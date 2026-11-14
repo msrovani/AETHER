@@ -112,6 +112,32 @@ pub struct OrganismFrame {
     pub frame_cost_us: u64,
 }
 
+impl OrganismFrame {
+    /// Quadro **pré-dimensionado** para o caminho quente.
+    ///
+    /// `energy_trace` já nasce com `steps + 1` amostras e `states` com `n`
+    /// atuadores, exatamente as formas que [`ClosedLoopOrganism::step_into`]
+    /// exige. Assim o loop de 60 Hz reutiliza o mesmo quadro e só preenche os
+    /// campos (`copy_from_slice`), sem realocar `Vec`.
+    pub fn with_capacity(steps: usize, n: usize) -> Self {
+        Self {
+            elapsed: Duration::ZERO,
+            order_parameter: 0.0,
+            r_per_node: [0.0; 3],
+            entropy_raw: 0.0,
+            entropy_wave: 0.0,
+            energy: 0.0,
+            energy_initial: 0.0,
+            energy_trace: vec![0.0; steps + 1],
+            states: vec![0; n],
+            phase_bancada: [0.0; 4],
+            perturbed: false,
+            dropped_frames: 0,
+            frame_cost_us: 0,
+        }
+    }
+}
+
 /// Organismo cognitivo integrado.
 pub struct ClosedLoopOrganism {
     cfg: OrganismConfig,
@@ -127,6 +153,8 @@ pub struct ClosedLoopOrganism {
     u: Array2<f32>,
     v: Array2<f32>,
     out: RelaxOutcome,
+    /// Scratch da leitura espectral (`h(t)` antes da normalização).
+    raw: Array1<f64>,
     started: Instant,
     perturbed: bool,
     dropped_frames: u32,
@@ -241,6 +269,7 @@ impl ClosedLoopOrganism {
             u: Array2::<f32>::zeros((c_in, window)),
             v: Array2::<f32>::zeros((c_out, window)),
             out,
+            raw: Array1::<f64>::zeros(n),
             started: Instant::now(),
             perturbed: false,
             dropped_frames: 0,
@@ -268,8 +297,38 @@ impl ClosedLoopOrganism {
     }
 
     /// Um quadro completo do organismo.
+    ///
+    /// Aloca o quadro (`OrganismFrame::with_capacity`) e delega para
+    /// [`Self::step_into`]; o caminho quente sem alocação é `step_into`.
     pub fn step(&mut self) -> Result<OrganismFrame> {
+        let mut frame = OrganismFrame::with_capacity(self.cfg.steps, self.cfg.decision_dim);
+        self.step_into(&mut frame)?;
+        Ok(frame)
+    }
+
+    /// Computa um quadro **dentro de `out`**, sem alocar após o warmup.
+    ///
+    /// Exige que `out` já tenha as formas canônicas
+    /// (`energy_trace.len() == steps + 1`, `states.len() == decision_dim`);
+    /// qualquer divergência retorna [`AetherError::Shape`] **sem**
+    /// redimensionar (o warmup deve usar [`OrganismFrame::with_capacity`]).
+    ///
+    /// Todos os buffers internos (`RelaxOutcome`, `raw`, plano/scratch da onda)
+    /// são reutilizados; os dois `Vec` do quadro são preenchidos por
+    /// `copy_from_slice`.
+    pub fn step_into(&mut self, out: &mut OrganismFrame) -> Result<()> {
         let t0 = Instant::now();
+        let steps = self.cfg.steps;
+        let n = self.cfg.decision_dim;
+
+        // --- validação de formas (sem alocar/redimensionar no caminho feliz) ---
+        if out.energy_trace.len() != steps + 1 || out.states.len() != n {
+            return Err(AetherError::shape(
+                [steps + 1, n],
+                [out.energy_trace.len(), out.states.len()],
+            ));
+        }
+
         let channels = self.cfg.sensor_channels;
         let window = self.cfg.window;
 
@@ -337,9 +396,7 @@ impl ClosedLoopOrganism {
         {
             let spec = self.wave.wave_spectrum();
             let keep = self.wave.modes().min(spec.ncols());
-            let n = self.cfg.decision_dim;
             let c_out = spec.nrows();
-            let mut raw = vec![0.0f64; n];
             for i in 0..n {
                 let mut acc = 0.0f64;
                 for o in 0..c_out {
@@ -350,51 +407,53 @@ impl ClosedLoopOrganism {
                         acc += (w.re * y.re - w.im * y.im) as f64;
                     }
                 }
-                raw[i] = acc;
+                self.raw[i] = acc;
             }
             // normaliza (média zero, desvio unitário) e aplica o ganho
-            let mean = raw.iter().sum::<f64>() / n as f64;
-            let var = raw.iter().map(|x| (x - mean) * (x - mean)).sum::<f64>() / n as f64;
+            let mean = self.raw.iter().sum::<f64>() / n as f64;
+            let var = self
+                .raw
+                .iter()
+                .map(|x| (x - mean) * (x - mean))
+                .sum::<f64>()
+                / n as f64;
             let sd = var.sqrt().max(1e-12);
             for i in 0..n {
-                self.h[i] = (raw[i] - mean) / sd * self.cfg.field_gain;
+                self.h[i] = (self.raw[i] - mean) / sd * self.cfg.field_gain;
             }
         }
 
         // --- colapso termodinâmico ---
-        let h2 = self
-            .h
-            .view()
-            .into_shape_with_order((1, self.cfg.decision_dim))
-            .unwrap();
-        let j3 = self
-            .j
-            .view()
-            .into_shape_with_order((1, self.cfg.decision_dim, self.cfg.decision_dim))
-            .unwrap();
+        let h2 = self.h.view().into_shape_with_order((1, n)).unwrap();
+        let j3 = self.j.view().into_shape_with_order((1, n, n)).unwrap();
         self.solver
             .relax_into(IsingLandscape::new(j3, h2), &mut self.out)?;
 
-        let energy_trace = self.out.energy_trace.row(0).to_vec();
-        let energy = self.out.best_energy[0];
-        let energy_initial = self.out.energy_trace[[0, 0]];
-        let states = self.out.states.row(0).to_vec();
+        // --- preenche o quadro (sem realocar os Vec de `out`) ---
+        let trace = self.out.energy_trace.row(0);
+        let trace_slice = trace
+            .as_slice()
+            .ok_or_else(|| AetherError::Config("out.energy_trace deve ser C-contiguo".into()))?;
+        out.energy_trace.copy_from_slice(trace_slice);
 
-        Ok(OrganismFrame {
-            elapsed: self.started.elapsed(),
-            order_parameter,
-            r_per_node,
-            entropy_raw,
-            entropy_wave,
-            energy,
-            energy_initial,
-            energy_trace,
-            states,
-            phase_bancada: bancada_phase,
-            perturbed: self.perturbed,
-            dropped_frames: self.dropped_frames,
-            frame_cost_us: t0.elapsed().as_micros() as u64,
-        })
+        let st = self.out.states.row(0);
+        let st_slice = st
+            .as_slice()
+            .ok_or_else(|| AetherError::Config("out.states deve ser C-contiguo".into()))?;
+        out.states.copy_from_slice(st_slice);
+
+        out.elapsed = self.started.elapsed();
+        out.order_parameter = order_parameter;
+        out.r_per_node = r_per_node;
+        out.entropy_raw = entropy_raw;
+        out.entropy_wave = entropy_wave;
+        out.energy = self.out.best_energy[0];
+        out.energy_initial = self.out.energy_trace[[0, 0]];
+        out.phase_bancada = bancada_phase;
+        out.perturbed = self.perturbed;
+        out.dropped_frames = self.dropped_frames;
+        out.frame_cost_us = t0.elapsed().as_micros() as u64;
+        Ok(())
     }
 
     /// Roda o organismo até `deadline` (ou para sempre se `None`), desenhando

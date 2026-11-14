@@ -17,7 +17,6 @@ use rand_chacha::ChaCha8Rng;
 const C_IN: usize = 4;
 const C_OUT: usize = 8;
 const MODES: usize = 32;
-const MAX_LEN: usize = 8192;
 
 fn field(c: usize, l: usize, seed: u64) -> Array2<f32> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
@@ -29,7 +28,9 @@ fn bench_forward(c: &mut Criterion) {
     group.sample_size(20);
 
     for &l in &[128usize, 512, 2048, 8192] {
-        let mut block = WaveInterferenceBlock::with_max_len(C_IN, C_OUT, MODES, MAX_LEN, 0xC0FFEE);
+        // max_len = L: mede o custo real para o comprimento (o bloco do M4
+        // declara o max_len da sua janela, e o FFT interno usa exatamente ele).
+        let mut block = WaveInterferenceBlock::with_max_len(C_IN, C_OUT, MODES, l, 0xC0FFEE);
         let u = field(C_IN, l, 0xA11CE);
         let mut out = Array2::<f32>::zeros((C_OUT, l));
         block.forward_into(u.view(), &mut out).expect("warmup");
@@ -52,7 +53,7 @@ fn bench_entropy(c: &mut Criterion) {
     group.sample_size(20);
 
     for &l in &[128usize, 512, 2048, 8192] {
-        let mut block = WaveInterferenceBlock::with_max_len(C_IN, C_OUT, MODES, MAX_LEN, 0xBEEF);
+        let mut block = WaveInterferenceBlock::with_max_len(C_IN, C_OUT, MODES, l, 0xBEEF);
         let u = field(C_IN, l, 0x5EED);
         let mut out = Array2::<f32>::zeros((C_OUT, l));
         block.forward_into(u.view(), &mut out).expect("warmup");

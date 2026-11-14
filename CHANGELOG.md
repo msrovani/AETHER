@@ -3,6 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.14] - 2026-11-14
+
+### Changed
+
+- Ciclo automatico: 4 arquivo(s) (benches:1, src:1, tests:2).
+- Gate: ok (4s).
+
+- `benches/wave.rs`
+- `src/simulation/closed_loop_organism.rs`
+- `tests/organism_step_into.rs`
+- `tests/phase2_hardening.rs`
+
 ## [0.0.13] - 2026-11-14
 
 ### Changed
