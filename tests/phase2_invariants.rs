@@ -53,9 +53,9 @@ fn test_complex_phase_memory_recall() {
     let mut rng = ChaCha8Rng::seed_from_u64(0xFA51);
     let mut mask = vec![true; N];
     let mut hidden = 0;
-    for i in 0..N {
-        if rng.gen::<f32>() < MASK_FRACTION as f32 / 100.0 && hidden < MASK_FRACTION * N as usize / 100 {
-            mask[i] = false;
+    for m in mask.iter_mut() {
+        if rng.gen::<f32>() < MASK_FRACTION as f32 / 100.0 && hidden < MASK_FRACTION * N / 100 {
+            *m = false;
             hidden += 1;
         }
     }
@@ -107,7 +107,7 @@ fn test_complex_phase_memory_atratores_estaveis() {
     for v in corrupted.iter_mut() {
         *v = (*v + std::f32::consts::FRAC_PI_2).rem_euclid(std::f32::consts::TAU);
     }
-    let (rec, _e) = memory.recall(&corrupted, &vec![true; N], 600, 0.05);
+    let (rec, _e) = memory.recall(&corrupted, &[true; N], 600, 0.05);
     let e0 = memory.phase_energy();
     // evolução livre: energia não pode piorar significativamente
     let e1 = memory.free_run(120, 0.05);
@@ -184,15 +184,14 @@ fn test_thermodynamic_dreamer_uncertainty() {
 
     // As amostras têm energia menor que a de um estado aleatório TÍPICO
     // (a distribuição de Boltzmann é enviesada para baixo por construção).
-    let mut random_mean = 0.0f64;
-    {
+    let random_mean: f64 = {
         const TRIALS: usize = 512;
         let mut acc = 0.0f64;
         for _ in 0..TRIALS {
             acc += dreamer.random_reference_energy(&j, &h, 1);
         }
-        random_mean = acc / TRIALS as f64;
-    }
+        acc / TRIALS as f64
+    };
     assert!(
         hot.mean_energy < random_mean,
         "⟨H⟩_quente {:.4} !< ref_aleatória {:.4}",
@@ -227,7 +226,7 @@ fn test_morphogenetic_homeostasis_and_pruning() {
     }
 
     let mut field = MorphogeneticField::new(N, &j0, MorphogenesisConfig::default());
-    let mut spins: Vec<f32> = (0..N).map(|i| if i % 2 == 0 { 1.0 } else { -1.0 }).collect();
+    let spins: Vec<f32> = (0..N).map(|i| if i % 2 == 0 { 1.0 } else { -1.0 }).collect();
 
     let mut max_asym = 0.0f32;
     let mut sparsity_start = field.sparsity_ratio();

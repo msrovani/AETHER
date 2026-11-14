@@ -80,7 +80,7 @@ fn random_landscape(n: usize, seed: u64) -> (Array2<f64>, Array2<f64>) {
 fn invariante_alocacao_zero_no_solver() {
     const N: usize = 64;
     let (j, h) = random_landscape(N, 0x1234);
-    let j3 = j.view().into_shape((1, N, N)).unwrap();
+    let j3 = j.view().into_shape_with_order((1, N, N)).unwrap();
     let mut solver = ThermodynamicIsingSolver::new(1, N, 200, 0.05);
     let mut out = RelaxOutcome::with_capacity(1, N, 200);
 
@@ -142,7 +142,7 @@ fn invariante_codec_pacote_40_bytes() {
 fn invariante_determinismo_do_solver() {
     const N: usize = 32;
     let (j, h) = random_landscape(N, 0x777);
-    let j3 = j.view().into_shape((1, N, N)).unwrap();
+    let j3 = j.view().into_shape_with_order((1, N, N)).unwrap();
     let mut solver = ThermodynamicIsingSolver::new(1, N, 120, 0.05);
 
     solver.reset(42);

@@ -70,7 +70,7 @@ fn invariante_01_colapso_termodinamico() {
         }
 
         solver.reset(0xDEAD_BEEF ^ case as u64);
-        let j3 = j.view().into_shape((1, N, N)).expect("shape J");
+        let j3 = j.view().into_shape_with_order((1, N, N)).expect("shape J");
         let out = solver
             .relax(IsingLandscape::new(j3, h.view()))
             .expect("relax falhou");

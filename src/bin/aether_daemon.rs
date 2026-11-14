@@ -354,8 +354,11 @@ impl AetherDaemon {
         let entropy_wave = self.wave.compute_wave_entropy() as f32;
         let prediction_error = ((entropy_raw - entropy_wave).abs() / 8.0).clamp(0.0, 4.0);
 
-        // spins contínuos derivados da fase local (entrada da morfogênese)
-        let spins: Vec<f32> = frame.phase.iter().map(|p| p.cos() as f32).collect();
+        // spins contínuos derivados da fase local (entrada da morfogênese),
+        // mapeados dos 4 canais de fase para a dimensão cognitiva completa
+        let spins: Vec<f32> = (0..self.cfg.cognition_dim)
+            .map(|i| (frame.phase[i % 4].cos() * 0.9) as f32)
+            .collect();
         let free_energy = self
             .field
             .evolve_topology(prediction_error, &spins, 0.05);
