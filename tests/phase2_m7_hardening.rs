@@ -216,6 +216,7 @@ fn test_m7_silence_prunes_and_surprise_grows() {
     let mut zeros_prev = zeros_initial;
     let mut zeros_monotone = true;
     let mut max_rho_silence = rho;
+    let mut cycle_full_prune = None;
     for cycle in 0..SILENCE_CYCLES {
         let f = field
             .try_evolve_topology(0.0, &spins, DT)
@@ -228,6 +229,9 @@ fn test_m7_silence_prunes_and_surprise_grows() {
             zeros_monotone = false;
         }
         zeros_prev = zeros;
+        if zeros == pairs && cycle_full_prune.is_none() {
+            cycle_full_prune = Some(cycle + 1);
+        }
 
         rho = field.spectral_radius();
         assert!(
@@ -275,12 +279,16 @@ fn test_m7_silence_prunes_and_surprise_grows() {
     let zeros_before_growth = field.zero_synapses();
     let density_before_growth = field.density();
     let mut max_rho_growth = 0.0f32;
+    let mut cycle_first_synapse = None;
     for cycle in 0..SURPRISE_CYCLES {
         let f = field
             .try_evolve_topology(2.0, &spins, DT)
             .expect("surpresa deveria ser entrada válida");
         assert!(f.is_finite(), "F não finita na surpresa, ciclo {cycle}");
         assert_structural(&field, N, cycle);
+        if cycle_first_synapse.is_none() && field.zero_synapses() < pairs {
+            cycle_first_synapse = Some(cycle + 1);
+        }
         rho = field.spectral_radius();
         assert!(
             rho.is_finite() && rho <= 1.5,
@@ -296,6 +304,9 @@ fn test_m7_silence_prunes_and_surprise_grows() {
     let f_growth = field.last_free_energy();
     let rho_growth_power = field.spectral_radius();
     let rho_growth_jacobi = raio_espectral_jacobi(&field.j, N);
+
+    let cycle_full_prune = cycle_full_prune.expect("silêncio não drenou todas as sinapses");
+    let cycle_first_synapse = cycle_first_synapse.expect("surpresa não criou nenhuma sinapse");
 
     assert!(
         rho_growth_jacobi <= 1.5 + 1e-3,
@@ -324,7 +335,7 @@ fn test_m7_silence_prunes_and_surprise_grows() {
     );
 
     println!(
-        "M7 silence/surprise: zeros {}→{}/{} | sparsity {:.4}→{:.4} | density {:.4}→{:.4} | rho_silence_max {:.4} → {:.4} | rho_growth_max {max_rho_growth:.4} (jacobi {rho_growth_jacobi:.4}) | prune {} | F_silence {f_silence:.4} | F_growth {f_growth:.4}",
+        "M7 silence/surprise: zeros {}→{}/{} | sparsity {:.4}→{:.4} | density {:.4}→{:.4} | rho_silence_max {:.4} → {:.4} | rho_growth_max {max_rho_growth:.4} (jacobi {rho_growth_jacobi:.4}) | prune {} em {} ciclos | regrow em {} ciclos | F_silence {f_silence:.4} | F_growth {f_growth:.4}",
         zeros_initial,
         zeros_silence,
         pairs,
@@ -334,7 +345,9 @@ fn test_m7_silence_prunes_and_surprise_grows() {
         density_growth,
         max_rho_silence,
         rho_silence,
-        zeros_silence - zeros_initial
+        zeros_silence - zeros_initial,
+        cycle_full_prune,
+        cycle_first_synapse
     );
 }
 

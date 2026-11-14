@@ -334,12 +334,12 @@ impl ComplexPhaseMemory {
             for i in 0..n {
                 let base = i * n;
                 let psi_i = wrap(pattern[i]);
-                for j in 0..n {
+                for (j, psi_j) in pattern.iter().enumerate().take(n) {
                     if i == j {
                         continue;
                     }
                     let idx = base + j;
-                    let dpsi = wrap_signed(wrap(pattern[j]) - psi_i);
+                    let dpsi = wrap_signed(wrap(*psi_j) - psi_i);
                     // ΔC = η_W · e^{i(ψ_j−ψ_i)} − γ_W · C  (regra hebbiana local).
                     // A parte real é exatamente ΔW = η_W(cos(Δψ−δ) − γ_W W).
                     self.c_re[idx] = self.c_re[idx] + eta * dpsi.cos() - gamma * self.c_re[idx];
@@ -596,7 +596,7 @@ impl ComplexPhaseMemory {
         for idx in 0..self.weights.len() {
             let w = self.weights[idx];
             // Podado se está abaixo do limiar ou se não é finito (NaN/∞).
-            let remove = !(w >= threshold) || !w.is_finite();
+            let remove = w < threshold || !w.is_finite();
             if !remove {
                 continue;
             }
