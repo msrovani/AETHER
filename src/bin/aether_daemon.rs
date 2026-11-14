@@ -241,8 +241,6 @@ pub struct AetherDaemon {
     field: MorphogeneticField,
     transducer: HardwareTransducer,
     c_in: usize,
-    c_out: usize,
-    modes: usize,
     j_field: Vec<f32>,
     u: Array2<f32>,
     v: Array2<f32>,
@@ -298,14 +296,14 @@ impl AetherDaemon {
         Ok(Self {
             cfg,
             node,
-            wave: WaveInterferenceBlock::with_max_len(c_in, c_out, modes, window, cfg.seed),
+            wave: WaveInterferenceBlock::with_max_len(c_in, c_out, modes, window, seed),
             dreamer: ThermodynamicDreamer::new(
                 cognition_dim,
                 DreamerConfig {
                     a0: 1.0,
                     gamma_damp: 0.35,
                     beta_chaos: 0.55,
-                    seed: cfg.seed ^ 0xD12E,
+                    seed: seed ^ 0xD12E,
                 },
             ),
             memory: ComplexPhaseMemory::with_config(
@@ -323,10 +321,8 @@ impl AetherDaemon {
                 &j_field,
                 MorphogenesisConfig::default(),
             ),
-            transducer: HardwareTransducer::new(window, cfg.seed),
+            transducer: HardwareTransducer::new(window, seed),
             c_in,
-            c_out,
-            modes,
             j_field,
             u: Array2::<f32>::zeros((c_in, window)),
             v: Array2::<f32>::zeros((c_out, window)),
@@ -340,7 +336,11 @@ impl AetherDaemon {
         self.transducer.tick_deadline(self.cfg.hz);
 
         // 1) onda física + fases dos vizinhos
-        let frame = self.node.latest().unwrap_or_else(zero_frame);
+        let frame = self
+            .node
+            .as_ref()
+            .and_then(|n| n.latest())
+            .unwrap_or_else(zero_frame);
         let _ = self.transducer.sample(frame.rx_bytes as u64);
         let fresh = self.transducer.field(self.c_in);
         self.u.assign(&fresh);
@@ -430,9 +430,11 @@ impl AetherDaemon {
         Ok(())
     }
 
-    /// Encerra o nó de fase.
+    /// Encerra o nó de fase (o `Drop` de `NodeHandle` faz o join).
     pub fn shutdown(&mut self) {
-        let _ = self.node.stop();
+        if let Some(node) = self.node.take() {
+            let _ = node.stop();
+        }
     }
 }
 

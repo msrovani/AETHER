@@ -127,10 +127,7 @@ impl FftPlans {
 
     /// Garante os planos para `n` e devolve cópias `Arc` (contagem de
     /// referência, sem alocação de heap).
-    fn ensure(
-        &mut self,
-        n: usize,
-    ) -> (Arc<dyn RealToComplex<f32>>, Arc<dyn ComplexToReal<f32>>) {
+    fn ensure(&mut self, n: usize) -> (Arc<dyn RealToComplex<f32>>, Arc<dyn ComplexToReal<f32>>) {
         let fwd = match self.kernels.get(&n) {
             Some(k) => Arc::clone(k),
             None => {
@@ -403,32 +400,21 @@ impl WaveInterferenceBlock {
             ));
         }
         if u.nrows() != c_in {
-            return Err(AetherError::shape(
-                [c_in, u.ncols()],
-                u.shape().to_vec(),
-            ));
+            return Err(AetherError::shape([c_in, u.ncols()], u.shape().to_vec()));
         }
         let l = u.ncols();
         if l == 0 {
             return Err(AetherError::Config("wave: L == 0".into()));
         }
         if out.dim() != (c_out, l) {
-            return Err(AetherError::shape(
-                [c_out, l],
-                [out.nrows(), out.ncols()],
-            ));
+            return Err(AetherError::shape([c_out, l], [out.nrows(), out.ncols()]));
         }
 
         let n = self.working_len(l);
         let nb = n / 2 + 1;
         let (fwd, inv) = self.plans.borrow_mut().ensure(n);
-        self.scratch.ensure(
-            c_in,
-            c_out,
-            n,
-            fwd.get_scratch_len(),
-            inv.get_scratch_len(),
-        );
+        self.scratch
+            .ensure(c_in, c_out, n, fwd.get_scratch_len(), inv.get_scratch_len());
         let sc = &mut self.scratch;
 
         // 1) Copia u para o buffer de comprimento efetivo, zero-padded.
@@ -555,8 +541,7 @@ impl WaveInterferenceBlock {
         }
 
         // 8) Copia o recorte [C_out, L] para a saída (qualquer layout).
-        for (mut dst_row, src_row) in out.outer_iter_mut().zip(self.scratch.time_out.outer_iter())
-        {
+        for (mut dst_row, src_row) in out.outer_iter_mut().zip(self.scratch.time_out.outer_iter()) {
             for (dst, src) in dst_row.iter_mut().zip(src_row.iter()) {
                 *dst = *src;
             }

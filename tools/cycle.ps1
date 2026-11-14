@@ -240,7 +240,8 @@ try {
     if ($cargoText -match '(?m)^version\s*=\s*"([^"]+)"') { $currentVersion = $Matches[1] }
 
     $newVersion = $currentVersion
-    $isRelease = ($changedCount -gt 0) -and ($gate -like 'ok*')
+    $sourceChanged = @($changed | Where-Object { ($_ -replace '\\', '/') -match '^(src|tests)/' }).Count
+    $isRelease = ($changedCount -gt 0) -and ($gate -like 'ok*') -and ($sourceChanged -gt 0)
     if ($isRelease) {
         if ($currentVersion -match '^0\.0\.(\d+)$') {
             $newVersion = "0.0.$([int]$Matches[1] + 1)"

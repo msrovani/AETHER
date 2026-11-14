@@ -38,8 +38,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\cycle_install.ps1 inst
 Politica completa em [`docs/REPO_SYNC.md`](docs/REPO_SYNC.md); historico em
 [`docs/CYCLE_LOG.md`](docs/CYCLE_LOG.md); versoes em [`CHANGELOG.md`](CHANGELOG.md).
 
-Regra de ouro do ciclo: **gate verde** -> `chore(cycle): 0.0.N` + tag `v0.0.N`;
-**gate vermelho** -> `wip(cycle): snapshot` sem bump/tag (outro agente ainda esta editando).
+Regra de ouro do ciclo: **gate verde + mudanca em `src/`/`tests/`** ->
+`chore(cycle): 0.0.N` + tag `v0.0.N`; **gate vermelho ou so docs/tools** ->
+`wip(cycle): snapshot` sem bump/tag.
 
 ## Estado atual
 
