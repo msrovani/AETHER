@@ -133,6 +133,19 @@ pub struct ClosedLoopOrganism {
     rng: ChaCha8Rng,
 }
 
+impl std::fmt::Debug for ClosedLoopOrganism {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClosedLoopOrganism")
+            .field("cfg", &self.cfg)
+            .field("nodes", &self.handles.len())
+            .field("j", &self.j.dim())
+            .field("window", &self.ring.ncols())
+            .field("perturbed", &self.perturbed)
+            .field("dropped_frames", &self.dropped_frames)
+            .finish()
+    }
+}
+
 impl ClosedLoopOrganism {
     /// Monta o organismo: 3 nós, bloco de onda, solver e paisagem `J`.
     pub fn new(cfg: OrganismConfig) -> Result<Self> {

@@ -629,7 +629,7 @@ impl WaveInterferenceBlock {
         for row in spec_slice.chunks_exact(nb) {
             total += row.iter().map(bin_power).sum::<f64>();
         }
-        if !(total > 0.0) || !total.is_finite() {
+        if total <= 0.0 || !total.is_finite() {
             return Ok(0.0);
         }
         for row in spec_slice.chunks_exact(nb) {
@@ -666,7 +666,7 @@ impl WaveInterferenceBlock {
             .flat_map(|row| row[..k_eff].iter())
             .map(bin_power)
             .sum();
-        if !(total > 0.0) || !total.is_finite() {
+        if total <= 0.0 || !total.is_finite() {
             return 0.0;
         }
         let mut h = 0.0f64;

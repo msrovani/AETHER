@@ -323,6 +323,13 @@ try {
     $shouldPush = $Push -or ($env:AETHER_PUSH -eq '1')
     if ($shouldPush -and $hasRemote) {
         $pushMain = Invoke-Git push origin main
+        if ($pushMain.Code -ne 0) {
+            # outro agente pode ter empurrado antes: rebase e uma unica retentativa
+            Write-Log "push rejeitado; tentando pull --rebase e retry"
+            $pull = Invoke-Git pull --rebase --autostash origin main
+            if ($pull.Code -eq 0) { $pushMain = Invoke-Git push origin main }
+            else { Write-Log "rebase falhou: $($pull.Output)" }
+        }
         $pushTags = Invoke-Git push origin --tags
         if ($pushMain.Code -eq 0 -and $pushTags.Code -eq 0) {
             $pushed = $true

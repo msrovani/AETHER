@@ -1,7 +1,5 @@
 //! Erros tipados do crate AETHER.
 
-use std::fmt;
-
 /// Resultado padrao do crate.
 pub type Result<T> = std::result::Result<T, AetherError>;
 
