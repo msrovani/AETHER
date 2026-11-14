@@ -53,7 +53,7 @@ fn mean_err(recovered: &[f32], target: &[f32], mask: &[bool]) -> f32 {
     s / c as f32
 }
 
-fn run(label: &str, patterns: &[Vec<f32>], dt: f32, steps: usize, seeds: u64) {
+fn report(label: &str, patterns: &[Vec<f32>], seeds: u64) {
     let cfg = PhaseMemoryConfig {
         omega0: 0.0,
         clamp_strength: 8.0,
@@ -65,55 +65,54 @@ fn run(label: &str, patterns: &[Vec<f32>], dt: f32, steps: usize, seeds: u64) {
     for p in patterns {
         mem.imprint(p, 40);
     }
-    let mut means = [0.0f32; 3];
-    let mut worst = [0.0f32; 3];
-    let mut fails = [0usize; 3];
+    let k = patterns.len();
+    let mut means = vec![0.0f32; k];
+    let mut worst = vec![0.0f32; k];
     for seed in 0..seeds {
-        for (k, p) in patterns.iter().enumerate().take(3) {
+        for (idx, p) in patterns.iter().enumerate() {
             let mask = mask_exact_hidden(seed, 12);
             mem.reset_phases(0.0);
-            let (rec, _e) = mem.recall(p, &mask, steps, dt);
+            let (rec, _e) = mem.recall(p, &mask, 600, 0.05);
             let e = mean_err(&rec, p, &mask);
-            means[k] += e;
-            worst[k] = worst[k].max(e);
-            if e >= 0.15 {
-                fails[k] += 1;
-            }
+            means[idx] += e;
+            worst[idx] = worst[idx].max(e);
         }
     }
     println!(
-        "[{label} dt={dt} steps={steps} seeds={seeds}] mean p0={:.4} p1={:.4} p2={:.4} | worst p0={:.4} p1={:.4} p2={:.4} | fails {} {} {}",
-        means[0] / seeds as f32,
-        means[1] / seeds as f32,
-        means[2] / seeds as f32,
-        worst[0],
-        worst[1],
-        worst[2],
-        fails[0],
-        fails[1],
-        fails[2]
+        "[{label} P={k}] mean {} | worst {}",
+        (0..k)
+            .map(|i| format!("{:.4}", means[i] / seeds as f32))
+            .collect::<Vec<_>>()
+            .join(" "),
+        (0..k)
+            .map(|i| format!("{:.4}", worst[i]))
+            .collect::<Vec<_>>()
+            .join(" ")
     );
 }
 
 #[test]
 fn probe_stats() {
-    let harm = vec![
-        harmonic_pattern(N, 0),
-        harmonic_pattern(N, 1),
-        harmonic_pattern(N, 2),
-    ];
-    for (dt, steps) in [
-        (0.05f32, 600usize),
-        (0.02, 1500),
-        (0.01, 3000),
-        (0.005, 6000),
-    ] {
-        run("harm", &harm, dt, steps, 60);
-    }
-    let rnd = vec![
-        random_pattern(N, 1),
-        random_pattern(N, 2),
-        random_pattern(N, 3),
-    ];
-    run("rand", &rnd, 0.05, 600, 60);
+    let p0 = harmonic_pattern(N, 0);
+    let p1 = harmonic_pattern(N, 1);
+    let p2 = harmonic_pattern(N, 2);
+    let p3 = harmonic_pattern(N, 3);
+
+    // Família do invariante
+    report("harm 0,1,2", &[p0.clone(), p1.clone(), p2.clone()], 40);
+    report("harm 0..3", &[p0.clone(), p1.clone(), p2.clone(), p3.clone()], 20);
+    report("harm 0,1", &[p0.clone(), p1.clone()], 40);
+
+    // Controle: três padrões que diferem por rotação rígida (crosstalk nulo
+    // por construção: Δψ é idêntico para todos os pares em todos os padrões).
+    let tau3 = std::f32::consts::TAU / 3.0;
+    let q1: Vec<f32> = p0.iter().map(|v| (v + tau3).rem_euclid(std::f32::consts::TAU)).collect();
+    let q2: Vec<f32> = p0.iter().map(|v| (v + 2.0 * tau3).rem_euclid(std::f32::consts::TAU)).collect();
+    report("rotacoes rigidas", &[p0.clone(), q1, q2], 40);
+
+    // Padrões aleatórios (referência da capacidade clássica)
+    let r0 = random_pattern(N, 11);
+    let r1 = random_pattern(N, 12);
+    let r2 = random_pattern(N, 13);
+    report("aleatorios", &[r0, r1, r2], 40);
 }

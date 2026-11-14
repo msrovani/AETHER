@@ -751,7 +751,7 @@ mod tanh_tests {
     use super::fast_tanh;
 
     /// A otimizacao troca `f32::tanh` (libm) por Pade 7/6 vetorizavel.
-    /// Este teste fixa o tamanho do desvio aceito: 2e-4.
+    /// Este teste fixa o tamanho do desvio aceito: 1e-4.
     #[test]
     fn fast_tanh_dentro_de_2e4_do_tanh_exato() {
         let mut worst = 0.0f32;
@@ -765,7 +765,7 @@ mod tanh_tests {
             }
             x += 0.001;
         }
-        assert!(worst <= 2e-4, "erro maximo {worst:.3e} em x={worst_at}");
+        assert!(worst <= 1e-4, "erro maximo {worst:.3e} em x={worst_at}");
     }
 
     #[test]
