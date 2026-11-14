@@ -344,8 +344,20 @@ impl ClosedLoopOrganism {
         }
 
         // --- colapso termodinâmico ---
-        let h2 = self.h.view().into_shape((1, self.cfg.decision_dim)).unwrap();
-        let j3 = self.j.view().into_shape((1, self.cfg.decision_dim, self.cfg.decision_dim)).unwrap();
+        let h2 = self
+            .h
+            .view()
+            .into_shape_with_order((1, self.cfg.decision_dim))
+            .unwrap();
+        let j3 = self
+            .j
+            .view()
+            .into_shape_with_order((
+                1,
+                self.cfg.decision_dim,
+                self.cfg.decision_dim,
+            ))
+            .unwrap();
         self.solver.relax_into(IsingLandscape::new(j3, h2), &mut self.out)?;
 
         let energy_trace = self.out.energy_trace.row(0).to_vec();

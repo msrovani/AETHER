@@ -3,6 +3,20 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.3] - 2026-11-14
+
+### Changed
+
+- Ciclo automatico: 6 arquivo(s) (.:2, docs:1, src:2, tests:1).
+- Gate: ok (1s).
+
+- `Cargo.lock`
+- `README.md`
+- `docs/REPO_SYNC.md`
+- `src/error.rs`
+- `src/simulation/closed_loop_organism.rs`
+- `tests/test_kuramoto.rs`
+
 ## [0.0.2] - 2026-11-14
 
 ### Changed

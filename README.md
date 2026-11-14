@@ -43,7 +43,7 @@ Regra de ouro do ciclo: **gate verde** -> `chore(cycle): 0.0.N` + tag `v0.0.N`;
 
 ## Estado atual
 
-- Versao: `0.0.1` (baseline versionado).
+- Versao: `0.0.2` — baseline versionado e publicado.
 - `m1` (thermodynamic_solver) e `m3` (kuramoto_field) implementados; `m2` em andamento.
-- Sem remote Git configurado: push habilitado assim que `origin` existir
-  (`AETHER_REMOTE` ou `git remote add origin <url>`).
+- Remote: `https://github.com/msrovani/AETHER.git` (`main`), push + merge de PRs
+  habilitados no ciclo de 5 min.

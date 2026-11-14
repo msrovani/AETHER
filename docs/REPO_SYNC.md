@@ -24,20 +24,27 @@ repositorio Git, analisa PRs, integra em `main`, versiona e documenta.
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\cycle.ps1
 
 # com merge de PRs e push
-$env:GITHUB_TOKEN = "ghp_..."      # escopo repo
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\cycle.ps1 -PrMerge -Push
 
 # gate completo (cargo test --release)
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\cycle.ps1 -Full
 ```
 
-Agendamento (a cada 5 minutos):
+Agendamento (a cada 5 minutos, com rede):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\cycle_install.ps1 install
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\cycle_install.ps1 install -Network
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\cycle_install.ps1 status
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\cycle_install.ps1 remove
 ```
+
+### Origin e autenticacao
+
+- `origin = https://github.com/msrovani/AETHER.git` (branch `main`).
+- Push usa a credencial HTTPS do Git Credential Manager (usuario `msrovani`),
+  ja armazenada na maquina; a tarefa agendada roda no mesmo usuario.
+- A etapa de PR reutiliza a mesma credencial (`git credential fill`) quando
+  `GITHUB_TOKEN` nao esta no ambiente. Nenhum token e gravado em arquivo do repo.
 
 ## 3. Regras de PR
 

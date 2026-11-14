@@ -354,7 +354,8 @@ fn perturbacao_local_degrada_e_recupera_a_coerencia() {
     );
 
     // 3) Recuperação: o acoplamento restaura a coerência.
-    let deadline = Instant::now() + Duration::from_secs(2);
+    let recovery_started = Instant::now();
+    let deadline = recovery_started + Duration::from_secs(2);
     let mut r_after = 0.0f64;
     while Instant::now() < deadline {
         r_after = mean_order_parameter(&handles).0;
@@ -363,12 +364,15 @@ fn perturbacao_local_degrada_e_recupera_a_coerencia() {
         }
         std::thread::sleep(Duration::from_millis(10));
     }
+    let recovery = recovery_started.elapsed();
 
     for handle in handles {
         handle.stop().expect("stop do no");
     }
 
-    eprintln!("perturbacao: R antes = {r_before:.4}, minimo = {min_r:.4}, recuperado = {r_after:.4}");
+    eprintln!(
+        "perturbacao: R antes = {r_before:.4}, minimo = {min_r:.4}, recuperado = {r_after:.4} em {recovery:?}"
+    );
     assert!(
         r_after > LIMIAR,
         "R nao recuperou apos a perturbacao: {r_after:.4}"

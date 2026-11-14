@@ -7,8 +7,7 @@ pub type Result<T> = std::result::Result<T, AetherError>;
 
 /// Erros de dominio do motor.
 #[derive(Debug, thiserror::Error)]
-pub enum AetherError {
-    /// Forma/dimensao de tensor incompativel com a operacao.
+pub enum AetherError {    /// Forma/dimensao de tensor incompativel com a operacao.
     #[error("shape mismatch: esperado {expected:?}, obtido {got:?}")]
     Shape {
         /// Forma esperada.
@@ -46,14 +45,5 @@ impl AetherError {
             expected: expected.into(),
             got: got.into(),
         }
-    }
-}
-
-/// Helper de formatacao para mensagens de estado (mantem `fmt` no escopo).
-pub(crate) struct Fmt<'a>(pub &'a str);
-
-impl fmt::Display for Fmt<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.0)
     }
 }
