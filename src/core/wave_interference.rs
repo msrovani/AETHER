@@ -742,3 +742,39 @@ impl WaveInterferenceBlock {
         self.c_out
     }
 }
+
+#[cfg(test)]
+mod tanh_tests {
+    use super::fast_tanh;
+
+    /// A otimizacao troca `f32::tanh` (libm) por Pade 7/6 vetorizavel.
+    /// Este teste fixa o tamanho do desvio aceito: 2e-4.
+    #[test]
+    fn fast_tanh_dentro_de_2e4_do_tanh_exato() {
+        let mut worst = 0.0f32;
+        let mut worst_at = 0.0f32;
+        let mut x = -12.0f32;
+        while x <= 12.0 {
+            let err = (fast_tanh(x) - x.tanh()).abs();
+            if err > worst {
+                worst = err;
+                worst_at = x;
+            }
+            x += 0.001;
+        }
+        assert!(worst <= 2e-4, "erro maximo {worst:.3e} em x={worst_at}");
+    }
+
+    #[test]
+    fn fast_tanh_limitado_monotono_e_simetrico() {
+        let mut prev = -1.0f32;
+        for i in -400..=400 {
+            let x = i as f32 * 0.05;
+            let y = fast_tanh(x);
+            assert!(y.abs() <= 1.0 + 1e-6, "saida fora de [-1,1] em x={x}: {y}");
+            assert!(y >= prev - 1e-6, "nao monotonico em x={x}");
+            assert!((fast_tanh(-x) + y).abs() < 1e-6, "assimetria em x={x}");
+            prev = y;
+        }
+    }
+}

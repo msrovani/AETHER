@@ -335,19 +335,8 @@ fn test_m7_silence_prunes_and_surprise_grows() {
     );
 
     println!(
-        "M7 silence/surprise: zeros {}→{}/{} | sparsity {:.4}→{:.4} | density {:.4}→{:.4} | rho_silence_max {:.4} → {:.4} | rho_growth_max {max_rho_growth:.4} (jacobi {rho_growth_jacobi:.4}) | prune {} em {} ciclos | regrow em {} ciclos | F_silence {f_silence:.4} | F_growth {f_growth:.4}",
-        zeros_initial,
-        zeros_silence,
-        pairs,
-        sparsity_initial,
-        sparsity_silence,
-        density_before_growth,
-        density_growth,
-        max_rho_silence,
-        rho_silence,
-        zeros_silence - zeros_initial,
-        cycle_full_prune,
-        cycle_first_synapse
+        "M7 silence/surprise: zeros {zeros_initial}→{zeros_silence}/{pairs} | sparsity {sparsity_initial:.4}→{sparsity_silence:.4} | density {density_before_growth:.4}→{density_growth:.4} | rho_silence_max {max_rho_silence:.4} → {rho_silence:.4} | rho_growth_max {max_rho_growth:.4} (jacobi {rho_growth_jacobi:.4}) | prune {} em {cycle_full_prune} ciclos | regrow em {cycle_first_synapse} ciclos | F_silence {f_silence:.4} | F_growth {f_growth:.4}",
+        zeros_silence - zeros_initial
     );
 }
 
