@@ -219,6 +219,8 @@ fn quatro_nos_convergem_em_menos_de_3s() {
         handle.stop().expect("stop do no");
     }
 
+    eprintln!("convergencia: melhor R = {best_r:.6} em {elapsed:?}");
+
     assert!(wire_ok, "rx_bytes nao e multiplo de 40");
     assert!(saw_packets, "nenhum datagrama de 40 bytes foi contabilizado");
     assert!(
