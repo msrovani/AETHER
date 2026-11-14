@@ -53,9 +53,13 @@ Sem `GITHUB_TOKEN` a etapa de PR e ignorada (nao falha o ciclo).
 ## 4. Versionamento `0.0.x`
 
 - `Cargo.toml` e a fonte da verdade; `CHANGELOG.md` recebe a entrada do ciclo.
-- Versao fora do padrao `0.0.x` e normalizada para `0.0.1` no primeiro ciclo.
-- Cada ciclo com mudancas gera uma tag anotada `v0.0.N` e um commit
-  `chore(cycle): 0.0.N`.
+- Versao fora do padrao `0.0.x` e normalizada para `0.0.1` no primeiro ciclo verde.
+- Ciclo **verde** (gate `cargo check`, ou `cargo test --release` com `-Full`) e com
+  mudancas: bump de patch, entrada no `CHANGELOG.md`, commit `chore(cycle): 0.0.N`
+  e tag anotada `v0.0.N`.
+- Ciclo **vermelho** (gate falhou, common enquanto outro agente edita um modulo):
+  commit `wip(cycle): snapshot <utc>`, **sem** bump, **sem** tag e **sem** entrada
+  no changelog; o motivo fica em `.cycle/gate.log` e em `docs/CYCLE_LOG.md`.
 - Ciclo sem mudancas nao cria commit, nao cria tag e nao incrementa versao.
 
 ## 5. Concorrencia (3+ agentes no mesmo diretorio)

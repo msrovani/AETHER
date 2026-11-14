@@ -100,7 +100,8 @@ try {
         Invoke-Git remote add origin $env:AETHER_REMOTE | Out-Null
         Write-Log "origin configurado: $env:AETHER_REMOTE"
     }
-    $remoteUrl = (Invoke-Git remote get-url origin).Output
+    $remoteRes = Invoke-Git remote get-url origin
+    $remoteUrl = if ($remoteRes.Code -eq 0) { $remoteRes.Output.Trim() } else { '' }
     $hasRemote = [bool]$remoteUrl
 
     # ---------- comparar com o repositorio ----------
@@ -215,6 +216,10 @@ try {
             $gateCode = $LASTEXITCODE
         }
         $sw.Stop()
+        if ($gateCode -ne 0) {
+            $gateLog = Join-Path $CycleDir 'gate.log'
+            $gateOutput | Out-File -FilePath $gateLog -Encoding utf8
+        }
         $gate = if ($gateCode -eq 0) { "ok ($([int]$sw.Elapsed.TotalSeconds)s)" } else { "fail ($([int]$sw.Elapsed.TotalSeconds)s)" }
         Write-Log "gate $gate"
     }
@@ -226,7 +231,8 @@ try {
     if ($cargoText -match '(?m)^version\s*=\s*"([^"]+)"') { $currentVersion = $Matches[1] }
 
     $newVersion = $currentVersion
-    if ($changedCount -gt 0) {
+    $isRelease = ($changedCount -gt 0) -and ($gate -like 'ok*')
+    if ($isRelease) {
         if ($currentVersion -match '^0\.0\.(\d+)$') {
             $newVersion = "0.0.$([int]$Matches[1] + 1)"
         } else {
@@ -250,19 +256,21 @@ try {
     # ---------- changelog + log do ciclo ----------
     if ($changedCount -gt 0) {
         $stamp = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')
-        $bulletFiles = ($changed | Select-Object -First 12 | ForEach-Object { "- ``$_``" }) -join "`n"
-        $entry = "## [$newVersion] - $stamp`n`n### Changed`n`n- Ciclo automatico: $changedCount arquivo(s) ($areaSummary).`n- Gate: $gate.`n`n$bulletFiles`n`n"
+        if ($isRelease) {
+            $bulletFiles = ($changed | Select-Object -First 12 | ForEach-Object { "- ``$_``" }) -join "`n"
+            $entry = "## [$newVersion] - $stamp`n`n### Changed`n`n- Ciclo automatico: $changedCount arquivo(s) ($areaSummary).`n- Gate: $gate.`n`n$bulletFiles`n`n"
 
-        $changelogPath = Join-Path $RepoRoot 'CHANGELOG.md'
-        if (Test-Path $changelogPath) {
-            $cl = Get-Content $changelogPath -Raw
-            $idx = $cl.IndexOf("`n## [")
-            if ($idx -ge 0) {
-                $cl = $cl.Substring(0, $idx + 1) + $entry + $cl.Substring($idx + 1)
-            } else {
-                $cl = $cl.TrimEnd() + "`n`n" + $entry
+            $changelogPath = Join-Path $RepoRoot 'CHANGELOG.md'
+            if (Test-Path $changelogPath) {
+                $cl = Get-Content $changelogPath -Raw
+                $idx = $cl.IndexOf("`n## [")
+                if ($idx -ge 0) {
+                    $cl = $cl.Substring(0, $idx + 1) + $entry + $cl.Substring($idx + 1)
+                } else {
+                    $cl = $cl.TrimEnd() + "`n`n" + $entry
+                }
+                Set-Content -Path $changelogPath -Value $cl -Encoding utf8 -NoNewline
             }
-            Set-Content -Path $changelogPath -Value $cl -Encoding utf8 -NoNewline
         }
 
         $cycleLog = Join-Path $RepoRoot 'docs\CYCLE_LOG.md'
@@ -271,20 +279,29 @@ try {
         }
         $pushCell = if ($Push -or $env:AETHER_PUSH -eq '1') { 'sim' } else { 'nao' }
         $prCell = if ($mergedPrs.Count -gt 0) { $mergedPrs -join ' ' } else { '-' }
-        Add-Content -Path $cycleLog -Value "| $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')) | $newVersion | $changedCount | $areaSummary | $gate | $prCell | $pushCell |" -Encoding utf8
+        $versionCell = if ($isRelease) { $newVersion } else { 'wip' }
+        Add-Content -Path $cycleLog -Value "| $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')) | $versionCell | $changedCount | $areaSummary | $gate | $prCell | $pushCell |" -Encoding utf8
     }
 
     # ---------- commit + tag ----------
     $commitHash = ''
     if ($changedCount -gt 0 -and -not $NoCommit) {
         Invoke-Git add -A | Out-Null
-        $title = "chore(cycle): $newVersion"
+        if ($isRelease) {
+            $title = "chore(cycle): $newVersion"
+        } else {
+            $title = "wip(cycle): snapshot $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+        }
         $body = "ciclo automatico $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))`narquivos: $changedCount ($areaSummary)`ngate: $gate"
         $commit = Invoke-Git commit -m $title -m $body
         if ($commit.Code -eq 0) {
             $commitHash = (Invoke-Git rev-parse --short HEAD).Output
-            Invoke-Git tag -a "v$newVersion" -m "AETHER $newVersion - ciclo automatico ($gate)" | Out-Null
-            Write-Log "commit $commitHash versao $newVersion"
+            if ($isRelease) {
+                Invoke-Git tag -a "v$newVersion" -m "AETHER $newVersion - ciclo automatico ($gate)" | Out-Null
+                Write-Log "commit $commitHash versao $newVersion"
+            } else {
+                Write-Log "commit wip $commitHash (gate: $gate)"
+            }
         } else {
             Write-Log "commit falhou: $($commit.Output)"
         }

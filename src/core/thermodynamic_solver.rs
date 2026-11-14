@@ -388,7 +388,7 @@ impl ThermodynamicIsingSolver {
         for i in 0..n {
             self.s_cur[i] = self.best_states[[b, i]];
         }
-        let mut e = descend(n, jb, hb, self.s_cur.as_mut_slice(), self.g.as_mut_slice());
+        let e = descend(n, jb, hb, self.s_cur.as_mut_slice(), self.g.as_mut_slice());
 
         // --- fuga determinística (só se o polimento não bateu H(s_0)) ---
         if e >= e0 {
@@ -396,13 +396,9 @@ impl ThermodynamicIsingSolver {
                 self.best_states[[b, i]] = self.s_cur[i];
             }
             let mut best_e = e;
-            let mut improved = false;
             for i in 0..n {
-                let base = self
-                    .best_states
-                    .row(b)
-                    .as_slice()
-                    .expect("linha do elite é C-contígua");
+                let elite = self.best_states.row(b);
+                let base = elite.as_slice().expect("linha do elite é C-contígua");
                 self.s_try.copy_from_slice(base);
                 self.s_try[i] = -self.s_try[i];
                 let e_try = descend(
@@ -414,12 +410,8 @@ impl ThermodynamicIsingSolver {
                 );
                 if e_try < best_e {
                     best_e = e_try;
-                    improved = true;
                     self.s_cur.copy_from_slice(&self.s_try);
                 }
-            }
-            if improved {
-                e = best_e;
             }
         }
 
