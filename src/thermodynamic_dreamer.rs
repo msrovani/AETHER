@@ -19,10 +19,32 @@
 //! * `T → 0`  — ação: colapso rápido e determinístico;
 //! * `T > 0`  — imaginação: `K` trajetórias paralelas (rayon) geram um
 //!   conjunto de futuros plausíveis e medem a própria incerteza.
+//!
+//! # Contrato de alocação (Fase 2, §1)
+//!
+//! [`ThermodynamicDreamer::imagine_futures_into`] **não aloca** quando o
+//! [`DreamEnsemble`] de saída já foi dimensionado (via
+//! [`DreamEnsemble::with_capacity`] ou por uma chamada anterior) e o workspace
+//! interno do sonhador já cobre `num_samples · 3 · N` f64. A primeira chamada
+//! (ou uma chamada com `num_samples` maior) paga a alocação de *warmup*.
+//!
+//! # Determinismo
+//!
+//! Cada amostra `k` roda com `ChaCha8Rng` semeado por
+//! `seed_do_ciclo ^ f(k)`; o resultado vai para o slot `k`, portanto é
+//! bit-a-bit independente do número de threads do pool rayon.
+//!
+//! O sonhador mantém um contador `call_index`: a semente do ciclo `c` é
+//! `seed ^ (c · 0x9E37_79B9_7F4A_7C15)`. Isso mantém o determinismo **por
+//! sequência** (mesma configuração + mesma sequência de chamadas ⇒ mesmos
+//! resultados) e evita que todo ciclo com `J` fixo produza exatamente o mesmo
+//! sonho. O ciclo `0` reproduz a semente histórica `cfg.seed`.
 
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use rayon::prelude::*;
+
+use crate::error::{AetherError, Result};
 
 /// Configuração do sonhador.
 #[derive(Clone, Copy, Debug)]
@@ -33,7 +55,7 @@ pub struct DreamerConfig {
     pub gamma_damp: f64,
     /// Profundidade do controle na borda do caos `β_chaos` (0 = solver puro).
     pub beta_chaos: f64,
-    /// Semente base (cada amostra usa `seed + k`).
+    /// Semente base (cada amostra usa `seed do ciclo + f(k)`).
     pub seed: u64,
 }
 
@@ -63,6 +85,54 @@ pub struct DreamEnsemble {
     pub temperature: f64,
 }
 
+impl DreamEnsemble {
+    /// Cria um ensemble vazio com `num_samples` linhas de `n` spins já
+    /// alocadas e capacidade para `num_samples` energias.
+    ///
+    /// É o buffer de *warmup* do contrato de zero alocação: depois de uma
+    /// chamada de [`ThermodynamicDreamer::imagine_futures_into`] com este
+    /// `out`, chamadas subsequentes de mesmo `(n, num_samples)` não alocam.
+    pub fn with_capacity(n: usize, num_samples: usize) -> Self {
+        let mut samples = Vec::with_capacity(num_samples);
+        for _ in 0..num_samples {
+            samples.push(vec![0i8; n]);
+        }
+        Self {
+            samples,
+            energies: Vec::with_capacity(num_samples),
+            mean_energy: 0.0,
+            epistemic_uncertainty: 0.0,
+            temperature: 0.0,
+        }
+    }
+
+    /// Ensemble degenerado determinístico (todos os spins em `-1`), usado
+    /// como fallback documentado de [`ThermodynamicDreamer::imagine_futures`]
+    /// quando os parâmetros são inválidos.
+    ///
+    /// Nunca contém `NaN`/`inf`; `temperature` é sanitizada (`0.0` se negativa
+    /// ou não finita). Não é uma amostra de Boltzmann — é apenas um estado
+    /// consistente para consumidores que não tratam erro.
+    pub fn degenerate(n: usize, num_samples: usize, temperature: f64) -> Self {
+        let t = if temperature.is_finite() && temperature >= 0.0 {
+            temperature
+        } else {
+            0.0
+        };
+        let mut samples = Vec::with_capacity(num_samples);
+        for _ in 0..num_samples {
+            samples.push(vec![-1i8; n]);
+        }
+        Self {
+            energies: vec![0.0; num_samples],
+            samples,
+            mean_energy: 0.0,
+            epistemic_uncertainty: 0.0,
+            temperature: t,
+        }
+    }
+}
+
 /// Energia de Ising sobre `J` plana `[N,N]` (f64), campo `h` e spins `s`.
 #[inline]
 fn ising_energy(j: &[f32], h: &[f32], s: &[i8], n: usize) -> f64 {
@@ -77,6 +147,36 @@ fn ising_energy(j: &[f32], h: &[f32], s: &[i8], n: usize) -> f64 {
         e -= h[i] as f64 * s[i] as f64;
     }
     e
+}
+
+/// Escala de acoplamento `c0 = 0.5 / (sqrt(N) · std(J))` — mesma regra do
+/// Módulo 1. `O(N²)`, sem alocação.
+fn coupling_scale(j: &[f32], n: usize) -> f64 {
+    let mut count = 0usize;
+    let mut sum = 0.0f64;
+    let mut sumsq = 0.0f64;
+    for i in 0..n {
+        let off = i * n;
+        for k in 0..n {
+            if i != k {
+                let v = j[off + k] as f64;
+                sum += v;
+                sumsq += v * v;
+                count += 1;
+            }
+        }
+    }
+    let std_j = if count > 0 {
+        let mean = sum / count as f64;
+        ((sumsq / count as f64 - mean * mean).max(0.0)).sqrt()
+    } else {
+        0.0
+    };
+    if std_j > 1e-12 {
+        0.5 / ((n as f64).sqrt() * std_j)
+    } else {
+        0.5 / (n as f64).sqrt()
+    }
 }
 
 /// Gaussiana padrão via Box-Muller (determinística com o RNG do crate).
@@ -95,8 +195,16 @@ fn normal(rng: &mut ChaCha8Rng) -> f64 {
 pub struct ThermodynamicDreamer {
     n: usize,
     cfg: DreamerConfig,
-    /// Energia de referência de um estado aleatório (para comparação).
+    /// RNG stateful da referência aleatória (energia média de estados uniformes).
     rng: ChaCha8Rng,
+    /// Workspace por amostra: `[x (N), y (N), hx (N)]` f64, fatiado por
+    /// `par_chunks_mut(3·N)`. Pré-alocado no warmup, nunca realocado quando o
+    /// número de amostras não cresce.
+    scratch: Vec<f64>,
+    /// Buffer reutilizado por [`Self::random_reference_energy`].
+    ref_state: Vec<i8>,
+    /// Número de chamadas de amostragem já feitas (varia a semente por ciclo).
+    call_index: u64,
 }
 
 impl std::fmt::Debug for ThermodynamicDreamer {
@@ -104,6 +212,7 @@ impl std::fmt::Debug for ThermodynamicDreamer {
         f.debug_struct("ThermodynamicDreamer")
             .field("n", &self.n)
             .field("cfg", &self.cfg)
+            .field("call_index", &self.call_index)
             .finish()
     }
 }
@@ -115,6 +224,9 @@ impl ThermodynamicDreamer {
             n,
             cfg,
             rng: ChaCha8Rng::seed_from_u64(cfg.seed),
+            scratch: Vec::new(),
+            ref_state: vec![0i8; n],
+            call_index: 0,
         }
     }
 
@@ -123,14 +235,105 @@ impl ThermodynamicDreamer {
         self.n
     }
 
-    /// Amostra `num_samples` futuros da distribuição de Boltzmann
-    /// `P(s) ∝ e^{−H(s)/T}` com `steps` passos de integração por trajetória.
+    /// Número de chamadas de amostragem já realizadas (semente de ciclo).
+    pub fn call_index(&self) -> u64 {
+        self.call_index
+    }
+
+    /// Valida os parâmetros de amostragem sem `panic`.
     ///
-    /// * `j`: `[N,N]` plano (f32), simétrica, diagonal zero;
-    /// * `h`: `[N]` campo externo;
-    /// * `temperature`: `T` (0.0 = regime de ação determinístico);
-    /// * retorna o [`DreamEnsemble`] com amostras, energias, ⟨H⟩ e incerteza.
-    pub fn imagine_futures(
+    /// Rejeita: `n == 0`, `num_samples == 0`, `steps == 0`, `dt` não finito ou
+    /// `<= 0`, `temperature` não finita ou `< 0`, `J.len() != N²`,
+    /// `h.len() != N`.
+    fn validate(
+        &self,
+        j: &[f32],
+        h: &[f32],
+        temperature: f64,
+        num_samples: usize,
+        steps: usize,
+        dt: f64,
+    ) -> Result<()> {
+        let n = self.n;
+        if n == 0 {
+            return Err(AetherError::Config(
+                "dimensao n deve ser > 0 (dim(0) nao tem dinamica)".into(),
+            ));
+        }
+        if j.len() != n * n {
+            return Err(AetherError::shape([n, n], [j.len()]));
+        }
+        if h.len() != n {
+            return Err(AetherError::shape([n], [h.len()]));
+        }
+        if num_samples == 0 {
+            return Err(AetherError::Config(
+                "num_samples deve ser > 0 (ensemble vazio nao mede incerteza)".into(),
+            ));
+        }
+        if steps == 0 {
+            return Err(AetherError::Config(
+                "steps deve ser > 0 (integracao vazia)".into(),
+            ));
+        }
+        if !dt.is_finite() || dt <= 0.0 {
+            return Err(AetherError::Config(format!(
+                "dt deve ser finito e > 0 (obtido {dt})"
+            )));
+        }
+        if !temperature.is_finite() || temperature < 0.0 {
+            return Err(AetherError::Config(format!(
+                "temperature deve ser finita e >= 0 (obtido {temperature})"
+            )));
+        }
+        Ok(())
+    }
+
+    /// Semente base da chamada atual e avança o contador de ciclos.
+    fn next_cycle_seed(&mut self) -> u64 {
+        let cycle = self.call_index;
+        self.call_index = self.call_index.wrapping_add(1);
+        self.cfg.seed ^ cycle.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+    }
+
+    /// Dimensionaliza `out` (amostras/energias) e o workspace interno.
+    ///
+    /// Só paga alocação quando o tamanho pedido é maior que o já reservado —
+    /// esta é a única parte que pode alocar dentro do caminho de amostragem.
+    fn prepare(&mut self, out: &mut DreamEnsemble, num_samples: usize) {
+        let n = self.n;
+
+        if out.samples.len() > num_samples {
+            out.samples.truncate(num_samples);
+        }
+        out.samples.resize_with(num_samples, Vec::new);
+        for s in out.samples.iter_mut() {
+            if s.len() != n {
+                s.clear();
+                s.resize(n, 0);
+            }
+        }
+
+        out.energies.resize(num_samples, 0.0);
+
+        let needed = num_samples * 3 * n;
+        if self.scratch.len() < needed {
+            self.scratch.resize(needed, 0.0);
+        }
+    }
+
+    /// Amostra `num_samples` futuros **em um buffer existente**.
+    ///
+    /// Sem alocação quando `out` já tem `num_samples` linhas de `N` spins,
+    /// `num_samples` energias e o workspace já cobriu `num_samples · 3 · N`.
+    /// Caso contrário, dimensiona uma única vez (warmup) e retorna `Ok(())`.
+    ///
+    /// Parâmetros inválidos retornam [`AetherError`] em vez de `panic`/`NaN`
+    /// (ver [`Self::try_imagine_futures`]). Os resultados são independentes da
+    /// quantidade de threads do pool rayon (cada amostra tem seu slot e sua
+    /// semente).
+    #[allow(clippy::too_many_arguments)] // espelha a assinatura pública + buffer
+    pub fn imagine_futures_into(
         &mut self,
         j: &[f32],
         h: &[f32],
@@ -138,54 +341,37 @@ impl ThermodynamicDreamer {
         num_samples: usize,
         steps: usize,
         dt: f64,
-    ) -> DreamEnsemble {
+        out: &mut DreamEnsemble,
+    ) -> Result<()> {
+        self.validate(j, h, temperature, num_samples, steps, dt)?;
+        self.prepare(out, num_samples);
+
         let n = self.n;
-        assert_eq!(j.len(), n * n, "J precisa ser [N,N] plana");
-        assert_eq!(h.len(), n, "h precisa ter n entradas");
-        assert!(temperature >= 0.0, "T >= 0");
-
-        // normalização c0 = 0.5 / (sqrt(N) · std(J)) — mesma regra do Módulo 1.
-        let mut count = 0usize;
-        let mut sum = 0.0f64;
-        let mut sumsq = 0.0f64;
-        for i in 0..n {
-            for k in 0..n {
-                if i != k {
-                    let v = j[i * n + k] as f64;
-                    sum += v;
-                    sumsq += v * v;
-                    count += 1;
-                }
-            }
-        }
-        let std_j = if count > 0 {
-            let mean = sum / count as f64;
-            ((sumsq / count as f64 - mean * mean).max(0.0)).sqrt()
-        } else {
-            0.0
-        };
-        let c0 = if std_j > 1e-12 {
-            0.5 / ((n as f64).sqrt() * std_j)
-        } else {
-            0.5 / (n as f64).sqrt()
-        };
-
         let a0 = self.cfg.a0;
         let gamma = self.cfg.gamma_damp;
         let beta = self.cfg.beta_chaos;
-        let base_seed = self.cfg.seed;
-        let steps_max = steps.max(1);
+        let base_seed = self.next_cycle_seed();
+        let noise_scale = (2.0 * temperature * dt).sqrt();
+        let c0 = coupling_scale(j, n);
+
+        out.temperature = temperature;
+
+        let scratch = &mut self.scratch[..num_samples * 3 * n];
+        let samples = &mut out.samples[..num_samples];
+        let energies = &mut out.energies[..num_samples];
 
         // K trajetórias paralelas, cada uma uma realização independente.
-        let results: Vec<(Vec<i8>, f64)> = (0..num_samples)
-            .into_par_iter()
-            .map(|k| {
-                let mut rng =
-                    ChaCha8Rng::seed_from_u64(base_seed ^ (0x9E37_79B9 + k as u64 * 7919));
-                let mut x = vec![0.0f64; n];
-                let mut y = vec![0.0f64; n];
-                let mut hx = vec![0.0f64; n];
-                let mut s = vec![0i8; n];
+        samples
+            .par_iter_mut()
+            .enumerate()
+            .zip(energies.par_iter_mut())
+            .zip(scratch.par_chunks_mut(3 * n))
+            .for_each(|(((k, s), energy), w)| {
+                let mut rng = ChaCha8Rng::seed_from_u64(
+                    base_seed ^ 0x9E37_79B9u64.wrapping_add((k as u64).wrapping_mul(7919)),
+                );
+                let (x, rest) = w.split_at_mut(n);
+                let (y, hx) = rest.split_at_mut(n);
 
                 // estado inicial: sign de ruído fraco (mesma regra do Módulo 1)
                 for v in x.iter_mut() {
@@ -195,10 +381,8 @@ impl ThermodynamicDreamer {
                     *v = rng.gen::<f64>() * 0.2 - 0.1;
                 }
 
-                let noise_scale = (2.0 * temperature * dt).sqrt();
-
-                for step in 0..steps_max {
-                    let frac = step as f64 / steps_max as f64;
+                for step in 0..steps {
+                    let frac = step as f64 / steps as f64;
                     // Rampa acelerada: a bifurcação "abre" em 40% do percurso,
                     // deixando 60% do tempo para o relaxamento termodinâmico
                     // (sem isso o momento não se acumula e nada colapsa).
@@ -236,76 +420,111 @@ impl ThermodynamicDreamer {
                 for i in 0..n {
                     s[i] = if x[i] >= 0.0 { 1 } else { -1 };
                 }
-                let energy = ising_energy(j, h, &s, n);
-                (s, energy)
-            })
-            .collect();
+                *energy = ising_energy(j, h, s, n);
+            });
 
-        let mut samples = Vec::with_capacity(num_samples);
-        let mut energies = Vec::with_capacity(num_samples);
-        for (s, e) in results {
-            samples.push(s);
-            energies.push(e);
+        let mut sum = 0.0f64;
+        for e in energies.iter() {
+            sum += *e;
         }
-        let mean_energy = if energies.is_empty() {
-            0.0
-        } else {
-            energies.iter().sum::<f64>() / energies.len() as f64
-        };
+        out.mean_energy = sum / num_samples as f64;
 
         // Incerteza epistêmica: variância média dos spins entre os futuros.
         // s ∈ {-1,+1} ⇒ Var ∈ [0,1]; média sobre os N osciladores.
-        let epistemic_uncertainty = if num_samples < 2 {
+        out.epistemic_uncertainty = if num_samples < 2 || n == 0 {
             0.0
         } else {
             let k = num_samples as f64;
             let mut var_sum = 0.0f64;
             for i in 0..n {
                 let mut m = 0.0f64;
-                for s in &samples {
+                for s in samples.iter() {
                     m += s[i] as f64;
                 }
                 m /= k;
                 let mut v = 0.0f64;
-                for s in &samples {
+                for s in samples.iter() {
                     let d = s[i] as f64 - m;
                     v += d * d;
                 }
-                v /= k;
-                var_sum += v;
+                var_sum += v / k;
             }
             (var_sum / n as f64).clamp(0.0, 1.0)
         };
 
-        DreamEnsemble {
-            samples,
-            energies,
-            mean_energy,
-            epistemic_uncertainty,
-            temperature,
+        Ok(())
+    }
+
+    /// Versão validada de [`Self::imagine_futures`]: devolve `Err` tipado em
+    /// vez de propagar `NaN`/`panic`.
+    pub fn try_imagine_futures(
+        &mut self,
+        j: &[f32],
+        h: &[f32],
+        temperature: f64,
+        num_samples: usize,
+        steps: usize,
+        dt: f64,
+    ) -> Result<DreamEnsemble> {
+        self.validate(j, h, temperature, num_samples, steps, dt)?;
+        let mut out = DreamEnsemble::with_capacity(self.n, num_samples);
+        self.imagine_futures_into(j, h, temperature, num_samples, steps, dt, &mut out)?;
+        Ok(out)
+    }
+
+    /// Amostra `num_samples` futuros da distribuição de Boltzmann
+    /// `P(s) ∝ e^{−H(s)/T}` com `steps` passos de integração por trajetória.
+    ///
+    /// * `j`: `[N,N]` plano (f32), simétrica, diagonal zero;
+    /// * `h`: `[N]` campo externo;
+    /// * `temperature`: `T` (0.0 = regime de ação determinístico);
+    /// * retorna o [`DreamEnsemble`] com amostras, energias, ⟨H⟩ e incerteza.
+    ///
+    /// # Parâmetros inválidos
+    ///
+    /// Esta variante **não faz `panic`**: se a validação falhar (por exemplo
+    /// `dt <= 0`, `T` negativo/`NaN`, `steps == 0`, `J`/`h` com tamanho errado,
+    /// `n == 0`, `num_samples == 0`), devolve
+    /// [`DreamEnsemble::degenerate`] — estado determinístico com todos os spins
+    /// em `-1`, energias `0.0` e incerteza `0.0`, sem `NaN`. Use
+    /// [`Self::try_imagine_futures`] (ou `imagine_futures_into`) quando o erro
+    /// precisa ser diagnosticado.
+    pub fn imagine_futures(
+        &mut self,
+        j: &[f32],
+        h: &[f32],
+        temperature: f64,
+        num_samples: usize,
+        steps: usize,
+        dt: f64,
+    ) -> DreamEnsemble {
+        match self.try_imagine_futures(j, h, temperature, num_samples, steps, dt) {
+            Ok(ensemble) => ensemble,
+            Err(_) => DreamEnsemble::degenerate(self.n, num_samples, temperature),
         }
     }
 
-    /// Energia de um estado aleatório de referência (para os testes).
+    /// Energia **média** de `trials` estados aleatórios uniformes
+    /// `s_i ∈ {-1,+1}` (referência de comparação para os testes).
+    ///
+    /// * `trials == 0` ⇒ `0.0`;
+    /// * `J`/`h` com shape inesperado ou `n == 0` ⇒ `0.0` (sem `panic`);
+    /// * consome o RNG interno (sequência stateful) e reutiliza
+    ///   `self.ref_state`, sem alocar por trial.
     pub fn random_reference_energy(&mut self, j: &[f32], h: &[f32], trials: usize) -> f64 {
         let n = self.n;
-        let mut best = f64::INFINITY;
-        for _ in 0..trials {
-            let s: Vec<i8> = (0..n)
-                .map(|_| {
-                    let bit = self.rng.gen::<f64>() < 0.5;
-                    if bit {
-                        1
-                    } else {
-                        -1
-                    }
-                })
-                .collect();
-            let e = ising_energy(j, h, &s, n);
-            if e < best {
-                best = e;
-            }
+        if trials == 0 || n == 0 || j.len() != n * n || h.len() != n {
+            return 0.0;
         }
-        best
+        let rng = &mut self.rng;
+        let state = &mut self.ref_state;
+        let mut acc = 0.0f64;
+        for _ in 0..trials {
+            for s in state.iter_mut() {
+                *s = if rng.gen::<f64>() < 0.5 { 1 } else { -1 };
+            }
+            acc += ising_energy(j, h, state, n);
+        }
+        acc / trials as f64
     }
 }
