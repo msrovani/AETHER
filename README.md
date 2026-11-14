@@ -1,50 +1,65 @@
-# AETHER
+# AETHER — motor cognitivo pós-token em Rust
 
-Motor cognitivo experimental de **computacao pos-token**: a informacao entra e circula como
-sinal continuo (forma de onda, campo, fase de oscilador) — sem tokenizacao, sem transformer,
-sem protocolo semantico de rede.
+Protótipo experimental de computação baseada em física contínua: **zero tokens,
+zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 
-Especificacao normativa: [`ARCHITECTURE.md`](ARCHITECTURE.md) e [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md).
-Coordenacao entre agentes: [`FORUM_PROTOCOL.md`](FORUM_PROTOCOL.md).
+* **ARCHITECTURE.md** — Fase 1 (Módulos 1–4): organismo reflexivo.
+* **ARCHITECTURE_PHASE2.md** — Fase 2 (Módulos 5–8): memória, imaginação,
+  morfogênese e encarnação em LAN.
+* **docs/API_CONTRACT.md** — contrato normativo de API entre módulos.
 
 ## Pilares
 
-| Feature | Modulo | Papel |
-|---|---|---|
-| `m1` | `src/core/thermodynamic_solver.rs` | Ising continuo via Bifurcacao Simulada Balistica (bSB) |
-| `m2` | `src/core/wave_interference.rs` | operador neural de Fourier / interferencia espectral |
-| `m3` | `src/core/kuramoto_field.rs` | sincronizacao de fase P2P (UDP, 40 bytes binarios) |
-| `m4` | `src/simulation/*` | organismo em malha fechada + painel ratatui |
+| Módulo | Feature | Arquivo | Física |
+|---|---|---|---|
+| 1 | `m1` | `src/core/thermodynamic_solver.rs` | Ising contínuo por Bifurcação Simulada Balística (Euler simplético, paredes inelásticas, elitismo) |
+| 2 | `m2` | `src/core/wave_interference.rs` | Operador Neural de Fourier (interferência espectral, invariante à resolução) |
+| 3 | `m3` | `src/core/kuramoto_field.rs` | Sincronização de fase P2P por UDP binário de 40 bytes (zero texto) |
+| 4 | `m4` | `src/simulation/` | Organismo integrado de loop fechado a 60 Hz |
+| 5 | `m5` | `src/phase_memory.rs` | Memória associativa oscilatória com acoplamento complexo (atratores de fase) |
+| 6 | `m6` | `src/thermodynamic_dreamer.rs` | GSB na borda do caos + Langevin (amostragem de Boltzmann, incerteza epistêmica) |
+| 7 | `m7` | `src/morphogenesis.rs` | Plasticidade topológica por energia livre (crescimento hebbiano + poda metabólica) |
+| 8 | `m8` | `src/bin/aether_daemon.rs` | Transdutor físico real + enxame UDP multicast `239.255.42.99:7777` |
 
 ## Build
 
-```powershell
-.\scripts\cargo.ps1 build --release                 # tudo (m1..m4)
-.\scripts\cargo.ps1 check --no-default-features --features m1
-.\scripts\cargo.ps1 test --release
+```bash
+cargo test --release          # 34 testes: invariantes físicos + engenharia
+cargo clippy --all-targets -- -D warnings
+cargo run --release --bin aether-organism   # Fase 1: painel em tempo real
+cargo run --release --bin aether-daemon     # Fase 2: organismo encarnado
 ```
 
-`scripts\cargo.ps1` apenas prepara o `PATH` do MinGW (`dlltool`) antes de chamar o cargo.
-Alvos de build por agente: `CARGO_TARGET_DIR=target_<agente>` (ignorados no Git).
+No Windows com a toolchain `x86_64-pc-windows-gnu`, use o wrapper
+`.\scripts\cargo.ps1` (ajusta o PATH para os binutils do MinGW) ou coloque
+`C:\Users\msrov\Tools\mingw64\mingw64\bin` no PATH (necessário porque os crates
+`windows-sys ≥ 0.52` usam *raw-dylib*, que exige `dlltool` + `as`).
 
-## Ciclo automatico (5 min)
+## Enxame multi-máquina
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\cycle.ps1            # check + commit
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\cycle.ps1 -PrMerge -Push
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\cycle_install.ps1 install
+```bash
+# máquina A
+cargo run --release --bin aether-daemon
+# máquina B (mesma rede)
+cargo run --release --bin aether-daemon
 ```
 
-Politica completa em [`docs/REPO_SYNC.md`](docs/REPO_SYNC.md); historico em
-[`docs/CYCLE_LOG.md`](docs/CYCLE_LOG.md); versoes em [`CHANGELOG.md`](CHANGELOG.md).
+As instâncias acoplam fase automaticamente via multicast — observe `R(LAN)`
+subir a ~1.0 e a Surpresa `F(t)` reagir a carga de CPU na outra máquina, sem um
+único pacote JSON/HTTP.
 
-Regra de ouro do ciclo: **gate verde + mudanca em `src/`/`tests/`** ->
-`chore(cycle): 0.0.N` + tag `v0.0.N`; **gate vermelho ou so docs/tools** ->
-`wip(cycle): snapshot` sem bump/tag.
+## Invariantes validados (`cargo test --release`)
 
-## Estado atual
-
-- Versao: `0.0.2` — baseline versionado e publicado.
-- `m1` (thermodynamic_solver) e `m3` (kuramoto_field) implementados; `m2` em andamento.
-- Remote: `https://github.com/msrovani/AETHER.git` (`main`), push + merge de PRs
-  habilitados no ciclo de 5 min.
+1. **Termodinâmico** — `H(s_final) < H(s_0)` estritamente, 50/50 matrizes `J`
+   simétricas aleatórias (`N = 64`).
+2. **Resolução ondulatória** — o mesmo bloco processa `L = 128/512/2048` com
+   pesos bit-a-bit idênticos.
+3. **Sincronização sem mensagens** — 4 nós UDP de 40 bytes atingem
+   `R(t) > 0.95` em < 3 s (medido: ~0,3 s).
+4. **Memória de fase** — recall com 40% de máscara reconstrói fases ocultas
+   com erro angular médio < 0.15 rad.
+5. **Imaginação** — `U(T=1.5) > U(T=0.001)` e amostras abaixo do estado
+   aleatório típico.
+6. **Morfogênese** — simetria estrita de `J`, poda no silêncio, zero NaN/Inf.
+7. **Engenharia** — `relax_into`/`forward_into` com zero alocação, codec de
+   40 bytes com round-trip e rejeição de tamanho, determinismo bit-a-bit.

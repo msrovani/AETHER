@@ -212,6 +212,8 @@ fn now_ns() -> u64 {
 #[derive(Clone, Debug)]
 struct PeerSlot {
     addr: SocketAddrV4,
+    /// `node_id` aprendido do primeiro pacote deste peer (None até ouvir).
+    node_id: Option<u32>,
     phase: [f64; CHANNELS],
     heard: bool,
 }
@@ -296,6 +298,7 @@ impl KuramotoPhaseNode {
             .iter()
             .map(|addr| PeerSlot {
                 addr: *addr,
+                node_id: None,
                 phase: [0.0; CHANNELS],
                 heard: false,
             })
@@ -395,6 +398,7 @@ impl KuramotoPhaseNode {
         self.peer_slots.clear();
         self.peer_slots.extend(self.cfg.peers.iter().map(|addr| PeerSlot {
             addr: *addr,
+            node_id: None,
             phase: [0.0; CHANNELS],
             heard: false,
         }));
@@ -430,7 +434,42 @@ impl KuramotoPhaseNode {
                         SocketAddr::V4(addr) => addr,
                         SocketAddr::V6(_) => continue,
                     };
-                    if let Some(slot) = self.peer_slots.iter_mut().find(|s| s.addr == addr) {
+                    // Casamento por `node_id` (o pacote carrega a identidade).
+                    // Em multicast a origem não é o endereço do grupo, então o
+                    // endereço só é usado como fallback (unicast puro).
+                    let can_learn = self.peer_slots.len() < 64;
+                    let slot = self
+                        .peer_slots
+                        .iter_mut()
+                        .find(|s| s.node_id == Some(packet.node_id));
+                    let slot = match slot {
+                        Some(slot) => Some(slot),
+                        None => {
+                            let by_addr = self
+                                .peer_slots
+                                .iter_mut()
+                                .find(|s| s.addr == addr && s.node_id.is_none());
+                            match by_addr {
+                                Some(s) => {
+                                    s.node_id = Some(packet.node_id);
+                                    Some(s)
+                                }
+                                // topologia aprendida no fio: peer novo entra
+                                // como slot próprio (limite físico de segurança)
+                                None if can_learn => {
+                                    self.peer_slots.push(PeerSlot {
+                                        addr,
+                                        node_id: Some(packet.node_id),
+                                        phase: [0.0; CHANNELS],
+                                        heard: true,
+                                    });
+                                    None
+                                }
+                                None => None,
+                            }
+                        }
+                    };
+                    if let Some(slot) = slot {
                         for (dst, src) in slot.phase.iter_mut().zip(packet.phase.iter()) {
                             *dst = f64::from(*src);
                         }
