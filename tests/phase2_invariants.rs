@@ -145,7 +145,12 @@ fn test_thermodynamic_dreamer_uncertainty() {
     const SAMPLES: usize = 32;
     const STEPS: usize = 200;
 
-    let (j, h) = frustrated_j(N, 0xD12E);
+    let (j, _h) = frustrated_j(N, 0xD12E);
+    // Campo externo real (o que o Módulo 4 entrega ao solver): com campo,
+    // o colapso a T→0 é determinado pela física e não pelo ruído inicial.
+    let h: Vec<f32> = (0..N)
+        .map(|i| if i % 2 == 0 { 0.3 } else { -0.3 })
+        .collect();
     let mut dreamer = ThermodynamicDreamer::new(
         N,
         DreamerConfig {

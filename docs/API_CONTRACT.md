@@ -142,6 +142,8 @@ pub struct KuramotoConfig {
     pub hz: f64,
     pub adjacency: Option<[[f64; 4]; 4]>,
     pub perturb_duration: std::time::Duration,
+    /// Grupo multicast a entrar (`IP_ADD_MEMBERSHIP`), Módulo 8. `None` = unicast.
+    pub multicast: Option<std::net::Ipv4Addr>,
 }
 
 #[derive(Clone, Copy, Debug)]

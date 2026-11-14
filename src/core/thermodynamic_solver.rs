@@ -268,12 +268,10 @@ impl ThermodynamicIsingSolver {
     /// `H(s) = -0.5 * s' J s - h' s`, com `J: [N, N]` e `h: [1, N]`.
     ///
     /// Não aloca. Formas inválidas (ou views não contíguas) retornam
-    /// `f64::NAN` — a validação estrita fica em `debug_assert!`, para que o
-    /// caminho quente não pague checagem em release.
+    /// `f64::NAN` — a checagem é única e idêntica em debug e release (a
+    /// assinatura `-> f64` não tem canal de erro).
     pub fn energy(&self, j: &ArrayView2<'_, f64>, h: &ArrayView2<'_, f64>, s: &[i8]) -> f64 {
         let n = s.len();
-        debug_assert_eq!(j.dim(), (n, n), "energy: J deve ser [N, N]");
-        debug_assert_eq!(h.dim(), (1, n), "energy: h deve ser [1, N]");
         if j.dim() != (n, n) || h.dim() != (1, n) {
             return f64::NAN;
         }

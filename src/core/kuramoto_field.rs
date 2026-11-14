@@ -29,7 +29,7 @@
 //!   modo que `rx_bytes % 40 == 0` é sempre verdadeiro por construção.
 
 use std::io::ErrorKind;
-use std::net::{SocketAddr, SocketAddrV4, UdpSocket};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -168,6 +168,9 @@ pub struct KuramotoConfig {
     pub adjacency: Option<[[f64; 4]; 4]>,
     /// Duração de uma perturbação injetada.
     pub perturb_duration: Duration,
+    /// Grupo multicast a entrar (`IP_ADD_MEMBERSHIP`), para descoberta P2P
+    /// automática na LAN (Módulo 8). `None` = unicast puro.
+    pub multicast: Option<Ipv4Addr>,
 }
 
 /// Estado observável de um nó em um instante.
@@ -263,6 +266,13 @@ impl KuramotoPhaseNode {
         let _ = socket.set_send_buffer_size(SOCKET_BUFFER_BYTES);
         socket.bind(&SocketAddr::V4(cfg.bind).into())?;
         socket.set_nonblocking(true)?;
+
+        // Multicast (Módulo 8): entra no grupo ANTES da conversão para
+        // `UdpSocket`, para que a associação valha para o mesmo socket.
+        if let Some(group) = cfg.multicast {
+            let _ = socket.join_multicast_v4(&group, &Ipv4Addr::UNSPECIFIED);
+            let _ = socket.set_multicast_loop_v4(true);
+        }
 
         let socket: UdpSocket = socket.into();
         let local_addr = match socket.local_addr()? {

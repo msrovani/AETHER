@@ -629,7 +629,7 @@ impl WaveInterferenceBlock {
         for k in 0..nb {
             total += spec.column(k).iter().map(bin_power).sum::<f64>();
         }
-        if !(total > 0.0) || !total.is_finite() {
+        if total <= 0.0 || !total.is_finite() {
             return Ok(0.0);
         }
         let mut h = 0.0f64;
@@ -661,7 +661,7 @@ impl WaveInterferenceBlock {
         let total: f64 = (0..k_eff)
             .map(|k| spec.column(k).iter().map(bin_power).sum::<f64>())
             .sum();
-        if !(total > 0.0) || !total.is_finite() {
+        if total <= 0.0 || !total.is_finite() {
             return 0.0;
         }
         let mut h = 0.0f64;

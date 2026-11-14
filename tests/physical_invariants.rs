@@ -175,6 +175,7 @@ fn config_loopback(id: u32, seed: u64) -> KuramotoConfig {
         hz: 60.0,
         adjacency: None,
         perturb_duration: Duration::from_millis(250),
+        multicast: None,
     }
 }
 

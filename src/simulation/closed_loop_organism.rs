@@ -178,6 +178,7 @@ impl ClosedLoopOrganism {
                 hz: cfg.hz,
                 adjacency: None,
                 perturb_duration: Duration::from_millis(250),
+                multicast: None,
             };
             nodes.push(KuramotoPhaseNode::new(node_cfg)?);
         }
