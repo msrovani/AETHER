@@ -26,6 +26,15 @@ pub mod error;
 #[cfg(feature = "m4")]
 pub mod simulation;
 
+#[cfg(feature = "m5")]
+pub mod phase_memory;
+
+#[cfg(feature = "m6")]
+pub mod thermodynamic_dreamer;
+
+#[cfg(feature = "m7")]
+pub mod morphogenesis;
+
 pub use error::{AetherError, Result};
 
 /// Versao do protocolo de pacotes de fase (UDP, 40 bytes, little-endian).

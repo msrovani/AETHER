@@ -3,6 +3,19 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.5] - 2026-11-14
+
+### Changed
+
+- Ciclo automatico: 5 arquivo(s) (.:3, src:1, tests:1).
+- Gate: ok (1s).
+
+- `Cargo.lock`
+- `Cargo.toml`
+- `src/lib.rs`
+- `tests/test_wave.rs`
+- `ARCHITECTURE_PHASE2.md`
+
 ## [0.0.4] - 2026-11-14
 
 ### Changed

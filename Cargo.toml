@@ -1,6 +1,6 @@
 ﻿[package]
 name = "aether_engine"
-version = "0.0.4"
+version = "0.0.5"
 edition = "2021"
 rust-version = "1.78"
 description = "AETHER â€” motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
@@ -16,6 +16,11 @@ name = "aether-organism"
 path = "src/bin/organism.rs"
 required-features = ["m4"]
 
+[[bin]]
+name = "aether-daemon"
+path = "src/bin/aether_daemon.rs"
+required-features = ["m8"]
+
 # Features de modulo: permitem build isolado de cada pilar (paralelismo de agentes
 # sem colisao de codigo) e compilacao enxuta quando so um pilar e necessario.
 [features]
@@ -25,6 +30,10 @@ m2 = []
 m3 = []
 m4 = ["m1", "m2", "m3", "dep:ratatui", "dep:crossterm"]
 tui = ["m4"]
+m5 = []
+m6 = ["m1"]
+m7 = ["m1"]
+m8 = ["m1", "m2", "m3", "m4", "m5", "m6", "m7"]
 
 [dependencies]
 ndarray = { version = "0.16", features = ["rayon"] }
