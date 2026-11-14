@@ -154,8 +154,9 @@ impl Default for PhaseMemoryConfig {
 ///
 /// # Gravação de múltiplos atratores
 ///
-/// `imprint` acumula o fasor complexo `C_ij += η_W·e^{i(ψ_j−ψ_i)} − γ_W·C_ij`
-/// e publica `(W_ij, δ_ij) = (|C_ij|/A, arg C_ij)`, com `δ` relaxado pela regra
+/// `imprint` acumula o fasor complexo `C_ij += η_W·e^{i(ψ_j−ψ_i)}` (com
+/// esquecimento metabólico `(1−γ_W)^cycles` por episódio) e publica
+/// `(W_ij, δ_ij) = (|C_ij|/⟨|C|⟩, arg C_ij)`, com `δ` relaxado pela regra
 /// polar `Δδ` da especificação. A dinâmica de recuperação e a energia de fase
 /// são exatamente as da especificação; o acoplamento é a superposição dos
 /// padrões gravados.
@@ -477,10 +478,12 @@ impl ComplexPhaseMemory {
         dt: f32,
         out: &mut [f32],
     ) -> f32 {
+        // `out` incompatível: no-op total (não integra, não escreve, não panic).
+        if out.len() != self.n {
+            return self.phase_energy();
+        }
         if self.integrate(partial_cue, mask, steps, dt).is_err() {
-            if out.len() == self.n {
-                out.copy_from_slice(&self.phases);
-            }
+            out.copy_from_slice(&self.phases);
             return self.phase_energy();
         }
         out.copy_from_slice(&self.phases);
