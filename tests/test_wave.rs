@@ -217,7 +217,8 @@ fn inv_w4_entropia_coerente_menor_que_ruido() {
     let zeros = Array2::<f32>::zeros((4, 128));
     assert_eq!(block.compute_spectral_entropy(zeros.view()).unwrap(), 0.0);
     let dc = Array2::<f32>::from_shape_fn((4, 128), |_| 0.25);
-    assert!(block.compute_spectral_entropy(dc.view()).unwrap() < 1e-6);
+    let h_dc = block.compute_spectral_entropy(dc.view()).unwrap();
+    assert!(h_dc < 1e-6, "H(DC puro) = {h_dc} (esperado ~0)");
 }
 
 // ---------------------------------------------------------------------------

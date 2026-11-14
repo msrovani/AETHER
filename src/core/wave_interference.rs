@@ -623,21 +623,20 @@ impl WaveInterferenceBlock {
         }
 
         // Potência por bin somada sobre os canais: p_k = Σ_c |U_c,k|² / total.
-        let spec_slice = spec.as_slice().expect("entropy.spec contíguo");
+        // A distribuição tem K = nb categorias (bins), não C_in*nb: somar os
+        // canais antes de normalizar é o que dá a entropia *espectral*.
         let mut total = 0.0f64;
-        let mut h = 0.0f64;
-        for row in spec_slice.chunks_exact(nb) {
-            total += row.iter().map(bin_power).sum::<f64>();
+        for k in 0..nb {
+            total += spec.column(k).iter().map(bin_power).sum::<f64>();
         }
-        if total <= 0.0 || !total.is_finite() {
+        if !(total > 0.0) || !total.is_finite() {
             return Ok(0.0);
         }
-        for row in spec_slice.chunks_exact(nb) {
-            for z in row {
-                let p = bin_power(z) / total;
-                if p > 0.0 {
-                    h -= p * p.ln();
-                }
+        let mut h = 0.0f64;
+        for k in 0..nb {
+            let p = spec.column(k).iter().map(bin_power).sum::<f64>() / total;
+            if p > 0.0 {
+                h -= p * p.ln();
             }
         }
         let k = nb as f64;
@@ -655,23 +654,19 @@ impl WaveInterferenceBlock {
             return 0.0;
         }
         let k_eff = self.modes.min(self.last_bins);
-        let spec = self
-            .wave_spectrum
-            .as_slice()
-            .expect("wave_spectrum contíguo (ordem C)");
-        let rows = spec.chunks_exact(self.modes);
+        // Potência por bin somada sobre os canais de saída: a distribuição tem
+        // `k_eff` categorias (bins), não `C_out * modes`.
+        let spec = &self.wave_spectrum;
 
-        let total: f64 = rows
-            .clone()
-            .flat_map(|row| row[..k_eff].iter())
-            .map(bin_power)
+        let total: f64 = (0..k_eff)
+            .map(|k| spec.column(k).iter().map(bin_power).sum::<f64>())
             .sum();
-        if total <= 0.0 || !total.is_finite() {
+        if !(total > 0.0) || !total.is_finite() {
             return 0.0;
         }
         let mut h = 0.0f64;
-        for z in rows.flat_map(|row| row[..k_eff].iter()) {
-            let p = bin_power(z) / total;
+        for k in 0..k_eff {
+            let p = spec.column(k).iter().map(bin_power).sum::<f64>() / total;
             if p > 0.0 {
                 h -= p * p.ln();
             }

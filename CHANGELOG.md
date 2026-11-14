@@ -3,6 +3,21 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.6] - 2026-11-14
+
+### Changed
+
+- Ciclo automatico: 7 arquivo(s) (.:1, src:4, tests:2).
+- Gate: ok (2s).
+
+- `Cargo.lock`
+- `src/core/wave_interference.rs`
+- `tests/test_wave.rs`
+- `src/morphogenesis.rs`
+- `src/phase_memory.rs`
+- `src/thermodynamic_dreamer.rs`
+- `tests/phase2_invariants.rs`
+
 ## [0.0.5] - 2026-11-14
 
 ### Changed
