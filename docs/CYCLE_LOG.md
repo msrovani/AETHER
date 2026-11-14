@@ -20,3 +20,4 @@
 | 2026-11-14T22:16:04Z | 0.0.12 | 17 | .:1, benches:3, src:9, tests:4 | ok (1s) | - | sim |
 | 2026-11-14T22:21:04Z | wip | 7 | .:1, .backup:6 | ok (2s) | - | sim |
 | 2026-11-14T22:31:04Z | wip | 7 | .:1, benches:4, examples:1, src:1 | fail (1s) | - | sim |
+| 2026-11-14T22:38:38Z | 0.0.13 | 10 | .:1, benches:4, docs:1, examples:1, src:2, tests:1 | ok (0s) | - | sim |

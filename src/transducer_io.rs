@@ -92,7 +92,9 @@ impl SyntheticTransducer {
     /// Cria a fonte com `dim` canais a `hz` amostras por segundo.
     pub fn new(dim: usize, hz: f32, seed: u64) -> Result<Self> {
         if dim == 0 {
-            return Err(AetherError::Config("dim do transdutor nao pode ser 0".into()));
+            return Err(AetherError::Config(
+                "dim do transdutor nao pode ser 0".into(),
+            ));
         }
         if !(hz.is_finite() && hz > 0.0) {
             return Err(AetherError::Config("hz do transdutor deve ser > 0".into()));
@@ -152,9 +154,11 @@ impl TransducerIo for SyntheticTransducer {
             let mut value = base + noise;
 
             if active {
-                // Rajada de banda larga: energia alta e descoordenada.
-                let hi = (TAU * (2.7 + 0.19 * fi) * t).sin();
-                value += amp * (0.55 * hi + 0.25) * if i % 2 == 0 { 1.0 } else { -0.6 };
+                // Rajada de banda larga: energia alta, dessincronizada e com
+                // deslocamento DC — o preditor não consegue absorver.
+                let white = (self.rng.next_f32() - 0.5) * 2.0;
+                let drift = if i % 3 == 0 { 0.7 } else { -0.7 };
+                value = value * 0.10 + amp * (0.60 * white + drift);
             }
 
             *slot = value.clamp(-1.0, 1.0);
@@ -182,12 +186,14 @@ impl FieldNormalizer {
     /// Cria o normalizador para um campo de `dim` canais.
     pub fn new(dim: usize) -> Result<Self> {
         if dim == 0 {
-            return Err(AetherError::Config("dim do normalizador nao pode ser 0".into()));
+            return Err(AetherError::Config(
+                "dim do normalizador nao pode ser 0".into(),
+            ));
         }
         Ok(Self {
             mean: vec![0.0; dim],
             var: vec![1.0; dim],
-            alpha: 0.02,
+            alpha: 0.005,
             eps: 1e-4,
             primed: false,
         })
@@ -229,25 +235,40 @@ pub struct SurpriseTracker {
     scale: Vec<f32>,
     alpha: f32,
     beta: f32,
+    ratio_base: f32,
+    gamma: f32,
     eps: f32,
+    warmup: usize,
+    tick: usize,
 }
 
 impl SurpriseTracker {
     /// Cria o medidor para um campo de `dim` canais.
     pub fn new(dim: usize) -> Result<Self> {
         if dim == 0 {
-            return Err(AetherError::Config("dim do medidor de surpresa nao pode ser 0".into()));
+            return Err(AetherError::Config(
+                "dim do medidor de surpresa nao pode ser 0".into(),
+            ));
         }
         Ok(Self {
             pred: vec![0.0; dim],
             scale: vec![1e-3; dim],
-            alpha: 0.03,
-            beta: 0.02,
+            alpha: 0.02,
+            beta: 0.01,
+            ratio_base: 1.0,
+            gamma: 0.002,
             eps: 1e-6,
+            warmup: 30,
+            tick: 0,
         })
     }
 
     /// Observa um quadro e devolve `F ∈ [0, 1)`.
+    ///
+    /// O erro de predição é normalizado pela escala adaptativa e comparado com
+    /// a razão de regime (`ratio_base`), auto-calibrada nos primeiros quadros.
+    /// Assim `F ≈ 0` na assinatura saudável de qualquer dispositivo e sobe
+    /// apenas no excesso de erro que o preditor não consegue absorver.
     pub fn observe(&mut self, x: &[f32]) -> Result<f32> {
         let dim = self.pred.len();
         if x.len() != dim {
@@ -262,8 +283,18 @@ impl SurpriseTracker {
             self.scale[i] += self.beta * (e2 - self.scale[i]);
             self.pred[i] += self.alpha * err;
         }
-        let mean = acc / dim as f32;
-        Ok((mean * 0.25).tanh())
+        let ratio = acc / dim as f32;
+
+        if self.tick < self.warmup {
+            self.ratio_base = ratio.max(self.eps);
+            self.tick += 1;
+            return Ok(0.0);
+        }
+        self.tick += 1;
+
+        self.ratio_base += self.gamma * (ratio - self.ratio_base);
+        let excess = (ratio / (self.ratio_base + self.eps) - 1.0).max(0.0);
+        Ok((excess * 0.5).tanh())
     }
 }
 
@@ -277,7 +308,9 @@ impl PhaseMapper {
     /// Cria o projetor para um campo de `dim` canais.
     pub fn new(dim: usize) -> Result<Self> {
         if dim == 0 {
-            return Err(AetherError::Config("dim do mapeador de fase nao pode ser 0".into()));
+            return Err(AetherError::Config(
+                "dim do mapeador de fase nao pode ser 0".into(),
+            ));
         }
         Ok(Self { dim })
     }

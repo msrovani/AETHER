@@ -1,70 +1,78 @@
-//! Benchmark da interferência espectral (Módulo 2).
+//! Benchmarks do Módulo 2 — interferência espectral (operador de Fourier).
 //!
-//! Metas da Seção 3: FFT ida+volta, `C=8`, `L=2048`: ≤ 300 µs.
-//! Mede o caminho quente (`forward_into`, zero alocação) e a entropia.
+//! Mede o caminho quente `forward_into` (sem alocação, planos FFT cacheados) e
+//! as duas entropias, para `C_in = 4`, `C_out = 8`, `modes = 32` e
+//! `L ∈ {128, 512, 2048, 8192}`.
+//!
+//! Meta de referência: FFT ida+volta com `C = 8`, `L = 2048` ≤ 300 µs.
 
-use std::time::Duration;
+use std::hint::black_box;
 
 use aether_engine::core::wave_interference::WaveInterferenceBlock;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use ndarray::{Array2, Array3};
+use ndarray::Array2;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
-fn deterministic_field(channels: usize, len: usize, seed: u64) -> Array2<f32> {
+const C_IN: usize = 4;
+const C_OUT: usize = 8;
+const MODES: usize = 32;
+const MAX_LEN: usize = 8192;
+
+fn field(c: usize, l: usize, seed: u64) -> Array2<f32> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
-    let mut out = Array2::<f32>::zeros((channels, len));
-    for c in 0..channels {
-        for k in 0..len {
-            out[[c, k]] = rng.gen::<f32>() * 2.0 - 1.0;
-        }
-    }
-    out
+    Array2::<f32>::from_shape_fn((c, l), |_| rng.gen::<f32>() * 2.0 - 1.0)
 }
 
-fn bench_wave(c: &mut Criterion) {
-    let mut group = c.benchmark_group("wave");
-    group.warm_up_time(Duration::from_secs(1));
-    group.measurement_time(Duration::from_secs(2));
-    group.sample_size(10);
+fn bench_forward(c: &mut Criterion) {
+    let mut group = c.benchmark_group("wave_forward_into");
+    group.sample_size(20);
 
     for &l in &[128usize, 512, 2048, 8192] {
-        let mut block = WaveInterferenceBlock::with_max_len(4, 8, 32, l, 0xC0FFEE);
-        let u = deterministic_field(4, l, 0xF1E1D + l as u64);
-        let mut v = Array2::<f32>::zeros((8, l));
-        block.forward_into(u.view(), &mut v).expect("warmup");
+        let mut block = WaveInterferenceBlock::with_max_len(C_IN, C_OUT, MODES, MAX_LEN, 0xC0FFEE);
+        let u = field(C_IN, l, 0xA11CE);
+        let mut out = Array2::<f32>::zeros((C_OUT, l));
+        block.forward_into(u.view(), &mut out).expect("warmup");
 
-        group.bench_with_input(BenchmarkId::new("forward_into", l), &l, |b, _| {
-            b.iter(|| block.forward_into(u.view(), &mut v).expect("forward"))
+        group.bench_with_input(BenchmarkId::from_parameter(l), &l, |bh, _| {
+            bh.iter(|| {
+                block
+                    .forward_into(u.view(), &mut out)
+                    .expect("forward_into");
+                black_box(out[[0, 0]])
+            })
         });
-        group.bench_with_input(
-            BenchmarkId::new("entropy", l),
-            &l,
-            |b, _| b.iter(|| block.compute_spectral_entropy(u.view()).expect("entropia")),
-        );
     }
+
     group.finish();
 }
 
-/// Lote `[B, C_in, L]` — o caminho por item (o M4 usa B=1, mas o contrato
-/// cobre lote).
-fn bench_wave_batched(c: &mut Criterion) {
-    let mut group = c.benchmark_group("wave_batched");
-    group.warm_up_time(Duration::from_secs(1));
-    group.measurement_time(Duration::from_secs(2));
-    group.sample_size(10);
+fn bench_entropy(c: &mut Criterion) {
+    let mut group = c.benchmark_group("wave_entropia");
+    group.sample_size(20);
 
-    let mut block = WaveInterferenceBlock::with_max_len(4, 8, 32, 512, 0xC0FFEE);
-    let mut ub = Array3::<f32>::zeros((8, 4, 512));
-    let mut rng = ChaCha8Rng::seed_from_u64(0xB47C);
-    for v in ub.iter_mut() {
-        *v = rng.gen::<f32>() * 2.0 - 1.0;
+    for &l in &[128usize, 512, 2048, 8192] {
+        let mut block = WaveInterferenceBlock::with_max_len(C_IN, C_OUT, MODES, MAX_LEN, 0xBEEF);
+        let u = field(C_IN, l, 0x5EED);
+        let mut out = Array2::<f32>::zeros((C_OUT, l));
+        block.forward_into(u.view(), &mut out).expect("warmup");
+
+        group.bench_with_input(BenchmarkId::new("espectral", l), &l, |bh, _| {
+            bh.iter(|| {
+                black_box(
+                    block
+                        .compute_spectral_entropy(u.view())
+                        .expect("compute_spectral_entropy"),
+                )
+            })
+        });
+        group.bench_with_input(BenchmarkId::new("transferida", l), &l, |bh, _| {
+            bh.iter(|| black_box(block.compute_wave_entropy()))
+        });
     }
-    group.bench_function("L512xB8", |b| {
-        b.iter(|| block.forward_batched(ub.view()).expect("batched"))
-    });
+
     group.finish();
 }
 
-criterion_group!(benches, bench_wave, bench_wave_batched);
+criterion_group!(benches, bench_forward, bench_entropy);
 criterion_main!(benches);

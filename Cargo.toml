@@ -1,6 +1,6 @@
 ﻿[package]
 name = "aether_engine"
-version = "0.0.12"
+version = "0.0.13"
 edition = "2021"
 rust-version = "1.78"
 description = "AETHER â€” motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
@@ -67,6 +67,10 @@ required-features = ["m2"]
 name = "kuramoto_latency"
 harness = false
 required-features = ["m3"]
+
+[[example]]
+name = "transducer_probe"
+required-features = ["m8"]
 
 [[bench]]
 name = "organism"

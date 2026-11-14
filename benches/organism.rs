@@ -19,9 +19,7 @@ fn bench_organism(c: &mut Criterion) {
     cfg.perturb_after = Duration::from_secs(3600);
     let mut organism = ClosedLoopOrganism::new(cfg).expect("organismo");
 
-    group.bench_function("frame_60hz", |b| {
-        b.iter(|| organism.step().expect("step"))
-    });
+    group.bench_function("frame_60hz", |b| b.iter(|| organism.step().expect("step")));
 
     group.finish();
     organism.shutdown();

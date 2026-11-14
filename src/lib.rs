@@ -35,6 +35,9 @@ pub mod thermodynamic_dreamer;
 #[cfg(feature = "m7")]
 pub mod morphogenesis;
 
+#[cfg(feature = "m8")]
+pub mod transducer_io;
+
 pub use error::{AetherError, Result};
 
 /// Versao do protocolo de pacotes de fase (UDP, 40 bytes, little-endian).
