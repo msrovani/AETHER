@@ -68,6 +68,11 @@ name = "kuramoto_latency"
 harness = false
 required-features = ["m3"]
 
+[[bench]]
+name = "organism"
+harness = false
+required-features = ["m4"]
+
 [profile.release]
 opt-level = 3
 lto = "fat"
