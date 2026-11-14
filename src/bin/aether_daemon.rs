@@ -109,9 +109,16 @@ pub struct HardwareTransducer {
     next: Instant,
     origin: Instant,
     baseline_ns: f64,
+    /// Jitter do último acordar (ns), medido **antes** de avançar o prazo.
+    last_jitter_ns: f64,
     last_net: u64,
     rng: TransducerRng,
 }
+
+/// Iterações da unidade fixa de trabalho — as mesmas na calibração e na
+/// amostra (auditoria QA/M8: baseline e amostra com contagens diferentes
+/// deixavam `load` pinado no piso).
+const WORK_ITERS: u64 = 40_000;
 
 impl HardwareTransducer {
     /// Cria o transdutor e calibra o custo da unidade fixa de trabalho.
@@ -123,13 +130,14 @@ impl HardwareTransducer {
             next: Instant::now(),
             origin: Instant::now(),
             baseline_ns: 1.0,
+            last_jitter_ns: 0.0,
             last_net: 0,
             rng: TransducerRng(seed ^ 0x9E37_79B9_7F4A_7C15),
         };
         let mut acc = 0.0f64;
         for _ in 0..8 {
             let t0 = Instant::now();
-            let _ = t.busy_work(120_000);
+            let _ = t.busy_work(WORK_ITERS);
             acc += t0.elapsed().as_secs_f64() * 1e9;
         }
         t.baseline_ns = (acc / 8.0).max(1.0);
@@ -153,14 +161,25 @@ impl HardwareTransducer {
         acc
     }
 
+    /// Captura o jitter do acordar corrente (o atraso contra o prazo previsto)
+    /// e **só depois** avança o prazo — medir depois do avanço dava sempre ~0.
+    pub fn tick_deadline(&mut self, hz: f64) {
+        let now = Instant::now();
+        self.last_jitter_ns = now.saturating_duration_since(self.next).as_secs_f64() * 1e9;
+        self.next += Duration::from_secs_f64(1.0 / hz);
+        if self.next < now {
+            self.next = now;
+        }
+    }
+
     /// Amostra um instante físico; `net_bytes` é o contador cumulativo de
     /// bytes de fase observados pelo enxame.
     pub fn sample(&mut self, net_bytes: u64) -> f32 {
         let now = Instant::now();
-        let jitter_ns = now.saturating_duration_since(self.next).as_secs_f64() * 1e9;
+        let jitter_ns = self.last_jitter_ns;
 
         let t0 = Instant::now();
-        let _ = self.busy_work(40_000);
+        let _ = self.busy_work(WORK_ITERS);
         let work_ns = t0.elapsed().as_secs_f64() * 1e9;
         let load = (work_ns / self.baseline_ns - 1.0).clamp(-0.5, 4.0);
 
@@ -178,14 +197,6 @@ impl HardwareTransducer {
         self.ring[self.pos] = wave;
         self.pos = (self.pos + 1) % self.window;
         wave
-    }
-
-    /// Próximo deadline (avança um período).
-    pub fn tick_deadline(&mut self, hz: f64) {
-        self.next += Duration::from_secs_f64(1.0 / hz);
-        if self.next < Instant::now() {
-            self.next = Instant::now();
-        }
     }
 
     /// Prazo corrente (usado pelo laço principal).
@@ -214,6 +225,11 @@ pub struct DaemonTelemetry {
     pub frame_us: u64,
     /// Coerência de fase da LAN `R(t)`.
     pub lan_coherence: f64,
+    /// Peers distintos ouvidos no último ciclo (auditoria: `R > 0.9` só é
+    /// válido com peers > 0).
+    pub peers_heard: u32,
+    /// Quadros descartados por estouro do orçamento de 60 Hz.
+    pub dropped_frames: u64,
     /// Energia livre (surpresa) atual.
     pub free_energy: f32,
     /// Energia da memória de fase.
@@ -242,6 +258,8 @@ pub struct AetherDaemon {
     u: Array2<f32>,
     v: Array2<f32>,
     cycles: u64,
+    /// Quadros que estouraram o orçamento de 60 Hz (cumulativo).
+    dropped_frames: u64,
 }
 
 impl std::fmt::Debug for AetherDaemon {
@@ -264,9 +282,23 @@ impl AetherDaemon {
         let c_out = 4;
         let modes = 32;
 
-        // Nó de fase em multicast: descoberta automática na LAN.
+        // Validação estrutural (panic=abort não perdoa config inválida).
+        if hz <= 0.0 || !hz.is_finite() {
+            return Err(aether_engine::error::AetherError::Config(
+                "hz deve ser > 0 e finito".into(),
+            ));
+        }
+        if cfg.dream_samples == 0 || cfg.dream_steps == 0 || cognition_dim < 2 {
+            return Err(aether_engine::error::AetherError::Config(
+                "dream_samples/dream_steps > 0 e cognition_dim >= 2 sao obrigatorios".into(),
+            ));
+        }
+
+        // Nó de fase em multicast: descoberta automática na LAN. node_id é
+        // único por instância (auditoria QA/M8: id fixo colapsava N instâncias
+        // num único slot e invalidava R(LAN)).
         let node_cfg = KuramotoConfig {
-            node_id: 0xDAEA_0001,
+            node_id: unique_node_id(),
             bind: SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, MULTICAST_PORT),
             peers: vec![SocketAddrV4::new(MULTICAST_GROUP, MULTICAST_PORT)],
             omega: [6.0, 6.01, 5.99, 6.005],
@@ -320,6 +352,7 @@ impl AetherDaemon {
             u: Array2::<f32>::zeros((c_in, window)),
             v: Array2::<f32>::zeros((c_out, window)),
             cycles: 0,
+            dropped_frames: 0,
         })
     }
 
@@ -391,6 +424,8 @@ impl AetherDaemon {
         Ok(DaemonTelemetry {
             frame_us: t0.elapsed().as_micros() as u64,
             lan_coherence: frame.order_parameter,
+            peers_heard: frame.peers_heard,
+            dropped_frames: self.dropped_frames,
             free_energy,
             memory_energy,
             epistemic_uncertainty: ensemble.epistemic_uncertainty,
@@ -401,16 +436,24 @@ impl AetherDaemon {
     }
 
     /// Roda até o prazo (ou para sempre), reportando via callback.
+    ///
+    /// Quadros que estouram o orçamento de 60 Hz são contabilizados em
+    /// `dropped_frames` (sem acúmulo de atraso).
     pub fn run(&mut self, mut report: impl FnMut(&DaemonTelemetry)) -> Result<()> {
         let started = Instant::now();
         let mut last_report = Instant::now();
+        let period = Duration::from_secs_f64(1.0 / self.cfg.hz);
         loop {
             let now = Instant::now();
             let deadline = self.transducer.deadline();
             if now < deadline {
                 std::thread::sleep(deadline - now);
             }
+            let t0 = Instant::now();
             let telemetry = self.cycle()?;
+            if t0.elapsed() > period {
+                self.dropped_frames += 1;
+            }
             if last_report.elapsed() >= Duration::from_millis(250) {
                 report(&telemetry);
                 last_report = Instant::now();
@@ -446,8 +489,93 @@ fn zero_frame() -> aether_engine::core::kuramoto_field::Frame {
         rx_packets: 0,
         rx_bytes: 0,
         tx_packets: 0,
+        peers_heard: 0,
         last_latency_ns: 0,
     }
+}
+
+/// `node_id` único por instância: mistura pid + nanossegundos do boot do
+/// processo. Duas instâncias nunca colapsam no mesmo slot (auditoria QA/M8).
+fn unique_node_id() -> u32 {
+    let pid = std::process::id() as u64;
+    let t = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    let mut x = pid ^ t.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    (x >> 32) as u32 | 0xD000_0000
+}
+
+/// Parse de CLI + validação (auditoria QA/M8: args ignorados eram bug).
+fn parse_cli() -> std::result::Result<DaemonConfig, String> {
+    let mut cfg = DaemonConfig::default();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut i = 0;
+    while i < args.len() {
+        let flag = args[i].clone();
+        match flag.as_str() {
+            "--help" | "-h" => {
+                println!("aether-daemon [--duration s] [--hz f] [--seed u64] [--alert f] [--window n] [--dim n]");
+                std::process::exit(0);
+            }
+            "--duration" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --duration")?;
+                let secs: f64 = v.parse().map_err(|e| format!("--duration inválido: {e}"))?;
+                if secs <= 0.0 {
+                    return Err("--duration precisa ser > 0".into());
+                }
+                cfg.duration = Some(Duration::from_secs_f64(secs));
+            }
+            "--hz" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --hz")?;
+                cfg.hz = v.parse().map_err(|e| format!("--hz inválido: {e}"))?;
+                if cfg.hz <= 0.0 || cfg.hz > 10_000.0 {
+                    return Err("--hz fora de (0, 10000]".into());
+                }
+            }
+            "--seed" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --seed")?;
+                cfg.seed = v.parse().map_err(|e| format!("--seed inválido: {e}"))?;
+            }
+            "--alert" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --alert")?;
+                cfg.alert_free_energy = v.parse().map_err(|e| format!("--alert inválido: {e}"))?;
+            }
+            "--window" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --window")?;
+                cfg.window = v.parse().map_err(|e| format!("--window inválido: {e}"))?;
+                if cfg.window < 8 || cfg.window > 8192 {
+                    return Err("--window fora de [8, 8192]".into());
+                }
+            }
+            "--dim" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --dim")?;
+                cfg.cognition_dim = v.parse().map_err(|e| format!("--dim inválido: {e}"))?;
+                if cfg.cognition_dim < 2 || cfg.cognition_dim > 256 {
+                    return Err("--dim fora de [2, 256]".into());
+                }
+            }
+            other => return Err(format!("flag desconhecida: {other} (use --help)")),
+        }
+        i += 1;
+    }
+    // validação estrutural (panic=abort não perdoa config inválida)
+    if cfg.dream_samples == 0 || cfg.dream_steps == 0 {
+        return Err("dream_samples e dream_steps devem ser > 0".into());
+    }
+    if cfg.alert_free_energy <= 0.0 {
+        return Err("--alert precisa ser > 0".into());
+    }
+    Ok(cfg)
 }
 
 /// Fases a partir de spins (para a memória de fase).
@@ -465,20 +593,28 @@ fn phases_from_spins(s: &[i8], n: usize) -> Vec<f32> {
 }
 
 fn main() -> Result<()> {
+    let cfg = match parse_cli() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("erro de uso: {e}");
+            std::process::exit(2);
+        }
+    };
     println!("AETHER daemon — organismo encarnado (multicast {MULTICAST_GROUP}:{MULTICAST_PORT})");
-    let cfg = DaemonConfig::default();
     let mut daemon = AetherDaemon::new(cfg)?;
     daemon.run(|t| {
         println!(
-            "ciclo {:>6} | R(LAN)={:.3} | F={:.3} | E_mem={:+.3} | U={:.3} | topologia={:.1}% | {} | {}µs",
+            "ciclo {:>6} | R(LAN)={:.3} peers={} | F={:.3} | E_mem={:+.3} | U={:.3} | topologia={:.1}% | {} | {}µs | drops={}",
             t.cycles,
             t.lan_coherence,
+            t.peers_heard,
             t.free_energy,
             t.memory_energy,
             t.epistemic_uncertainty,
             t.topological_density * 100.0,
             if t.dreaming { "SONHANDO" } else { "AÇÃO" },
-            t.frame_us
+            t.frame_us,
+            t.dropped_frames
         );
     })?;
     println!("daemon encerrado.");

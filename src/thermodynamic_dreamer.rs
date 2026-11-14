@@ -328,6 +328,10 @@ impl ThermodynamicDreamer {
     /// `num_samples` energias e o workspace já cobriu `num_samples · 3 · N`.
     /// Caso contrário, dimensiona uma única vez (warmup) e retorna `Ok(())`.
     ///
+    /// Encolher `num_samples` descarta as linhas excedentes (sem alocar) e não
+    /// preserva o workspace; voltar a crescer depois re-paga o warmup daquelas
+    /// linhas. No caminho quente mantenha `num_samples` estável.
+    ///
     /// Parâmetros inválidos retornam [`AetherError`] em vez de `panic`/`NaN`
     /// (ver [`Self::try_imagine_futures`]). Os resultados são independentes da
     /// quantidade de threads do pool rayon (cada amostra tem seu slot e sua

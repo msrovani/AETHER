@@ -3,6 +3,23 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.18] - 2026-11-14
+
+### Changed
+
+- Ciclo automatico: 9 arquivo(s) (.:1, docs:1, src:5, tests:2).
+- Gate: ok (4s).
+
+- `ARCHITECTURE.md`
+- `docs/HW_TARGET.md`
+- `src/bin/aether_daemon.rs`
+- `src/core/kuramoto_field.rs`
+- `src/core/wave_interference.rs`
+- `src/morphogenesis.rs`
+- `src/thermodynamic_dreamer.rs`
+- `tests/phase2_m5_hardening.rs`
+- `tests/phase2_m7_hardening.rs`
+
 ## [0.0.17] - 2026-11-14
 
 ### Changed

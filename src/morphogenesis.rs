@@ -385,10 +385,8 @@ impl MorphogeneticField {
     /// legitimamente nula). Para distinguir erro, use
     /// [`Self::try_evolve_topology`].
     pub fn evolve_topology(&mut self, prediction_error: f32, active_spins: &[f32], dt: f32) -> f32 {
-        match self.try_evolve_topology(prediction_error, active_spins, dt) {
-            Ok(f) => f,
-            Err(_) => 0.0,
-        }
+        self.try_evolve_topology(prediction_error, active_spins, dt)
+            .unwrap_or(0.0)
     }
 
     /// Um passo morfogenético com validação estrita.
@@ -637,9 +635,9 @@ impl MorphogeneticField {
         // Inicialização determinística e não degenerada (evita ortogonalidade
         // com o modo dominante, ex.: vetor de uns).
         let mut norm2 = 0.0f32;
-        for i in 0..n {
+        for (i, slot) in self.power_v.iter_mut().enumerate() {
             let v = ((i as f32) * 0.754_877_7 + 0.31).sin() + 0.025 * ((i % 5) as f32 - 2.0);
-            self.power_v[i] = v;
+            *slot = v;
             norm2 += v * v;
         }
         let norm = norm2.sqrt();

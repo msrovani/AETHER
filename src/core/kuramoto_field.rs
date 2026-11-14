@@ -274,15 +274,15 @@ impl KuramotoPhaseNode {
 
         // Multicast (Módulo 8): entra no grupo ANTES da conversão para
         // `UdpSocket`, para que a associação valha para o mesmo socket.
-        // Loop desligado: o eco próprio não é um peer (auditoria QA/M8) — o
-        // descarte por node_id continua como segunda barreira.
+        // Loop LIGADO para que instâncias na mesma máquina se acoplem; o eco
+        // próprio é descartado por `node_id` na recepção (auditoria QA/M8).
         if let Some(group) = cfg.multicast {
             socket
                 .join_multicast_v4(&group, &Ipv4Addr::UNSPECIFIED)
-                .map_err(|e| AetherError::Io(e))?;
+                .map_err(AetherError::Io)?;
             socket
-                .set_multicast_loop_v4(false)
-                .map_err(|e| AetherError::Io(e))?;
+                .set_multicast_loop_v4(true)
+                .map_err(AetherError::Io)?;
         }
 
         let socket: UdpSocket = socket.into();

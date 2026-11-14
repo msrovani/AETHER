@@ -58,7 +58,9 @@ Você está construindo um motor cognitivo experimental inspirado em física de 
 **Opcional / por feature:**
 `candle-core` atrás de `--features cuda` (apenas como backend tensorial alternativo para o solver,
 nunca como transformer); `wide` ou `std::simd` (nightly, `--features simd`) para vetorização manual
-do integrador; `cudarc` para `rustfft` em GPU fica fora de escopo no v1.
+do integrador; `cudarc` para `rustfft` em GPU fica fora de escopo no v1;
+a rota de GPU aprovada (cross-vendor, AMD/Intel/NVIDIA) é `wgpu` atrás de
+`--features gpu` — ver `docs/HW_TARGET.md` §3/§4.
 
 ---
 

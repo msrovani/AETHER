@@ -34,8 +34,11 @@ atingi-la em CPU — a GPU é aceleração, não desculpa.
 
 ## 3. GPU — um motor, três vendors
 
-A regra é **não acoplar o motor a nenhum vendor**. Toda aceleração de GPU vive
-atrás de `--features gpu` e fala **uma única API neutra**:
+**Decisão aprovada: a rota de GPU do AETHER é `wgpu`** (um backend único —
+Vulkan/DX12/Metal — cobre AMD, Intel e NVIDIA com o mesmo binário WGSL).
+Toda aceleração de GPU vive atrás de `--features gpu` e fala **essa única
+API neutra**; caminhos nativos por vendor são acelerações opcionais, nunca
+rota de contrato:
 
 | Vendor | Caminho nativo | Caminho neutro (contrato do AETHER) |
 |---|---|---|

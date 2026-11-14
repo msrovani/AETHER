@@ -6,9 +6,7 @@
 
 #![cfg(all(feature = "m5", feature = "m6", feature = "m7"))]
 
-use aether_engine::morphogenesis::{
-    MorphogenesisConfig, MorphogenesisError, MorphogeneticField,
-};
+use aether_engine::morphogenesis::{MorphogenesisConfig, MorphogenesisError, MorphogeneticField};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -101,6 +99,63 @@ fn dense_j0(n: usize, scale: f32, seed: u64) -> Vec<f32> {
     j
 }
 
+/// Raio espectral **independente** por rotações de Jacobi (f64, 30 varreduras).
+///
+/// Usado para auditar a homeostase sem reutilizar a iteração de potência do
+/// módulo (evita validar o estimador com ele mesmo). `O(n³)` — só em checkpoints.
+fn raio_espectral_jacobi(a: &[f32], n: usize) -> f32 {
+    let mut m = vec![0.0f64; n * n];
+    for (dst, src) in m.iter_mut().zip(a.iter()) {
+        *dst = f64::from(*src);
+    }
+    for _ in 0..30 {
+        let mut off = 0.0f64;
+        for p in 0..n {
+            for q in (p + 1)..n {
+                off += m[p * n + q] * m[p * n + q];
+            }
+        }
+        if off < 1e-20 {
+            break;
+        }
+        for p in 0..n {
+            for q in (p + 1)..n {
+                let apq = m[p * n + q];
+                if apq.abs() < 1e-14 {
+                    continue;
+                }
+                let app = m[p * n + p];
+                let aqq = m[q * n + q];
+                let theta = 0.5 * (aqq - app) / apq;
+                let t = if theta < 0.0 { -1.0 } else { 1.0 }
+                    / (theta.abs() + (theta * theta + 1.0).sqrt());
+                let c = 1.0 / (t * t + 1.0).sqrt();
+                let s = t * c;
+                for k in 0..n {
+                    let mkp = m[k * n + p];
+                    let mkq = m[k * n + q];
+                    m[k * n + p] = c * mkp - s * mkq;
+                    m[k * n + q] = s * mkp + c * mkq;
+                }
+                for k in 0..n {
+                    let mpk = m[p * n + k];
+                    let mqk = m[q * n + k];
+                    m[p * n + k] = c * mpk - s * mqk;
+                    m[q * n + k] = s * mpk + c * mqk;
+                }
+            }
+        }
+    }
+    let mut max = 0.0f64;
+    for i in 0..n {
+        let v = m[i * n + i].abs();
+        if v > max {
+            max = v;
+        }
+    }
+    max as f32
+}
+
 /// Invariantes estruturais: simetria estrita, diagonal nula, tudo finito.
 fn assert_structural(field: &MorphogeneticField, n: usize, cycle: usize) {
     for (idx, v) in field.j.iter().enumerate() {
@@ -111,13 +166,14 @@ fn assert_structural(field: &MorphogeneticField, n: usize, cycle: usize) {
         );
     }
     for i in 0..n {
-        assert_eq!(field.j[i * n + i], 0.0, "diagonal não nula no ciclo {cycle}");
+        assert_eq!(
+            field.j[i * n + i],
+            0.0,
+            "diagonal não nula no ciclo {cycle}"
+        );
         for k in (i + 1)..n {
             let d = (field.j[i * n + k] - field.j[k * n + i]).abs();
-            assert!(
-                d < 1e-6,
-                "assimetria {d} em ({i},{k}) no ciclo {cycle}"
-            );
+            assert!(d < 1e-6, "assimetria {d} em ({i},{k}) no ciclo {cycle}");
         }
     }
 }
@@ -201,7 +257,8 @@ fn test_m7_silence_prunes_and_surprise_grows() {
         "esparsidade não subiu: {sparsity_initial:.4} → {sparsity_silence:.4}"
     );
     assert_eq!(
-        zeros_silence, pairs,
+        zeros_silence,
+        pairs,
         "silêncio deveria drenar TODAS as sinapses; sobraram {}",
         pairs - zeros_silence
     );
@@ -237,6 +294,17 @@ fn test_m7_silence_prunes_and_surprise_grows() {
     let zeros_growth = field.zero_synapses();
     let density_growth = field.density();
     let f_growth = field.last_free_energy();
+    let rho_growth_power = field.spectral_radius();
+    let rho_growth_jacobi = raio_espectral_jacobi(&field.j, N);
+
+    assert!(
+        rho_growth_jacobi <= 1.5 + 1e-3,
+        "ρ (Jacobi independente) {rho_growth_jacobi} > 1.5 após surpresa"
+    );
+    assert!(
+        (rho_growth_power - rho_growth_jacobi).abs() <= 0.05,
+        "iteração de potência ({rho_growth_power}) divergiu de Jacobi ({rho_growth_jacobi})"
+    );
 
     assert!(
         zeros_growth < zeros_before_growth,
@@ -256,7 +324,7 @@ fn test_m7_silence_prunes_and_surprise_grows() {
     );
 
     println!(
-        "M7 silence/surprise: zeros {}→{}/{} | sparsity {:.4}→{:.4} | density {:.4}→{:.4} | rho_silence_max {:.4} → {:.4} | rho_growth_max {max_rho_growth:.4} | prune {} | F_silence {f_silence:.4} | F_growth {f_growth:.4}",
+        "M7 silence/surprise: zeros {}→{}/{} | sparsity {:.4}→{:.4} | density {:.4}→{:.4} | rho_silence_max {:.4} → {:.4} | rho_growth_max {max_rho_growth:.4} (jacobi {rho_growth_jacobi:.4}) | prune {} | F_silence {f_silence:.4} | F_growth {f_growth:.4}",
         zeros_initial,
         zeros_silence,
         pairs,
@@ -281,11 +349,8 @@ fn test_m7_two_thousand_alternating_cycles() {
     const DT: f32 = 0.05;
 
     let spins = alternating_spins(N);
-    let mut field = MorphogeneticField::new(
-        N,
-        &dense_j0(N, 0.06, 0x404),
-        MorphogenesisConfig::default(),
-    );
+    let mut field =
+        MorphogeneticField::new(N, &dense_j0(N, 0.06, 0x404), MorphogenesisConfig::default());
 
     let mut max_asym = 0.0f32;
     let mut max_rho = 0.0f32;
@@ -322,7 +387,10 @@ fn test_m7_two_thousand_alternating_cycles() {
         N * (N - 1),
         "último bloco de silêncio não podou tudo"
     );
-    println!("M7 2000 ciclos: max_asym={max_asym} max_rho={max_rho:.4} zeros_finais={}", field.zero_synapses());
+    println!(
+        "M7 2000 ciclos: max_asym={max_asym} max_rho={max_rho:.4} zeros_finais={}",
+        field.zero_synapses()
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -340,6 +408,7 @@ fn test_m7_homeostasis_real_spectral_radius() {
     let mut field = MorphogeneticField::new(N, &dense_j0(N, 0.05, 0xBEEF), cfg);
 
     let mut max_rho = 0.0f32;
+    let mut max_rho_jacobi = 0.0f32;
     let mut normalized_samples = 0usize;
     let mut worst_after_norm = 0.0f32;
     let mut rho_prev = field.spectral_radius();
@@ -371,6 +440,22 @@ fn test_m7_homeostasis_real_spectral_radius() {
             );
         }
         rho_prev = rho;
+
+        // Auditoria independente (sem reutilizar a iteração de potência).
+        if cycle % 50 == 0 || cycle + 1 == CYCLES {
+            let rho_jacobi = raio_espectral_jacobi(&field.j, N);
+            assert!(
+                rho_jacobi <= 1.5 + 1e-3,
+                "ρ (Jacobi) {rho_jacobi} > 1.5 no ciclo {cycle}"
+            );
+            assert!(
+                (rho - rho_jacobi).abs() <= 0.05,
+                "potência {rho} vs Jacobi {rho_jacobi} no ciclo {cycle}"
+            );
+            if rho_jacobi > max_rho_jacobi {
+                max_rho_jacobi = rho_jacobi;
+            }
+        }
     }
 
     assert!(
@@ -382,7 +467,7 @@ fn test_m7_homeostasis_real_spectral_radius() {
         "desvio pós-normalização {worst_after_norm} > 0.15"
     );
     println!(
-        "M7 homeostase: max_rho={max_rho:.4} normalizacoes={normalized_samples} desvio_max={worst_after_norm:.4} gershgorin_final={:.4}",
+        "M7 homeostase: max_rho={max_rho:.4} max_rho_jacobi={max_rho_jacobi:.4} normalizacoes={normalized_samples} desvio_max={worst_after_norm:.4} gershgorin_final={:.4}",
         field.spectral_radius_bound()
     );
 }
