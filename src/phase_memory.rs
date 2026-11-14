@@ -33,40 +33,58 @@
 //! como representar várias relações de fase simultâneas. A generalização
 //! correta para memória associativa é acumular o **fasor** complexo
 //! `C_ij = Σ_μ e^{i(ψ_j^μ − ψ_i^μ)}` e usar a representação polar
-//! `(W_ij, δ_ij) = (|C_ij|/A, arg C_ij)`: a superposição é a média circular
-//! das relações de fase e `arg C` é exatamente o alvo que a regra `Δδ`
-//! persegue (o máximo de `Σ_μ cos(ψ_j^μ − ψ_i^μ − δ)`).
+//! `(W_ij, δ_ij) = (|C_ij|/⟨|C|⟩, arg C_ij)`: a superposição é a média
+//! circular das relações de fase e `arg C` é exatamente o alvo que a regra
+//! `Δδ` persegue (o máximo de `Σ_μ cos(ψ_j^μ − ψ_i^μ − δ)`).
 //!
 //! O que este módulo faz de fato:
 //!
-//! * **`ΔW`**: o acumulador complexo `C += η_W·e^{iΔψ} − γ_W·C` é a forma
-//!   complexa da regra acima; sua decomposição polar é
-//!   `ΔW = η_W cos(Δψ−δ) − γ_W W`, idêntica à especificação.
-//! * **`Δδ`**: implementado literalmente como relaxação da fase para o alvo
-//!   `arg C_ij`, `δ ← δ + η_δ·W_ij·sin(arg C_ij − δ)`, executada a cada ciclo
-//!   de imprint. `η_δ` é, portanto, a **taxa de aprendizado de fase** (com
-//!   `η_δ = 0` a memória não aprende relações de fase — há teste para isso).
+//! * **`ΔW`**: o acumulador complexo `C += η_W·e^{iΔψ}` com esquecimento
+//!   metabólico `C ← (1−γ_W)^cycles·C` por **episódio** de imprint é a forma
+//!   complexa da regra acima (a parte real é `ΔW ∝ η_W cos(Δψ−δ)`); o
+//!   decaimento é por episódio — e não por ciclo — porque senão o primeiro
+//!   padrão é decaído pelos ciclos de todos os seguintes: com 3 padrões × 40
+//!   ciclos e `γ_W = 0.002` p0 ficava 15% mais fraco que p2, e com 200 ciclos
+//!   por padrão o recall de p0 degradava de 0.13 para 0.90 rad.
+//! * **`Δδ`**: implementado de verdade como relaxação da fase para o alvo
+//!   `arg C_ij`, `δ ← δ + η_δ·W_ij·sin(arg C_ij − δ)`, com `4·cycles`
+//!   relaxações por imprint. `η_δ` é a **taxa de aprendizado de fase**: com
+//!   `η_δ = 0` a memória não aprende relações de fase e o recall colapsa
+//!   (erro medido 1.41 rad contra 0.11 rad com `η_δ = 0.08` — há teste).
 //! * **Sem `clamp` de magnitude.** A versão anterior truncava
 //!   `W_ij = min(|C_ij|, 1.0)`. Como `|C|` satura em `η_W/γ_W ≫ 1`, *todos*
 //!   os pesos viravam 1.0 e a informação de coerência (a magnitude relativa,
 //!   que diz em quais pares os padrões concordam) era destruída — pares com
 //!   `|C| ≈ 0` recebiam acoplamento unitário baseado só no ruído de `arg C`.
-//!   Agora `W_ij = |C_ij| / <|C|>` (gauge: acoplamento médio = 1), uma
+//!   Agora `W_ij = |C_ij| / ⟨|C|⟩` (gauge: acoplamento médio = 1), uma
 //!   **constante global multiplicativa, não truncamento**: as razões entre
 //!   pesos são exatamente preservadas. O gauge também desacopla a escala do
 //!   campo de `η_W`, `γ_W` e do número de imprints, o que mantém a dinâmica
 //!   estável para qualquer histórico de gravação (incluindo o daemon, que
 //!   reimprime a cada ciclo e nunca chama `recall`).
 //!
-//! # Limite físico
+//! # Limite físico (medido, não postulado)
 //!
-//! A capacidade de uma memória de fase com uma única `δ_ij` por par é finita:
-//! os padrões interferem (a soma de fasores não é linear em `(W, δ)`) e a
-//! matriz de coerência resultante só mantém `P ≲ 0.1·N` atratores estáveis.
-//! Para `N = 32` isso significa `P = 3` no limite — medido em
-//! `tests/phase2_m5_hardening.rs` (ver a tabela de erros no relatório).
-//! Acima disso o `recall` converge para um mínimo espúrio da mistura, não para
-//! o padrão original: é um limite do modelo, não um bug de implementação.
+//! A superposição de fasores **não** é linear em `(W, δ)`: para o padrão `ν` o
+//! campo residual em `ψ^ν` é `(1/N)Σ_j Im[conj(C_ij)·e^{iΔ_ij^ν}] =
+//! (1/N)Σ_j Σ_{μ≠ν} sin(a_j − a_i)`, com `a = ψ^μ − ψ^ν`. Se `a` varia de
+//! forma não uniforme sobre os nós, esse campo tem uma componente **sistemática**
+//! (não é ruído que decai com `N`): o mínimo da energia de superposição fica
+//! deslocado de `ψ^ν` e o `recall` erra por esse deslocamento.
+//!
+//! Medido em `tests/phase2_m5_hardening.rs` (`N = 32`, 12 ocultos, 30 seeds,
+//! configuração do invariante): `p1 = 0.039`, `p2 = 0.121`, `p0 = 0.169` rad.
+//! Os controles mostram que não é bug nem convergência: `P = 1` dá `0.000`,
+//! padrões que diferem por rotação rígida (crosstalk nulo) dão `0.00001`,
+//! `dt` (0.05→0.005) e `steps` (600→6000) não mudam nada, e o mínimo
+//! encontrado tem energia *menor* que o padrão verdadeiro. O erro de p0
+//! **não decai com `N`** (0.156 em `N = 96`), ao contrário de padrões
+//! aleatórios (0.19–0.21 em `N = 32`, limite clássico `α = P/N ≈ 0.1`).
+//!
+//! Conclusão honesta: em `N = 32` com `P = 3` harmônicos a meta de `< 0.15`
+//! rad fica exatamente na borda do que a arquitetura entrega (o melhor
+//! balanceamento de pesos dá `p0 ≈ 0.135` e `p2 ≈ 0.150`). Para `P ≲ 2` o
+//! invariante é cumprido com folga.
 //!
 //! # Robustez
 //!
@@ -121,15 +139,19 @@ pub struct PhaseMemoryConfig {
     /// Força do grampo sensorial (`α_clamp`).
     pub clamp_strength: f32,
     /// Taxa de aprendizado da magnitude `W`: incremento do fasor por ciclo
-    /// (`ΔC = η_W·e^{iΔψ} − γ_W·C`). Como o campo é normalizado por um gauge
+    /// (`C += η_W·e^{iΔψ}`; o esquecimento é `(1−γ_W)^cycles` por episódio).
+    /// Como o campo é normalizado por um gauge
     /// global, `η_W` controla a velocidade de consolidação, não a paisagem de
     /// atratores (que depende só de `γ_W` e das relações entre os padrões).
     pub eta_w: f32,
     /// Taxa de aprendizado da fase `δ` (regra `Δδ = η_δ·W·sin(arg C − δ)`).
     /// `0.0` desliga o aprendizado de fase.
     pub eta_delta: f32,
-    /// Decaimento metabólico dos pesos (Wenger espectral). Deve estar em
-    /// `[0, 1)`: é o fator de esquecimento por ciclo.
+    /// Decaimento metabólico dos pesos (Wenger espectral), **por episódio** de
+    /// `imprint`: `(1−γ_W)^cycles` é o esquecimento aplicado ao conteúdo
+    /// anterior. Deve estar em `[0, 1)`. Vírgula: padrões gravados com o mesmo
+    /// `cycles` decaem apenas por quantos episódios vieram depois, e não pelos
+    /// ciclos de consolidação dos outros (que quebraria a coexistência).
     pub gamma_w: f32,
 }
 
@@ -210,11 +232,12 @@ fn wrap_signed(x: f32) -> f32 {
     v
 }
 
-/// Relaxações de fase executadas por ciclo de `imprint` para a regra `Δδ`.
+/// Relaxações de fase por ciclo de `imprint` para a regra `Δδ`.
 ///
-/// A regra `δ ← δ + η_δ·W·sin(arg C − δ)` tem taxa proporcional a `η_δ·W`;
-/// algumas sub-relaxações por ciclo fazem `δ` acompanhar a média circular sem
-/// remover o papel de `η_δ` (com `η_δ = 0` nada é aprendido).
+/// A regra `δ ← δ + η_δ·W·sin(arg C − δ)` tem taxa proporcional a `η_δ·W`, que
+/// pode ser pequena nos pares de baixa coerência; `4·cycles` sub-relaxações por
+/// imprint fazem `δ` acompanhar a média circular sem remover o papel de `η_δ`
+/// (com `η_δ = 0` nada é aprendido). O alvo `arg C` é o ponto fixo da regra.
 const DELTA_SUBSTEPS: usize = 4;
 
 impl ComplexPhaseMemory {

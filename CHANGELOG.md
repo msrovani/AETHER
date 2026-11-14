@@ -3,6 +3,17 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.25] - 2026-11-14
+
+### Changed
+
+- Ciclo automatico: 3 arquivo(s) (src:1, tests:2).
+- Gate: ok (3s).
+
+- `src/phase_memory.rs`
+- `tests/phase2_hardening.rs`
+- `tests/phase2_m5_hardening.rs`
+
 ## [0.0.24] - 2026-11-14
 
 ### Changed

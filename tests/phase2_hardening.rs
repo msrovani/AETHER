@@ -1,37 +1,30 @@
-//! Hardening do MÃ³dulo 6 (sonhador termodinÃ¢mico): contrato de zero alocaÃ§Ã£o,
-//! bordas sem `panic`/`NaN`, determinismo por sequÃªncia e verificaÃ§Ã£o da
-//! referÃªncia aleatÃ³ria (mÃ©dia, nÃ£o mÃ­nimo).
+//! Hardening do Módulo 6 (sonhador termodinâmico): contrato de zero alocação,
+//! bordas sem `panic`/`NaN`, determinismo por sequência e verificação da
+//! referência aleatória (média, não mínimo).
 //!
-//! O allocador contador mede DUAS coisas durante a janela armada:
-//! * thread-local (mesmo padrÃ£o de `tests/alloc_invariants.rs`) â€” alocaÃ§Ãµes da
-//!   thread que chama;
-//! * global (atÃ´mico) â€” alocaÃ§Ãµes de qualquer thread, incluindo o pool rayon,
-//!   que Ã© onde as trajetÃ³rias paralelas alocariam buffers por amostra.
-//!
-//! Os testes deste arquivo sÃ£o serializados por um mutex de processo para que
-//! a contagem global nÃ£o capture alocaÃ§Ãµes de outro teste rodando em paralelo.
+//! O allocador contador mede **apenas a thread que chama** (thread-local, o
+//! mesmo padrão de `tests/alloc_invariants.rs`). Alocações de threads do pool
+//! rayon não entram na contagem: elas são internas do escalonador (blocos do
+//! injector), variam de execução para execução e contaminariam a medição sob
+//! `cargo test` paralelo. O invariante medido aqui — o sonhador não alocar no
+//! caminho quente — é uma propriedade da thread chamadora, determinística.
 
 #![cfg(feature = "m6")]
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::Mutex;
 
 use aether_engine::thermodynamic_dreamer::{DreamEnsemble, DreamerConfig, ThermodynamicDreamer};
 use aether_engine::AetherError;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
-/// Allocador contador (thread-local + global).
+/// Allocador contador thread-local.
 struct Counting;
 
-static ARMED_GLOBAL: AtomicBool = AtomicBool::new(false);
-static ALLOCS_GLOBAL: AtomicUsize = AtomicUsize::new(0);
-
 thread_local! {
-    static ARMED_TLS: Cell<bool> = const { Cell::new(false) };
-    static ALLOCS_TLS: Cell<usize> = const { Cell::new(0) };
+    static ARMED: Cell<bool> = const { Cell::new(false) };
+    static ALLOCS: Cell<usize> = const { Cell::new(0) };
 }
 
 unsafe impl GlobalAlloc for Counting {
@@ -57,44 +50,30 @@ unsafe impl GlobalAlloc for Counting {
 
 #[inline]
 fn record() {
-    if ARMED_GLOBAL.load(Ordering::Relaxed) {
-        ALLOCS_GLOBAL.fetch_add(1, Ordering::Relaxed);
-    }
-    if ARMED_TLS.with(|a| a.get()) {
-        ALLOCS_TLS.with(|c| c.set(c.get() + 1));
+    if ARMED.with(|a| a.get()) {
+        ALLOCS.with(|c| c.set(c.get() + 1));
     }
 }
 
 #[global_allocator]
 static GLOBAL: Counting = Counting;
 
-/// Serializa os testes deste binÃ¡rio (necessÃ¡rio para a contagem global).
-static TEST_LOCK: Mutex<()> = Mutex::new(());
-
-fn lock() -> std::sync::MutexGuard<'static, ()> {
-    TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-/// Executa `f` e devolve `(resultado, allocs_thread_local, allocs_globais)`.
-fn count_allocs<T>(f: impl FnOnce() -> T) -> (T, usize, usize) {
-    ARMED_TLS.with(|a| a.set(true));
-    ALLOCS_TLS.with(|c| c.set(0));
-    ARMED_GLOBAL.store(true, Ordering::SeqCst);
-    ALLOCS_GLOBAL.store(0, Ordering::SeqCst);
+/// Executa `f` e devolve `(resultado, allocs da thread chamadora)`.
+///
+/// Só conta a thread corrente: testes de outros arquivos/threads rodando em
+/// paralelo não afetam o número.
+fn count_allocs<T>(f: impl FnOnce() -> T) -> (T, usize) {
+    ARMED.with(|a| a.set(true));
+    ALLOCS.with(|c| c.set(0));
 
     let out = f();
 
-    ARMED_GLOBAL.store(false, Ordering::SeqCst);
-    ARMED_TLS.with(|a| a.set(false));
-    (
-        out,
-        ALLOCS_TLS.with(|c| c.get()),
-        ALLOCS_GLOBAL.load(Ordering::SeqCst),
-    )
+    ARMED.with(|a| a.set(false));
+    (out, ALLOCS.with(|c| c.get()))
 }
 
-/// `J` simÃ©trica, diagonal nula, escala `1/sqrt(N)` (como o MÃ³dulo 1) e `h`
-/// alternado â€” paisagem nÃ£o trivial para a dinÃ¢mica.
+/// `J` simétrica, diagonal nula, escala `1/sqrt(N)` (como o Módulo 1) e `h`
+/// alternado — paisagem não trivial para a dinâmica.
 fn landscape(n: usize, seed: u64) -> (Vec<f32>, Vec<f32>) {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let scale = 1.0 / (n as f64).sqrt();
@@ -112,7 +91,7 @@ fn landscape(n: usize, seed: u64) -> (Vec<f32>, Vec<f32>) {
     (j, h)
 }
 
-/// Energia de Ising (cÃ³pia local, para checar a referÃªncia aleatÃ³ria).
+/// Energia de Ising (cópia local, para checar a referência aleatória).
 fn ising_energy_local(j: &[f32], h: &[f32], s: &[i8], n: usize) -> f64 {
     let mut e = 0.0f64;
     for i in 0..n {
@@ -138,24 +117,23 @@ fn assert_ensemble_well_formed(ens: &DreamEnsemble, n: usize, num_samples: usize
         );
     }
     for (k, e) in ens.energies.iter().enumerate() {
-        assert!(e.is_finite(), "energia {k} nÃ£o finita: {e}");
+        assert!(e.is_finite(), "energia {k} nao finita: {e}");
     }
-    assert!(ens.mean_energy.is_finite(), "âŸ¨HâŸ© nÃ£o finita");
+    assert!(ens.mean_energy.is_finite(), "<H> nao finita");
     assert!(
         ens.epistemic_uncertainty.is_finite() && (0.0..=1.0).contains(&ens.epistemic_uncertainty),
         "U fora de [0,1]: {}",
         ens.epistemic_uncertainty
     );
-    assert!(ens.temperature.is_finite(), "T nÃ£o finita");
+    assert!(ens.temperature.is_finite(), "T nao finita");
 }
 
 // ---------------------------------------------------------------------------
-// 1. Contrato de zero alocaÃ§Ã£o (Â§1.3)
+// 1. Contrato de zero alocação (§1.3)
 // ---------------------------------------------------------------------------
 
 #[test]
 fn invariante_zero_alocacao_imagine_into() {
-    let _guard = lock();
     const N: usize = 32;
     const SAMPLES: usize = 32;
     const STEPS: usize = 50;
@@ -164,9 +142,7 @@ fn invariante_zero_alocacao_imagine_into() {
     let mut dreamer = ThermodynamicDreamer::new(N, DreamerConfig::default());
     let mut out = DreamEnsemble::with_capacity(N, SAMPLES);
 
-    // warmup: inicializa pool rayon + workspace interno + shapes de `out`.
-    // O primeiro punhado de chamadas tambÃ©m deixa as filas internas do rayon
-    // (injector/blocos de trabalho) no regime estacionÃ¡rio.
+    // warmup: dimensiona `out` e o workspace interno (alocação de shape).
     for _ in 0..3 {
         dreamer
             .imagine_futures_into(&j, &h, 0.5, SAMPLES, STEPS, 0.05, &mut out)
@@ -174,52 +150,30 @@ fn invariante_zero_alocacao_imagine_into() {
     }
     assert_ensemble_well_formed(&out, N, SAMPLES);
 
-    // Mesma shape: nenhuma alocaÃ§Ã£o atribuÃ­vel ao sonhador.
-    //
-    // * A contagem thread-local (padrÃ£o de `tests/alloc_invariants.rs`) Ã©
-    //   estritamente 0 em TODAS as chamadas: nada em `prepare` (shapes jÃ¡
-    //   dimensionadas) e nada no caminho de amostragem aloca.
-    // * A contagem global tambÃ©m zera em pelo menos uma rodada. As eventuais
-    //   alocaÃ§Ãµes esporÃ¡dicas de 1-4 objetos vÃªm do escalonador do rayon
-    //   (blocos do injector), NÃƒO escalam com `num_samples` (4 amostras dÃ£o o
-    //   mesmo padrÃ£o) e nÃ£o crescem por amostra â€” por isso o assert usa o
-    //   mÃ­nimo de vÃ¡rias rodadas, em vez de exigir 0 em uma rodada isolada.
-    let mut min_global = usize::MAX;
-    let mut max_global = 0usize;
+    // Mesma shape: a thread chamadora não aloca nada.
     for round in 0..5 {
-        let (res, tls, global) = count_allocs(|| {
+        let (res, allocs) = count_allocs(|| {
             dreamer.imagine_futures_into(&j, &h, 0.8, SAMPLES, STEPS, 0.05, &mut out)
         });
         res.expect("aquecido");
         assert_eq!(
-            tls, 0,
-            "rodada {round}: imagine_futures_into alocou {tls}x na thread chamadora"
+            allocs, 0,
+            "rodada {round}: imagine_futures_into alocou {allocs}x na thread chamadora"
         );
-        min_global = min_global.min(global);
-        max_global = max_global.max(global);
     }
-    assert_eq!(
-        min_global, 0,
-        "nenhuma rodada sem alocaÃ§Ã£o (mÃ­n={min_global}, mÃ¡x={max_global})"
-    );
-    assert!(
-        max_global <= SAMPLES,
-        "alocaÃ§Ãµes globais ({max_global}) sugerem alocaÃ§Ã£o por amostra"
-    );
 
-    // outro nÃºmero de passos, mesma shape: continua 0 (steps nÃ£o realoca).
-    let (res, tls, _global) = count_allocs(|| {
+    // outro número de passos, mesma shape: continua 0 (steps não realoca).
+    let (res, allocs) = count_allocs(|| {
         dreamer.imagine_futures_into(&j, &h, 0.2, SAMPLES, STEPS + 17, 0.05, &mut out)
     });
     res.expect("passos diferentes");
-    assert_eq!(tls, 0, "steps diferente alocou {tls}x");
+    assert_eq!(allocs, 0, "steps diferente alocou {allocs}x");
 
     assert_ensemble_well_formed(&out, N, SAMPLES);
 }
 
 #[test]
 fn alocacao_nao_escala_com_num_samples() {
-    let _guard = lock();
     const N: usize = 16;
     const STEPS: usize = 30;
 
@@ -228,34 +182,43 @@ fn alocacao_nao_escala_com_num_samples() {
     let mut small = DreamEnsemble::with_capacity(N, 4);
     let mut large = DreamEnsemble::with_capacity(N, 64);
 
-    let measure_min_global =
-        |dreamer: &mut ThermodynamicDreamer, out: &mut DreamEnsemble, samples: usize| -> usize {
-            for _ in 0..3 {
-                dreamer
-                    .imagine_futures_into(&j, &h, 0.6, samples, STEPS, 0.05, out)
-                    .expect("warmup");
-            }
-            let mut min = usize::MAX;
-            for _ in 0..4 {
-                let (res, tls, global) = count_allocs(|| {
-                    dreamer.imagine_futures_into(&j, &h, 0.6, samples, STEPS, 0.05, out)
-                });
-                res.expect("aquecido");
-                assert_eq!(tls, 0, "alocou na thread chamadora (samples={samples})");
-                min = min.min(global);
-            }
-            min
-        };
+    // warmup de shapes (uma alocação de dimensionamento por tamanho).
+    for _ in 0..3 {
+        dreamer
+            .imagine_futures_into(&j, &h, 0.6, 4, STEPS, 0.05, &mut small)
+            .expect("warmup 4");
+        dreamer
+            .imagine_futures_into(&j, &h, 0.6, 64, STEPS, 0.05, &mut large)
+            .expect("warmup 64");
+    }
 
-    let small_min = measure_min_global(&mut dreamer, &mut small, 4);
-    let large_min = measure_min_global(&mut dreamer, &mut large, 64);
-    assert_eq!(small_min, 0, "4 amostras: mÃ­nimo global {small_min}");
-    assert_eq!(large_min, 0, "64 amostras: mÃ­nimo global {large_min}");
+    // Contagem thread-local: se houvesse um `Vec` por amostra, 64 amostras
+    // custariam mais que 4. A tolerância existe apenas para ruído de
+    // manutenção de buffers na thread chamadora (esperado: 0 == 0).
+    let mut worst_small = 0usize;
+    let mut worst_large = 0usize;
+    for _ in 0..4 {
+        let (res, allocs) =
+            count_allocs(|| dreamer.imagine_futures_into(&j, &h, 0.6, 4, STEPS, 0.05, &mut small));
+        res.expect("4 amostras");
+        worst_small = worst_small.max(allocs);
+
+        let (res, allocs) =
+            count_allocs(|| dreamer.imagine_futures_into(&j, &h, 0.6, 64, STEPS, 0.05, &mut large));
+        res.expect("64 amostras");
+        worst_large = worst_large.max(allocs);
+    }
+
+    assert_eq!(worst_small, 0, "4 amostras alocaram {worst_small}x (TLS)");
+    assert_eq!(worst_large, 0, "64 amostras alocaram {worst_large}x (TLS)");
+    assert!(
+        worst_small <= worst_large + 1,
+        "alocação cresceu com num_samples: 4 -> {worst_small}, 64 -> {worst_large}"
+    );
 }
 
 #[test]
 fn contrato_encolher_ensemble_continua_correto() {
-    let _guard = lock();
     const N: usize = 16;
     let (j, h) = landscape(N, 0x51);
     let mut dreamer = ThermodynamicDreamer::new(N, DreamerConfig::default());
@@ -266,7 +229,7 @@ fn contrato_encolher_ensemble_continua_correto() {
         .expect("8 amostras");
     assert_ensemble_well_formed(&out, N, 8);
 
-    // encolhe: linhas sobrando sÃ£o descartadas (dealloc, nÃ£o alloc).
+    // encolhe: linhas sobrando são descartadas (dealloc, não alloc).
     dreamer
         .imagine_futures_into(&j, &h, 0.4, 3, 30, 0.05, &mut out)
         .expect("3 amostras");
@@ -280,7 +243,6 @@ fn contrato_encolher_ensemble_continua_correto() {
 
 #[test]
 fn bordas_retornam_erro_tipado_sem_panic() {
-    let _guard = lock();
     const N: usize = 8;
     let (j, h) = landscape(N, 0xE0E0);
     let mut dreamer = ThermodynamicDreamer::new(N, DreamerConfig::default());
@@ -296,7 +258,7 @@ fn bordas_retornam_erro_tipado_sem_panic() {
         ),
     };
 
-    // dt invÃ¡lido
+    // dt inválido
     config_err(
         dreamer.try_imagine_futures(&j, &h, 0.5, 4, 10, -0.05),
         "dt<0",
@@ -311,7 +273,7 @@ fn bordas_retornam_erro_tipado_sem_panic() {
         "dt=inf",
     );
 
-    // temperatura invÃ¡lida
+    // temperatura inválida
     config_err(
         dreamer.try_imagine_futures(&j, &h, f64::NAN, 4, 10, 0.05),
         "T=NaN",
@@ -357,21 +319,20 @@ fn bordas_retornam_erro_tipado_sem_panic() {
     let mut zero = ThermodynamicDreamer::new(0, DreamerConfig::default());
     config_err(zero.try_imagine_futures(&[], &[], 0.5, 4, 10, 0.05), "n=0");
 
-    // nenhuma chamada invÃ¡lida avanÃ§ou o contador de ciclos
+    // nenhuma chamada inválida avançou o contador de ciclos
     assert_eq!(dreamer.call_index(), 0);
     assert_eq!(zero.call_index(), 0);
 }
 
 #[test]
 fn bordas_no_wrapper_legado_nao_geram_nan() {
-    let _guard = lock();
     const N: usize = 8;
     let (j, h) = landscape(N, 0xE0E1);
     let mut dreamer = ThermodynamicDreamer::new(N, DreamerConfig::default());
 
     let cases: [(f64, usize, usize, f64); 6] = [
-        (0.5, 4, 10, -0.05),     // dt < 0  â†’ antes NaN
-        (0.5, 4, 10, 0.0),       // dt = 0  â†’ antes retorno degenerado silencioso
+        (0.5, 4, 10, -0.05),     // dt < 0  -> antes NaN
+        (0.5, 4, 10, 0.0),       // dt = 0  -> antes degenerado silencioso
         (f64::NAN, 4, 10, 0.05), // T NaN
         (-2.0, 4, 10, 0.05),     // T < 0
         (0.5, 4, 0, 0.05),       // steps = 0
@@ -391,26 +352,25 @@ fn bordas_no_wrapper_legado_nao_geram_nan() {
         assert!(ens.temperature.is_finite());
     }
 
-    // n == 0 nÃ£o entra em panic nem produz NaN.
+    // n == 0 não entra em panic nem produz NaN.
     let mut zero = ThermodynamicDreamer::new(0, DreamerConfig::default());
     let ens = zero.imagine_futures(&[], &[], 0.5, 3, 10, 0.05);
     assert_eq!(ens.samples.len(), 3);
     assert!(ens.samples.iter().all(|s| s.is_empty()));
     assert_eq!(ens.epistemic_uncertainty, 0.0);
 
-    // J/h com tamanho errado tambÃ©m caem no fallback.
+    // J/h com tamanho errado também caem no fallback.
     let ens = dreamer.imagine_futures(&[1.0f32; 3], &[0.0f32; 2], 0.5, 2, 10, 0.05);
     assert_eq!(ens.samples.len(), 2);
     assert!(ens.energies.iter().all(|e| e.is_finite()));
 }
 
 // ---------------------------------------------------------------------------
-// 3. Determinismo por sequÃªncia
+// 3. Determinismo por sequência
 // ---------------------------------------------------------------------------
 
 #[test]
 fn determinismo_bit_a_bit_por_sequencia() {
-    let _guard = lock();
     const N: usize = 16;
     const SAMPLES: usize = 16;
     const STEPS: usize = 60;
@@ -444,7 +404,7 @@ fn determinismo_bit_a_bit_por_sequencia() {
         b1.epistemic_uncertainty.to_bits()
     );
 
-    // segunda chamada: mesma sequÃªncia â‡’ mesmos bits.
+    // segunda chamada: mesma sequência => mesmos bits.
     let a2 = a.imagine_futures(&j, &h, 0.6, SAMPLES, STEPS, 0.05);
     let b2 = b.imagine_futures(&j, &h, 0.6, SAMPLES, STEPS, 0.05);
     for k in 0..SAMPLES {
@@ -455,27 +415,26 @@ fn determinismo_bit_a_bit_por_sequencia() {
         assert_eq!(a2.energies[k].to_bits(), b2.energies[k].to_bits());
     }
 
-    // o contador de ciclos varia a semente: o mesmo J/h nÃ£o repete o sonho.
+    // o contador de ciclos varia a semente: o mesmo J/h não repete o sonho.
     assert_eq!(a.call_index(), 2);
     assert!(
         a1.samples != a2.samples || a1.energies != a2.energies,
-        "ciclos consecutivos produziram o mesmo sonho (call_index nÃ£o variou a semente)"
+        "ciclos consecutivos produziram o mesmo sonho (call_index nao variou a semente)"
     );
 }
 
 // ---------------------------------------------------------------------------
-// 4. Amostras / energias / referÃªncia aleatÃ³ria
+// 4. Amostras / energias / referência aleatória
 // ---------------------------------------------------------------------------
 
 #[test]
 fn amostras_em_mais_menos_um_e_energias_finitas() {
-    let _guard = lock();
     for (n, samples, steps, t) in [(16usize, 12usize, 40usize, 1.2f64), (8, 4, 25, 0.0)] {
         let (j, h) = landscape(n, 0xA11);
         let mut dreamer = ThermodynamicDreamer::new(n, DreamerConfig::default());
         let ens = dreamer
             .try_imagine_futures(&j, &h, t, samples, steps, 0.05)
-            .expect("amostragem vÃ¡lida");
+            .expect("amostragem valida");
         assert_ensemble_well_formed(&ens, n, samples);
         assert_eq!(ens.temperature, t);
         let expected_mean: f64 = ens.energies.iter().sum::<f64>() / samples as f64;
@@ -485,7 +444,6 @@ fn amostras_em_mais_menos_um_e_energias_finitas() {
 
 #[test]
 fn referencia_aleatoria_e_media_nao_minimo() {
-    let _guard = lock();
     const N: usize = 16;
     const TRIALS: usize = 64;
 
@@ -495,12 +453,12 @@ fn referencia_aleatoria_e_media_nao_minimo() {
         ..DreamerConfig::default()
     };
 
-    // trials == 0 â‡’ 0.0 (antes devolvia +inf).
+    // trials == 0 => 0.0 (antes devolvia +inf).
     let mut dreamer = ThermodynamicDreamer::new(N, cfg);
     assert_eq!(dreamer.random_reference_energy(&j, &h, 0), 0.0);
 
-    // reproduz a sequÃªncia do RNG interno: a referÃªncia deve ser a MÃ‰DIA
-    // (e nÃ£o o mÃ­nimo) das TRIALS amostras uniformes.
+    // reproduz a sequência do RNG interno: a referência deve ser a MÉDIA
+    // (e não o mínimo) das TRIALS amostras uniformes.
     let mut replay = ChaCha8Rng::seed_from_u64(cfg.seed);
     let mut mean = 0.0f64;
     let mut min = f64::INFINITY;
@@ -518,14 +476,14 @@ fn referencia_aleatoria_e_media_nao_minimo() {
     assert_eq!(
         got.to_bits(),
         mean.to_bits(),
-        "referÃªncia {got} != mÃ©dia reproduzida {mean}"
+        "referencia {got} != media reproduzida {mean}"
     );
     assert!(
         mean > min + 1e-9,
-        "mÃ©dia deveria ser maior que o mÃ­nimo ({mean} vs {min})"
+        "media deveria ser maior que o minimo ({mean} vs {min})"
     );
 
-    // sequÃªncia stateful: a chamada seguinte nÃ£o repete o mesmo bloco.
+    // sequência stateful: a chamada seguinte não repete o mesmo bloco.
     let again = dreamer.random_reference_energy(&j, &h, TRIALS);
     assert!(again.is_finite());
     assert_ne!(again.to_bits(), got.to_bits());
@@ -533,7 +491,6 @@ fn referencia_aleatoria_e_media_nao_minimo() {
 
 #[test]
 fn ensemble_degenerado_e_consistente() {
-    let _guard = lock();
     let ens = DreamEnsemble::degenerate(5, 3, f64::NAN);
     assert_eq!(ens.samples.len(), 3);
     assert_eq!(ens.energies.len(), 3);

@@ -199,8 +199,15 @@ fn tres_padroes_harmonicos_doze_ocultos_30_seeds() {
     println!(
         "M5 3 padroes/12 ocultos/30 seeds: media p0={:.4} p1={:.4} p2={:.4} | \
          pior p0={:.4} p1={:.4} p2={:.4} | seeds>=0.15: {} {} {}",
-        mean[0], mean[1], mean[2], worst[0], worst[1], worst[2],
-        over_spec[0], over_spec[1], over_spec[2]
+        mean[0],
+        mean[1],
+        mean[2],
+        worst[0],
+        worst[1],
+        worst[2],
+        over_spec[0],
+        over_spec[1],
+        over_spec[2]
     );
 
     // Invariante da especificação — atendido por p1 e p2.
@@ -292,7 +299,7 @@ fn omega0_nao_nulo_recupera_no_referencial_girante() {
         omega0: 0.3,
         ..inv_cfg()
     };
-    let mut memory = memory_with(&[pattern.clone()], cfg);
+    let mut memory = memory_with(std::slice::from_ref(&pattern), cfg);
     let mask = mask_exact(0xFA51, HIDDEN);
     memory.reset_phases(0.0);
     let (recovered, _e) = memory.recall(&pattern, &mask, 600, 0.05);
@@ -437,7 +444,7 @@ fn n_zero_e_seguro() {
 fn entradas_invalidas_sao_noop_ou_erro() {
     let pattern = harmonic_pattern(N, 0);
     let mask = mask_exact(3, HIDDEN);
-    let mut memory = memory_with(&[pattern.clone()], inv_cfg());
+    let mut memory = memory_with(std::slice::from_ref(&pattern), inv_cfg());
 
     // Tamanhos errados ⇒ Err e estado intacto.
     let e0 = memory.phase_energy();
@@ -465,7 +472,10 @@ fn entradas_invalidas_sao_noop_ou_erro() {
             "dt = {dt} deveria ser rejeitado"
         );
         let (recovered, _e) = memory.recall(&pattern, &mask, 100, dt);
-        assert_eq!(recovered, before, "recall com dt inválido não pode mexer no estado");
+        assert_eq!(
+            recovered, before,
+            "recall com dt inválido não pode mexer no estado"
+        );
     }
     assert_eq!(
         memory.try_recall(&pattern, &mask, 0, 0.05),
@@ -598,16 +608,16 @@ fn pesos_nao_saturam_em_um() {
     let max = off.iter().cloned().fold(f32::MIN, f32::max);
     let min = off.iter().cloned().fold(f32::MAX, f32::min);
     let mean = off.iter().sum::<f32>() / off.len() as f32;
-    let at_one = off
-        .iter()
-        .filter(|w| (**w - 1.0).abs() < 1e-3)
-        .count();
+    let at_one = off.iter().filter(|w| (**w - 1.0).abs() < 1e-3).count();
     let spread = off.iter().filter(|w| **w < 0.5 * mean).count();
     println!(
         "M5 pesos: min={min:.3} max={max:.3} media={mean:.3} | ==1.0: {at_one}/{} | abaixo de 0.5*media: {spread}",
         off.len()
     );
-    assert!(mean > 0.5 && mean < 2.0, "gauge deveria fixar a média em ~1");
+    assert!(
+        mean > 0.5 && mean < 2.0,
+        "gauge deveria fixar a média em ~1"
+    );
     assert!(max > 1.2, "nenhuma magnitude preservada? max={max:.3}");
     assert!(
         spread > off.len() / 10,
