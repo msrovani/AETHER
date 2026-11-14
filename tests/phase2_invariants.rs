@@ -72,8 +72,7 @@ fn test_complex_phase_memory_recall() {
         if mask[i] {
             continue;
         }
-        let d = (recovered[i] - p1[i] + std::f32::consts::PI)
-            .rem_euclid(std::f32::consts::TAU)
+        let d = (recovered[i] - p1[i] + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
             - std::f32::consts::PI;
         err_sum += d.abs();
         count += 1;
@@ -111,10 +110,7 @@ fn test_complex_phase_memory_atratores_estaveis() {
     let e0 = memory.phase_energy();
     // evolução livre: energia não pode piorar significativamente
     let e1 = memory.free_run(120, 0.05);
-    assert!(
-        e1 <= e0 + 1e-3,
-        "atrator instável: E0={e0:.5} E1={e1:.5}"
-    );
+    assert!(e1 <= e0 + 1e-3, "atrator instável: E0={e0:.5} E1={e1:.5}");
     let _ = rec;
 }
 
@@ -172,7 +168,10 @@ fn test_thermodynamic_dreamer_uncertainty() {
         cold.epistemic_uncertainty
     );
     assert!(hot.epistemic_uncertainty > 0.0, "T alto deveria amostrar");
-    assert!(cold.epistemic_uncertainty < 0.05, "T baixo deveria colapsar");
+    assert!(
+        cold.epistemic_uncertainty < 0.05,
+        "T baixo deveria colapsar"
+    );
 
     // Energias finitas e amostras em {-1,+1}.
     for e in cold.energies.iter().chain(hot.energies.iter()) {
@@ -226,7 +225,9 @@ fn test_morphogenetic_homeostasis_and_pruning() {
     }
 
     let mut field = MorphogeneticField::new(N, &j0, MorphogenesisConfig::default());
-    let spins: Vec<f32> = (0..N).map(|i| if i % 2 == 0 { 1.0 } else { -1.0 }).collect();
+    let spins: Vec<f32> = (0..N)
+        .map(|i| if i % 2 == 0 { 1.0 } else { -1.0 })
+        .collect();
 
     let mut max_asym = 0.0f32;
     let mut sparsity_start = field.sparsity_ratio();
@@ -244,7 +245,11 @@ fn test_morphogenetic_homeostasis_and_pruning() {
 
         // (a) simetria estrita + diagonal nula
         for i in 0..N {
-            assert_eq!(field.j[i * N + i], 0.0, "diagonal não nula no ciclo {cycle}");
+            assert_eq!(
+                field.j[i * N + i],
+                0.0,
+                "diagonal não nula no ciclo {cycle}"
+            );
             for k in (i + 1)..N {
                 let d = (field.j[i * N + k] - field.j[k * N + i]).abs();
                 if d > max_asym {

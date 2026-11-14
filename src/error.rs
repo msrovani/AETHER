@@ -5,7 +5,8 @@ pub type Result<T> = std::result::Result<T, AetherError>;
 
 /// Erros de dominio do motor.
 #[derive(Debug, thiserror::Error)]
-pub enum AetherError {    /// Forma/dimensao de tensor incompativel com a operacao.
+pub enum AetherError {
+    /// Forma/dimensao de tensor incompativel com a operacao.
     #[error("shape mismatch: esperado {expected:?}, obtido {got:?}")]
     Shape {
         /// Forma esperada.

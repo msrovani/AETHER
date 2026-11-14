@@ -130,7 +130,10 @@ fn k5_quatro_nos_sincronizam_em_menos_de_3s() {
     }
 
     assert!(bytes_ok, "datagrama com tamanho diferente de 40 bytes");
-    assert!(converged, "R(t) nao passou de 0.95 em 3 s (melhor = {best:.4})");
+    assert!(
+        converged,
+        "R(t) nao passou de 0.95 em 3 s (melhor = {best:.4})"
+    );
     assert!(best <= 1.0 + 1e-9);
 }
 
@@ -168,9 +171,7 @@ fn k6_perturbacao_propaga_sem_mensagem() {
     }
 
     // injeta ξ apenas no no' 0 e observa a quebra de simetria nos demais
-    handles[0]
-        .perturb([40.0, 40.0, 0.0])
-        .expect("perturbacao");
+    handles[0].perturb([40.0, 40.0, 0.0]).expect("perturbacao");
 
     let mut dropped_below = false;
     let t1 = Instant::now();

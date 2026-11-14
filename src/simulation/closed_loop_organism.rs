@@ -295,7 +295,11 @@ impl ClosedLoopOrganism {
         // --- injeção da perturbação física ---
         if !self.perturbed && self.started.elapsed() >= self.cfg.perturb_after {
             self.perturbed = true;
-            let xi = [self.cfg.acoustic_amplitude, self.cfg.acoustic_amplitude, 0.0];
+            let xi = [
+                self.cfg.acoustic_amplitude,
+                self.cfg.acoustic_amplitude,
+                0.0,
+            ];
             let _ = self.handles[0].perturb_oscillatory(xi, self.cfg.acoustic_hz as f32);
         }
 
@@ -366,13 +370,10 @@ impl ClosedLoopOrganism {
         let j3 = self
             .j
             .view()
-            .into_shape_with_order((
-                1,
-                self.cfg.decision_dim,
-                self.cfg.decision_dim,
-            ))
+            .into_shape_with_order((1, self.cfg.decision_dim, self.cfg.decision_dim))
             .unwrap();
-        self.solver.relax_into(IsingLandscape::new(j3, h2), &mut self.out)?;
+        self.solver
+            .relax_into(IsingLandscape::new(j3, h2), &mut self.out)?;
 
         let energy_trace = self.out.energy_trace.row(0).to_vec();
         let energy = self.out.best_energy[0];

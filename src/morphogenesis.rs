@@ -61,11 +61,11 @@ pub struct MorphogeneticField {
 impl std::fmt::Debug for MorphogeneticField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MorphogeneticField")
-        .field("n", &self.n)
-        .field("cfg", &self.cfg)
-        .field("free_energy", &self.free_energy)
-        .field("surprise", &self.surprise)
-        .finish()
+            .field("n", &self.n)
+            .field("cfg", &self.cfg)
+            .field("free_energy", &self.free_energy)
+            .field("surprise", &self.surprise)
+            .finish()
     }
 }
 

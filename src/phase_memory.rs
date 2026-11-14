@@ -185,8 +185,10 @@ impl ComplexPhaseMemory {
                     let idx = i * n + j;
                     let dpsi = wrap_signed(wrap(pattern[j]) - wrap(pattern[i]));
                     // ΔC = η_W · e^{i(ψ_j−ψ_i)} − γ_W · C  (regra hebbiana local)
-                    self.c_re[idx] += self.cfg.eta_w * dpsi.cos() - self.cfg.gamma_w * self.c_re[idx];
-                    self.c_im[idx] += self.cfg.eta_w * dpsi.sin() - self.cfg.gamma_w * self.c_im[idx];
+                    self.c_re[idx] +=
+                        self.cfg.eta_w * dpsi.cos() - self.cfg.gamma_w * self.c_re[idx];
+                    self.c_im[idx] +=
+                        self.cfg.eta_w * dpsi.sin() - self.cfg.gamma_w * self.c_im[idx];
                 }
             }
         }

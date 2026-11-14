@@ -157,10 +157,7 @@ impl HardwareTransducer {
     /// bytes de fase observados pelo enxame.
     pub fn sample(&mut self, net_bytes: u64) -> f32 {
         let now = Instant::now();
-        let jitter_ns = now
-            .saturating_duration_since(self.next)
-            .as_secs_f64()
-            * 1e9;
+        let jitter_ns = now.saturating_duration_since(self.next).as_secs_f64() * 1e9;
 
         let t0 = Instant::now();
         let _ = self.busy_work(40_000);
@@ -316,11 +313,7 @@ impl AetherDaemon {
                     gamma_w: 0.002,
                 },
             ),
-            field: MorphogeneticField::new(
-                cognition_dim,
-                &j_field,
-                MorphogenesisConfig::default(),
-            ),
+            field: MorphogeneticField::new(cognition_dim, &j_field, MorphogenesisConfig::default()),
             transducer: HardwareTransducer::new(window, seed),
             c_in,
             j_field,
@@ -347,10 +340,10 @@ impl AetherDaemon {
 
         // 2) predição espectral + surpresa
         self.wave.forward_into(self.u.view(), &mut self.v)?;
-        let entropy_raw =
-            self.wave
-                .compute_spectral_entropy(self.u.view())
-                .unwrap_or(0.0) as f32;
+        let entropy_raw = self
+            .wave
+            .compute_spectral_entropy(self.u.view())
+            .unwrap_or(0.0) as f32;
         let entropy_wave = self.wave.compute_wave_entropy() as f32;
         let prediction_error = ((entropy_raw - entropy_wave).abs() / 8.0).clamp(0.0, 4.0);
 
@@ -359,9 +352,7 @@ impl AetherDaemon {
         let spins: Vec<f32> = (0..self.cfg.cognition_dim)
             .map(|i| (frame.phase[i % 4].cos() * 0.9) as f32)
             .collect();
-        let free_energy = self
-            .field
-            .evolve_topology(prediction_error, &spins, 0.05);
+        let free_energy = self.field.evolve_topology(prediction_error, &spins, 0.05);
 
         // 3) decisão: sonhar (surpresa alta) ou colapsar (ação)
         let dreaming = free_energy > self.cfg.alert_free_energy;

@@ -180,7 +180,8 @@ impl ThermodynamicDreamer {
         let results: Vec<(Vec<i8>, f64)> = (0..num_samples)
             .into_par_iter()
             .map(|k| {
-                let mut rng = ChaCha8Rng::seed_from_u64(base_seed ^ (0x9E37_79B9 + k as u64 * 7919));
+                let mut rng =
+                    ChaCha8Rng::seed_from_u64(base_seed ^ (0x9E37_79B9 + k as u64 * 7919));
                 let mut x = vec![0.0f64; n];
                 let mut y = vec![0.0f64; n];
                 let mut hx = vec![0.0f64; n];

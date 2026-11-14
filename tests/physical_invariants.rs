@@ -88,7 +88,10 @@ fn invariante_01_colapso_termodinamico() {
         // O estado-emergente tem de estar em {-1,+1}^N e ter a energia anunciada.
         let s = out.states.row(0);
         for v in s.iter() {
-            assert!(*v == -1 || *v == 1, "caso {case}: estado discreto inválido {v}");
+            assert!(
+                *v == -1 || *v == 1,
+                "caso {case}: estado discreto inválido {v}"
+            );
         }
         let recomputed = solver.energy(&j.view(), &h.view(), s.as_slice().unwrap());
         assert!(

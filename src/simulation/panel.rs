@@ -95,7 +95,11 @@ impl PlainPanel {
             frame.r_per_node[0],
             frame.r_per_node[1],
             frame.r_per_node[2],
-            if frame.perturbed { "   (pós-perturbação)" } else { "" }
+            if frame.perturbed {
+                "   (pós-perturbação)"
+            } else {
+                ""
+            }
         ));
         out.push('\n');
 
@@ -207,7 +211,9 @@ impl PanelSink for RatatuiPanel {
                 Paragraph::new(Line::from(vec![
                     Span::styled(
                         "AETHER",
-                        Style::default().add_modifier(Modifier::BOLD).fg(Color::Cyan),
+                        Style::default()
+                            .add_modifier(Modifier::BOLD)
+                            .fg(Color::Cyan),
                     ),
                     Span::raw(format!(
                         "  t={:.2}s  custo={}µs  drops={}",
@@ -224,7 +230,11 @@ impl PanelSink for RatatuiPanel {
                 Gauge::default()
                     .ratio(frame.order_parameter.clamp(0.0, 1.0))
                     .label(format!("R(t) = {:.4}", frame.order_parameter))
-                    .block(Block::default().borders(Borders::ALL).title("Coerência de fase")),
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("Coerência de fase"),
+                    ),
                 chunks[1],
             );
 
@@ -233,7 +243,11 @@ impl PanelSink for RatatuiPanel {
                     "entropia cru = {:.4}   interferido = {:.4}",
                     frame.entropy_raw, frame.entropy_wave
                 ))
-                .block(Block::default().borders(Borders::ALL).title("Entropia espectral")),
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Entropia espectral"),
+                ),
                 chunks[2],
             );
 
@@ -243,8 +257,11 @@ impl PanelSink for RatatuiPanel {
             ))];
             lines.push(Line::from(sparkline(&frame.energy_trace, 72)));
             f.render_widget(
-                Paragraph::new(lines)
-                    .block(Block::default().borders(Borders::ALL).title("Energia Hamiltoniana")),
+                Paragraph::new(lines).block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Energia Hamiltoniana"),
+                ),
                 chunks[3],
             );
 
@@ -254,8 +271,11 @@ impl PanelSink for RatatuiPanel {
                 .map(|s| if *s > 0 { '1' } else { '0' })
                 .collect();
             f.render_widget(
-                Paragraph::new(bits)
-                    .block(Block::default().borders(Borders::ALL).title("Estado emergente s*")),
+                Paragraph::new(bits).block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Estado emergente s*"),
+                ),
                 chunks[4],
             );
         })?;

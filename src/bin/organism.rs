@@ -53,7 +53,9 @@ fn parse_args() -> Result<(OrganismConfig, Duration), String> {
             }
             "--perturb-at" => {
                 let v = value(&mut i)?;
-                let secs: f64 = v.parse().map_err(|e| format!("--perturb-at inválido: {e}"))?;
+                let secs: f64 = v
+                    .parse()
+                    .map_err(|e| format!("--perturb-at inválido: {e}"))?;
                 cfg.perturb_after = Duration::from_secs_f64(secs);
             }
             "--hz" => {
@@ -68,9 +70,9 @@ fn parse_args() -> Result<(OrganismConfig, Duration), String> {
         }
         i += 1;
     }
-    cfg.perturb_after = cfg.perturb_after.max(Duration::from_secs_f64(
-        cfg.window as f64 / cfg.hz + 0.5,
-    ));
+    cfg.perturb_after = cfg
+        .perturb_after
+        .max(Duration::from_secs_f64(cfg.window as f64 / cfg.hz + 0.5));
     Ok((cfg, duration))
 }
 
@@ -87,11 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("AETHER — organismo pós-token");
     println!(
         "nós=3 canais={} janela={} passos={} hz={} perturb_em={:?}",
-        cfg.sensor_channels,
-        cfg.window,
-        cfg.steps,
-        cfg.hz,
-        cfg.perturb_after
+        cfg.sensor_channels, cfg.window, cfg.steps, cfg.hz, cfg.perturb_after
     );
 
     let mut organism = ClosedLoopOrganism::new(cfg)?;

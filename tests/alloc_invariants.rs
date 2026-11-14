@@ -7,7 +7,9 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
 use aether_engine::core::kuramoto_field::PhasePacket;
-use aether_engine::core::thermodynamic_solver::{IsingLandscape, RelaxOutcome, ThermodynamicIsingSolver};
+use aether_engine::core::thermodynamic_solver::{
+    IsingLandscape, RelaxOutcome, ThermodynamicIsingSolver,
+};
 use aether_engine::core::wave_interference::WaveInterferenceBlock;
 use ndarray::Array2;
 use rand::{Rng, SeedableRng};
@@ -96,7 +98,10 @@ fn invariante_alocacao_zero_no_solver() {
             .relax_into(IsingLandscape::new(j3, h.view()), &mut out)
             .expect("relax")
     });
-    assert_eq!(allocs, 0, "reset+relax_into alocaram {allocs} vezes (deve ser 0)");
+    assert_eq!(
+        allocs, 0,
+        "reset+relax_into alocaram {allocs} vezes (deve ser 0)"
+    );
 }
 
 #[test]
@@ -146,11 +151,18 @@ fn invariante_determinismo_do_solver() {
     let mut solver = ThermodynamicIsingSolver::new(1, N, 120, 0.05);
 
     solver.reset(42);
-    let a = solver.relax(IsingLandscape::new(j3, h.view())).expect("relax");
+    let a = solver
+        .relax(IsingLandscape::new(j3, h.view()))
+        .expect("relax");
     solver.reset(42);
-    let b = solver.relax(IsingLandscape::new(j3, h.view())).expect("relax");
+    let b = solver
+        .relax(IsingLandscape::new(j3, h.view()))
+        .expect("relax");
 
     assert_eq!(a.states, b.states, "estados divergiram entre execuções");
-    assert_eq!(a.energy_trace, b.energy_trace, "curvas de energia divergiram");
+    assert_eq!(
+        a.energy_trace, b.energy_trace,
+        "curvas de energia divergiram"
+    );
     assert_eq!(a.best_energy, b.best_energy);
 }

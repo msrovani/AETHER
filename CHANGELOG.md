@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.12] - 2026-11-14
+
+### Changed
+
+- Ciclo automatico: 17 arquivo(s) (.:1, benches:3, src:9, tests:4).
+- Gate: ok (1s).
+
+- `Cargo.lock`
+- `benches/kuramoto_latency.rs`
+- `benches/solver.rs`
+- `benches/wave.rs`
+- `src/bin/aether_daemon.rs`
+- `src/bin/organism.rs`
+- `src/core/kuramoto_field.rs`
+- `src/error.rs`
+- `src/morphogenesis.rs`
+- `src/phase_memory.rs`
+- `src/simulation/closed_loop_organism.rs`
+- `src/simulation/panel.rs`
+
 ## [0.0.11] - 2026-11-14
 
 ### Changed

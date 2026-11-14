@@ -396,12 +396,13 @@ impl KuramotoPhaseNode {
 
     fn rebuild_peer_slots(&mut self) {
         self.peer_slots.clear();
-        self.peer_slots.extend(self.cfg.peers.iter().map(|addr| PeerSlot {
-            addr: *addr,
-            node_id: None,
-            phase: [0.0; CHANNELS],
-            heard: false,
-        }));
+        self.peer_slots
+            .extend(self.cfg.peers.iter().map(|addr| PeerSlot {
+                addr: *addr,
+                node_id: None,
+                phase: [0.0; CHANNELS],
+                heard: false,
+            }));
     }
 
     fn apply_cmd(&mut self, cmd: Cmd) -> bool {
@@ -729,9 +730,7 @@ impl NodeHandle {
     pub fn perturb_oscillatory(&self, xi: [f32; 3], freq_hz: f32) -> Result<()> {
         validate_xi(xi)?;
         if !freq_hz.is_finite() || freq_hz < 0.0 {
-            return Err(AetherError::Config(format!(
-                "freq_hz invalido: {freq_hz}"
-            )));
+            return Err(AetherError::Config(format!("freq_hz invalido: {freq_hz}")));
         }
         self.send(Cmd::Perturb { xi, freq_hz })
     }
