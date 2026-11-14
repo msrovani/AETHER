@@ -69,6 +69,11 @@ harness = false
 required-features = ["m3"]
 
 [[example]]
+name = "field_probe"
+path = "examples/field_probe.rs"
+required-features = ["m2"]
+
+[[example]]
 name = "transducer_probe"
 required-features = ["m8"]
 

@@ -14,9 +14,11 @@ fn bench_organism(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(2));
     group.sample_size(10);
 
-    let mut cfg = OrganismConfig::default();
-    // Perturbação fora do horizonte do bench: mede o quadro em regime.
-    cfg.perturb_after = Duration::from_secs(3600);
+    let cfg = OrganismConfig {
+        // Perturbação fora do horizonte do bench: mede o quadro em regime.
+        perturb_after: Duration::from_secs(3600),
+        ..Default::default()
+    };
     let mut organism = ClosedLoopOrganism::new(cfg).expect("organismo");
 
     group.bench_function("frame_60hz", |b| b.iter(|| organism.step().expect("step")));
