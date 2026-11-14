@@ -2,7 +2,8 @@
 //!
 //! Cobrem os invariantes `INV-K1..K5` do `docs/API_CONTRACT.md`:
 //! layout do pacote, round-trip do codec, rejeição de tamanhos errados,
-//! `R(t) ∈ [0,1]`, convergência de 4 nós em loopback e integridade do wire.
+//! `R(t) ∈ [0,1]`, convergência de 4 nós em loopback, integridade do wire e
+//! propagação de perturbação (só fase no fio, nenhum texto/comando).
 
 #![cfg(feature = "m3")]
 
@@ -56,6 +57,25 @@ fn wire_full_mesh(nodes: &mut [KuramotoPhaseNode]) {
             .collect();
         node.set_peers(peers);
     }
+}
+
+/// Média de `R` entre os quadros publicados disponíveis.
+fn mean_order_parameter(handles: &[NodeHandle]) -> (f64, usize) {
+    let mut sum = 0.0f64;
+    let mut count = 0usize;
+    for handle in handles {
+        if let Some(frame) = handle.latest() {
+            assert!(
+                (0.0..=1.0).contains(&frame.order_parameter),
+                "R fora de [0,1]: {}",
+                frame.order_parameter
+            );
+            assert_eq!(frame.rx_bytes % PACKET_SIZE as u32, 0, "wire != 40 B");
+            sum += frame.order_parameter;
+            count += 1;
+        }
+    }
+    (if count > 0 { sum / count as f64 } else { 0.0 }, count)
 }
 
 // ---------------------------------------------------------------------------
@@ -152,7 +172,10 @@ fn order_parameter_nao_converge_antes_de_ouvir_os_peers() {
         "R fora de [0,1]: {}",
         frame.order_parameter
     );
-    assert!(frame.phase.iter().all(|theta| (0.0..std::f64::consts::TAU).contains(theta)));
+    assert!(frame
+        .phase
+        .iter()
+        .all(|theta| (0.0..std::f64::consts::TAU).contains(theta)));
 }
 
 #[test]
@@ -183,8 +206,6 @@ fn quatro_nos_convergem_em_menos_de_3s() {
     let mut wire_ok = true;
 
     while started.elapsed() < Duration::from_secs(3) {
-        let mut sum = 0.0f64;
-        let mut count = 0.0f64;
         for handle in &handles {
             if let Some(frame) = handle.latest() {
                 // INV-K4: o wire só transporta múltiplos exatos de 40 bytes.
@@ -199,12 +220,10 @@ fn quatro_nos_convergem_em_menos_de_3s() {
                     "R fora de [0,1]: {}",
                     frame.order_parameter
                 );
-                sum += frame.order_parameter;
-                count += 1.0;
             }
         }
-        if count > 0.0 {
-            let r = sum / count;
+        let (r, count) = mean_order_parameter(&handles);
+        if count > 0 {
             best_r = best_r.max(r);
             if r > LIMIAR && converged_at.is_none() {
                 converged_at = Some(started.elapsed());
@@ -232,13 +251,19 @@ fn quatro_nos_convergem_em_menos_de_3s() {
     );
 
     assert!(wire_ok, "rx_bytes nao e multiplo de 40");
-    assert!(saw_packets, "nenhum datagrama de 40 bytes foi contabilizado");
+    assert!(
+        saw_packets,
+        "nenhum datagrama de 40 bytes foi contabilizado"
+    );
     assert!(
         converged_at.is_some(),
         "R(t) nao atingiu {LIMIAR} em 3 s (melhor R = {best_r:.4}, t = {elapsed:?})"
     );
     assert!(best_r <= 1.0 + 1e-9);
-    assert!(elapsed < Duration::from_secs(3), "convergencia levou {elapsed:?}");
+    assert!(
+        elapsed < Duration::from_secs(3),
+        "convergencia levou {elapsed:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -281,4 +306,71 @@ fn handle_perturba_e_para() {
 
     ha.stop().expect("stop a");
     hb.stop().expect("stop b");
+}
+
+// ---------------------------------------------------------------------------
+// Propagação de perturbação — só fase no fio, nenhum texto/comando
+// ---------------------------------------------------------------------------
+
+#[test]
+fn perturbacao_local_degrada_e_recupera_a_coerencia() {
+    const NODES: u32 = 3;
+    const LIMIAR: f64 = 0.95;
+
+    let mut nodes: Vec<KuramotoPhaseNode> = (0..NODES).map(node).collect();
+    wire_full_mesh(&mut nodes);
+    let handles: Vec<NodeHandle> = nodes.into_iter().map(KuramotoPhaseNode::spawn).collect();
+
+    // 1) Convergência.
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let mut r_before = 0.0f64;
+    while Instant::now() < deadline {
+        r_before = mean_order_parameter(&handles).0;
+        if r_before > LIMIAR {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(r_before > LIMIAR, "R antes da perturbacao = {r_before:.4}");
+
+    // 2) Perturbação DC no nó 0: ξ = 30 rad/s por 250 ms (~7.5 rad de deriva).
+    //    Nada é anunciado; a quebra de simetria propaga por sin(θ_n − θ_m).
+    handles[0]
+        .perturb([30.0, 30.0, 0.0])
+        .expect("perturbacao local");
+
+    let mut min_r = 1.0f64;
+    let window = Instant::now();
+    while window.elapsed() < Duration::from_millis(300) {
+        let (r, count) = mean_order_parameter(&handles);
+        if count > 0 {
+            min_r = min_r.min(r);
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        min_r < r_before - 0.05,
+        "perturbacao nao degradou R: antes {r_before:.4}, minimo {min_r:.4}"
+    );
+
+    // 3) Recuperação: o acoplamento restaura a coerência.
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let mut r_after = 0.0f64;
+    while Instant::now() < deadline {
+        r_after = mean_order_parameter(&handles).0;
+        if r_after > LIMIAR {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    for handle in handles {
+        handle.stop().expect("stop do no");
+    }
+
+    eprintln!("perturbacao: R antes = {r_before:.4}, minimo = {min_r:.4}, recuperado = {r_after:.4}");
+    assert!(
+        r_after > LIMIAR,
+        "R nao recuperou apos a perturbacao: {r_after:.4}"
+    );
 }

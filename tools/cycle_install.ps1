@@ -11,7 +11,8 @@
 param(
     [ValidateSet('install', 'remove', 'status', 'run')]
     [string]$Action = 'install',
-    [int]$Minutes = 5
+    [int]$Minutes = 5,
+    [switch]$Network
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,6 +23,7 @@ $PowerShellExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powe
 switch ($Action) {
     'install' {
         $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$CyclePs1`""
+        if ($Network) { $arguments += ' -Push -PrMerge' }
         $result = & schtasks.exe /Create /TN $TaskName /TR "`"$PowerShellExe`" $arguments" /SC MINUTE /MO $Minutes /RL LIMITED /F 2>&1
         $result
         if ($LASTEXITCODE -ne 0) { throw "schtasks falhou ($LASTEXITCODE)" }

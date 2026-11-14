@@ -3,6 +3,23 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.2] - 2026-11-14
+
+### Changed
+
+- Ciclo automatico: 9 arquivo(s) (.backup:1, src:4, tests:2, tools:2).
+- Gate: ok (1s).
+
+- `src/core/thermodynamic_solver.rs`
+- `src/core/wave_interference.rs`
+- `src/lib.rs`
+- `src/simulation/closed_loop_organism.rs`
+- `tests/test_kuramoto.rs`
+- `tests/test_thermodynamic.rs`
+- `tools/cycle.ps1`
+- `tools/cycle_install.ps1`
+- `.backup/`
+
 ## [0.0.1] - 2026-11-14
 
 ### Changed

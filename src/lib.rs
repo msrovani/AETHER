@@ -13,7 +13,10 @@
 //!   datagramas UDP binarios de 40 bytes (zero texto, zero comando).
 //! * [`simulation::closed_loop_organism`] (feature `m4`) — organismo integrado.
 
-#![forbid(unsafe_code)]
+// `deny(unsafe_code)` (e não `forbid`): o macro `s!` do ndarray traz um
+// `#[allow(unsafe_code)]` interno que um `forbid` na raiz do crate anularia.
+// Nosso código não contém nenhum bloco `unsafe`.
+#![deny(unsafe_code)]
 #![deny(rust_2018_idioms)]
 #![warn(missing_debug_implementations)]
 

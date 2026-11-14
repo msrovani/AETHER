@@ -211,6 +211,7 @@ impl ClosedLoopOrganism {
         let wave = WaveInterferenceBlock::with_max_len(c_in, c_out, modes, cfg.window, cfg.seed);
         let solver = ThermodynamicIsingSolver::new(1, n, cfg.steps, 0.05);
         let out = RelaxOutcome::with_capacity(1, n, cfg.steps);
+        let window = cfg.window;
 
         Ok(Self {
             cfg,
@@ -220,11 +221,11 @@ impl ClosedLoopOrganism {
             j,
             h: Array1::<f64>::zeros(n),
             readout,
-            ring: Array2::<f32>::zeros((c_in, cfg.window)),
+            ring: Array2::<f32>::zeros((c_in, window)),
             ring_pos: 0,
             ring_filled: 0,
-            u: Array2::<f32>::zeros((c_in, cfg.window)),
-            v: Array2::<f32>::zeros((c_out, cfg.window)),
+            u: Array2::<f32>::zeros((c_in, window)),
+            v: Array2::<f32>::zeros((c_out, window)),
             out,
             started: Instant::now(),
             perturbed: false,
@@ -310,7 +311,7 @@ impl ClosedLoopOrganism {
         }
 
         // --- interferência espectral ---
-        self.wave.forward_into(self.u.view(), self.v.view_mut())?;
+        self.wave.forward_into(self.u.view(), &mut self.v)?;
         let entropy_raw = self.wave.compute_spectral_entropy(self.u.view())?;
         let entropy_wave = self.wave.compute_wave_entropy();
 

@@ -41,8 +41,8 @@
 //!
 //! * [`WaveInterferenceBlock::compute_spectral_entropy`] mede a entropia
 //!   espectral normalizada do **campo cru**
-//!   `H = -Σ p_k ln p_k / ln K`, `p_k = |U_k|² / Σ|U|²`, `K = L_fft/2 + 1`
-//!   (bin 0..K). Fica em `[0, 1]`; campo coerente (senoide) dá `H ≈ 0`.
+//!   `H = -Σ p_k ln p_k / ln K`, `p_k = |U_k|² / Σ|U|²`, `K = L_eff/2 + 1`
+//!   (todos os bins). Fica em `[0, 1]`; campo coerente (senoide) dá `H ≈ 0`.
 //! * [`WaveInterferenceBlock::compute_wave_entropy`] mede a ocupação modal do
 //!   **espectro já transferido** (`wave_spectrum`, `modes` bins) usando o
 //!   **mesmo denominador** `ln K` (normalização comum). Como o caminho de onda
@@ -57,7 +57,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
-use ndarray::{s, Array2, Array3, ArrayView2, ArrayView3};
+use ndarray::{Array2, Array3, ArrayView2, ArrayView3, ArrayViewMut2, Axis};
 use num_complex::Complex32;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -389,13 +389,13 @@ impl WaveInterferenceBlock {
         }
         let mut out = Array3::<f32>::zeros((batch, self.c_out, l));
         for b in 0..batch {
-            self.dispatch(u.slice(s![b, .., ..]), out.slice_mut(s![b, .., ..]))?;
+            self.dispatch(u.index_axis(Axis(0), b), out.index_axis_mut(Axis(0), b))?;
         }
         Ok(out)
     }
 
     /// Núcleo único de `forward`/`forward_into`/`forward_batched`.
-    fn dispatch(&mut self, u: ArrayView2<'_, f32>, mut out: ArrayView2<'_, f32>) -> Result<()> {
+    fn dispatch(&mut self, u: ArrayView2<'_, f32>, mut out: ArrayViewMut2<'_, f32>) -> Result<()> {
         let (c_in, c_out, modes) = (self.c_in, self.c_out, self.modes);
         if c_in == 0 || c_out == 0 || modes == 0 {
             return Err(AetherError::Config(
@@ -433,14 +433,19 @@ impl WaveInterferenceBlock {
 
         // 1) Copia u para o buffer de comprimento efetivo, zero-padded.
         sc.time_in.fill(0.0);
-        for (mut dst, src) in sc.time_in.outer_iter_mut().zip(u.outer_iter()) {
-            dst.slice_mut(s![..l]).assign(&src);
+        for (mut dst_row, src_row) in sc.time_in.outer_iter_mut().zip(u.outer_iter()) {
+            for (dst, src) in dst_row.iter_mut().zip(src_row.iter()) {
+                *dst = *src;
+            }
         }
 
         // 2) FFT real canal a canal -> [C_in, nb].
         {
             let fft_scratch = &mut sc.fwd_scratch;
-            let time = sc.time_in.as_slice_mut().expect("time_in contíguo (ordem C)");
+            let time = sc
+                .time_in
+                .as_slice_mut()
+                .expect("time_in contíguo (ordem C)");
             let spec_in = sc
                 .spec_in
                 .as_slice_mut()
@@ -487,21 +492,22 @@ impl WaveInterferenceBlock {
                 .spec_out
                 .as_slice_mut()
                 .expect("spec_out contíguo (ordem C)");
-            for o in 0..c_out {
-                let base = o * nb;
-                spec_out[base].im = 0.0;
-                spec_out[base + nb - 1].im = 0.0;
+            for row in spec_out.chunks_mut(nb) {
+                row[0].im = 0.0;
+                row[nb - 1].im = 0.0;
             }
+        }
 
-            // 5) Publica o espectro transferido [C_out, modes] para o M4.
+        // 5) Publica o espectro transferido [C_out, modes] para o M4.
+        {
             self.wave_spectrum.fill(Complex32::new(0.0, 0.0));
+            let spec_out = sc.spec_out.as_slice().expect("spec_out contíguo");
             let dst = self
                 .wave_spectrum
                 .as_slice_mut()
                 .expect("wave_spectrum contíguo (ordem C)");
-            for o in 0..c_out {
-                dst[o * modes..o * modes + k_eff]
-                    .copy_from_slice(&spec_out[o * nb..o * nb + k_eff]);
+            for (dst_row, src_row) in dst.chunks_mut(modes).zip(spec_out.chunks(nb)) {
+                dst_row[..k_eff].copy_from_slice(&src_row[..k_eff]);
             }
         }
         self.last_bins = nb;
@@ -547,7 +553,14 @@ impl WaveInterferenceBlock {
                 }
             }
         }
-        out.assign(&self.time_out.slice(s![.., ..l]));
+
+        // 8) Copia o recorte [C_out, L] para a saída (qualquer layout).
+        for (mut dst_row, src_row) in out.outer_iter_mut().zip(self.scratch.time_out.outer_iter())
+        {
+            for (dst, src) in dst_row.iter_mut().zip(src_row.iter()) {
+                *dst = *src;
+            }
+        }
         Ok(())
     }
 
@@ -581,38 +594,45 @@ impl WaveInterferenceBlock {
         let nb = n / 2 + 1;
         let (fwd, _) = self.plans.borrow_mut().ensure(n);
         let scratch_len = fwd.get_scratch_len();
-        let mut ent = self.entropy.borrow_mut();
-        ent.ensure(self.c_in, n, scratch_len);
 
-        ent.time.fill(0.0);
-        for (mut dst, src) in ent.time.outer_iter_mut().zip(u.outer_iter()) {
-            dst.slice_mut(s![..l]).assign(&src);
+        let mut guard = self.entropy.borrow_mut();
+        let ent: &mut EntropyScratch = &mut guard;
+        ent.ensure(self.c_in, n, scratch_len);
+        let EntropyScratch {
+            time,
+            spec,
+            scratch: fft_scratch,
+            ..
+        } = ent;
+
+        time.fill(0.0);
+        for (mut dst_row, src_row) in time.outer_iter_mut().zip(u.outer_iter()) {
+            for (dst, src) in dst_row.iter_mut().zip(src_row.iter()) {
+                *dst = *src;
+            }
         }
         {
-            let fft_scratch = &mut ent.scratch;
-            let time = ent.time.as_slice_mut().expect("entropy.time contíguo");
-            let spec = ent.spec.as_slice_mut().expect("entropy.spec contíguo");
+            let time_slice = time.as_slice_mut().expect("entropy.time contíguo");
+            let spec_slice = spec.as_slice_mut().expect("entropy.spec contíguo");
             for c in 0..self.c_in {
-                let input = &mut time[c * n..(c + 1) * n];
-                let output = &mut spec[c * nb..(c + 1) * nb];
+                let input = &mut time_slice[c * n..(c + 1) * n];
+                let output = &mut spec_slice[c * nb..(c + 1) * nb];
                 fwd.process_with_scratch(input, output, fft_scratch)
                     .map_err(fft_error)?;
             }
         }
 
         // Potência por bin somada sobre os canais: p_k = Σ_c |U_c,k|² / total.
-        let spec = ent.spec.as_slice().expect("entropy.spec contíguo");
+        let spec_slice = spec.as_slice().expect("entropy.spec contíguo");
         let mut total = 0.0f64;
-        for c in 0..self.c_in {
-            let row = &spec[c * nb..(c + 1) * nb];
+        let mut h = 0.0f64;
+        for row in spec_slice.chunks_exact(nb) {
             total += row.iter().map(bin_power).sum::<f64>();
         }
         if !(total > 0.0) || !total.is_finite() {
             return Ok(0.0);
         }
-        let mut h = 0.0f64;
-        for c in 0..self.c_in {
-            let row = &spec[c * nb..(c + 1) * nb];
+        for row in spec_slice.chunks_exact(nb) {
             for z in row {
                 let p = bin_power(z) / total;
                 if p > 0.0 {

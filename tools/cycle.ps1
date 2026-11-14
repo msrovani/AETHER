@@ -123,14 +123,22 @@ try {
     if ($PrMerge) {
         $token = $env:GITHUB_TOKEN
         if (-not $token) {
-            Write-Log 'PrMerge pedido mas GITHUB_TOKEN ausente; etapa ignorada'
+            # reusa a credencial HTTPS ja armazenada (GCM/Windows) sem imprimi-la
+            try {
+                $credIn = "protocol=https`nhost=github.com`n`n"
+                $credOut = (($credIn | & $Git credential fill 2>$null) -join "`n")
+                if ($credOut -match '(?m)^password=(.+)$') { $token = $Matches[1].Trim() }
+            } catch { }
+        }
+        if (-not $token) {
+            Write-Log 'PrMerge pedido mas sem token (GITHUB_TOKEN ou credencial git); etapa ignorada'
         }
         elseif ($remoteUrl -match 'github\.com[:/](?<owner>[^/]+)/(?<repo>[^/.]+?)(\.git)?/?$') {
             $owner = $Matches.owner
             $repoName = $Matches.repo
             $api = "https://api.github.com/repos/$owner/$repoName"
             $headers = @{
-                Authorization          = "Bearer $token"
+                Authorization          = "token $token"
                 Accept                 = 'application/vnd.github+json'
                 'User-Agent'           = 'aether-cycle'
                 'X-GitHub-Api-Version' = '2022-11-28'

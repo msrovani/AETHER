@@ -143,7 +143,7 @@ fn inv_t1_elitismo_estrito_50_casos() {
 
         // trace[0] é H(sign(x_0)) do estado inicial gravado.
         let e0 = out.energy_trace[[0, 0]];
-        let e0_recalc = solver.energy(&j.view(), &h.view(), row_slice(out.initial_states.row(0)));
+        let e0_recalc = solver.energy(&j.view(), &h.view(), row_slice(&out.initial_states.row(0)));
         assert!(
             (e0 - e0_recalc).abs() < 1e-9,
             "caso {case}: trace[0]={e0} != H(initial_states)={e0_recalc}"
@@ -158,7 +158,7 @@ fn inv_t1_elitismo_estrito_50_casos() {
         assert!(ef.is_finite(), "caso {case}: H_final não finito");
 
         // O estado emergente tem exatamente a energia anunciada.
-        let recomputed = solver.energy(&j.view(), &h.view(), row_slice(out.states.row(0)));
+        let recomputed = solver.energy(&j.view(), &h.view(), row_slice(&out.states.row(0)));
         assert!(
             (recomputed - ef).abs() < 1e-9,
             "caso {case}: energia recomputada {recomputed} != best_energy {ef}"
@@ -194,7 +194,10 @@ fn inv_t5_determinismo_bit_a_bit() {
     let ob = b.relax(IsingLandscape::new(j3, h.view())).expect("relax B");
 
     assert_eq!(oa.states, ob.states, "states divergiram");
-    assert_eq!(oa.initial_states, ob.initial_states, "initial_states divergiram");
+    assert_eq!(
+        oa.initial_states, ob.initial_states,
+        "initial_states divergiram"
+    );
     assert_eq!(
         oa.best_energy[0].to_bits(),
         ob.best_energy[0].to_bits(),
@@ -254,7 +257,7 @@ fn lote_b_maior_que_um() {
 
         let jb = j.index_axis(Axis(0), b);
         let hb = h.slice(ndarray::s![b..b + 1, ..]);
-        let recomputed = solver.energy(&jb, &hb, row_slice(out.states.row(b)));
+        let recomputed = solver.energy(&jb, &hb, row_slice(&out.states.row(b)));
         assert!(
             (recomputed - ef).abs() < 1e-9,
             "lote {b}: recomputada {recomputed} != best_energy {ef}"
@@ -283,7 +286,9 @@ fn relax_e_relax_into_equivalentes() {
 
     let mut solver = ThermodynamicIsingSolver::new(1, N, STEPS, 0.05);
     solver.reset(7);
-    let alocado = solver.relax(IsingLandscape::new(j3, h.view())).expect("relax");
+    let alocado = solver
+        .relax(IsingLandscape::new(j3, h.view()))
+        .expect("relax");
 
     let mut solver2 = ThermodynamicIsingSolver::new(1, N, STEPS, 0.05);
     solver2.reset(7);
@@ -341,7 +346,10 @@ fn shapes_invalidos_retornam_erro() {
     // out.energy_trace com passos errados — e o buffer NÃO é redimensionado
     let mut out_trace = RelaxOutcome::with_capacity(B, N, STEPS + 1);
     assert!(matches!(
-        solver.relax_into(IsingLandscape::new(j_ok.view(), h_ok.view()), &mut out_trace),
+        solver.relax_into(
+            IsingLandscape::new(j_ok.view(), h_ok.view()),
+            &mut out_trace
+        ),
         Err(AetherError::Shape { .. })
     ));
     assert_eq!(out_trace.energy_trace.dim(), (B, STEPS + 2));
@@ -350,7 +358,10 @@ fn shapes_invalidos_retornam_erro() {
     // out.states com N errado
     let mut out_states = RelaxOutcome::with_capacity(B, N - 1, STEPS);
     assert!(matches!(
-        solver.relax_into(IsingLandscape::new(j_ok.view(), h_ok.view()), &mut out_states),
+        solver.relax_into(
+            IsingLandscape::new(j_ok.view(), h_ok.view()),
+            &mut out_states
+        ),
         Err(AetherError::Shape { .. })
     ));
     assert_eq!(out_states.states.dim(), (B, N - 1));
@@ -360,11 +371,15 @@ fn shapes_invalidos_retornam_erro() {
     let j2 = Array2::<f64>::zeros((N, N));
     let h_wrong = Array2::<f64>::zeros((N, N));
     assert!(solver
-        .energy(&j2.view(), &h_wrong.view(), row_slice(s.view()))
+        .energy(&j2.view(), &h_wrong.view(), row_slice(&s.view()))
         .is_nan());
     let j_wrong = Array2::<f64>::zeros((N + 1, N));
     assert!(solver
-        .energy(&j_wrong.view(), &h_ok.slice(ndarray::s![0..1, ..]), row_slice(s.view()))
+        .energy(
+            &j_wrong.view(),
+            &h_ok.slice(ndarray::s![0..1, ..]),
+            row_slice(&s.view())
+        )
         .is_nan());
 }
 

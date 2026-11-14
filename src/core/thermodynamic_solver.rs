@@ -290,7 +290,6 @@ impl ThermodynamicIsingSolver {
     ///
     /// `init_row` recebe `sign(x_0)`, `trace_row` recebe `steps + 1` energias e
     /// `state_row` recebe o argmin polido.
-    #[allow(clippy::too_many_arguments)]
     fn relax_one(
         &mut self,
         b: usize,
@@ -333,9 +332,18 @@ impl ThermodynamicIsingSolver {
         };
 
         // --- integração simplética do lote b ---
-        let x_all = self.x.as_slice_mut().expect("x é C-contíguo por construção");
-        let y_all = self.y.as_slice_mut().expect("y é C-contíguo por construção");
-        let hx_all = self.hx.as_slice_mut().expect("hx é C-contíguo por construção");
+        let x_all = self
+            .x
+            .as_slice_mut()
+            .expect("x é C-contíguo por construção");
+        let y_all = self
+            .y
+            .as_slice_mut()
+            .expect("y é C-contíguo por construção");
+        let hx_all = self
+            .hx
+            .as_slice_mut()
+            .expect("hx é C-contíguo por construção");
         let xr = &mut x_all[b * n..(b + 1) * n];
         let yr = &mut y_all[b * n..(b + 1) * n];
         let hxr = &mut hx_all[b * n..(b + 1) * n];
