@@ -4,7 +4,7 @@
 #![cfg(all(feature = "m1", feature = "m2"))]
 
 use std::alloc::{GlobalAlloc, Layout, System};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::cell::Cell;
 
 use aether_engine::core::kuramoto_field::PhasePacket;
 use aether_engine::core::thermodynamic_solver::{IsingLandscape, RelaxOutcome, ThermodynamicIsingSolver};
@@ -13,30 +13,34 @@ use ndarray::Array2;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
-/// Allocador contador — só conta enquanto `ARMED` está ligado.
+/// Allocador contador — conta SOMENTE as alocações da thread corrente enquanto
+/// `ARMED` está ligado (testes rodam em paralelo: contagem global cruzaria
+/// entre testes).
 struct Counting;
 
-static ARMED: AtomicBool = AtomicBool::new(false);
-static ALLOCS: AtomicUsize = AtomicUsize::new(0);
+thread_local! {
+    static ARMED: Cell<bool> = const { Cell::new(false) };
+    static ALLOCS: Cell<usize> = const { Cell::new(0) };
+}
 
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if ARMED.load(Ordering::Relaxed) {
-            ALLOCS.fetch_add(1, Ordering::Relaxed);
+        if ARMED.with(|a| a.get()) {
+            ALLOCS.with(|c| c.set(c.get() + 1));
         }
         unsafe { System.alloc(layout) }
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        if ARMED.load(Ordering::Relaxed) {
-            ALLOCS.fetch_add(1, Ordering::Relaxed);
+        if ARMED.with(|a| a.get()) {
+            ALLOCS.with(|c| c.set(c.get() + 1));
         }
         unsafe { System.alloc_zeroed(layout) }
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        if ARMED.load(Ordering::Relaxed) {
-            ALLOCS.fetch_add(1, Ordering::Relaxed);
+        if ARMED.with(|a| a.get()) {
+            ALLOCS.with(|c| c.set(c.get() + 1));
         }
         unsafe { System.realloc(ptr, layout, new_size) }
     }
@@ -49,13 +53,13 @@ unsafe impl GlobalAlloc for Counting {
 #[global_allocator]
 static GLOBAL: Counting = Counting;
 
-/// Executa `f` contando alocações de heap.
+/// Executa `f` contando as alocações de heap da thread corrente.
 fn count_allocs<T>(f: impl FnOnce() -> T) -> (T, usize) {
-    ALLOCS.store(0, Ordering::Relaxed);
-    ARMED.store(true, Ordering::Relaxed);
+    ARMED.with(|a| a.set(true));
+    ALLOCS.with(|c| c.set(0));
     let out = f();
-    ARMED.store(false, Ordering::Relaxed);
-    (out, ALLOCS.load(Ordering::Relaxed))
+    ARMED.with(|a| a.set(false));
+    (out, ALLOCS.with(|c| c.get()))
 }
 
 fn random_landscape(n: usize, seed: u64) -> (Array2<f64>, Array2<f64>) {
@@ -92,7 +96,7 @@ fn invariante_alocacao_zero_no_solver() {
             .relax_into(IsingLandscape::new(j3, h.view()), &mut out)
             .expect("relax")
     });
-    assert_eq!(allocs, 0, "relax_into alocou {allocs} vezes (deve ser 0)");
+    assert_eq!(allocs, 0, "reset+relax_into alocaram {allocs} vezes (deve ser 0)");
 }
 
 #[test]

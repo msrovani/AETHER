@@ -3,6 +3,16 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.9] - 2026-11-14
+
+### Changed
+
+- Ciclo automatico: 2 arquivo(s) (.:1, tests:1).
+- Gate: ok (52s).
+
+- `Cargo.lock`
+- `tests/alloc_invariants.rs`
+
 ## [0.0.8] - 2026-11-14
 
 ### Changed
