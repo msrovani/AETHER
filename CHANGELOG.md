@@ -3,6 +3,15 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.7] - 2026-11-14
+
+### Changed
+
+- Ciclo automatico: 1 arquivo(s) (.:1).
+- Gate: ok (1s).
+
+- `Cargo.lock`
+
 ## [0.0.6] - 2026-11-14
 
 ### Changed
