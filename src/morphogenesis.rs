@@ -32,7 +32,7 @@
 //! * Existe um limiar de nucleação: partindo de `J = 0`, uma sinapse só
 //!   sobrevive ao primeiro passo se `g(S)·|s_i s_j|·dt > θ`. Para os padrões
 //!   default (`κ_grow = 0.2`, `θ = 0.005`, `dt = 0.05`) isso ocorre em
-//!   `S ≳ 0.57` com `|s_i s_j| = 1`. Abaixo do limiar não há como cristalizar
+//!   `S ≳ 0.55` com `|s_i s_j| = 1`. Abaixo do limiar não há como cristalizar
 //!   conexão — é física, não bug (sem correlação suficiente, sem sinapse).
 //!
 //! # Homeostase espectral (ρ real)

@@ -2,7 +2,7 @@
 
 use aether_engine::phase_memory::{ComplexPhaseMemory, PhaseMemoryConfig};
 use rand::seq::SliceRandom;
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
 const N: usize = 32;
@@ -15,13 +15,6 @@ fn harmonic_pattern(n: usize, order: usize) -> Vec<f32> {
             let tilt = 0.4 * (order as f32 + 1.0);
             (base + tilt).rem_euclid(std::f32::consts::TAU)
         })
-        .collect()
-}
-
-fn random_pattern(n: usize, seed: u64) -> Vec<f32> {
-    let mut rng = ChaCha8Rng::seed_from_u64(seed);
-    (0..n)
-        .map(|_| rng.gen::<f32>() * std::f32::consts::TAU)
         .collect()
 }
 
@@ -53,66 +46,94 @@ fn mean_err(recovered: &[f32], target: &[f32], mask: &[bool]) -> f32 {
     s / c as f32
 }
 
-fn report(label: &str, patterns: &[Vec<f32>], seeds: u64) {
-    let cfg = PhaseMemoryConfig {
-        omega0: 0.0,
-        clamp_strength: 8.0,
-        eta_w: 0.12,
-        eta_delta: 0.08,
-        gamma_w: 0.002,
-    };
+fn eval(
+    label: &str,
+    cfg: PhaseMemoryConfig,
+    profile: impl Fn(f32) -> f32,
+    quantile_cut: f32,
+    seeds: u64,
+) {
+    let patterns = [
+        harmonic_pattern(N, 0),
+        harmonic_pattern(N, 1),
+        harmonic_pattern(N, 2),
+    ];
     let mut mem = ComplexPhaseMemory::with_config(N, cfg);
-    for p in patterns {
+    for p in &patterns {
         mem.imprint(p, 40);
     }
-    let k = patterns.len();
-    let mut means = vec![0.0f32; k];
-    let mut worst = vec![0.0f32; k];
+    if quantile_cut > 0.0 {
+        let mut off: Vec<f32> = (0..N)
+            .filter(|i| *i != 0)
+            .map(|j| mem.weights[j])
+            .collect();
+        off.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let th = off[((off.len() as f32) * quantile_cut) as usize];
+        mem.prune(th);
+    }
+    let mut sum = 0.0f32;
+    for idx in 0..(N * N) {
+        let i = idx / N;
+        let j = idx % N;
+        if i == j {
+            continue;
+        }
+        mem.weights[idx] = profile(mem.weights[idx]);
+        sum += mem.weights[idx];
+    }
+    if sum > 0.0 {
+        let g = (N * N) as f32 / sum;
+        for w in mem.weights.iter_mut() {
+            *w *= g;
+        }
+    }
+    let mut means = [0.0f32; 3];
+    let mut worst = [0.0f32; 3];
     for seed in 0..seeds {
-        for (idx, p) in patterns.iter().enumerate() {
+        for (k, p) in patterns.iter().enumerate() {
             let mask = mask_exact_hidden(seed, 12);
             mem.reset_phases(0.0);
             let (rec, _e) = mem.recall(p, &mask, 600, 0.05);
             let e = mean_err(&rec, p, &mask);
-            means[idx] += e;
-            worst[idx] = worst[idx].max(e);
+            means[k] += e;
+            worst[k] = worst[k].max(e);
         }
     }
     println!(
-        "[{label} P={k}] mean {} | worst {}",
-        (0..k)
-            .map(|i| format!("{:.4}", means[i] / seeds as f32))
-            .collect::<Vec<_>>()
-            .join(" "),
-        (0..k)
-            .map(|i| format!("{:.4}", worst[i]))
-            .collect::<Vec<_>>()
-            .join(" ")
+        "[{label}] mean p0={:.4} p1={:.4} p2={:.4} | worst p0={:.4} p1={:.4} p2={:.4}",
+        means[0] / seeds as f32,
+        means[1] / seeds as f32,
+        means[2] / seeds as f32,
+        worst[0],
+        worst[1],
+        worst[2]
     );
+}
+
+fn cfg(gamma: f32) -> PhaseMemoryConfig {
+    PhaseMemoryConfig {
+        omega0: 0.0,
+        clamp_strength: 8.0,
+        eta_w: 0.12,
+        eta_delta: 0.08,
+        gamma_w: gamma,
+    }
 }
 
 #[test]
 fn probe_stats() {
-    let p0 = harmonic_pattern(N, 0);
-    let p1 = harmonic_pattern(N, 1);
-    let p2 = harmonic_pattern(N, 2);
-    let p3 = harmonic_pattern(N, 3);
-
-    // Família do invariante
-    report("harm 0,1,2", &[p0.clone(), p1.clone(), p2.clone()], 40);
-    report("harm 0..3", &[p0.clone(), p1.clone(), p2.clone(), p3.clone()], 20);
-    report("harm 0,1", &[p0.clone(), p1.clone()], 40);
-
-    // Controle: três padrões que diferem por rotação rígida (crosstalk nulo
-    // por construção: Δψ é idêntico para todos os pares em todos os padrões).
-    let tau3 = std::f32::consts::TAU / 3.0;
-    let q1: Vec<f32> = p0.iter().map(|v| (v + tau3).rem_euclid(std::f32::consts::TAU)).collect();
-    let q2: Vec<f32> = p0.iter().map(|v| (v + 2.0 * tau3).rem_euclid(std::f32::consts::TAU)).collect();
-    report("rotacoes rigidas", &[p0.clone(), q1, q2], 40);
-
-    // Padrões aleatórios (referência da capacidade clássica)
-    let r0 = random_pattern(N, 11);
-    let r1 = random_pattern(N, 12);
-    let r2 = random_pattern(N, 13);
-    report("aleatorios", &[r0, r1, r2], 40);
+    eval("gamma=0 linear", cfg(0.0), |w| w, 0.0, 40);
+    eval("gamma=0 W^0.5", cfg(0.0), |w| w.sqrt(), 0.0, 40);
+    eval("gamma=0 W^0.75", cfg(0.0), |w| w.powf(0.75), 0.0, 40);
+    eval("gamma=0 prune 20%", cfg(0.0), |w| w, 0.2, 40);
+    eval("gamma=0 prune 40%", cfg(0.0), |w| w, 0.4, 40);
+    eval("gamma=0.0005", cfg(0.0005), |w| w, 0.0, 40);
+    eval("gamma=0.002", cfg(0.002), |w| w, 0.0, 40);
+    eval(
+        "default",
+        PhaseMemoryConfig::default(),
+        |w| w,
+        0.0,
+        40,
+    );
 }
