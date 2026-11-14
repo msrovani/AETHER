@@ -3,6 +3,16 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.17] - 2026-11-14
+
+### Changed
+
+- Ciclo automatico: 2 arquivo(s) (.:1, tests:1).
+- Gate: ok (2s).
+
+- `Cargo.lock`
+- `tests/phase2_hardening.rs`
+
 ## [0.0.16] - 2026-11-14
 
 ### Changed

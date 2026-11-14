@@ -160,37 +160,45 @@ fn probe_rayon_alloc() {
     let mut energies = vec![0.0f64; 32];
     let mut scratch = vec![0.0f64; 32 * 24];
 
+    for _ in 0..6 {
+        let (_, tls, g) = count_allocs(|| ());
+        println!("PROBE noop: tls={tls} global={g}");
+    }
     samples.par_iter_mut().for_each(|s| s[0] = 1);
-    let (_, tls, g) = count_allocs(|| samples.par_iter_mut().for_each(|s| s[0] = 1));
-    println!("PROBE plain par_iter_mut: tls={tls} global={g}");
+    for _ in 0..6 {
+        let (_, tls, g) = count_allocs(|| scratch.par_chunks_mut(24).for_each(|w| w[0] = 1.0));
+        println!("PROBE chunks: tls={tls} global={g}");
+    }
 
-    scratch.par_chunks_mut(24).for_each(|w| w[0] = 1.0);
-    let (_, tls, g) = count_allocs(|| scratch.par_chunks_mut(24).for_each(|w| w[0] = 1.0));
-    println!("PROBE par_chunks_mut: tls={tls} global={g}");
-
-    samples
-        .par_iter_mut()
-        .enumerate()
-        .zip(energies.par_iter_mut())
-        .zip(scratch.par_chunks_mut(24))
-        .for_each(|(((k, s), e), w)| {
-            s[0] = 1;
-            *e = k as f64;
-            w[0] = 1.0;
-        });
-    let (_, tls, g) = count_allocs(|| {
-        samples
-            .par_iter_mut()
-            .enumerate()
-            .zip(energies.par_iter_mut())
-            .zip(scratch.par_chunks_mut(24))
-            .for_each(|(((k, s), e), w)| {
-                s[0] = 1;
-                *e = k as f64;
-                w[0] = 1.0;
-            });
-    });
-    println!("PROBE zip3: tls={tls} global={g}");
+    const N: usize = 32;
+    let mut j = vec![0.0f32; N * N];
+    for i in 0..N {
+        for k in 0..N {
+            if i != k {
+                j[i * N + k] = 0.01 * ((i * 31 + k * 17) % 7) as f32;
+            }
+        }
+    }
+    let h = vec![0.01f32; N];
+    let mut dreamer = ThermodynamicDreamer::new(N, DreamerConfig::default());
+    let mut out = DreamEnsemble::with_capacity(N, 32);
+    dreamer
+        .imagine_futures_into(&j, &h, 0.5, 32, 40, 0.05, &mut out)
+        .unwrap();
+    for _ in 0..8 {
+        let (_, tls, g) =
+            count_allocs(|| dreamer.imagine_futures_into(&j, &h, 0.5, 32, 40, 0.05, &mut out));
+        println!("PROBE dream32: tls={tls} global={g}");
+    }
+    let mut out4 = DreamEnsemble::with_capacity(N, 4);
+    dreamer
+        .imagine_futures_into(&j, &h, 0.5, 4, 40, 0.05, &mut out4)
+        .unwrap();
+    for _ in 0..8 {
+        let (_, tls, g) =
+            count_allocs(|| dreamer.imagine_futures_into(&j, &h, 0.5, 4, 40, 0.05, &mut out4));
+        println!("PROBE dream4: tls={tls} global={g}");
+    }
 }
 
 // ---------------------------------------------------------------------------
