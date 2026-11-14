@@ -49,12 +49,14 @@
 //! * **Sem `clamp` de magnitude.** A versão anterior truncava
 //!   `W_ij = min(|C_ij|, 1.0)`. Como `|C|` satura em `η_W/γ_W ≫ 1`, *todos*
 //!   os pesos viravam 1.0 e a informação de coerência (a magnitude relativa,
-//!   que diz quais pares os padrões concordam) era destruída — pares com
+//!   que diz em quais pares os padrões concordam) era destruída — pares com
 //!   `|C| ≈ 0` recebiam acoplamento unitário baseado só no ruído de `arg C`.
-//!   Agora `W_ij = |C_ij| / A` com `A = η_W/γ_W` (amplitude estacionária de um
-//!   padrão coerente) e, se `γ_W = 0`, `A = η_W·cycles`. Isso é **normalização
-//!   por uma constante global, não truncamento**: as razões entre pesos são
-//!   preservadas e o campo fica em `[−1, 1]` por causa do `1/N` da equação.
+//!   Agora `W_ij = |C_ij| / <|C|>` (gauge: acoplamento médio = 1), uma
+//!   **constante global multiplicativa, não truncamento**: as razões entre
+//!   pesos são exatamente preservadas. O gauge também desacopla a escala do
+//!   campo de `η_W`, `γ_W` e do número de imprints, o que mantém a dinâmica
+//!   estável para qualquer histórico de gravação (incluindo o daemon, que
+//!   reimprime a cada ciclo e nunca chama `recall`).
 //!
 //! # Limite físico
 //!
@@ -118,8 +120,10 @@ pub struct PhaseMemoryConfig {
     pub omega0: f32,
     /// Força do grampo sensorial (`α_clamp`).
     pub clamp_strength: f32,
-    /// Taxa de aprendizado da magnitude `W` (também define a amplitude de
-    /// referência `A = η_W/γ_W` usada na normalização dos pesos).
+    /// Taxa de aprendizado da magnitude `W`: incremento do fasor por ciclo
+    /// (`ΔC = η_W·e^{iΔψ} − γ_W·C`). Como o campo é normalizado por um gauge
+    /// global, `η_W` controla a velocidade de consolidação, não a paisagem de
+    /// atratores (que depende só de `γ_W` e das relações entre os padrões).
     pub eta_w: f32,
     /// Taxa de aprendizado da fase `δ` (regra `Δδ = η_δ·W·sin(arg C − δ)`).
     /// `0.0` desliga o aprendizado de fase.
@@ -170,8 +174,8 @@ pub struct ComplexPhaseMemory {
     c_re: Vec<f32>,
     /// Acumulador complexo (parte imaginária).
     c_im: Vec<f32>,
-    /// Amplitude de referência `A` (estacionária de um padrão coerente).
-    amp_ref: f32,
+    /// Módulo médio do acoplamento complexo (diagnóstico do gauge).
+    mean_coupling: f32,
     cfg: PhaseMemoryConfig,
 }
 
@@ -180,7 +184,7 @@ impl std::fmt::Debug for ComplexPhaseMemory {
         f.debug_struct("ComplexPhaseMemory")
             .field("n", &self.n)
             .field("cfg", &self.cfg)
-            .field("amp_ref", &self.amp_ref)
+            .field("mean_coupling", &self.mean_coupling)
             .finish()
     }
 }
@@ -230,7 +234,7 @@ impl ComplexPhaseMemory {
             rotation: 0.0,
             c_re: vec![0.0f32; n * n],
             c_im: vec![0.0f32; n * n],
-            amp_ref: 0.0,
+            mean_coupling: 0.0,
             cfg,
         }
     }
@@ -240,13 +244,20 @@ impl ComplexPhaseMemory {
         &self.cfg
     }
 
+    /// Magnitude média `⟨|C_ij|⟩` do último imprint (referência do gauge:
+    /// `weights = |C| / mean_coupling`). `0.0` antes do primeiro imprint.
+    pub fn mean_coupling(&self) -> f32 {
+        self.mean_coupling
+    }
+
     /// Reinicia o estado dinâmico: todas as fases em `phase` e rotação em zero.
     ///
     /// `recall` é *stateful* (os nós ocultos partem do estado corrente, por
     /// continuidade com o Módulo 8); chame isto para garantir que uma
     /// recuperação não dependa da anterior.
     pub fn reset_phases(&mut self, phase: f32) {
-        self.phases.fill(if phase.is_finite() { wrap(phase) } else { 0.0 });
+        self.phases
+            .fill(if phase.is_finite() { wrap(phase) } else { 0.0 });
         self.rotation = 0.0;
     }
 
@@ -293,11 +304,7 @@ impl ComplexPhaseMemory {
     ///
     /// `cycles` é o número de passadas hebbianas; `cycles = 0` é no-op (`Ok`,
     /// nada é gravado — não é promovido silenciosamente a 1).
-    pub fn try_imprint(
-        &mut self,
-        pattern: &[f32],
-        cycles: usize,
-    ) -> Result<(), PhaseMemoryError> {
+    pub fn try_imprint(&mut self, pattern: &[f32], cycles: usize) -> Result<(), PhaseMemoryError> {
         let n = self.n;
         if n == 0 {
             return Err(PhaseMemoryError::EmptyNetwork);
@@ -317,23 +324,6 @@ impl ComplexPhaseMemory {
             return Ok(());
         }
 
-        // Amplitude de referência: regime estacionário de um padrão coerente.
-        // É uma constante GLOBAL (não um clamp por peso): preserva as razões
-        // |C_ij|/|C_kl| e apenas fixa a unidade do campo.
-        let amp = if gamma > 0.0 {
-            eta / gamma
-        } else {
-            eta * cycles as f32
-        };
-        if amp > 0.0 && amp.is_finite() {
-            self.amp_ref = self.amp_ref.max(amp);
-        }
-        let inv_amp = if self.amp_ref > 0.0 {
-            1.0 / self.amp_ref
-        } else {
-            0.0
-        };
-
         let rate = if self.cfg.eta_delta.is_finite() {
             self.cfg.eta_delta.clamp(0.0, 1.0)
         } else {
@@ -352,44 +342,72 @@ impl ComplexPhaseMemory {
                     let dpsi = wrap_signed(wrap(pattern[j]) - psi_i);
                     // ΔC = η_W · e^{i(ψ_j−ψ_i)} − γ_W · C  (regra hebbiana local).
                     // A parte real é exatamente ΔW = η_W(cos(Δψ−δ) − γ_W W).
-                    self.c_re[idx] =
-                        self.c_re[idx] + eta * dpsi.cos() - gamma * self.c_re[idx];
-                    self.c_im[idx] =
-                        self.c_im[idx] + eta * dpsi.sin() - gamma * self.c_im[idx];
-
-                    // Δδ = η_δ · W · sin(arg C − δ): a fase relaxa para a média
-                    // circular dos padrões já gravados (o alvo que a regra
-                    // polar da especificação persegue para um único padrão).
-                    let re = self.c_re[idx];
-                    let im = self.c_im[idx];
-                    let mag2 = re * re + im * im;
-                    if mag2 > 0.0 && rate > 0.0 {
-                        let target = im.atan2(re);
-                        let w = mag2.sqrt() * inv_amp;
-                        let mut d = self.phase_shifts[idx];
-                        for _ in 0..DELTA_SUBSTEPS {
-                            let err = wrap_signed(target - d);
-                            d = wrap(d + rate * w * err.sin());
-                        }
-                        self.phase_shifts[idx] = d;
-                    }
+                    self.c_re[idx] = self.c_re[idx] + eta * dpsi.cos() - gamma * self.c_re[idx];
+                    self.c_im[idx] = self.c_im[idx] + eta * dpsi.sin() - gamma * self.c_im[idx];
                 }
             }
         }
 
-        // Publica a representação polar usada pela dinâmica e pela energia.
-        for idx in 0..(n * n) {
-            let re = self.c_re[idx];
-            let im = self.c_im[idx];
-            let mag = (re * re + im * im).sqrt() * inv_amp;
-            self.weights[idx] = if mag.is_finite() { mag } else { 0.0 };
-            // |C| = 0 ⇒ arg indefinido: mantém o δ corrente em vez de inventar 0.
-            if re != 0.0 || im != 0.0 {
-                // (a fase já foi relaxada; nada a fazer aqui além de garantir
-                // que o δ publicado está em [0, 2π))
-                self.phase_shifts[idx] = wrap(self.phase_shifts[idx]);
-            } else {
-                self.weights[idx] = 0.0;
+        // Gauge do acoplamento: a matriz só é definida a menos de um ganho
+        // global (reescalar W e dt não muda as trajetórias de fase). Fixamos a
+        // unidade no acoplamento **médio** = 1, de modo que a escala do campo
+        // não dependa de η_W, γ_W nem do número de imprints e `weights` fique
+        // na unidade da coerência (1 = par médio). Não é um clamp: todos os
+        // pesos recebem exatamente o mesmo fator.
+        let mut sum_mag = 0.0f64;
+        let mut count = 0usize;
+        for i in 0..n {
+            for j in 0..n {
+                if i == j {
+                    continue;
+                }
+                let idx = i * n + j;
+                let re = self.c_re[idx] as f64;
+                let im = self.c_im[idx] as f64;
+                sum_mag += (re * re + im * im).sqrt();
+                count += 1;
+            }
+        }
+        let mean_mag = if count > 0 {
+            (sum_mag / count as f64) as f32
+        } else {
+            0.0
+        };
+        self.mean_coupling = mean_mag;
+        let gain = if mean_mag > 0.0 && mean_mag.is_finite() {
+            1.0 / mean_mag
+        } else {
+            0.0
+        };
+
+        // Publica (W, δ) e executa a regra Δδ da especificação:
+        //   δ ← δ + η_δ · W · sin(arg C − δ)
+        // O número de relaxações é proporcional a `cycles`: η_δ é a taxa de
+        // aprendizado de fase por ciclo (com η_δ = 0 nada é aprendido).
+        let relax_steps = cycles.saturating_mul(DELTA_SUBSTEPS).min(4096);
+        for i in 0..n {
+            for j in 0..n {
+                if i == j {
+                    continue;
+                }
+                let idx = i * n + j;
+                let re = self.c_re[idx];
+                let im = self.c_im[idx];
+                let mag = (re * re + im * im).sqrt();
+                let w = if mag.is_finite() { mag * gain } else { 0.0 };
+                self.weights[idx] = if w.is_finite() { w } else { 0.0 };
+                // |C| = 0 ⇒ arg indefinido: mantém o δ corrente (peso nulo, o
+                // par não participa da dinâmica) em vez de inventar um ângulo.
+                if mag > 0.0 && w > 0.0 && rate > 0.0 {
+                    let target = im.atan2(re);
+                    let mut d = self.phase_shifts[idx];
+                    let step = rate * w;
+                    for _ in 0..relax_steps {
+                        let err = wrap_signed(target - d);
+                        d = wrap(d + step * err.sin());
+                    }
+                    self.phase_shifts[idx] = d;
+                }
             }
         }
         Ok(())

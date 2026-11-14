@@ -186,6 +186,9 @@ pub struct Frame {
     pub rx_bytes: u32,
     /// Datagramas enviados com sucesso (cumulativo).
     pub tx_packets: u32,
+    /// Peers distintos ouvidos no último ciclo (auditoria de coerência: com
+    /// eco próprio descartado, `R > 0.9` só é válido com `peers_heard > 0`).
+    pub peers_heard: u32,
     /// `now − timestamp_ns` do último pacote válido (ns, saturating).
     pub last_latency_ns: u64,
 }
@@ -271,9 +274,15 @@ impl KuramotoPhaseNode {
 
         // Multicast (Módulo 8): entra no grupo ANTES da conversão para
         // `UdpSocket`, para que a associação valha para o mesmo socket.
+        // Loop desligado: o eco próprio não é um peer (auditoria QA/M8) — o
+        // descarte por node_id continua como segunda barreira.
         if let Some(group) = cfg.multicast {
-            let _ = socket.join_multicast_v4(&group, &Ipv4Addr::UNSPECIFIED);
-            let _ = socket.set_multicast_loop_v4(true);
+            socket
+                .join_multicast_v4(&group, &Ipv4Addr::UNSPECIFIED)
+                .map_err(|e| AetherError::Io(e))?;
+            socket
+                .set_multicast_loop_v4(false)
+                .map_err(|e| AetherError::Io(e))?;
         }
 
         let socket: UdpSocket = socket.into();
@@ -427,6 +436,11 @@ impl KuramotoPhaseNode {
                         Ok(packet) => packet,
                         Err(_) => continue,
                     };
+                    // Eco próprio descartado (auditoria QA/M8): o pacote com o
+                    // node_id local não é um peer — nem entra em rx.
+                    if packet.node_id == self.cfg.node_id {
+                        continue;
+                    }
                     let received_at = now_ns();
                     self.last_latency_ns = received_at.saturating_sub(packet.timestamp_ns);
                     self.rx_packets = self.rx_packets.wrapping_add(1);
@@ -563,6 +577,7 @@ impl KuramotoPhaseNode {
             rx_packets: self.rx_packets,
             rx_bytes: self.rx_bytes,
             tx_packets: self.tx_packets,
+            peers_heard: self.peer_slots.iter().filter(|s| s.heard).count() as u32,
             last_latency_ns: self.last_latency_ns,
         }
     }

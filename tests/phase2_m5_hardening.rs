@@ -45,69 +45,25 @@ fn mean_err(recovered: &[f32], target: &[f32], mask: &[bool]) -> f32 {
     s / c as f32
 }
 
-/// Erro após remover o deslocamento global de fase (diagnóstico).
-fn mean_err_aligned(recovered: &[f32], target: &[f32], mask: &[bool]) -> f32 {
-    let mut best = f32::INFINITY;
-    for k in 0..72 {
-        let off = k as f32 * std::f32::consts::TAU / 72.0;
-        let mut s = 0.0;
-        let mut c = 0;
-        for i in 0..N {
-            if mask[i] {
-                continue;
-            }
-            let d = (recovered[i] + off - target[i] + std::f32::consts::PI)
-                .rem_euclid(std::f32::consts::TAU)
-                - std::f32::consts::PI;
-            s += d.abs();
-            c += 1;
-        }
-        best = best.min(s / c as f32);
-    }
-    best
-}
-
 #[test]
 fn probe_stats() {
-    let patterns = [harmonic_pattern(N, 0), harmonic_pattern(N, 1), harmonic_pattern(N, 2)];
-    let cfgs: [(&str, PhaseMemoryConfig); 3] = [
-        (
-            "inv",
-            PhaseMemoryConfig {
-                omega0: 0.0,
-                clamp_strength: 8.0,
-                eta_w: 0.12,
-                eta_delta: 0.08,
-                gamma_w: 0.002,
-            },
-        ),
-        (
-            "d10",
-            PhaseMemoryConfig {
-                omega0: 0.0,
-                clamp_strength: 10.0,
-                eta_w: 0.12,
-                eta_delta: 0.08,
-                gamma_w: 0.002,
-            },
-        ),
-        (
-            "inv20",
-            PhaseMemoryConfig {
-                omega0: 0.0,
-                clamp_strength: 8.0,
-                eta_w: 0.12,
-                eta_delta: 0.08,
-                gamma_w: 0.002,
-            },
-        ),
+    let patterns = [
+        harmonic_pattern(N, 0),
+        harmonic_pattern(N, 1),
+        harmonic_pattern(N, 2),
     ];
-    for (name, cfg) in cfgs {
-        let steps = if name == "inv20" { 1200 } else { 600 };
+    let cfg = PhaseMemoryConfig {
+        omega0: 0.0,
+        clamp_strength: 8.0,
+        eta_w: 0.12,
+        eta_delta: 0.08,
+        gamma_w: 0.002,
+    };
+    for steps in [600usize, 1500] {
         let mut means = [0.0f32; 3];
         let mut worst = [0.0f32; 3];
         let mut fails = [0usize; 3];
-        let mut aligned_means = [0.0f32; 3];
+        let mut spurious = [0usize; 3];
         let seeds = 30u64;
         for seed in 0..seeds {
             let mut mem = ComplexPhaseMemory::with_config(N, cfg);
@@ -117,35 +73,51 @@ fn probe_stats() {
             for (k, p) in patterns.iter().enumerate() {
                 let mask = mask_exact_hidden(seed, 12);
                 mem.reset_phases(0.0);
-                let (rec, _e) = mem.recall(p, &mask, steps, 0.05);
+                mem.phases.copy_from_slice(p);
+                let e_true = mem.phase_energy();
+                let (rec, e_rec) = mem.recall(p, &mask, steps, 0.05);
                 let e = mean_err(&rec, p, &mask);
-                let ea = mean_err_aligned(&rec, p, &mask);
                 means[k] += e;
-                aligned_means[k] += ea;
                 worst[k] = worst[k].max(e);
                 if e >= 0.15 {
                     fails[k] += 1;
+                }
+                if e_rec < e_true - 1e-4 {
+                    spurious[k] += 1;
                 }
             }
         }
         for k in 0..3 {
             means[k] /= seeds as f32;
-            aligned_means[k] /= seeds as f32;
         }
         println!(
-            "[{name}] steps={steps} mean p0={:.4} p1={:.4} p2={:.4} | aligned p0={:.4} p1={:.4} p2={:.4} | worst p0={:.4} p1={:.4} p2={:.4} | fails {} {} {}",
+            "[steps={steps}] mean p0={:.4} p1={:.4} p2={:.4} | worst p0={:.4} p1={:.4} p2={:.4} | fails {} {} {} | spurious {} {} {}",
             means[0],
             means[1],
             means[2],
-            aligned_means[0],
-            aligned_means[1],
-            aligned_means[2],
             worst[0],
             worst[1],
             worst[2],
             fails[0],
             fails[1],
-            fails[2]
+            fails[2],
+            spurious[0],
+            spurious[1],
+            spurious[2]
         );
     }
+    let mut mem = ComplexPhaseMemory::with_config(N, cfg);
+    for p in &patterns {
+        mem.imprint(p, 40);
+    }
+    let mut ws: Vec<f32> = mem.weights.clone();
+    ws.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    println!(
+        "weights: mean={:.3} median={:.3} max={:.3} p10={:.3} | mean_coupling={:.4}",
+        ws.iter().sum::<f32>() / ws.len() as f32,
+        ws[ws.len() / 2],
+        ws[ws.len() - 1],
+        ws[ws.len() / 10],
+        mem.mean_coupling()
+    );
 }

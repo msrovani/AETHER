@@ -7,6 +7,7 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 * **ARCHITECTURE_PHASE2.md** — Fase 2 (Módulos 5–8): memória, imaginação,
   morfogênese e encarnação em LAN.
 * **docs/API_CONTRACT.md** — contrato normativo de API entre módulos.
+* **docs/HW_TARGET.md** — hardware alvo (PC/note/servidor, CPU multithread + GPU AMD/Intel/NVIDIA).
 
 ## Pilares
 
