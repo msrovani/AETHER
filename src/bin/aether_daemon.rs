@@ -258,6 +258,8 @@ pub struct AetherDaemon {
     u: Array2<f32>,
     v: Array2<f32>,
     cycles: u64,
+    /// Média móvel do erro relativo de reconstrução (baseline de surpresa).
+    baseline_nmse: f32,
     /// Quadros que estouraram o orçamento de 60 Hz (cumulativo).
     dropped_frames: u64,
 }
@@ -352,6 +354,7 @@ impl AetherDaemon {
             u: Array2::<f32>::zeros((c_in, window)),
             v: Array2::<f32>::zeros((c_out, window)),
             cycles: 0,
+            baseline_nmse: 0.0,
             dropped_frames: 0,
         })
     }
@@ -378,7 +381,26 @@ impl AetherDaemon {
             .compute_spectral_entropy(self.u.view())
             .unwrap_or(0.0) as f32;
         let entropy_wave = self.wave.compute_wave_entropy() as f32;
-        let prediction_error = ((entropy_raw - entropy_wave).abs() / 8.0).clamp(0.0, 4.0);
+
+        // Surpresa = erro relativo de reconstrução ACIMA do baseline + variação
+        // de entropia. O |ΔH|/8 sozinho ficava limitado a 0.125 e nunca cruzava
+        // o limiar de sonho; o erro relativo responde a mudanças reais do sinal.
+        let rows = self.c_in.min(self.v.nrows());
+        let mut se = 0.0f32;
+        let mut su = 0.0f32;
+        for c in 0..rows {
+            for k in 0..self.cfg.window {
+                let u = self.u[[c, k]];
+                let d = u - self.v[[c, k]];
+                se += d * d;
+                su += u * u;
+            }
+        }
+        let nmse = se / (su + 1e-6);
+        let entropy_surprise = ((entropy_raw - entropy_wave).abs() / 8.0).clamp(0.0, 0.5);
+        let prediction_error =
+            ((nmse - self.baseline_nmse).max(0.0) + entropy_surprise).clamp(0.0, 4.0);
+        self.baseline_nmse = 0.95 * self.baseline_nmse + 0.05 * nmse;
 
         // spins contínuos derivados da fase local (entrada da morfogênese),
         // mapeados dos 4 canais de fase para a dimensão cognitiva completa
@@ -407,9 +429,14 @@ impl AetherDaemon {
         );
 
         // 4) grava o padrão estável na memória de fase
+        let first_sample = ensemble.samples.first();
         let pattern: Vec<f32> = (0..self.cfg.cognition_dim)
             .map(|i| {
-                if ensemble.samples[0][i] > 0 {
+                let bit = first_sample
+                    .and_then(|sample| sample.get(i))
+                    .copied()
+                    .unwrap_or(-1);
+                if bit > 0 {
                     std::f32::consts::FRAC_PI_4
                 } else {
                     std::f32::consts::FRAC_PI_4 + std::f32::consts::PI
@@ -429,7 +456,7 @@ impl AetherDaemon {
             free_energy,
             memory_energy,
             epistemic_uncertainty: ensemble.epistemic_uncertainty,
-            topological_density: self.field.sparsity_ratio(),
+            topological_density: self.field.density(),
             dreaming,
             cycles: self.cycles,
         })
@@ -518,15 +545,28 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
         let flag = args[i].clone();
         match flag.as_str() {
             "--help" | "-h" => {
-                println!("aether-daemon [--duration s] [--hz f] [--seed u64] [--alert f] [--window n] [--dim n]");
+                println!("aether-daemon [opções]");
+                println!("  --duration <s>   duração em segundos (aceita 30 ou 30s)");
+                println!("  --hz <f>         taxa do ciclo (padrão 60)");
+                println!("  --seed <u64>     semente determinística");
+                println!("  --alert <f>      limiar de surpresa para sonhar (padrão 0.35)");
+                println!("  --window <n>     janela do campo sensorial [8, 8192]");
+                println!("  --dim <n>        dimensão cognitiva [2, 256]");
+                println!("  --samples <n>    amostras do sonhador (>0)");
+                println!("  --steps <n>      passos do sonhador (>0)");
+                println!("  --help           esta ajuda");
                 std::process::exit(0);
             }
             "--duration" => {
                 i += 1;
-                let v = args.get(i).ok_or("faltou valor para --duration")?;
+                let raw = args.get(i).ok_or("faltou valor para --duration")?;
+                let v = raw
+                    .strip_suffix('s')
+                    .or_else(|| raw.strip_suffix('S'))
+                    .unwrap_or(raw);
                 let secs: f64 = v.parse().map_err(|e| format!("--duration inválido: {e}"))?;
-                if secs <= 0.0 {
-                    return Err("--duration precisa ser > 0".into());
+                if !secs.is_finite() || secs <= 0.0 {
+                    return Err("--duration precisa ser > 0 e finito".into());
                 }
                 cfg.duration = Some(Duration::from_secs_f64(secs));
             }
@@ -534,8 +574,8 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
                 i += 1;
                 let v = args.get(i).ok_or("faltou valor para --hz")?;
                 cfg.hz = v.parse().map_err(|e| format!("--hz inválido: {e}"))?;
-                if cfg.hz <= 0.0 || cfg.hz > 10_000.0 {
-                    return Err("--hz fora de (0, 10000]".into());
+                if !cfg.hz.is_finite() || cfg.hz <= 0.0 || cfg.hz > 10_000.0 {
+                    return Err("--hz fora de (0, 10000] e finito".into());
                 }
             }
             "--seed" => {
@@ -547,6 +587,25 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
                 i += 1;
                 let v = args.get(i).ok_or("faltou valor para --alert")?;
                 cfg.alert_free_energy = v.parse().map_err(|e| format!("--alert inválido: {e}"))?;
+                if !cfg.alert_free_energy.is_finite() || cfg.alert_free_energy <= 0.0 {
+                    return Err("--alert precisa ser > 0 e finito".into());
+                }
+            }
+            "--samples" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --samples")?;
+                cfg.dream_samples = v.parse().map_err(|e| format!("--samples inválido: {e}"))?;
+                if cfg.dream_samples == 0 || cfg.dream_samples > 1024 {
+                    return Err("--samples fora de [1, 1024]".into());
+                }
+            }
+            "--steps" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --steps")?;
+                cfg.dream_steps = v.parse().map_err(|e| format!("--steps inválido: {e}"))?;
+                if cfg.dream_steps == 0 || cfg.dream_steps > 10_000 {
+                    return Err("--steps fora de [1, 10000]".into());
+                }
             }
             "--window" => {
                 i += 1;
@@ -572,8 +631,8 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
     if cfg.dream_samples == 0 || cfg.dream_steps == 0 {
         return Err("dream_samples e dream_steps devem ser > 0".into());
     }
-    if cfg.alert_free_energy <= 0.0 {
-        return Err("--alert precisa ser > 0".into());
+    if !cfg.alert_free_energy.is_finite() || cfg.alert_free_energy <= 0.0 {
+        return Err("--alert precisa ser > 0 e finito".into());
     }
     Ok(cfg)
 }
