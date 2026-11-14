@@ -3,7 +3,7 @@
 #![cfg(feature = "m2")]
 
 use aether_engine::core::wave_interference::WaveInterferenceBlock;
-use ndarray::Array2;
+use ndarray::{Array2, Array3};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
@@ -106,5 +106,3 @@ fn m2_lote_b_processa() {
     assert_eq!(v.shape(), &[3, 8, 512]);
     assert!(v.iter().all(|x| x.is_finite()));
 }
-
-use ndarray::Array3;

@@ -178,7 +178,7 @@ fn quatro_nos_convergem_em_menos_de_3s() {
 
     let started = Instant::now();
     let mut best_r = 0.0f64;
-    let mut converged = false;
+    let mut converged_at: Option<Duration> = None;
     let mut saw_packets = false;
     let mut wire_ok = true;
 
@@ -206,8 +206,15 @@ fn quatro_nos_convergem_em_menos_de_3s() {
         if count > 0.0 {
             let r = sum / count;
             best_r = best_r.max(r);
-            if r > LIMIAR {
-                converged = true;
+            if r > LIMIAR && converged_at.is_none() {
+                converged_at = Some(started.elapsed());
+            }
+            // Depois de convergir, observa mais 300 ms para registrar o R de
+            // regime permanente (relatório), sem alongar o teste.
+            let observe_done = converged_at
+                .map(|at| started.elapsed() >= at + Duration::from_millis(300))
+                .unwrap_or(false);
+            if observe_done {
                 break;
             }
         }
@@ -219,12 +226,15 @@ fn quatro_nos_convergem_em_menos_de_3s() {
         handle.stop().expect("stop do no");
     }
 
-    eprintln!("convergencia: melhor R = {best_r:.6} em {elapsed:?}");
+    eprintln!(
+        "convergencia: melhor R = {best_r:.6} apos {elapsed:?} (limiar em {:?})",
+        converged_at
+    );
 
     assert!(wire_ok, "rx_bytes nao e multiplo de 40");
     assert!(saw_packets, "nenhum datagrama de 40 bytes foi contabilizado");
     assert!(
-        converged,
+        converged_at.is_some(),
         "R(t) nao atingiu {LIMIAR} em 3 s (melhor R = {best_r:.4}, t = {elapsed:?})"
     );
     assert!(best_r <= 1.0 + 1e-9);

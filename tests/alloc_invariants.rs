@@ -102,9 +102,9 @@ fn invariante_alocacao_zero_na_onda() {
     let u = Array2::<f32>::from_shape_fn((4, 512), |_| rng.gen::<f32>() * 2.0 - 1.0);
     let mut v = Array2::<f32>::zeros((8, 512));
 
-    block.forward_into(u.view(), v.view_mut()).expect("warmup");
+    block.forward_into(u.view(), &mut v).expect("warmup");
 
-    let (_, allocs) = count_allocs(|| block.forward_into(u.view(), v.view_mut()).expect("forward"));
+    let (_, allocs) = count_allocs(|| block.forward_into(u.view(), &mut v).expect("forward"));
     assert_eq!(allocs, 0, "forward_into alocou {allocs} vezes (deve ser 0)");
 }
 

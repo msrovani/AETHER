@@ -109,12 +109,12 @@ fn invariante_01_colapso_termodinamico() {
 #[test]
 fn invariante_02_resolucao_independente() {
     let mut block = WaveInterferenceBlock::new(4, 8, 32, 0xC0FFEE);
-    let pesos_antes = block.r_phi().to_owned();
-    let local_antes = block.w_local().to_owned();
+    let pesos = block.r_phi().to_vec();
+    let local = block.w_local().to_vec();
 
     for &l in &[128usize, 512, 2048] {
         let u = deterministic_field(4, l, 0xA11CE + l as u64);
-        let v = block.forward(u.view()).expect("forward falhou");
+        let v = block.forward(u.view()).expect("forward");
         assert_eq!(v.shape(), &[8, l], "shape errado para L={l}");
         assert!(
             v.iter().all(|x| x.is_finite()),
@@ -122,12 +122,12 @@ fn invariante_02_resolucao_independente() {
         );
         assert_eq!(
             block.r_phi(),
-            pesos_antes.as_slice().unwrap(),
+            pesos.as_slice(),
             "pesos espectrais mudaram com L={l}"
         );
         assert_eq!(
             block.w_local(),
-            local_antes.as_slice().unwrap(),
+            local.as_slice(),
             "pesos locais mudaram com L={l}"
         );
     }

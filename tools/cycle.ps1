@@ -68,9 +68,10 @@ if (-not $Git) {
 function Invoke-Git {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$GitArgs)
     $output = & $Git @GitArgs 2>&1
+    $text = (($output | ForEach-Object { "$_" }) -join "`n")
     return [pscustomobject]@{
         Code   = $LASTEXITCODE
-        Output = (($output | ForEach-Object { "$_" }) -join "`n").Trim()
+        Output = $text.TrimEnd()
     }
 }
 

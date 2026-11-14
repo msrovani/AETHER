@@ -85,7 +85,7 @@ fn symmetric_landscape(n: usize, seed: u64) -> (Array2<f64>, Array2<f64>) {
     (j, Array2::<f64>::zeros((1, n)))
 }
 
-fn row_slice(row: ArrayView1<'_, i8>) -> &[i8] {
+fn row_slice<'a>(row: &'a ArrayView1<'_, i8>) -> &'a [i8] {
     row.as_slice().expect("linha de estados C-contígua")
 }
 
@@ -119,7 +119,7 @@ fn inv_t1_elitismo_estrito_50_casos() {
         }
 
         solver.reset(0xDEAD_BEEF ^ case as u64);
-        let j3 = j.view().into_shape((1, N, N)).expect("shape J");
+        let j3 = j.view().into_shape_with_order((1, N, N)).expect("shape J");
         let out = solver
             .relax(IsingLandscape::new(j3, h.view()))
             .expect("relax falhou");
@@ -182,8 +182,8 @@ fn inv_t5_determinismo_bit_a_bit() {
     const N: usize = 48;
     const STEPS: usize = 150;
 
-    let (j, h) = symmetric_landscape(N, 0xD37E_7);
-    let j3 = j.view().into_shape((1, N, N)).expect("shape J");
+    let (j, h) = symmetric_landscape(N, 0x000D_37E7);
+    let j3 = j.view().into_shape_with_order((1, N, N)).expect("shape J");
 
     let mut a = ThermodynamicIsingSolver::new(1, N, STEPS, 0.05);
     let mut b = ThermodynamicIsingSolver::new(1, N, STEPS, 0.05);
@@ -279,7 +279,7 @@ fn relax_e_relax_into_equivalentes() {
     const STEPS: usize = 80;
 
     let (j, h) = symmetric_landscape(N, 0xE9A1);
-    let j3 = j.view().into_shape((1, N, N)).expect("shape J");
+    let j3 = j.view().into_shape_with_order((1, N, N)).expect("shape J");
 
     let mut solver = ThermodynamicIsingSolver::new(1, N, STEPS, 0.05);
     solver.reset(7);
@@ -378,7 +378,7 @@ fn inv_t4_relax_into_zero_alocacao() {
     const STEPS: usize = 200;
 
     let (j, h) = symmetric_landscape(N, 0xA110C);
-    let j3 = j.view().into_shape((1, N, N)).expect("shape J");
+    let j3 = j.view().into_shape_with_order((1, N, N)).expect("shape J");
     let mut solver = ThermodynamicIsingSolver::new(1, N, STEPS, 0.05);
     let mut out = RelaxOutcome::with_capacity(1, N, STEPS);
 
