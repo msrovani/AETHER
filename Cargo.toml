@@ -1,0 +1,72 @@
+﻿[package]
+name = "aether_engine"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.78"
+description = "AETHER â€” motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[lib]
+name = "aether_engine"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aether-organism"
+path = "src/bin/organism.rs"
+required-features = ["m4"]
+
+# Features de modulo: permitem build isolado de cada pilar (paralelismo de agentes
+# sem colisao de codigo) e compilacao enxuta quando so um pilar e necessario.
+[features]
+default = ["m1", "m2", "m3", "m4"]
+m1 = []
+m2 = []
+m3 = []
+m4 = ["m1", "m2", "m3", "dep:ratatui", "dep:crossterm"]
+tui = ["m4"]
+
+[dependencies]
+ndarray = { version = "0.16", features = ["rayon"] }
+rayon = "1.10"
+rustfft = "6.2"
+realfft = "3.3"
+num-complex = "0.4"
+rand = "0.8"
+rand_chacha = "0.3"
+socket2 = "0.5"
+mio = { version = "1", features = ["net", "os-poll"] }
+crossbeam-channel = "0.5"
+thiserror = "2"
+ratatui = { version = "0.29", optional = true }
+crossterm = { version = "0.28", optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false }
+
+[[bench]]
+name = "solver"
+harness = false
+required-features = ["m1"]
+
+[[bench]]
+name = "wave"
+harness = false
+required-features = ["m2"]
+
+[[bench]]
+name = "kuramoto_latency"
+harness = false
+required-features = ["m3"]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+overflow-checks = false
+debug = 1
+
+[profile.bench]
+inherits = "release"
+debug = 1

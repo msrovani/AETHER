@@ -1,0 +1,21 @@
+# Builds de cada agente (target_<agente>) e target padrao
+/target/
+/target_*/
+*.pdb
+*.rlib
+*.rmeta
+*.exe
+*.dll
+*.dSYM/
+
+# Estado do ciclo automatico
+/.cycle/
+
+# Editores / SO
+.idea/
+.vscode/
+Thumbs.db
+desktop.ini
+
+# Logs locais
+*.log
