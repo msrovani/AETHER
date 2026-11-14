@@ -197,6 +197,11 @@ fn test_m7_silence_prunes_and_surprise_grows() {
     let zeros_initial = field.zero_synapses();
     let sparsity_initial = field.sparsity_ratio();
     let mut rho = field.spectral_radius();
+    let rho_jacobi_initial = raio_espectral_jacobi(&field.j, N);
+    assert!(
+        (rho - rho_jacobi_initial).abs() <= 0.05,
+        "ρ inicial: potência {rho} vs Jacobi {rho_jacobi_initial}"
+    );
     let f_silence = field.free_energy(0.0);
 
     // Auditoria #2: F > 0 no silêncio (custo metabólico) NÃO pode gerar crescimento.

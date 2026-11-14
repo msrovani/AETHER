@@ -101,11 +101,14 @@ fn fft_error(err: realfft::FftError) -> AetherError {
 ///
 /// A chamada a `f32::tanh` dominava o caminho quente (~30 ns por elemento, e a
 /// projeção local tem `C_out * L` elementos). Esta forma é aritmética pura —
-/// logo, vetorizável pelo LLVM — com erro absoluto ≤ 2e-4 em `|x| ≤ 4.5` e
-/// saturação exata em `±1` fora da faixa, preservando simetria e limites.
+/// logo, vetorizável pelo LLVM — com erro absoluto ≤ 1e-4 em `|x| ≤ 5.5` e
+/// saturação em `±1` fora da faixa, preservando simetria e limites.
+///
+/// A faixa de saturação é 5.5 (e não 4.5) porque `1 - tanh(T) = 2e^{-2T}`:
+/// truncar em 4.5 deixaria 2.5e-4 de erro no degrau.
 #[inline(always)]
 fn fast_tanh(x: f32) -> f32 {
-    let x = x.clamp(-4.5, 4.5);
+    let x = x.clamp(-5.5, 5.5);
     let x2 = x * x;
     let num = x * (135_135.0 + x2 * (17_325.0 + x2 * (378.0 + x2)));
     let den = 135_135.0 + x2 * (62_370.0 + x2 * (3_150.0 + x2 * 28.0));

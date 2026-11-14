@@ -675,14 +675,17 @@ impl MorphogeneticField {
         }
 
         // Quociente de Rayleigh final (O(N²)): preciso a O(θ²) no autovetor.
+        // Em espectros quase degenerados (±λ) o quociente pode cancelar; a norma
+        // `||Jv||/||v||` é exata nesse caso, então usamos o maior dos dois.
+        let rho_norm = rho;
         Self::mat_vec(&self.j, &self.power_v, &mut self.power_av, n);
         let mut quotient = 0.0f32;
         for (v, a) in self.power_v.iter().zip(self.power_av.iter()) {
             quotient += v * a;
         }
-        let quotient = quotient.abs();
-        if quotient.is_finite() {
-            quotient
+        let estimate = quotient.abs().max(rho_norm);
+        if estimate.is_finite() {
+            estimate
         } else {
             f32::NAN
         }

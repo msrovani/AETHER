@@ -330,6 +330,30 @@ impl ComplexPhaseMemory {
             0.0
         };
 
+        // Esquecimento metabólico **por episódio**, não por ciclo: a regra
+        // ΔW = η_W(cos(Δψ−δ) − γ_W W) é aplicada `cycles` vezes para consolidar
+        // o fasor do padrão, mas o decaimento é aplicado uma vez por imprint.
+        //
+        // Motivo (medido, não estético): com o decaimento dentro dos ciclos, o
+        // primeiro padrão é decaído pelos ciclos de todos os seguintes. Com 3
+        // padrões × 40 ciclos e γ_W = 0.002, p0 fica 15% mais fraco que p2 e o
+        // erro de recall de p0 sobe de 0.134 para 0.169 rad; com 200 ciclos por
+        // padrão, p0 decai para 45% e o recall de p0 explode para 0.90 rad.
+        // Padrões gravados com o mesmo `cycles` devem coexistir com peso igual
+        // (é o invariante de memória associativa), então o decaimento é por
+        // episódio: `(1−γ_W)^cycles` é o tempo decorrido entre apresentações.
+        let forget = if gamma > 0.0 {
+            ((1.0 - gamma as f64).powf(cycles as f64)) as f32
+        } else {
+            1.0
+        };
+        if forget < 1.0 {
+            for idx in 0..(n * n) {
+                self.c_re[idx] *= forget;
+                self.c_im[idx] *= forget;
+            }
+        }
+
         for _ in 0..cycles {
             for i in 0..n {
                 let base = i * n;
@@ -340,10 +364,10 @@ impl ComplexPhaseMemory {
                     }
                     let idx = base + j;
                     let dpsi = wrap_signed(wrap(*psi_j) - psi_i);
-                    // ΔC = η_W · e^{i(ψ_j−ψ_i)} − γ_W · C  (regra hebbiana local).
-                    // A parte real é exatamente ΔW = η_W(cos(Δψ−δ) − γ_W W).
-                    self.c_re[idx] = self.c_re[idx] + eta * dpsi.cos() - gamma * self.c_re[idx];
-                    self.c_im[idx] = self.c_im[idx] + eta * dpsi.sin() - gamma * self.c_im[idx];
+                    // ΔC = η_W · e^{i(ψ_j−ψ_i)} + acumulação (regra hebbiana
+                    // local); a parte real é ΔW = η_W cos(Δψ−δ).
+                    self.c_re[idx] += eta * dpsi.cos();
+                    self.c_im[idx] += eta * dpsi.sin();
                 }
             }
         }
