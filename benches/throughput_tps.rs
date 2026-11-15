@@ -347,17 +347,16 @@ fn main() {
     let path = "target/aether_scorecard.json";
     let merged = match fs::read_to_string(path) {
         Ok(text) => {
-            let trimmed = text.trim_end();
-            match trimmed.rfind('}') {
-                Some(pos) if trimmed.starts_with('{') => {
-                    let head = trimmed[..pos].trim_end();
-                    if head.ends_with('{') {
-                        format!("{head}\"throughput\": {json}\n}}")
-                    } else {
-                        format!("{head},\"throughput\": {json}\n}}")
-                    }
-                }
-                _ => format!("{{\"throughput\": {json}}}"),
+            // Remove qualquer bloco `"throughput"` anterior (merge idempotente).
+            let base = match text.find("\"throughput\":") {
+                Some(pos) => &text[..pos],
+                None => &text[..],
+            };
+            let trimmed = base.trim_end().trim_end_matches(',');
+            if trimmed.ends_with('{') {
+                format!("{trimmed}\"throughput\": {json}\n}}")
+            } else {
+                format!("{trimmed},\"throughput\": {json}\n}}")
             }
         }
         Err(_) => format!("{{\"throughput\": {json}}}"),

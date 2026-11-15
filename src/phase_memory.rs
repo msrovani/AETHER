@@ -305,7 +305,8 @@ impl RecallConfidence {
 
     /// Vale abster-se (pista sem correspondência confiável)?
     pub fn should_abstain(&self) -> bool {
-        !(self.margin >= Self::ABSTAIN_MARGIN)
+        // Margem `NaN` conta como "não confiável" (abster).
+        self.margin < Self::ABSTAIN_MARGIN || self.margin.is_nan()
     }
 }
 
