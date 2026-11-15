@@ -1,9 +1,9 @@
 ﻿[package]
 name = "aether_engine"
-version = "0.0.60"
+version = "0.0.61"
 edition = "2021"
 rust-version = "1.78"
-description = "AETHER ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
+description = "AETHER ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
 license = "MIT OR Apache-2.0"
 publish = false
 
@@ -44,7 +44,7 @@ jit = [
     "dep:cranelift-frontend",
     "dep:cranelift-native",
 ]
-affinity = ["dep:core_affinity"]
+affinity = ["dep:core_affinity", "dep:num_cpus"]
 
 [dependencies]
 ndarray = { version = "0.16", features = ["rayon"] }
@@ -66,6 +66,7 @@ cranelift-codegen = { version = "0.113.1", optional = true }
 cranelift-frontend = { version = "0.113.1", optional = true }
 cranelift-native = { version = "0.113.1", optional = true }
 core_affinity = { version = "0.8.3", optional = true }
+num_cpus = { version = "1.17", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", default-features = false }

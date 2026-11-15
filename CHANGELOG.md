@@ -3,6 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.61] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 4 arquivo(s) (.:2, src:2).
+- Gate: ok (0s).
+
+- `Cargo.lock`
+- `Cargo.toml`
+- `src/core/mod.rs`
+- `src/core/aether_governor.rs`
+
 ## [0.0.60] - 2026-11-15
 
 ### Changed

@@ -28,4 +28,15 @@ pub mod kuramoto_field;
 #[cfg(feature = "m5")]
 pub mod fhrr;
 
+// FASE 5 — hardware extremus.
+pub mod bam_phase;
+pub mod silicon_entropy;
+pub mod spsc_ring;
+
+#[cfg(feature = "m1")]
+pub mod sindy_jit;
+
+#[cfg(feature = "m1")]
+pub mod aether_governor;
+
 pub use crate::error::{AetherError, Result};
