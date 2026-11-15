@@ -1,0 +1,670 @@
+# O PROBLEMA DOS 3 CORPOS — NÃO · Volume II
+## Hardware moderno e os seis riscos, enfrentados com números
+
+> **Dossiê de pesquisa · Volume II** · AETHER · 2026-11-15
+> Complementa `docs/O_PROBLEMA_DOS_3_CORPOS_NAO.md` (Volume I).
+> Escopo: os seis riscos honestos do Volume I, confrontados com CPU/GPU/FPGA/neuromórfico
+> modernos e com evidência medida.
+>
+> **Método:** cada risco recebe (a) o que a evidência mais recente mostra, (b) a mitigação
+> com números, (c) a decisão de arquitetura, (d) o gate. Nenhum benchmark citado foi
+> re-executado por nós — são números publicados, com a fonte e o nível de confiança.
+>
+> **Nada aqui altera `docs/API_CONTRACT.md`.** É dossiê, não contrato.
+
+---
+
+## Sumário
+
+- [0. Como ler a evidência](#0-como-ler-a-evidência)
+- [1. O mapa de hardware](#1-o-mapa-de-hardware)
+- [2. Risco 1 — "Ising não é oráculo"](#2-risco-1--ising-não-é-oráculo)
+- [3. Risco 2 — Interferência em VSA](#3-risco-2--interferência-em-vsa)
+- [4. Risco 3 — Transplantação dá geometria, não verdade](#4-risco-3--transplantação-dá-geometria-não-verdade)
+- [5. Risco 4 — Open-endedness precisa de corpo](#5-risco-4--open-endedness-precisa-de-corpo)
+- [6. Risco 5 — Custo de treino](#6-risco-5--custo-de-treino)
+- [7. Risco 6 — Preprints de baixa revisão](#7-risco-6--preprints-de-baixa-revisão)
+- [8. Registo de risco atualizado](#8-registo-de-risco-atualizado)
+- [9. Matriz de decisão de hardware](#9-matriz-de-decisão-de-hardware)
+- [10. Experimentos novos E6–E9](#10-experimentos-novos-e6e9)
+- [11. O que mudou desde o Volume I](#11-o-que-mudou-desde-o-volume-i)
+- [12. Referências novas](#12-referências-novas)
+
+---
+
+## 0. Como ler a evidência
+
+Toda afirmação recebe um selo:
+
+| Selo | Significado |
+|---|---|
+| **[A]** | peer-reviewed **e** mecanismo reproduzido independentemente |
+| **[B]** | peer-reviewed (ou arXiv sério), mecanismo plausível, **números não replicados** |
+| **[C]** | preprint (Zenodo/SSRN) ou blog de engenharia — **hipótese** |
+| **[M]** | medido neste projeto (`docs/COGNITIVE_AUDIT_FINAL.md`) |
+
+Regra de ouro adotada: **nenhuma decisão de arquitetura pode depender só de [C].**
+
+---
+
+## 1. O mapa de hardware
+
+### 1.1 A máquina de referência tem uma limitação que importa
+
+**Intel Core 7 240H**: 6 P + 4 E, 16 threads, 2,5–5,2 GHz, L1d 48 KB/P, L2 1,25 MB/P,
+L3 24 MB, LPDDR5-6400 (102,4 GB/s), TDP 45 W.
+**SIMD: AVX2 — sem AVX-512.** [A, datasheet]
+
+Consequência aritmética imediata, para o matvec do Ising (`N=64`):
+
+```
+MACs        = 64 × 64 = 4.096
+AVX2 FMA    = 8 f32 / instrução, 2 FMA/ciclo ⇒ 16 MAC/ciclo
+matvec      = 4.096 / 16 = 256 ciclos ≈ 0,10 µs @2,5 GHz
+```
+
+Contra um ciclo cognitivo de **146,5 µs [M]**, isso é **0,07% do orçamento**.
+
+> **Achado #1 (desconfortável):** o motor **não é matvec-bound**. 99,9% dos 146 µs
+> estão em outro lugar — sonhador, FFTs, sincronização, cópias, branch mispredict.
+> Não existe hoje um *breakdown* por estágio. Isso vira o gap `NO_PROFILE_BREAKDOWN`
+> (§8) e o experimento E6.
+
+Sem AVX-512, a rota SIMD de 512 bits (que rende 95,81× em inferência ternária,
+arXiv:2605.06485 [B]) **não está disponível** nesta máquina. O teto aqui é AVX2:
+8 f32, 16 MAC/ciclo/core, ~96 MAC/ciclo nos 6 P-cores.
+
+### 1.2 O espectro de substratos, com números medidos
+
+| Plataforma | Medida publicada | O que significa para o AETHER | Selo |
+|---|---|---|---|
+| **CPU multicore** (ScalableHD, arXiv:2506.09282) | até **10×** throughput vs TorchHD; até 18× em PAMAP2/TEX; escala quase proporcional a cores; SMT ajuda com binding NUMA | CPU **é** substrato válido para HDC/VSA; pipeline 2-estágios + tiling + afinidade é o padrão que ganha | [B] |
+| **FPGA** (HDC, arXiv:2601.20061) | **0,09 ms**, 11.141 img/s; **1300×** CPU e **60×** GPU | quando o produto for embarcado, FPGA ganha 2 ordens de magnitude | [B] |
+| **GPU (dSB)** (arXiv:2610.06622) | RTT **166–189 µs**, 618–628 k req/s; **307 Gb/s** em `n = 10⁷` | GPU só compensa com **batimento/permanência**; requisição única ≈ CPU | [B] |
+| **CiM FeFET** (arXiv:2512.17165) | **175,9×** sobre SB em GPU (A6000), Max-Cut até 100k nós; init inspirada em atenção corta **80% das iterações** | o ganho maior veio do **algoritmo** (init), não do silício | [B] |
+| **Digital Annealer** (arXiv:2507.22117) | competitivo em até **53.000** variáveis (2.000+ grafos MQLib) | QUBO grande já é tratável hoje por heurística | [B] |
+| **Ising embarcado + ML** (Nature Comms 2026) | **5.500×** vs NetworkX e **4.300×** vs ReduMIS em MIS esparso | tunagem de parâmetros por ML é o gargalo prático, não o solver | [A] |
+| **Neuromórfico Loihi 2** (arXiv:2608.18341) | **0,0406 mJ**/amostra vs **20,16 mJ** CPU e **5,35 mJ** GPU ⇒ **496×** e **132×** menos energia | para monitoramento 24/7, a energia domina o TCO | [B] |
+| **Loihi 2 + aprendizado contínuo** (arXiv:2511.01553) | 0,33 ms e **0,05 mJ**/passo; **341×** menos energia que replay em Orin | online continual learning no chip é viável | [B] |
+
+### 1.3 A conta de energia do AETHER (estimativa)
+
+```
+60 Hz × 86.400 s/dia        = 5,184 M ciclos/dia
+5,184 M × 146,5 µs          = 757 s de CPU/dia
+757 s / 86.400 s            = 0,88% de UM core
+```
+
+A 5–15 W por P-core ativo: **≈ 1–3 Wh/dia**. [M + estimativa]
+
+Comparação grosseira (rotulada como tal): um LLM a 50 tok/s e ~300 W gasta ~6 J/token;
+o AETHER gasta ~1,46 mJ/ciclo para 128 eq-tokens ⇒ **~11 µJ/eq-token**. Mesmo que a
+equivalência esteja errada por 100×, ainda é **2–3 ordens de magnitude**.
+**Não usar esse número em marketing sem a ressalva de que `eq-t` é convenção.**
+
+---
+
+## 2. Risco 1 — "Ising não é oráculo"
+
+> *"Restrição apertada destrói o landscape. Sem passe simbólico + partição structure-aware,
+> lógica vai falhar em casos reais. Trabalho de engenharia, não de física."*
+
+### 2.1 A evidência confirma o risco — e quantifica a cura
+
+arXiv:2511.21046 [B] mede exatamente o que suspeitávamos, e com um contraste brutal:
+
+| Componente | Ganho |
+|---|---|
+| Só pré-processamento simbólico, solver **clássico** | **< 3×** |
+| Só pré-processamento simbólico, solver **Ising** | **> 150×** |
+| Resultado no chip de 45 spins | problemas de 8 bits (94 var) → **11 bits (190 var)** sem mudar hardware |
+
+O paper é explícito: restrições apertadas viram **apenas penalidades**, e penalidades
+podem se cancelar. Exemplo dado: `(¬a)` (unit clause) é apagada por `(a ∨ b)` na
+formulação quadrática — o solver passa a aceitar `a = 1`.
+
+**Conclusão:** o Ising não deve ser o **raciocinador**; deve ser o **acelerador de
+busca local** no fim de um pipeline simbólico.
+
+### 2.2 As quatro peças que resolvem — e o número de cada uma
+
+| Peça | Evidência | Número |
+|---|---|---|
+| **1. Roof dual / persistências** | arXiv:2610.20346 [B] prova que a posiform roof-dual-optimal dá o **domínio máximo de autarkia em tempo polinomial**; arXiv:1705.09844 [B] valida empiricamente | No solver Hercules: BQP100 de **77,5 s → 0,0132 s** (**≈5.800×**); nós visitados **2,19 M → 40** (>50.000× redução) [C, blog de engenharia] |
+| **2. Codificação esparsa de restrições** | arXiv:2601.18108 [B] | arestas de **O(N²) → O(N)** para one-hot e **O(N log N)** para igualdade geral |
+| **3. Presolve structure-aware paralelo** | arXiv:2603.03498 [B] | **18×** sobre PaPILO e **6×** sobre Gurobi (1 máquina); **13×** distribuído |
+| **4. Lagrange / osciladores de restrição** | arXiv:2505.07179 [B] (LagONN) | Max-3-SAT até **200 var / 860 cláusulas**, determinístico, sem annealing |
+
+Somando: a peça 1 sozinha já move o problema de "Ising falha" para "Ising recebe um
+problema 10³–10⁴× menor". É engenharia — exatamente como o risco dizia.
+
+### 2.3 O desenho que isso força
+
+```
+consulta lógica
+  │
+  ├─[1] SIMBÓLICO      CNF → implicações, unidades, equivalências
+  ├─[2] ROOF DUAL      max-flow/min-cut → fixa variáveis persistentes
+  ├─[3] DECOMPOSIÇÃO   comunidades do grafo → sub-QUBOs independentes
+  ├─[4] BSB/ISING      só o núcleo duro, N pequeno, com Lagrange se preciso
+  └─[5] CERTIFICADO    E, ΔE, violações → resposta ou abstenção
+```
+
+Etapas 1–3 são **CPU, baratas, determinísticas, 0 alloc**. A etapa 4 é a única que
+toca o Módulo 1 — e agora recebe instâncias que cabem no L1 (N≤64 ⇒ `J` = 16 KB).
+
+### 2.4 Onde GPU entra (e onde não entra)
+
+| Situação | Decisão |
+|---|---|
+| `N ≤ 128`, um organismo | **CPU**. GPU é desperdício: 166 µs de RTT ≈ o ciclo inteiro |
+| `N ≥ 512` (J = 1 MB+) | GPU com **estado residente** (1 bloco = 1 solve), não launch-per-request |
+| Muitos organismos (enxame) | GPU com **replicas** — a arXiv:2610.06622 mostra 8 replicas a 307 Gb/s |
+| Modelos > VRAM | *streaming* de tiles de acoplamento |
+
+> **Achado #2:** o ganho de 175,9× da CiM vem majoritariamente da **inicialização
+> informada** (−80% iterações), não do ferro. Isso é reproduzível em CPU **hoje**:
+> inicializar spins com a topologia global (o `J` já está lá) em vez de aleatoriamente.
+
+### 2.5 Gate do Risco 1
+
+| Métrica | Alvo |
+|---|---|
+| Redução de variáveis por roof dual, 3-SAT aleatório `n=64` | ≥ 40% |
+| Instâncias resolvidas pelo pipeline que o BSB puro erra | ≥ 90% |
+| Custo do passe simbólico | ≤ 5% do ciclo |
+| Determinismo | bit-a-bit com seed fixa |
+
+---
+
+## 3. Risco 2 — Interferência em VSA
+
+> *"Raciocínio multi-passo acumula erro de cleanup. D tem que crescer; capacidade é o teto."*
+
+### 3.1 A lei de escala existe — e é melhor do que se temia
+
+arXiv:1906.11684 [B] mede a **capacidade operacional** de redes ressonadoras com
+`p = 0,99` e orçamento de `k = 0,001M` iterações:
+
+> **`M_max ∝ N²`** — capacidade cresce **quadraticamente** com a dimensionalidade,
+> independentemente do número de fatores `F`.
+
+Âncoras medidas em arXiv:2412.00354 [B]: o ressonador baseline satura em
+**10⁵ (F=2), 10⁶ (F=3), 10⁷ (F=4)**; as variantes com ruído chegam a **>5×10⁹** em F=4.
+
+**Isso é a resposta ao risco:** não é "D tem que crescer até o infinito"; é que a
+capacidade **cresce ao quadrado** com D. Dobrar D quadruplica a capacidade.
+
+### 3.2 O problema real não é capacidade — é **ciclo-limite**
+
+O mesmo paper identifica a falha dominante: o ressonador determinístico **entra em
+ciclo-limite** e nunca converge, mesmo com iterações infinitas.
+
+A cura medida é surpreendentemente barata e **já está no vocabulário do projeto**:
+
+| Técnica | O que faz | Ganho |
+|---|---|---|
+| **IMF** (noise during iteration) | injeta ruído a cada passo de cleanup | +50× capacidade |
+| **ACF** (noise only at init) | ruído só na inicialização do codebook | **+50×**, e **funciona em hardware digital** |
+| **Sparse coding antes** (arXiv:2404.19126) | reduz colisões no espaço combinatório | aumenta capacidade efetiva |
+| **Escolha da nonlinearidade** (Frontiers 2026) | sign/ReLU/poly/softmax mudam *o modo de falha*, não só a capacidade | permite escolher falha "abstém" em vez de "erra" |
+
+**Insight para o AETHER:** o `ThermodynamicDreamer` já usa Langevin. O mesmo ruído
+térmico que hoje serve para amostrar contrafactuais pode ser **o mecanismo anti-ciclo-limite
+do cleanup**. Um único gerador de ruído, dois papéis.
+
+### 3.3 O cálculo que faltava: D × cache × memória
+
+| D | vetor FHRR (complexo f32) | 10k átomos | Onde vive |
+|---:|---:|---:|---|
+| **160** (atual) | **1,28 KB** | 12,8 MB | L3 / DRAM |
+| 512 | 4,1 KB | 41 MB | DRAM |
+| 1024 | 8,2 KB | 82 MB | DRAM |
+| 4096 | 32,8 KB | 328 MB | DRAM + swap |
+
+> **Achado #3 — o trade-off escondido:** subir D para ganhar capacidade **expulsa o
+> código do cache**. Em D=160 e 10k átomos já são 12,8 MB — metade do L3 do 240H,
+> e o L3 é compartilhado com o SO/iGPU. **Capacidade e localidade são a mesma moeda
+> gasta duas vezes.**
+
+Saídas, em ordem de custo:
+1. **Fatorar em vez de aumentar D** — ressonador busca em superposição; não precisa
+   do codebook inteiro quente, só do bloco consultado.
+2. **Sparsity** (SBC/hipervetores esparsos) — 10k átomos esparsos ocupam fração.
+3. **Binarizar** — 10.240 bits = **1,28 KB** por átomo (o mesmo tamanho de um FHRR
+   D=160 complexo!) com 10⁴ átomos = 12,8 MB. BAM já é binário.
+4. **Sharding por papel** — só os fillers do papel ativo ficam quentes.
+
+### 3.4 Profundidade de composição (o risco de multi-passo)
+
+Erro de `unbind` compõe. Mitigação em camadas:
+
+```
+passo k:  unbind → cleanup → [confiança] → se confiança < θ: ABSTÉM
+                                    └→ se ok: re-encode (projeta de volta no atrator)
+```
+
+Isso espelha o T12 medido (**SNR 5,88σ**) [M] e `should_abstain` já existente.
+**Regra nova:** profundidade máxima declarada por consulta; ao exceder, o resultado
+é `Inconclusivo` — não uma resposta degradada.
+
+### 3.5 Gate do Risco 2
+
+| Métrica | Alvo |
+|---|---|
+| Capacidade medida (`M_max`) com D=160, F=2 | ≥ 5.000 (curva medida, não extrapolada) |
+| Taxa de ciclo-limite sem ruído | medida e reportada |
+| Ganho do ACF | ≥ 10× capacidade |
+| Profundidade de composição com erro < 5% | ≥ 4 passos |
+
+---
+
+## 4. Risco 3 — Transplantação dá geometria, não verdade
+
+> *"'Similar' ≠ 'correto'. O risco de alucinação volta como hipervetor plausível."*
+
+### 4.1 A matemática da transplantação é sólida — e o limite é estrutural
+
+O pipeline do preprint (Zenodo 19476847 [C]) é **Johnson–Lindenstrauss clássico**:
+matriz Gaussiana semeada `P ∈ ℝ^{d×D}` + binarização por sinal.
+
+Verificação independente da conta deles:
+
+```
+JL:  D ≥ 8 ln(n) / ε²
+n = 5.000, ε = 0,10  ⇒  D ≥ 8 × 8,517 / 0,01 = 6.814
+D = 10.240           ⇒  10.240 / 6.814 = 1,50×  (eles alegam ≥1,40×) ✓
+```
+
+Números alegados [C]: Spearman **ρ > 0,98**; BERT contextual ρ = 0,9906, Recall@10 =
+0,889; MiniLM escalado ρ = 0,9839, Recall@10 = 0,954; analogia `king⊕man⊕woman` Top-1
+**78%**, Top-5 96%.
+
+**O que já é [B] independentemente:**
+- Binarização de embeddings preserva semântica com perda pequena: **~2%** de degradação
+  com **98%** menos armazenamento (arXiv:1906.08340 [B]).
+- Autoencoder siamês com perda de preservação semântica: **4%** de perda, **9,4×** menos
+  memória (ACM [B]).
+- Binding recursivo preserva similaridade de sequência em FHRR (arXiv:2201.11691 [B]).
+
+**O que é [C] e não deve ser tratado como resultado:** os 78% de analogia e a
+"restauração de raciocínio funcional" (+0,400 no Top-1 de relação). 78% de Top-1
+significa **22% de respostas plausíveis e erradas** — isto é, exatamente o modo de
+falha que o risco aponta.
+
+### 4.2 A distinção que o projeto precisa gravar
+
+| Tipo de alegação | O AETHER pode certificar? |
+|---|---|
+| **Consistência** (não viola restrições, não contradiz a base) | **SIM** — Ising + violações |
+| **Derivabilidade** (segue das premissas por regra) | **SIM** — se as regras estiverem codificadas |
+| **Similaridade** (está perto do que se sabe) | Sim, geometricamente — **mas não é verdade** |
+| **Factualidade** (o mundo é assim) | **NÃO** — depende da fonte transplantada |
+
+> **Achado #4:** o certificado de energia certifica *consistência*, não *verdade*.
+> Chamar isso de "anti-alucinação" seria o mesmo erro que o risco denuncia. O nome
+> correto é **certificado de coerência**, e a resposta deve carregar a proveniência
+> (`transplantado de X`, `observado em T`, `inferido de regra R`).
+
+### 4.3 A evidência mais forte a favor do verificador
+
+| Trabalho | Número |
+|---|---|
+| **ReGA** (WWW 2026) [A] | detecção de alucinação estrutural em **14–17 ms** em CPU; **70–88×** mais rápido que juiz LLM; AUC 0,90 (funcional) e 0,80 (inversão de papel); energia 0,00 para direção correta vs **1,82** para invertida |
+| **Distributional EBM** (arXiv:2605.18871) [B] | verificador de **149M** parâmetros orquestra geradores de 7–26B e supera Qwen-72B em 5 benchmarks; **−53%** de violação de restrição |
+| **KG-Guard** (arXiv:2606.00328) [B] | F1 82,0/87,4/84,3 em WebQSP/CWQ/PUGG com **~305×** menos parâmetros; feedback eleva F1 downstream em **+13,0–14,5** |
+| **Spilled energy** (arXiv:2602.18671) [B] | métrica de energia **sem treino** separa correto de incorreto em 9 benchmarks |
+| **Carnot EBM** (negativo) [C] | 38 experimentos, 16 modelos: EBM em ativações detecta **confiança**, não verdade. "Alucinação confiante é indistinguível de acerto confiante." |
+
+Esse último resultado é o mais importante do bloco: ele **falsifica** a esperança de
+resolver verdade por plausibilidade interna. Reforça a decisão: **o verificador tem
+que ser de restrição, não de ativação.**
+
+### 4.4 Custo do verificador — o número que decide a arquitetura
+
+14 ms por verificação (ReGA, CPU) contra **146,5 µs** de ciclo [M] = **95 ciclos** de
+orçamento. Ou seja: verificar **não cabe no hot path**.
+
+Desenho resultante:
+
+```
+hot path (146 µs)     → propõe + emite (E, ΔE, violações)       [sempre]
+fora do hot path      → verificação estrutural 14–17 ms         [assíncrona]
+resposta ao usuário   → só sai depois do gate                    [latência humana: OK]
+```
+
+### 4.5 Gate do Risco 3
+
+| Métrica | Alvo |
+|---|---|
+| Analogia Top-1 em benchmark próprio (não o do preprint) | medida, sem alvo de marketing |
+| Precisão do certificado: `ΔE` grande ⇒ acerto | ≥ 95% |
+| Falsos "confiáveis" (responde com ΔE alto e erra) | < 5% |
+| Verificação | ≤ 20 ms, CPU, 0 alloc |
+
+---
+
+## 5. Risco 4 — Open-endedness precisa de corpo
+
+> *"Metas autotélicas sem sensorium real viram passeio. O Produto C é fraco mas real."*
+
+### 5.1 A evidência de que "corpo" é fechamento de laço, não biologia
+
+| Trabalho | Resultado |
+|---|---|
+| **AIF + diffusion + MTRSSM** (arXiv:2510.23258) [B] | robô real: **75%** sucesso vs 53% (só extrínseco), 50% (FlowNav), **8,33%** (NoMaD); menos colisões; ganho maior justamente em exploração (78% vs 28%) |
+| **AIF hierárquico temporal** (arXiv:2512.01924) [B] | manipulação real; alterna dirigido↔exploratório sob incerteza; custo tratável via ações abstratas (VQ) |
+| **AIF como lei de escala de test-time** (arXiv:2606.22813) [B] | generaliza para cenários não vistos **escalando com experiência contínua**; **+36%** de eficiência de inferência |
+| **Racing no limite** (arXiv:2608.10618) [B] | 256,3 km/h, 26,8 m/s²; **88,3%** de sucesso com world model |
+| **AWAM** (arXiv:2610.23396) [B] | **94,4%** em robô real com imaginação de viewpoint |
+
+Padrão comum: **não é o corpo que importa, é o laço fechado com consequência** — e
+todos usam *hierarquia temporal* (lento = meta, rápido = ação). O AETHER já tem isso
+em `renormalization` (64→16→4) e EMA τ=100 ms.
+
+### 5.2 O sensorium mínimo viável, em três estágios
+
+| Estágio | Fonte | Ações com consequência | Custo |
+|---|---|---|---|
+| **S0 (hoje)** | telemetria de host: jitter, CPU, disco, rede | 4 atuadores: throttling, migração de afinidade, alarme, pausa | zero hardware |
+| **S1** | mundo sintético com física contínua (tipo Lenia, arXiv:2608.26116 [B]) | perturbação local do campo | CPU/GPU já existente |
+| **S2** | sensor real (CAN/CSI) — Produto A/B | atuação física | certificação |
+
+**S0 é suficiente para falsificar a hipótese?** Sim, se as ações tiverem consequência
+real: se o organismo "decide" alarmar e o alarme não muda nada, ele degenera em passeio.
+A primeira tarefa de E7 é justamente medir **degeneração**: as metas propostas
+convergem para um conjunto trivial?
+
+### 5.3 O teste anti-passeio
+
+```
+H1: distribuição de metas permanece com entropia > H_min após 10⁵ ciclos
+H2: o agente prefere metas de dificuldade intermediária (progresso máximo)
+H3: remover o atuador faz a entropia de metas cair (i.e. o corpo restringe)
+```
+
+Se H3 falhar, o "corpo" é decorativo — e o risco está confirmado.
+
+### 5.4 Gate do Risco 4
+
+| Métrica | Alvo |
+|---|---|
+| Entropia de metas em 10⁵ ciclos | não decai mais de 20% |
+| Correlação dificuldade × escolha (curva em U invertido) | Spearman > 0,5 |
+| H3 (ablação do atuador) | entropia cai ≥ 30% |
+
+---
+
+## 6. Risco 5 — Custo de treino
+
+> *"OLMs treinam ~40× mais devagar (sem parallel scan). Inferência é o forte; treino é o gargalo."*
+
+### 6.1 Primeiro: o risco pode ser evitado, não vencido
+
+O próprio preprint do OLM (SSRN 7431978 [C]) reporta o achado mais útil:
+
+> melhores resultados com **dinâmica aprendida devagar ou congelada** — "um reservatório
+> de fase estruturado com fronteiras aprendidas".
+
+Isso é **reservoir computing**: congele a física, treine só o readout linear.
+
+E a literatura de RC é grande, peer-reviewed e barata:
+
+| Trabalho | Número |
+|---|---|
+| **OpenReservoirComputing** (arXiv:2603.14802) [B] | RC em JAX/Equinox: GPU, JIT, vetorização automática |
+| **OpenPRC** (arXiv:2604.07423) [B] | engine física GPU (RK4–PBD) + camada de aprendizado; schema HDF5 unificado |
+| **NEMS ressonador** (arXiv:2609.29532) [B] | multiplexação de modos reduz erro **>28×** sem treinar parâmetros internos |
+| **Josephson junction** (arXiv:2605.13354) [B] | um único JJ já é reservatório suficiente |
+| **Vestibular RC** (arXiv:2604.09943) [B] | topologia **desacoplada** ≈ acoplada; memória analítica |
+
+> **Achado #5:** o AETHER já é, estruturalmente, um reservatório: física fixa +
+> `OnlineKoopmanOperator` (RLS/Sherman-Morrison) como readout linear. **Não há
+> 40× de treino a pagar** se a física não for treinada.
+
+### 6.2 Se precisar treinar a dinâmica: DEER existe, mas não salva em n=64
+
+| Método | Ganho | Limite |
+|---|---|---|
+| **DEER** (ICLR 2024, arXiv:2309.12252) [A] | **10×** treino; até **500×** forward; >1000× fwd+grad; 1 M passos em 15 ms | complexidade **O(n³)**; em **n=64 o ganho cai a ~25%** |
+| **ELK** (NeurIPS 2024, arXiv:2407.19115) [A] | quasi-Newton + Kalman smoothing: menos memória, mais estável | ainda O(n³)-ish |
+
+Para o AETHER (`n = 64`), DEER rende ~25%. **Não é a alavanca.** As alavancas reais:
+
+1. **Congelar a dinâmica** (reservoir) → treino = mínimos quadrados, fechado, paralelo.
+2. **Paralelizar por organismo** — enxame é *embarrassingly parallel*; 6 P-cores = 6×.
+3. **Treinar offline em GPU** e só inferir na borda.
+
+### 6.3 O orçamento real de treino
+
+```
+inferência:  146,5 µs/ciclo × 86.400 s = 757 s de CPU por dia de operação
+treino:      se 10⁶ passos × 150 µs     = 150 s  (uma vez)
+```
+
+Ou seja: **um dia de operação custa 5× mais CPU que um treino inteiro.** O gargalo
+não é treino — é *desenvolvimento* (iterar arquitetura). E isso se resolve com
+experimentos pequenos, não com escala.
+
+### 6.4 Gate do Risco 5
+
+| Métrica | Alvo |
+|---|---|
+| Treino do readout (RLS) em 10⁶ amostras | < 60 s, 1 core |
+| Regressão de acurácia físico-congelado vs físico-treinado | < 5% |
+| Throughput de inferência com dinâmica congelada | ≥ baseline [M] |
+
+---
+
+## 7. Risco 6 — Preprints de baixa revisão
+
+> *"Wave Memory, Causal Oscillator, Model Transplantation são preprints — hipótese, não resultado."*
+
+### 7.1 O método: triangulação em três camadas
+
+Para cada alegação [C], procurei: (i) mecanismo em fonte [A]/[B], (ii) número
+independente, (iii) plausibilidade física.
+
+| Preprint [C] | Mecanismo corroborado por | Números replicados? | Veredito |
+|---|---|---|---|
+| **Model Transplantation** | JL + binarização: arXiv:1906.08340 [B] (~2% perda), ACM siamês [B] (~4%), arXiv:2201.11691 [B] | **NÃO** (78% analogia) | mecanismo **[A]**, números **[C]** |
+| **Wave Memory** (100% coerência) | PRISM arXiv:2512.01208 [B] (COMET 0.799 com fase pura), CAWN arXiv:2604.04250 [B], Attention by Sync arXiv:2606.12059 [B] | **NÃO** — e "100%" é sinal de alerta | mecanismo **[B]**, claims **[C−]** |
+| **Causal Oscillator** (1,34 BPB) | SSM/state-space peer-reviewed; reservatório físico | **NÃO** | **[C]** |
+| **OLM** (40× mais lento) | consistente com ausência de parallel scan (DEER/ELK existem justamente por isso) [A] | coerente | **[C]**, mas o *diagnóstico* é **[A]** |
+
+### 7.2 Regras de uso adotadas
+
+1. **Nenhuma decisão de arquitetura** se apoia em [C]. E1–E9 podem ser *motivados* por [C],
+   mas o gate é sempre uma medida nossa.
+2. **Toda citação de [C]** leva o selo no texto.
+3. **Anti-sinal:** qualquer resultado "100%" ou "sem perda" em preprint é tratado como
+   erro de medição até prova em contrário.
+4. **Reprodução mínima:** antes de usar um mecanismo [C], reproduzimos a parte trivial
+   (ex.: JL com ρ de similaridade) em < 1 dia.
+
+### 7.3 O que a triangulação salvou
+
+- **Não** construir o PLH em cima do "100% de coerência" do Wave Memory.
+- **Sim** construir em cima do PRISM (fase pura, COMET medido, arXiv) e do OLMs (mecanismo).
+- **Não** assumir transplantação como verdade.
+- **Sim** assumir JL+binarização como transporte de geometria — e só isso.
+
+---
+
+## 8. Registo de risco atualizado
+
+| # | Risco | Status após Vol. II | Risco residual | Mitigação principal |
+|---|---|---|---|---|
+| 1 | Ising não é oráculo | **mitigável com engenharia conhecida** | médio | roof dual (10³–10⁴× menor) + presolve structure-aware + Lagrange |
+| 2 | Interferência VSA | **mitigável; capacidade ∝ D²** | médio | ACF/IMF (ruído na init) + fatoração + abstenção por passo |
+| 3 | Geometria ≠ verdade | **irredutível em parte** | **alto** | certificado de *coerência* (não verdade) + proveniência + verificador 14 ms |
+| 4 | Open-endedness sem corpo | **mitigável com S0** | médio | laço fechado com atuador real + teste anti-passeio H1–H3 |
+| 5 | Custo de treino | **evitável** (reservoir) | baixo | congelar física; RLS como readout |
+| 6 | Preprints | **gerenciável** | baixo | triangulação + selos + regra "nenhuma decisão só em [C]" |
+
+### 8.1 Gaps novos
+
+| Código | Severidade | Descrição | Remediação |
+|---|---|---|---|
+| `NO_PROFILE_BREAKDOWN` | **crítico** | não se sabe onde os 146 µs são gastos; matvec é 0,07% | E6 |
+| `NO_ROOF_DUAL` | alto | sem passe simbólico; Ising recebe instância crua | E2b |
+| `NO_LIMIT_CYCLE_GUARD` | alto | cleanup determinístico pode ciclar | E1b |
+| `NO_PROVENANCE` | alto | resposta não diz de onde veio (transplantado/observado/inferido) | E3b |
+| `D_CAPACITY_UNMEASURED` | médio | capacidade real em D=160 desconhecida | E1 |
+| `NO_ACTUATOR_LOOP` | alto | metas sem consequência (S0 incompleto) | E7 |
+| `CERT_SEMANTICS` | médio | "certificado de energia" pode ser lido como "verdade" | renomear para **certificado de coerência** |
+
+---
+
+## 9. Matriz de decisão de hardware
+
+| Cenário | Substrato | Justificativa numérica |
+|---|---|---|
+| Motor em produção, N=64, 1 organismo | **CPU (AVX2)** | 0,88% de um core/dia; GPU seria 1000× overkill |
+| N ≥ 512 | **GPU, estado residente** | `J` ≥ 1 MB; L2 estourado; 307 Gb/s de streaming |
+| Enxame (muitos organismos) | **GPU com replicas** ou **6 P-cores** | paralelismo trivial; 618–628 k req/s |
+| Produto C (host 24/7) | **CPU**; neuromórfico se energia for TCO | Loihi 2: 496× menos energia/amostra |
+| Produto B (casa, bateria) | **FPGA ou neuromórfico** | FPGA HDC: 0,09 ms, 1300× CPU |
+| Lógica pesada (SAT grande) | **CPU híbrida + Ising** | presolve 6–18×; Ising só no núcleo |
+| Pesquisa de fronteira (CiM) | **não** | exige FeFET; ganho vem do algoritmo |
+
+**Regra prática:** *CPU até N=512; GPU depois; neuromórfico só quando a energia for
+a métrica — nunca por moda.*
+
+---
+
+## 10. Experimentos novos E6–E9
+
+| # | Entrega | Mede | Gate |
+|---|---|---|---|
+| **E6** | `examples/profile_breakdown.rs` | onde vão os 146 µs, por estágio, com `rdtsc`/contadores | soma dos estágios ≥ 95% do total; matvec < 1% |
+| **E2b** | roof dual + presolve antes do BSB | redução de variáveis, tempo, acerto | ≥40% redução; ≥90% das instâncias que o BSB puro erra |
+| **E1b** | ACF/IMF no cleanup do `FhrrStore` | capacidade e taxa de ciclo-limite com/sem ruído | ≥10× capacidade; ciclo-limite < 1% |
+| **E3b** | proveniência + verificador de coerência | precisão do selo; falsos "confiáveis" | ≥95% precisão; < 5% falsos |
+| **E7** | laço S0 com 4 atuadores | entropia de metas, H1–H3 | H3 confirmado |
+| **E8** | readout congelado (reservoir) vs treinado | regressão de acurácia; tempo de treino | < 5% regressão; < 60 s |
+
+E1–E5 do Volume I permanecem válidos; E6 vem **primeiro** (é diagnóstico e barato).
+
+---
+
+## 11. O que mudou desde o Volume I
+
+| Tema | Volume I | Volume II |
+|---|---|---|
+| Ising | "não é oráculo, precisa de engenharia" | **engenharia quantificada:** roof dual 5.800×, presolve 6–18×, sparse 0, N→O(N) |
+| VSA | "D tem que crescer; capacidade é o teto" | **capacidade ∝ D²**; o inimigo é **ciclo-limite**, curado com ruído na init (+50×) |
+| Transplantação | "ponte promissora e arriscada" | **JL é sólido; 78% de analogia é [C]**; certifica coerência, não verdade |
+| Corpo | "Produto C é fraco mas real" | **laço fechado basta**; 3 estágios S0–S2; teste anti-passeio H1–H3 |
+| Treino | "40× mais lento é o gargalo" | **gargalo evitável**: congelar física (reservoir); DEER só rende 25% em n=64 |
+| Preprints | "trate como hipótese" | **protocolo de triangulação** com selos [A]/[B]/[C] e regra de decisão |
+| Hardware | "cabe no L2; penhasco em N≈512" | **+ sem AVX-512**; matvec = 0,07% do ciclo; **não se sabe onde vão os 146 µs** |
+| Energia | não calculado | **0,88% de um core/dia; ~1–3 Wh/dia** |
+
+---
+
+## 12. Referências novas
+
+### 12.1 Ising, QUBO e lógica
+
+| ID | Título | Selo |
+|---|---|---|
+| arXiv:2511.21046 | On the Limits of Ising Machines for Circuit-Derived SAT | [B] |
+| arXiv:2610.20346 | On Partial Optimality in QUBO via Quadratic Posiform Autarkies | [B] |
+| arXiv:1705.09844 | QUBO Preprocessing: Theory and Empirical Analysis | [B] |
+| arXiv:2601.18108 | Sparse QUBO Formulation via Network-Based Decomposition | [B] |
+| arXiv:2603.03498 | Distributed Parallel Structure-Aware Presolving | [B] |
+| arXiv:2505.07179 | Lagrange Oscillatory Neural Networks (LagONN) | [B] |
+| arXiv:2512.17165 | BEOL Ferroelectric CiM Ising Machine for Simulated Bifurcation | [B] |
+| arXiv:2610.06622 | GPU-Initiated Discrete Simulated Bifurcation | [B] |
+| arXiv:2507.22117 | Benchmark of an Ising Machine (Digital Annealer) | [B] |
+| arXiv:2605.20328 | Tsat: Targeting Clause Type Distributions | [B] |
+| arXiv:2610.13368 | Anechoic: Onsager-Corrected Parallel Annealing | [B] |
+| Nature Comms 2026 | ML-assisted Ising machines for dynamically changing problems | [A] |
+| arXiv:2605.07017 | Short SAT Implicants via Ising/QUBO | [B] |
+| arXiv:2605.04033 | p-bit Guided CDCL | [B] |
+| arXiv:2610.27362 | Quantum-Classical Hybrid: Lessons from Classical Decomposition | [B] |
+| Frontiers 2026 | Probing variables in QUBOs with the roof dual | [A] |
+| blog Hercules | 5.800× / 2,19 M→40 nós | [C] |
+
+### 12.2 VSA, capacidade e hardware
+
+| ID | Título | Selo |
+|---|---|---|
+| arXiv:1906.11684 | Resonator Networks outperform optimization methods | [B] |
+| arXiv:2007.03748 | Resonator networks for factoring distributed representations | [B] |
+| arXiv:2412.00354 | On the Role of Noise in Factorizers (IMF/ACF, +50×) | [B] |
+| Frontiers 2026 | Comparative study of nonlinear cleanup rules in resonator networks | [A] |
+| arXiv:2311.04872 | Computing with Residue Numbers in High-Dimensional Representation | [B] |
+| arXiv:2404.19126 | Compositional Factorization with Convolutional Sparse Coding | [B] |
+| arXiv:2506.09282 | ScalableHD: HDC inference on multi-core CPUs (10×) | [B] |
+| arXiv:2601.20061 | Primitive-Driven Acceleration of HDC (FPGA 0,09 ms) | [B] |
+| arXiv:2605.06485 | Litespark: ternary SIMD (95,81× AVX-512 VNNI) | [B] |
+| arXiv:1906.08340 | Binary sentence embeddings (~2% perda, 98% menos memória) | [B] |
+| arXiv:2201.11691 | Recursive Binding for Similarity-Preserving Hypervectors | [B] |
+| ACM 3508230.3508235 | Siamese Autoencoder for Binary Quantization (4% perda) | [A] |
+| arXiv:2508.14245 | Cross-Layer Design of Vector-Symbolic Computing | [B] |
+
+### 12.3 Verificação, verdade e alucinação
+
+| ID | Título | Selo |
+|---|---|---|
+| WWW 2026 (ReGA) | Zero-Overhead Graph Alignment for Structural Hallucination Detection | [A] |
+| arXiv:2605.18871 | Distributional Energy-Based Models for Structured LLM Reasoning | [B] |
+| arXiv:2606.00328 | KG-Guard: Graph-Based Hallucination Detection | [B] |
+| arXiv:2602.18671 | Spilled Energy in LLMs | [B] |
+| arXiv:2602.19643 | KGHaluBench | [B] |
+| Carnot EBM | EBM em ativações detecta confiança, não verdade (negativo) | [C] |
+| Zenodo 19476847 | Model Transplantation (versão completa) | [C] |
+
+### 12.4 Corpo, agência e treino
+
+| ID | Título | Selo |
+|---|---|---|
+| arXiv:2510.23258 | Deep AIF + diffusion + MTRSSM (robô real, 75%) | [B] |
+| arXiv:2512.01924 | Real-World Robot Control by Deep AIF (hierárquico) | [B] |
+| arXiv:2606.22813 | Active Inference as the Test-Time Scaling Law | [B] |
+| arXiv:2610.05692 | Benchmarking Generative Trajectory Models for AIF | [B] |
+| arXiv:2608.10618 | World-Model-Centric Autonomous Racing (256 km/h) | [B] |
+| arXiv:2610.23396 | AWAM (94,4% real) | [B] |
+| arXiv:2608.10449 | PBD-AG Persistent Baseline-Delta Active Graphs | [B] |
+| arXiv:2309.12252 | DEER: Parallelizing non-linear sequential models (ICLR 2024) | [A] |
+| arXiv:2407.19115 | ELK: Scalable and Stable Parallelization of Nonlinear RNNs (NeurIPS 2024) | [A] |
+| arXiv:2603.14802 | OpenReservoirComputing (JAX, GPU) | [B] |
+| arXiv:2604.07423 | OpenPRC: Physics-to-Task in Physical RC | [B] |
+| arXiv:2609.29532 | Dynamical Diversity in Reconfigurable Nanomechanics (>28×) | [B] |
+| arXiv:2605.13354 | Reservoir Computing with a single Josephson junction | [B] |
+| arXiv:2604.09943 | Vestibular reservoir computing | [B] |
+
+### 12.5 Neuromórfico e energia
+
+| ID | Título | Selo |
+|---|---|---|
+| arXiv:2608.18341 | Acoustic Anomaly Detection on Loihi 2 (496× CPU, 132× GPU) | [B] |
+| arXiv:2511.01553 | Online Continual Learning on Loihi 2 (0,33 ms, 0,05 mJ) | [B] |
+| arXiv:2602.02439 | NeuEdge (847 GOp/s/W, 312× vs GPU) | [B] |
+| arXiv:2610.25424 | C. elegans on Loihi 2 (514–1211× latency) | [B] |
+| arXiv:2605.00146 | SNN Object Detection on Loihi 2 | [B] |
+| DATE 2022 | HyperSpike: HDC + SNN (31,5× robustez, 2,6× energia) | [A] |
+
+---
+
+## Fecho do Volume II
+
+O Volume I dizia: *"não é inventar física nova; é fechar o laço e medir."*
+O Volume II mostra que **as seis objeções eram corretas — e todas têm preço tabelado**:
+
+- Ising falha em restrição apertada → **5.800×** de redução antes de chegar nele.
+- VSA satura → capacidade é **quadrática em D**, e o inimigo real é **ciclo-limite**.
+- Geometria não é verdade → certifica-se **coerência**, com proveniência, em 14 ms.
+- Sem corpo não há agência → **laço fechado basta**; S0 já falsifica a hipótese.
+- Treino caro → **congele a física**; o readout é regressão linear.
+- Preprint não é resultado → **triangulação com selos** e regra de decisão.
+
+E um achado que não estava em nenhuma das seis objeções, e talvez seja o mais
+importante: **não sabemos onde vão os 146 µs.** O matvec que justifica a arquitetura
+inteira custa 0,07% do ciclo. Antes de qualquer nova física, o próximo experimento
+honesto é **E6 — o perfil**. Otimizar o que não se mediu é o único risco que não
+está no registo.
+
+> *"Seis corpos, seis preços. O sétimo é não saber onde o tempo vai."*
