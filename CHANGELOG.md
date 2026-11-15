@@ -3,6 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.57] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 4 arquivo(s) (.:3, tests:1).
+- Gate: ok (1s).
+
+- `tests/cognitive_audit.rs`
+- `target_close_bench.txt`
+- `target_close_clippy.txt`
+- `target_close_test.txt`
+
 ## [0.0.56] - 2026-11-15
 
 ### Changed
