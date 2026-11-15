@@ -11,6 +11,9 @@ pub mod thermodynamic_solver;
 pub mod certificate;
 
 #[cfg(feature = "m1")]
+pub mod presolve;
+
+#[cfg(feature = "m1")]
 pub mod active_inference;
 
 #[cfg(feature = "m1")]

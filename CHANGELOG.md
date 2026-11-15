@@ -3,6 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.89] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 4 arquivo(s) (examples:1, src:2, tests:1).
+- Gate: ok (4s).
+
+- `src/core/mod.rs`
+- `examples/e2b_presolve.rs`
+- `src/core/presolve.rs`
+- `tests/e2b_presolve.rs`
+
 ## [0.0.88] - 2026-11-15
 
 ### Changed
