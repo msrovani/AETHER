@@ -3,6 +3,15 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.83] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 1 arquivo(s) (src:1).
+- Gate: ok (7s).
+
+- `src/core/thermodynamic_solver.rs`
+
 ## [0.0.82] - 2026-11-15
 
 ### Changed
