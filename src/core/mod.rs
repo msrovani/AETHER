@@ -16,6 +16,9 @@ pub mod koopman_sindy;
 #[cfg(feature = "m1")]
 pub mod renormalization;
 
+#[cfg(feature = "m1")]
+pub mod swarm_speciation;
+
 #[cfg(feature = "m2")]
 pub mod wave_interference;
 

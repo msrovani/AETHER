@@ -261,13 +261,13 @@ fn inercia_do_atuador_reduz_chattering_sem_tocar_no_estado() {
         // O comando contínuo fica no intervalo físico e é finito.
         assert!(
             frame
-                .actuation
+                .continuous_action
                 .iter()
                 .all(|u| u.is_finite() && u.abs() <= 1.0 + 1e-6),
             "atuação fora de [-1,1] no passo {step}"
         );
         if frame
-            .actuation
+            .continuous_action
             .iter()
             .any(|u| u.abs() > 0.05 && u.abs() < 0.95)
         {
@@ -280,7 +280,7 @@ fn inercia_do_atuador_reduz_chattering_sem_tocar_no_estado() {
             ds += d * d;
         }
         state_chatter += ds.sqrt();
-        act_chatter += frame.actuation_delta;
+        act_chatter += frame.continuous_action_delta;
         prev_states.clone_from_slice(&frame.states);
     }
 

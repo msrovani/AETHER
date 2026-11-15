@@ -127,7 +127,17 @@ fn bench_recall(c: &mut Criterion) {
         mem.reset_phases(0.0);
         mem.recall_into(&cue, &mask, steps, dt, &mut out);
         legacy.fill(0.0);
-        legacy_integrate(&mut legacy, &cue, &mask, steps, dt, clamp, &weights, &shifts, n);
+        legacy_integrate(
+            &mut legacy,
+            &cue,
+            &mask,
+            steps,
+            dt,
+            clamp,
+            &weights,
+            &shifts,
+            n,
+        );
         let mut max_d = 0.0f32;
         for i in 0..n {
             let mut d = (legacy[i] - out[i]).abs() % TAU;
@@ -152,7 +162,15 @@ fn bench_recall(c: &mut Criterion) {
             b.iter(|| {
                 legacy.fill(0.0);
                 legacy_integrate(
-                    &mut legacy, &cue, &mask, steps, dt, clamp, &weights, &shifts, n,
+                    &mut legacy,
+                    &cue,
+                    &mask,
+                    steps,
+                    dt,
+                    clamp,
+                    &weights,
+                    &shifts,
+                    n,
                 );
             });
         });

@@ -203,6 +203,36 @@ impl RenormalizationHierarchy {
     pub fn goal_drift(&self) -> Option<f32> {
         self.goal.map(|g| wrap_signed(self.macro_phase() - g).abs())
     }
+
+    /// Torque top-down na **Camada 0**: soma em `omega_eff[i]` (rad/s)
+    /// `k · [ sin(ψ_macro(i) − φ_i) + ½ sin(ψ_meso(i) − φ_i) ]`.
+    ///
+    /// `ψ_macro(i)` é o objetivo persistente (se houver) ou a fase do bloco
+    /// Macro pai (16 micro por macro); `ψ_meso(i)` é a fase do bloco Meso pai
+    /// (4 micro). Usa a fase micro de [`forward`](Self::forward); zero
+    /// alocação. É o análogo discreto de um campo de intenção acoplando a
+    /// frequência efetiva dos osciladores.
+    pub fn torque_into(&self, omega_eff: &mut [f32], k: f32) -> Result<()> {
+        if omega_eff.len() != self.micro {
+            return Err(AetherError::shape([self.micro], [omega_eff.len()]));
+        }
+        if !k.is_finite() {
+            return Err(AetherError::Degenerate("Renormalization: k nao finito".into()));
+        }
+        let per_macro = self.micro / self.macro_dim.max(1);
+        for i in 0..self.micro {
+            let meso = i / 4;
+            let mac = (i / per_macro).min(self.macro_dim - 1);
+            let psi_macro = match self.goal {
+                Some(g) => g,
+                None => self.macro_im[mac].atan2(self.macro_re[mac]),
+            };
+            let psi_meso = self.meso_im[meso].atan2(self.meso_re[meso]);
+            let phi = self.micro_phase[i];
+            omega_eff[i] += k * ((psi_macro - phi).sin() + 0.5 * (psi_meso - phi).sin());
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

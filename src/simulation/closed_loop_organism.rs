@@ -72,7 +72,7 @@ pub struct OrganismConfig {
     /// Constante de tempo da inércia do atuador (s). `0.0` desliga o filtro.
     ///
     /// O estado emergente `s*` continua discreto em `{-1, +1}`; a inércia age
-    /// só no sinal contínuo derivado dele (`OrganismFrame::actuation`), que é o
+    /// só no sinal contínuo derivado dele (`OrganismFrame::continuous_action`), que é o
     /// que um consumidor aciona. Com `τ = 0.1 s` e 60 Hz, `α = dt/(τ+dt) ≈
     /// 0.143`, o que derruba o chattering de troca de sinal em ~7×.
     pub actuator_tau: f64,
@@ -120,16 +120,18 @@ pub struct OrganismFrame {
     pub energy_trace: Vec<f64>,
     /// Estado emergente `s*`.
     pub states: Vec<i8>,
-    /// Atuação **contínua** em `[-1, +1]`: o estado emergente passado por um
-    /// filtro passa-baixa exponencial (`τ = OrganismConfig::actuator_tau`).
+    /// Atuação **contínua** `continuous_action` em `[-1, +1]`: campo médio
+    /// local `tanh(f_i/rms)` (com `f_i = h_i + Σ_j J_ij s*_j`) passado por um
+    /// filtro passa-baixa exponencial (`τ = OrganismConfig::actuator_tau`,
+    /// `α = dt/(τ+dt)`). Buffer pré-alocado em `with_capacity`.
     ///
     /// Existe porque `states` troca de sinal a cada quadro (chattering), o que
     /// é ruído de acionamento: a inércia suaviza o comando sem tocar no estado
     /// discreto que a física decide.
-    pub actuation: Vec<f32>,
+    pub continuous_action: Vec<f32>,
     /// Custo de troca do comando neste quadro, `‖u_t − u_{t−1}‖₂` — o
     /// *chattering* que a inércia existe para reduzir.
-    pub actuation_delta: f32,
+    pub continuous_action_delta: f32,
     /// Fase atual do `Nó_Bancada`.
     pub phase_bancada: [f64; 4],
     /// A perturbação já foi injetada?
@@ -158,8 +160,8 @@ impl OrganismFrame {
             energy_initial: 0.0,
             energy_trace: vec![0.0; steps + 1],
             states: vec![0; n],
-            actuation: vec![0.0; n],
-            actuation_delta: 0.0,
+            continuous_action: vec![0.0; n],
+            continuous_action_delta: 0.0,
             phase_bancada: [0.0; 4],
             perturbed: false,
             dropped_frames: 0,
@@ -172,7 +174,7 @@ impl OrganismFrame {
 pub struct ClosedLoopOrganism {
     cfg: OrganismConfig,
     /// Comando contínuo do quadro anterior (memória do filtro de inércia).
-    actuation: Vec<f32>,
+    action_ema: Vec<f32>,
     handles: Vec<NodeHandle>,
     wave: WaveInterferenceBlock,
     solver: ThermodynamicIsingSolver,
@@ -288,7 +290,7 @@ impl ClosedLoopOrganism {
         let window = cfg.window;
 
         Ok(Self {
-            actuation: vec![0.0; cfg.decision_dim],
+            action_ema: vec![0.0; cfg.decision_dim],
             cfg,
             handles,
             wave,
@@ -355,7 +357,9 @@ impl ClosedLoopOrganism {
         let n = self.cfg.decision_dim;
 
         // --- validação de formas (sem alocar/redimensionar no caminho feliz) ---
-        if out.energy_trace.len() != steps + 1 || out.states.len() != n || out.actuation.len() != n
+        if out.energy_trace.len() != steps + 1
+            || out.states.len() != n
+            || out.continuous_action.len() != n
         {
             return Err(AetherError::shape(
                 [steps + 1, n],
@@ -486,17 +490,31 @@ impl ClosedLoopOrganism {
         } else {
             1.0f32
         };
+        // Canal contínuo-alvo: campo médio local `f_i = h_i + Σ_j J_ij s_j`
+        // normalizado pelo RMS e comprimido por `tanh` — mesmo sinal que o
+        // spin emergente `s*_i`, porém com amplitude (confiança) em [-1, 1].
+        // Zero alocação: reutiliza `raw` (já consumido neste quadro).
+        let mut f2 = 0.0f64;
+        for i in 0..n {
+            let mut f = self.h[i];
+            for j in 0..n {
+                f += self.j[[i, j]] * out.states[j] as f64;
+            }
+            self.raw[i] = f;
+            f2 += f * f;
+        }
+        let inv_rms = 1.0 / (f2 / n as f64).sqrt().max(1e-12);
         let mut delta2 = 0.0f32;
         for i in 0..n {
-            let target = out.states[i] as f32;
-            let prev = self.actuation[i];
+            let target = (self.raw[i] * inv_rms).tanh() as f32;
+            let prev = self.action_ema[i];
             let next = prev + alpha * (target - prev);
-            self.actuation[i] = next;
-            out.actuation[i] = next;
+            self.action_ema[i] = next;
+            out.continuous_action[i] = next;
             let d = next - prev;
             delta2 += d * d;
         }
-        out.actuation_delta = delta2.sqrt();
+        out.continuous_action_delta = delta2.sqrt();
 
         out.elapsed = self.started.elapsed();
         out.order_parameter = order_parameter;
