@@ -3,6 +3,17 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.64] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 3 arquivo(s) (.:1, docs:1, tests:1).
+- Gate: ok (4s).
+
+- `Cargo.lock`
+- `tests/bam_precision.rs`
+- `docs/PHASE5_PHASE01_REPORT.md`
+
 ## [0.0.63] - 2026-11-15
 
 ### Changed

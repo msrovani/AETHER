@@ -165,5 +165,5 @@ fn lut_tem_o_tamanho_declarado_e_cabe_na_l1() {
         (LUT_LEN * 2).div_ceil(64)
     );
     assert_eq!(LUT_LEN, 1024);
-    assert!(LUT_LEN * 2 <= 2048, "LUT não cabe no orçamento de L1");
+    const _: () = assert!(LUT_LEN * 2 <= 2048, "LUT nao cabe no orcamento de L1");
 }

@@ -91,3 +91,4 @@
 | 2026-11-15T17:26:16Z | wip | 9 | .:1, benches:3, examples:1, src:3, tests:1 | fail (11s) | - | sim |
 | 2026-11-15T17:32:08Z | 0.0.62 | 3 | docs:1, examples:1, tests:1 | ok (6s) | - | sim |
 | 2026-11-15T17:36:07Z | 0.0.63 | 4 | .:1, docs:1, src:1, tests:1 | ok (4s) | - | sim |
+| 2026-11-15T17:41:07Z | 0.0.64 | 3 | .:1, docs:1, tests:1 | ok (4s) | - | sim |
