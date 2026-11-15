@@ -45,6 +45,7 @@ pub mod aether_governor;
 pub mod affinity;
 #[cfg(feature = "m5")]
 pub mod fhrr_bam;
+pub mod gpu_gate;
 pub mod noise;
 
 pub use crate::error::{AetherError, Result};

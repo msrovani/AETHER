@@ -9,6 +9,7 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 * **docs/API_CONTRACT.md** — contrato normativo de API entre módulos.
 * **docs/HW_TARGET.md** — hardware alvo (PC/note/servidor, CPU multithread + GPU AMD/Intel/NVIDIA).
 * **docs/HARDENING_REPORT.md** - auditoria, correcoes e medicoes finais (2026-11-15).
+* **docs/USER_DELIVERY_PLAN.md** — mapa do entregável ao usuário + plano de ondas (demo → Produto C → A/B).
 
 ## Pilares
 
@@ -68,9 +69,6 @@ subir a ~1.0 e a Surpresa `F(t)` reagir a carga de CPU na outra máquina, sem um
 
 ## Status (2026-11-15)
 
-- Versao **0.0.43** (`Cargo.toml`); gate **95 testes** (`cargo test -- --list`) / **15 suítes** em `tests/*.rs` + unitários no lib; clippy -D warnings e fmt --check verdes.
-- M5: projecao complexa (p0/p1/p2 < 0,001 rad).
-- M2: orward_into L2048 = **35,7 us** (meta 300 us).
-- Organismo: entropia interferida menor (sensor_noise=0.35), R~0,999 e H decrescente.
-- M8: 22 -> 0 alocacoes/ciclo; 0 drops em 8 s idle.
-- Detalhes: docs/HARDENING_REPORT.md e ARCHITECTURE_PHASE2.md secao 6.
+- Versão do crate: ver `Cargo.toml` (lab cognitivo: **ACQ 100 · 12/12 MEASURED · 0 B** hot-path).
+- Superfície de usuário: ainda **demo/lab** (`aether-organism`, `aether-daemon`) — plano em [`docs/USER_DELIVERY_PLAN.md`](docs/USER_DELIVERY_PLAN.md).
+- Detalhes de hardening/arquitetura: `docs/HARDENING_REPORT.md`, `ARCHITECTURE_PHASE2.md` §6, `docs/COGNITIVE_AUDIT_REPORT.md`.
