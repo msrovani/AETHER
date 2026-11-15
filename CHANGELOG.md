@@ -3,6 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.28] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 4 arquivo(s) (.:2, docs:1, src:1).
+- Gate: ok (2s).
+
+- `ARCHITECTURE_PHASE2.md`
+- `Cargo.lock`
+- `docs/API_CONTRACT.md`
+- `src/bin/aether_daemon.rs`
+
 ## [0.0.27] - 2026-11-15
 
 ### Changed

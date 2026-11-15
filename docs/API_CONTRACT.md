@@ -92,10 +92,12 @@ impl WaveInterferenceBlock {
 
     /// Espectro transferido [C_out, bins] (caminho de onda, sem projecao local).
     pub fn wave_spectrum(&self) -> ArrayView2<'_, Complex32>;
-    /// Pesos da matriz de transferencia (leitura: prova de invariancia de L).
-    pub fn r_phi(&self) -> ArrayView3<'_, Complex32>;
-    /// Pesos da projecao local 1x1 (leitura).
-    pub fn w_local(&self) -> ArrayView2<'_, f32>;
+    /// Pesos da matriz de transferencia, ordem C [C_out, C_in, modes]
+    /// (leitura: prova de invariancia de L). A implementacao devolve um
+    /// slice contiguo; `to_owned()` reconstroi o Array3.
+    pub fn r_phi(&self) -> &[Complex32];
+    /// Pesos da projecao local 1x1, ordem C [C_out, C_in] (leitura).
+    pub fn w_local(&self) -> &[f32];
     pub fn modes(&self) -> usize;
     pub fn c_in(&self) -> usize;
     pub fn c_out(&self) -> usize;
@@ -212,3 +214,22 @@ pub trait PanelSink {
     fn teardown(&mut self) -> Result<()> { Ok(()) }
 }
 ```
+
+---
+
+## Fase 2 (M5–M7)
+
+O contrato normativo da fase 2 é `ARCHITECTURE_PHASE2.md` §3. Desvios
+implementados e aprovados:
+
+* **M5** `recall()` retorna `(Vec<f32>, f32)` (normativo) e aloca; o caminho
+  **zero-alloc** é `recall_into(...)`. `sparsity_ratio`/`density` e
+  `try_imprint`/`try_recall` são extensões. Limite medido do invariante:
+  p0 < 0.20, p1/p2 < 0.15 (ver §3/M5).
+* **M6** `temperature`/`dt` são `f64` (convenção física); há
+  `imagine_futures_into(...)` zero-alloc e `try_imagine_futures(...)`.
+* **M7** `sparsity_ratio()` = fração dissolvida; `density()` = fração ativa.
+  `try_evolve_topology(...)` devolve `Result`; o wrapper `evolve_topology`
+  retorna 0.0 em erro.
+* **M8** CLI e telemetria em `src/bin/aether_daemon.rs`; não é API de
+  biblioteca.

@@ -413,6 +413,10 @@ impl AetherDaemon {
         // viva); o sonho é disparado pela SURPRESA relativa ao baseline.
         let free_energy = self.field.evolve_topology(abs_error, &spins, 0.05);
 
+        // O sonhador consome a topologia VIVA do M7 (não o J estático inicial).
+        // `coupling()` e `j_field` têm o mesmo layout N×N e ambos vivem no self.
+        self.j_field.copy_from_slice(self.field.coupling());
+
         // 3) decisão: sonhar (surpresa alta) ou colapsar (ação)
         let dreaming = surprise > self.cfg.alert_free_energy;
         let temperature = if dreaming {
