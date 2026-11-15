@@ -207,6 +207,21 @@ pub struct ComplexPhaseMemory {
     pat_cap: usize,
     /// Máscara de poda **permanente** por aresta (a projeção não ressuscita).
     pruned: Vec<bool>,
+    /// Matriz complexa pré-calculada `A_ij = W_ij·e^{−iδ_ij}` (parte real).
+    ///
+    /// Permite escrever a soma de acoplamento como
+    /// `Im(e^{−iφ_i} Σ_j A_ij e^{iφ_j})`, que tira **um `sin` por aresta** do
+    /// caminho quente. Mantida em dia por [`Self::sync_coupling_matrix`] e
+    /// revalidada por impressão digital em [`Self::ensure_coupling_matrix`].
+    cm_re: Vec<f32>,
+    /// Parte imaginária de `A_ij`.
+    cm_im: Vec<f32>,
+    /// Fasores correntes `e^{iφ_j}` (cosseno) do passo em integração.
+    ph_c: Vec<f32>,
+    /// Fasores correntes `e^{iφ_j}` (seno) do passo em integração.
+    ph_s: Vec<f32>,
+    /// Impressão digital de `(weights, phase_shifts)` quando `A` foi montada.
+    coupling_fp: (f64, f64),
     /// Buffers de trabalho (`f64`) para Gram, inversão e reconstrução.
     gin_re: Vec<f64>,
     gin_im: Vec<f64>,
@@ -287,6 +302,11 @@ impl ComplexPhaseMemory {
             pat_count: 0,
             pat_cap: cap,
             pruned: vec![false; n * n],
+            cm_re: vec![0.0f32; n * n],
+            cm_im: vec![0.0f32; n * n],
+            ph_c: vec![0.0f32; n],
+            ph_s: vec![0.0f32; n],
+            coupling_fp: (f64::NAN, f64::NAN),
             gin_re: vec![0.0f64; cap * cap],
             gin_im: vec![0.0f64; cap * cap],
             gj_re: vec![0.0f64; 2 * cap * cap],
@@ -746,6 +766,37 @@ impl ComplexPhaseMemory {
         (out, energy)
     }
 
+    /// Confiança de uma consulta: quão melhor o primeiro atrator bate em
+    /// relação ao segundo.
+    ///
+    /// `margin = best_similarity − second_similarity`. Medido no harness da
+    /// auditoria cognitiva (MSG 0058): pista real dá margem 0,71 (N=32) e 0,87
+    /// (N=64); pista vazia, 0,01 e 0,06. É este sinal que separa "lembrou" de
+    /// "inventou", ao contrário da similaridade absoluta (dependente de N), do
+    /// resíduo nos nós grampeados e da coerência global — os três medidos e
+    /// descartados.
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub struct RecallConfidence {
+        /// Margem entre o melhor e o segundo melhor casamento (`< 1`).
+        pub margin: f32,
+        /// Similaridade com o melhor atrator guardado.
+        pub best_similarity: f32,
+        /// Índice (na janela de padrões) do melhor casamento.
+        pub best: usize,
+        /// Índice do segundo melhor casamento.
+        pub second: usize,
+    }
+
+    impl RecallConfidence {
+        /// Limiar de margem abaixo do qual a consulta deve ser **abstida**.
+        pub const ABSTAIN_MARGIN: f32 = 0.20;
+
+        /// Vale abster-se (pista sem correspondência confiável)?
+        pub fn should_abstain(&self) -> bool {
+            !(self.margin >= Self::ABSTAIN_MARGIN)
+        }
+    }
+
     /// Versão de [`Self::recall`] que **não aloca** após o warmup: escreve em
     /// `out` (que deve ter `n` elementos) e devolve a energia final.
     ///
@@ -856,6 +907,80 @@ impl ComplexPhaseMemory {
         (out, energy, Some((mu, sim)))
     }
 
+    /// [`Self::recall_into`] devolvendo também a confiança da consulta.
+    ///
+    /// Compara o estado recordado com os padrões realmente guardados
+    /// (`pat_re`/`pat_im`) por `sim(φ, ψ) = (1/n)·Σ_i cos(φ_i − ψ_i)`, que é o
+    /// cosseno do produto interno de fasores. Custo `O(n·P)` **depois** da
+    /// integração, sem alocação.
+    ///
+    /// Com `stored_patterns() == 0` a confiança é degenerada (margem `0`), o
+    /// que faz `should_abstain()` ser `true` — não há o que lembrar.
+    pub fn recall_with_confidence_into(
+        &mut self,
+        partial_cue: &[f32],
+        mask: &[bool],
+        steps: usize,
+        dt: f32,
+        out: &mut [f32],
+    ) -> Result<RecallConfidence, PhaseMemoryError> {
+        self.integrate(partial_cue, mask, steps, dt)?;
+        let n = self.n;
+        if out.len() != n {
+            return Err(PhaseMemoryError::InvalidSize);
+        }
+        out.copy_from_slice(&self.phases);
+        Ok(self.confidence_from_phases(out))
+    }
+
+    /// Igual a [`Self::recall_with_confidence_into`], mas alocando a saída.
+    pub fn recall_with_confidence(
+        &mut self,
+        partial_cue: &[f32],
+        mask: &[bool],
+        steps: usize,
+        dt: f32,
+    ) -> Result<(Vec<f32>, RecallConfidence), PhaseMemoryError> {
+        let mut out = vec![0.0f32; self.n];
+        let conf = self.recall_with_confidence_into(partial_cue, mask, steps, dt, &mut out)?;
+        Ok((out, conf))
+    }
+
+    /// Confiança de um estado já recordado contra os atratores guardados.
+    pub fn confidence_from_phases(&self, phases: &[f32]) -> RecallConfidence {
+        let n = self.n;
+        let p = self.pat_count;
+        let mut best = 0.0f32;
+        let mut second = 0.0f32;
+        let mut best_idx = 0usize;
+        let mut second_idx = 0usize;
+        for mu in 0..p {
+            let base = mu * n;
+            let mut sim = 0.0f32;
+            for i in 0..n {
+                let (sp, cp) = phases[i].sin_cos();
+                // cos(φ − ψ) = cos φ cos ψ + sin φ sin ψ
+                sim += cp * self.pat_re[base + i] + sp * self.pat_im[base + i];
+            }
+            sim /= n as f32;
+            if sim > best {
+                second = best;
+                second_idx = best_idx;
+                best = sim;
+                best_idx = mu;
+            } else if sim > second {
+                second = sim;
+                second_idx = mu;
+            }
+        }
+        RecallConfidence {
+            margin: best - second,
+            best_similarity: best,
+            best: best_idx,
+            second: second_idx,
+        }
+    }
+
     /// Igual a [`Self::recall`], mas com validação explícita.
     pub fn try_recall(
         &mut self,
@@ -907,19 +1032,29 @@ impl ComplexPhaseMemory {
         let omega0 = self.cfg.omega0;
         let mut rot = self.rotation;
 
+        // `A_ij` é reconstruída só se `weights`/`phase_shifts` mudaram (os dois
+        // são públicos: um teste pode truncar o acoplamento à mão).
+        self.ensure_coupling_matrix();
+
         for _ in 0..steps {
+            // Jacobi: um `sin_cos` por nó e um snapshot dos fasores, em vez de
+            // um `sin` por aresta. A soma vira produto matriz-vetor complexo.
+            for j in 0..n {
+                let (sj, cj) = self.phases[j].sin_cos();
+                self.ph_s[j] = sj;
+                self.ph_c[j] = cj;
+            }
             for i in 0..n {
-                let mut drive = 0.0f32;
                 let base = i * n;
+                let (mut re, mut im) = (0.0f32, 0.0f32);
                 for j in 0..n {
-                    if j == i {
-                        continue;
-                    }
                     let idx = base + j;
-                    let dphi = self.phases[j] - self.phases[i] - self.phase_shifts[idx];
-                    drive += self.weights[idx] * dphi.sin();
+                    re += self.cm_re[idx] * self.ph_c[j] - self.cm_im[idx] * self.ph_s[j];
+                    im += self.cm_re[idx] * self.ph_s[j] + self.cm_im[idx] * self.ph_c[j];
                 }
-                drive *= inv_n;
+                let (spi, cpi) = self.phases[i].sin_cos();
+                // Im(e^{−iφ_i}·(re + i·im)) = im·cos φ_i − re·sin φ_i.
+                let mut drive = (im * cpi - re * spi) * inv_n;
 
                 if mask[i] {
                     // grampo sensorial suave; o alvo gira com o referencial
@@ -937,6 +1072,56 @@ impl ComplexPhaseMemory {
 
         self.rotation = rot;
         Ok(())
+    }
+
+    /// Recalcula a matriz complexa `A_ij = W_ij·e^{−iδ_ij}` a partir de
+    /// `weights`/`phase_shifts`.
+    ///
+    /// Chame depois de escrever nos campos públicos `weights` ou
+    /// `phase_shifts`. `recall`/`free_run` detectam a mudança por impressão
+    /// digital e chamam isto sozinhos, mas fazer explicitamente evita o custo
+    /// de detectar.
+    pub fn sync_coupling_matrix(&mut self) {
+        let n = self.n;
+        for i in 0..n {
+            let base = i * n;
+            for j in 0..n {
+                let idx = base + j;
+                if i == j {
+                    // Auto-acoplamento não entra na soma de fase.
+                    self.cm_re[idx] = 0.0;
+                    self.cm_im[idx] = 0.0;
+                    continue;
+                }
+                // `sin_cos` devolve (sin, cos).
+                let (sd, cd) = self.phase_shifts[idx].sin_cos();
+                let w = self.weights[idx];
+                self.cm_re[idx] = w * cd;
+                self.cm_im[idx] = -w * sd;
+            }
+        }
+        self.coupling_fp = self.coupling_fingerprint();
+    }
+
+    /// Assinatura barata (duas passadas lineares, sem transcendental) de
+    /// `(weights, phase_shifts)`, usada para saber se `A` ficou obsoleta.
+    fn coupling_fingerprint(&self) -> (f64, f64) {
+        let mut sw = 0.0f64;
+        let mut sd = 0.0f64;
+        for idx in 0..self.n * self.n {
+            let peso = 1.0 + (idx % 13) as f64 * 1e-3;
+            sw += self.weights[idx] as f64 * peso;
+            sd += self.phase_shifts[idx] as f64 * peso;
+        }
+        (sw, sd)
+    }
+
+    /// Garante que `A` corresponde ao acoplamento corrente.
+    fn ensure_coupling_matrix(&mut self) {
+        let fp = self.coupling_fingerprint();
+        if !(fp.0 == self.coupling_fp.0 && fp.1 == self.coupling_fp.1) {
+            self.sync_coupling_matrix();
+        }
     }
 
     /// Evolução livre (sem grampo): útil para verificar que os atratores são

@@ -417,19 +417,21 @@ impl FhrrStore {
         }
 
         let mut best_v = 0usize;
+        let mut best_sim = f32::NEG_INFINITY;
         let mut second = f32::NEG_INFINITY;
         for (k, &s) in sims.iter().enumerate() {
-            if s > sims[best_v] {
-                second = sims[best_v];
+            if s > best_sim {
+                second = best_sim;
+                best_sim = s;
                 best_v = k;
             } else if s > second {
                 second = s;
             }
         }
         let margin = if sims.len() > 1 {
-            sims[best_v] - second
+            best_sim - second
         } else {
-            sims[best_v]
+            best_sim
         };
 
         let fe = self.fact_entity[best_k];
