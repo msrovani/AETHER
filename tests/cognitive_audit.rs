@@ -48,21 +48,20 @@ use std::cell::Cell;
 use std::f32::consts::{PI, TAU};
 use std::fs;
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use aether_engine::core::active_inference::{
-    ActiveInferenceEngine, LyapunovCbf, Zone,
-};
+use aether_engine::core::active_inference::{ActiveInferenceEngine, LyapunovCbf, Zone};
 use aether_engine::core::fhrr::FhrrStore;
 use aether_engine::core::koopman_sindy::{
     DelayEmbedding, OnlineKoopmanOperator, SindyEquationDiscoverer, SINDY_WINDOW,
 };
+use aether_engine::core::kuramoto_field::{KuramotoConfig, KuramotoPhaseNode, NodeHandle};
+use aether_engine::core::renormalization::RenormalizationHierarchy;
 use aether_engine::core::swarm_speciation::{
     HolographicFrame, NicheRole, NodeState, SwarmSpeciationEngine, FRAME_BYTES, GENOME_DIM,
 };
-use aether_engine::core::kuramoto_field::{KuramotoConfig, KuramotoPhaseNode, NodeHandle};
-use aether_engine::core::renormalization::RenormalizationHierarchy;
 use aether_engine::core::thermodynamic_solver::{
     IsingLandscape, RelaxOutcome, ThermodynamicIsingSolver,
 };
@@ -88,12 +87,16 @@ thread_local! {
     static ALLOCS: Cell<usize> = const { Cell::new(0) };
 }
 
+/// Bytes alocados dentro de regioes armadas (hot-path medido; alvo = 0).
+static HOT_PATH_BYTES: AtomicUsize = AtomicUsize::new(0);
+
 struct CountingAlloc;
 
 unsafe impl GlobalAlloc for CountingAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         if ARMED.with(Cell::get) {
             ALLOCS.with(|c| c.set(c.get() + 1));
+            HOT_PATH_BYTES.fetch_add(layout.size(), Ordering::Relaxed);
         }
         unsafe { System.alloc(layout) }
     }
@@ -101,6 +104,7 @@ unsafe impl GlobalAlloc for CountingAlloc {
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         if ARMED.with(Cell::get) {
             ALLOCS.with(|c| c.set(c.get() + 1));
+            HOT_PATH_BYTES.fetch_add(layout.size(), Ordering::Relaxed);
         }
         unsafe { System.alloc_zeroed(layout) }
     }
@@ -108,6 +112,7 @@ unsafe impl GlobalAlloc for CountingAlloc {
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         if ARMED.with(Cell::get) {
             ALLOCS.with(|c| c.set(c.get() + 1));
+            HOT_PATH_BYTES.fetch_add(new_size, Ordering::Relaxed);
         }
         unsafe { System.realloc(ptr, layout, new_size) }
     }
@@ -223,7 +228,7 @@ fn print_table(dims: &[Dimension]) {
     println!("{separador}");
     println!("AETHER Cognitive Quotient (media 12 dimensoes) : {acq:.2}");
     println!("Quotient ponderado por confianca              : {weighted:.2}");
-    println!("real_coverage (1.0 = 12/12 MEASURED)          : {coverage:.2}");
+    println!("real_coverage (1.0 = 12/12 MEASURED)          : {coverage:.2}");`n    println!(`n        "hot_path_bytes (alocado em regioes armadas)   : {}",`n        HOT_PATH_BYTES.load(Ordering::Relaxed)`n    );
     println!(
         "Strict mode (metas como gate)                 : {}",
         strict_mode()
@@ -302,7 +307,7 @@ fn write_scorecard(dims: &[Dimension]) {
     out.push_str(&format!(
         "\"quotient_confidence_weighted\": {weighted:.4},\n"
     ));
-    out.push_str(&format!("\"real_coverage\": {coverage:.4},\n"));
+    out.push_str(&format!("\"real_coverage\": {coverage:.4},\n"));`n    out.push_str(&format!(`n        "\"hot_path_bytes\": {},\n",`n        HOT_PATH_BYTES.load(Ordering::Relaxed)`n    ));
     out.push_str(&format!("\"coverage\": {coverage:.4}\n"));
     out.push('}');
     let _ = fs::write("target/aether_scorecard.json", out);
@@ -704,15 +709,18 @@ fn test_01_inference() {
     let (mut l_res, mut l_tot, mut l_n) = (0.0f64, 0.0f64, 0usize);
     let ((), lifted_allocs) = count_allocs(|| {
         for t in split..(nx.len() - LH) {
-            lk.predict_steps(&state_at(t), LH, &mut out6).expect("predict_steps");
+            lk.predict_steps(&state_at(t), LH, &mut out6)
+                .expect("predict_steps");
             let e = (out6[(LH - 1) * 6] - nx[t + LH]) as f64;
             l_res += e * e;
             l_tot += (nx[t + LH] as f64) * (nx[t + LH] as f64);
             l_n += 1;
-            lk.observe_state(&state_at(t), &state_at(t + 1)).expect("online");
+            lk.observe_state(&state_at(t), &state_at(t + 1))
+                .expect("online");
         }
     });
-    let lifted_nrmse = ((l_res / l_n.max(1) as f64) / (l_tot / l_n.max(1) as f64).max(1e-12)).sqrt();
+    let lifted_nrmse =
+        ((l_res / l_n.max(1) as f64) / (l_tot / l_n.max(1) as f64).max(1e-12)).sqrt();
     println!(
         "[T01] Koopman lifted d=6 p=20: NRMSE(H={LH})={lifted_nrmse:.4} allocs={lifted_allocs}"
     );
@@ -1149,8 +1157,12 @@ fn test_04_self_evolution() {
     let sentinels = roles.iter().filter(|r| **r == NicheRole::Sentinel).count();
     let architects = roles.iter().filter(|r| **r == NicheRole::Architect).count();
     let regulators = roles.iter().filter(|r| **r == NicheRole::Regulator).count();
-    let phi_niche_mean =
-        speciation.phi_niche().iter().map(|v| *v as f64).sum::<f64>() / NODES as f64;
+    let phi_niche_mean = speciation
+        .phi_niche()
+        .iter()
+        .map(|v| *v as f64)
+        .sum::<f64>()
+        / NODES as f64;
     let genome_min_dist = speciation.swarm_min_distance() as f64;
     assert_eq!(frames_ok, NODES, "frames holograficos com CRC invalido");
     assert_eq!(spec_allocs, 0, "especiacao/encode alocaram no passo");
@@ -1498,7 +1510,9 @@ fn test_06_coherence() {
         .m("r_align", r_align)
         .m("r_organism", r_org)
         .m("chattering", chatter)
-        .m("chattering_continuous", chatter_ema)`n        .m("rg_torque_align_before", align_before as f64)`n        .m("rg_torque_align_after", align_after as f64)
+        .m("chattering_continuous", chatter_ema)
+        .m("rg_torque_align_before", align_before as f64)
+        .m("rg_torque_align_after", align_after as f64)
         .m("rg_alignment", rg_alignment as f64)
         .m("rg_macro_order", rg_order as f64)
         .m("rg_layers", rg_layers),
@@ -1507,7 +1521,10 @@ fn test_06_coherence() {
         "[T06] R_align={r_align:.4} chattering_discreto={chatter:.4} continuous_action={chatter_ema:.4} RG_align={rg_alignment:.4} RG_order={rg_order:.4}"
     );
 
-    target_gate(`n        r_align > 0.85 && rg_alignment > 0.85 && chatter_ema < 0.25,`n        "T06 R_align/RG/chattering",`n    );
+    target_gate(
+        r_align > 0.85 && rg_alignment > 0.85 && chatter_ema < 0.25,
+        "T06 R_align/RG/chattering",
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1562,6 +1579,56 @@ fn test_07_epistemic_search() {
     };
     let explored = engine.visits(1);
 
+    // Políticas com Boltzmann + projeção CBF: V(z_{t+1}) <= V_max sempre,
+    // zero alocação em `plan_step` (K=4 políticas, latente d=6).
+    const D: usize = 6;
+    const K: usize = 4;
+    let pol_zones: Vec<Zone> = (0..K)
+        .map(|k| Zone {
+            mean: 0.0,
+            var: 0.05 + 0.1 * k as f32,
+            cost: 0.0,
+        })
+        .collect();
+    let mut pol = ActiveInferenceEngine::new(pol_zones, 1.0, 0.1)
+        .expect("policy engine")
+        .with_policy_dim(D);
+    let mut cbf = LyapunovCbf::new(D, 0.8).expect("cbf T07");
+    let z_star = [0.0f32; D];
+    let mut z = [0.2f32; D];
+    let mut hats = [0.0f32; K * D];
+    let mut z_next = [0.0f32; D];
+    let mut prng = ChaCha8Rng::seed_from_u64(0x7E58);
+    let mut picks = [0u32; K];
+    let mut cbf_violations = 0usize;
+    let mut v_max_seen = 0.0f32;
+    let (_, plan_allocs) = count_allocs(|| {
+        for _ in 0..2000 {
+            for k in 0..K {
+                for d in 0..D {
+                    // Políticas agressivas: algumas empurram para fora do conjunto seguro.
+                    hats[k * D + d] = z[d] + (prng.gen::<f32>() - 0.5) * (0.4 + 0.6 * k as f32);
+                }
+            }
+            let u = prng.gen::<f32>();
+            let (k, v) = pol
+                .plan_step(&mut cbf, &z, &hats, &z_star, 0.5, u, 0.1, &mut z_next)
+                .expect("plan_step");
+            picks[k] += 1;
+            v_max_seen = v_max_seen.max(v);
+            if v > 0.8 + 1e-5 {
+                cbf_violations += 1;
+            }
+            z = z_next;
+        }
+    });
+    let policies_used = picks.iter().filter(|c| **c > 0).count();
+    println!(
+        "[T07] plan_step: V_max_visto={v_max_seen:.4} violacoes={cbf_violations} politicas_usadas={policies_used} allocs={plan_allocs}"
+    );
+    assert_eq!(cbf_violations, 0, "CBF violou V<=Vmax");
+    assert_eq!(plan_allocs, 0, "plan_step alocou");
+
     assert!(u_b.is_finite() && u_a.is_finite());
     assert!(mastered, "U_B={u_b}");
     assert!(steps_to_mastery > 0);
@@ -1583,6 +1650,9 @@ fn test_07_epistemic_search() {
         .m("visits_unknown", explored as f64)
         .m("steps_to_mastery", steps_to_mastery as f64)
         .m("effort_reduction", effort_reduction)
+        .m("policy_cbf_violations", cbf_violations as f64)
+        .m("policy_cbf_vmax_seen", v_max_seen as f64)
+        .m("policy_allocs", plan_allocs as f64)
         .m("lambda_epistemic", 1.0),
     );
     println!(
@@ -2108,6 +2178,8 @@ fn test_12_holographic_rag() {
     }
     assert_eq!(store.len(), FACTS);
 
+    let mut scratch = store.scratch(FACTS);
+    let mut hot_allocs = 0usize;
     let mut hits = 0usize;
     let mut latencies_us = Vec::with_capacity(QUERIES);
     let mut snr_samples = Vec::with_capacity(QUERIES);
@@ -2124,15 +2196,24 @@ fn test_12_holographic_rag() {
             }
         }
 
+        // Caminho quente: `query_into` com workspace pre-alocado (0 alocacoes).
         let t0 = Instant::now();
-        let mut recall = store.query_match(&ec, &rc, &mask).expect("query");
+        let mut recall = store
+            .query_into(&ec, &rc, &mask, &mut scratch)
+            .expect("query");
         let mut best_ns = t0.elapsed().as_nanos();
         for _ in 0..5 {
             let t = Instant::now();
-            recall = store.query_match(&ec, &rc, &mask).expect("query");
+            recall = store
+                .query_into(&ec, &rc, &mask, &mut scratch)
+                .expect("query");
             best_ns = best_ns.min(t.elapsed().as_nanos());
         }
         latencies_us.push(best_ns as f64 / 1000.0);
+        let (_, q_allocs) = count_allocs(|| {
+            let _ = store.query_into(&ec, &rc, &mask, &mut scratch);
+        });
+        hot_allocs += q_allocs;
 
         if recall.value_index == truth {
             hits += 1;
@@ -2143,10 +2224,10 @@ fn test_12_holographic_rag() {
                 recall.role_similarity,
                 recall.value_index,
                 recall.similarity,
-                recall.value_similarities[truth]
+                scratch.sims()[truth]
             );
         }
-        let sims = &recall.value_similarities;
+        let sims = scratch.sims();
         let correct = sims[truth] as f64;
         let mut sum = 0.0f64;
         let mut count = 0usize;
@@ -2175,7 +2256,7 @@ fn test_12_holographic_rag() {
     assert!(recall_at_1.is_finite() && mean_latency.is_finite() && snr.is_finite());
     let score = 0.5 * (100.0 * recall_at_1)
         + 0.25 * score_hi(snr, 3.0)
-        + 0.25 * score_lo(mean_latency, 50.0);
+        + 0.25 * score_lo(mean_latency, 45.0);
 
     record(
         Dimension::new(
@@ -2191,6 +2272,7 @@ fn test_12_holographic_rag() {
         .m("facts", FACTS as f64)
         .m("dim", D as f64)
         .m("traces", store.traces() as f64)
+        .m("hot_path_allocs", hot_allocs as f64)
         .m("occlusion_pct", 40.0),
     );
     println!(
@@ -2198,7 +2280,7 @@ fn test_12_holographic_rag() {
     );
 
     target_gate(
-        recall_at_1 >= 0.90 && snr > 3.0 && mean_latency < 50.0,
+        recall_at_1 >= 0.90 && snr > 3.0 && mean_latency < 45.0 && hot_allocs == 0,
         "T12 RAG",
     );
 }

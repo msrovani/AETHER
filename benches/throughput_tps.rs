@@ -352,11 +352,15 @@ fn main() {
                 Some(pos) => &text[..pos],
                 None => &text[..],
             };
-            let trimmed = base.trim_end().trim_end_matches(',');
-            if trimmed.ends_with('{') {
-                format!("{trimmed}\"throughput\": {json}\n}}")
+            let mut head = base.trim_end().trim_end_matches(',').trim_end();
+            // Fecha o objeto raiz antes de reinserir a chave.
+            if let Some(stripped) = head.strip_suffix('}') {
+                head = stripped.trim_end();
+            }
+            if head.ends_with('{') {
+                format!("{head}\"throughput\": {json}\n}}")
             } else {
-                format!("{trimmed},\"throughput\": {json}\n}}")
+                format!("{head},\"throughput\": {json}\n}}")
             }
         }
         Err(_) => format!("{{\"throughput\": {json}}}"),

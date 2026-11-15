@@ -429,8 +429,8 @@ mod tests {
         let mut e = SwarmSpeciationEngine::new(n, 0.5).expect("engine");
         for i in 0..n {
             let mut s = NodeState::default();
-            for k in 0..GENOME_DIM {
-                s.genome[k] = 0.01 * ((i * 7 + k * 3) % 11) as f32;
+            for (k, gene) in s.genome.iter_mut().enumerate() {
+                *gene = 0.01 * ((i * 7 + k * 3) % 11) as f32;
             }
             s.phi_auto = 0.1 * i as f32;
             s.spectral_radius = 1.0 - 0.05 * i as f32;
