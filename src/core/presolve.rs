@@ -258,3 +258,106 @@ impl Clause2 {
         fixed[self.i] == Some(self.si) || fixed[self.j] == Some(self.sj)
     }
 }
+
+// ---------------------------------------------------------------------------
+// E2c — persistência de primeira ordem para QUBO/Ising
+// ---------------------------------------------------------------------------
+
+/// Resultado da persistência de primeira ordem.
+#[derive(Clone, Debug)]
+pub struct QuboPresolve {
+    /// Valor ótimo-preservante por variável (`Some(v)` = existe ótimo com `s_i = v`).
+    pub fixed: Vec<Option<i8>>,
+    /// Variáveis que sobraram.
+    pub residual: Vec<usize>,
+    /// Campo efetivo após substituir as fixações (`h_j += J_ij·v_i`).
+    pub h_eff: Vec<f64>,
+    /// Rodadas até o fixpoint.
+    pub rounds: usize,
+}
+
+impl QuboPresolve {
+    /// Quantas variáveis foram fixadas.
+    pub fn fixed_count(&self) -> usize {
+        self.fixed.iter().filter(|f| f.is_some()).count()
+    }
+
+    /// Fração eliminada.
+    pub fn reduction(&self, n: usize) -> f64 {
+        if n == 0 {
+            0.0
+        } else {
+            self.fixed_count() as f64 / n as f64
+        }
+    }
+}
+
+/// **Persistência de primeira ordem** (regra de dominância) para
+/// `H(s) = −½·sᵀJs − hᵀs`, `J` simétrica e de diagonal zero.
+///
+/// Para a variável `i`, o ganho de virar o spin é
+/// `Δ_i(s) = 2·s_i·(h_i + (Js)_i)`. Sobre **todas** as atribuições dos outros:
+///
+/// * partindo de `s_i = +1`, `max Δ_i = 2(h_i + Σ_j |J_ij|)`. Se for `< 0`,
+///   virar para `−1` nunca piora ⇒ existe ótimo com `s_i = −1`;
+/// * partindo de `s_i = −1`, `max Δ_i = 2(Σ_j |J_ij| − h_i)`. Se for `< 0`,
+///   existe ótimo com `s_i = +1`.
+///
+/// Fixar assim **preserva o valor ótimo** (pode descartar ótimos alternativos,
+/// nunca o valor). É rigoroso, `O(n²)` por rodada, e **não** é roof dual
+/// completo: o roof dual (max-flow sobre a posiform) alcança persistências que
+/// esta regra não vê.
+///
+/// A fixação atualiza `h_j += J_ij·v` nos remanescentes, o que pode disparar
+/// novas fixações (cascata) — daí o fixpoint.
+pub fn persistency_qumo(n: usize, j: &[f64], h: &[f64]) -> QuboPresolve {
+    let mut fixed: Vec<Option<i8>> = vec![None; n];
+    let mut h_eff: Vec<f64> = h.to_vec();
+    let mut rounds = 0usize;
+
+    loop {
+        rounds += 1;
+        let mut changed = false;
+
+        for i in 0..n {
+            if fixed[i].is_some() {
+                continue;
+            }
+            let mut s_abs = 0.0;
+            for k in 0..n {
+                if k != i && fixed[k].is_none() {
+                    s_abs += j[i * n + k].abs();
+                }
+            }
+            let hi = h_eff[i];
+            let v = if hi + s_abs < 0.0 {
+                -1i8
+            } else if hi - s_abs > 0.0 {
+                1i8
+            } else {
+                continue;
+            };
+
+            fixed[i] = Some(v);
+            changed = true;
+            let vi = f64::from(v);
+            for k in 0..n {
+                if fixed[k].is_none() {
+                    h_eff[k] += j[k * n + i] * vi;
+                }
+            }
+        }
+
+        if !changed || rounds > 64 {
+            break;
+        }
+    }
+
+    let residual: Vec<usize> = (0..n).filter(|&i| fixed[i].is_none()).collect();
+    QuboPresolve {
+        fixed,
+        residual,
+        h_eff,
+        rounds,
+    }
+}
