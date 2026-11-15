@@ -1,6 +1,6 @@
 ﻿[package]
 name = "aether_engine"
-version = "0.0.78"
+version = "0.0.79"
 edition = "2021"
 rust-version = "1.78"
 description = "AETHER ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
@@ -46,7 +46,7 @@ m6 = ["m1"]
 m7 = ["m1"]
 m8 = ["m1", "m2", "m3", "m4", "m5", "m6", "m7"]
 # Dashboard Windows de metricas (egui). Opt-in; nao entra no default.
-dashboard = ["dep:eframe", "dep:egui", "dep:serde", "dep:serde_json"]
+dashboard = ["dep:eframe", "dep:egui", "dep:serde", "dep:serde_json", "m4"]
 # FASE 5 (hardware extremus): JIT Cranelift para termos SINDy ativos e pinning
 # de threads por nucleo. Ambos opcionais; sem eles o crate cai em fallbacks
 # interpretados / no-op (ver src/core/sindy_jit.rs e aether_governor.rs).

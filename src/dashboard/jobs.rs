@@ -1,5 +1,6 @@
 //! Runner single-flight de jobs do hub (auditoria, bench, demos).
 
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -7,8 +8,11 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use crate::dashboard::demo_trace::{parse_daemon_line, DemoTrace, TraceSink};
 use crate::dashboard::host_probe;
 use crate::dashboard::model::ScorecardView;
+use crate::simulation::closed_loop_organism::{ClosedLoopOrganism, OrganismConfig, OrganismFrame};
+use crate::simulation::panel::PanelSink;
 
 /// Tipo de job disparável pelos botões.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -81,6 +85,8 @@ struct Shared {
 pub struct JobRunner {
     shared: Arc<Shared>,
     worker: Mutex<Option<JoinHandle<()>>>,
+    /// Telemetria para gráficos na coluna direita.
+    pub trace: Arc<Mutex<DemoTrace>>,
 }
 
 impl std::fmt::Debug for JobRunner {
@@ -106,6 +112,7 @@ impl JobRunner {
                 cancel: AtomicBool::new(false),
             }),
             worker: Mutex::new(None),
+            trace: Arc::new(Mutex::new(DemoTrace::default())),
         }
     }
 
@@ -135,7 +142,6 @@ impl JobRunner {
                 Ok(g) => g,
                 Err(_) => return false,
             };
-            // Limpa join handle morto.
             if let Some(h) = guard.as_ref() {
                 if !h.is_finished() {
                     return false;
@@ -159,10 +165,18 @@ impl JobRunner {
         }
 
         let shared = Arc::clone(&self.shared);
+        let trace = Arc::clone(&self.trace);
         let handle = thread::spawn(move || {
             let result = match kind {
                 JobKind::Audit => run_cargo(
-                    &["test", "--release", "--test", "cognitive_audit", "--", "--nocapture"],
+                    &[
+                        "test",
+                        "--release",
+                        "--test",
+                        "cognitive_audit",
+                        "--",
+                        "--nocapture",
+                    ],
                     Duration::from_secs(900),
                     &shared,
                 ),
@@ -180,21 +194,12 @@ impl JobRunner {
                     )),
                     Err(e) => Err(e.to_string()),
                 },
-                JobKind::OrganismDemo => run_bin_or_cargo(
-                    "aether-organism",
-                    &["--duration", "15s", "--plain"],
-                    &["run", "--release", "--bin", "aether-organism", "--", "--duration", "15s", "--plain"],
-                    Duration::from_secs(120),
-                    &shared,
-                ),
-                JobKind::DaemonDemo => run_bin_or_cargo(
-                    "aether-daemon",
-                    &["--duration", "10s"],
-                    &["run", "--release", "--bin", "aether-daemon", "--", "--duration", "10s"],
-                    Duration::from_secs(90),
-                    &shared,
-                ),
+                JobKind::OrganismDemo => run_organism_traced(&shared, &trace),
+                JobKind::DaemonDemo => run_daemon_traced(&shared, &trace),
             };
+            if let Ok(mut t) = trace.lock() {
+                t.end();
+            }
             let mut snap = match shared.snap.lock() {
                 Ok(s) => s,
                 Err(_) => return,
@@ -252,25 +257,163 @@ fn release_bin(name: &str) -> PathBuf {
     target_root.join("release").join(exe)
 }
 
-fn run_bin_or_cargo(
-    bin: &str,
-    bin_args: &[&str],
-    cargo_args: &[&str],
-    timeout: Duration,
-    shared: &Shared,
-) -> Result<String, String> {
-    let path = release_bin(bin);
-    if path.is_file() {
-        set_log(shared, format!("executando {}…", path.display()));
-        let mut cmd = Command::new(&path);
-        cmd.args(bin_args)
-            .current_dir(workspace_root())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        return wait_cmd(cmd, timeout, shared, bin);
+fn run_organism_traced(shared: &Shared, trace: &Arc<Mutex<DemoTrace>>) -> Result<String, String> {
+    set_log(shared, "organismo in-process (15 s) — gráficos à direita…");
+    if let Ok(mut t) = trace.lock() {
+        t.begin("Demo organismo");
     }
-    set_log(shared, format!("{bin} release ausente — cargo run…"));
-    run_cargo(cargo_args, timeout, shared)
+
+    let mut cfg = OrganismConfig::default();
+    cfg.hz = 30.0; // um pouco mais leve para a UI acompanhar
+    let steps = cfg.steps;
+    let dim = cfg.decision_dim;
+    let mut organism =
+        ClosedLoopOrganism::new(cfg).map_err(|e| format!("organismo new: {e}"))?;
+    let mut sink = TraceSink {
+        trace: Arc::clone(trace),
+    };
+    let mut frame = OrganismFrame::with_capacity(steps, dim);
+
+    let period = Duration::from_secs_f64(1.0 / 30.0);
+    let deadline = Duration::from_secs(15);
+    let start = Instant::now();
+    let mut next = Instant::now();
+    let mut n = 0u64;
+
+    while start.elapsed() < deadline {
+        if shared.cancel.load(Ordering::SeqCst) {
+            organism.shutdown();
+            return Err("organismo cancelado".into());
+        }
+        let now = Instant::now();
+        if now < next {
+            thread::sleep(next - now);
+        }
+        organism
+            .step_into(&mut frame)
+            .map_err(|e| format!("step: {e}"))?;
+        sink.draw(&frame).map_err(|e| format!("trace: {e}"))?;
+        n += 1;
+        if n % 15 == 0 {
+            set_log(
+                shared,
+                format!(
+                    "organismo t={:.1}s R={:.3} H={:+.3}",
+                    frame.elapsed.as_secs_f64(),
+                    frame.order_parameter,
+                    frame.energy
+                ),
+            );
+        }
+        next += period;
+        if next < Instant::now() {
+            next = Instant::now() + period;
+        }
+    }
+    organism.shutdown();
+    Ok(format!("organismo ok — {n} quadros (gráficos à direita)"))
+}
+
+fn run_daemon_traced(shared: &Shared, trace: &Arc<Mutex<DemoTrace>>) -> Result<String, String> {
+    set_log(shared, "daemon — telemetria → gráficos…");
+    if let Ok(mut t) = trace.lock() {
+        t.begin("Demo daemon");
+    }
+
+    let path = release_bin("aether-daemon");
+    let mut cmd = if path.is_file() {
+        let mut c = Command::new(&path);
+        c.args(["--duration", "10s"]);
+        c
+    } else {
+        set_log(shared, "aether-daemon release ausente — cargo run…");
+        let mut c = Command::new("cargo");
+        c.args([
+            "run",
+            "--release",
+            "--bin",
+            "aether-daemon",
+            "--",
+            "--duration",
+            "10s",
+        ]);
+        c
+    };
+    cmd.current_dir(workspace_root())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("falha ao spawn daemon: {e}"))?;
+    let stdout = child.stdout.take();
+    let start = Instant::now();
+    let timeout = Duration::from_secs(90);
+
+    // Thread leitora de linhas → trace
+    let trace_r = Arc::clone(trace);
+    let reader = thread::spawn(move || {
+        let Some(out) = stdout else { return 0u64 };
+        let mut n = 0u64;
+        for line in BufReader::new(out).lines().map_while(Result::ok) {
+            if let Some(s) = parse_daemon_line(&line) {
+                if let Ok(mut g) = trace_r.lock() {
+                    g.push(s);
+                }
+                n += 1;
+            }
+        }
+        n
+    });
+
+    loop {
+        if shared.cancel.load(Ordering::SeqCst) {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = reader.join();
+            return Err("daemon cancelado".into());
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let samples = reader.join().unwrap_or(0);
+                if status.success() {
+                    return Ok(format!(
+                        "daemon ok — {samples} amostras no gráfico"
+                    ));
+                }
+                return Err(format!(
+                    "daemon exit {} — {samples} amostras",
+                    status.code().unwrap_or(-1)
+                ));
+            }
+            Ok(None) => {
+                if start.elapsed() > timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    let _ = reader.join();
+                    return Err("daemon timeout".into());
+                }
+                if let Ok(g) = trace.lock() {
+                    if let Some(last) = g.samples.back() {
+                        set_log(
+                            shared,
+                            format!(
+                                "daemon R(LAN)={:.3} F={:.3} ({} pts)",
+                                last.r,
+                                last.energy,
+                                g.samples.len()
+                            ),
+                        );
+                    }
+                }
+                thread::sleep(Duration::from_millis(200));
+            }
+            Err(e) => {
+                let _ = reader.join();
+                return Err(format!("daemon wait: {e}"));
+            }
+        }
+    }
 }
 
 fn run_cargo(args: &[&str], timeout: Duration, shared: &Shared) -> Result<String, String> {

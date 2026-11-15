@@ -27,7 +27,7 @@ mod aether_dashboard_win {
 
     use aether_engine::dashboard::{
         dimension_ficha, dimension_tooltip, global_tooltip, glossary_entries, load_scorecard,
-        probe_and_save, throughput_tooltip, DimFicha, HostReport, JobKind, JobRunner,
+        probe_and_save, throughput_tooltip, DemoTrace, DimFicha, HostReport, JobKind, JobRunner,
         ScorecardView,
     };
 
@@ -136,8 +136,16 @@ mod aether_dashboard_win {
         fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
             self.poll_jobs();
             self.hover_scratch = None;
-            if self.jobs.snapshot().phase == aether_engine::dashboard::JobPhase::Running {
-                ctx.request_repaint_after(std::time::Duration::from_millis(250));
+            let demo_live = self
+                .jobs
+                .trace
+                .lock()
+                .map(|t| t.running)
+                .unwrap_or(false);
+            if self.jobs.snapshot().phase == aether_engine::dashboard::JobPhase::Running
+                || demo_live
+            {
+                ctx.request_repaint_after(std::time::Duration::from_millis(50));
             }
 
             egui::TopBottomPanel::top("top").show(ctx, |ui| {
@@ -145,8 +153,8 @@ mod aether_dashboard_win {
             });
 
             egui::SidePanel::right("detail")
-                .default_width(320.0)
-                .min_width(260.0)
+                .default_width(360.0)
+                .min_width(280.0)
                 .resizable(true)
                 .show(ctx, |ui| {
                     self.draw_detail_pane(ui);
@@ -201,72 +209,129 @@ mod aether_dashboard_win {
         fn draw_detail_pane(&mut self, ui: &mut egui::Ui) {
             ui.heading(RichText::new("Detalhe").strong().size(18.0));
             ui.separator();
-            egui::ScrollArea::vertical().show(ui, |ui| match &self.detail {
-                DetailPane::Idle => {
-                    ui.label(
-                        RichText::new(
-                            "Passe o mouse sobre ACQ, T0x, vazão ou um botão \
-                                 para ler a explicação aqui — sem caixa flutuante.",
-                        )
-                        .small()
-                        .color(Color32::from_rgb(160, 170, 180)),
-                    );
-                    ui.add_space(10.0);
-                    ui.label(RichText::new("Glossário").strong());
-                    ui.add_space(4.0);
-                    for (k, v) in glossary_entries() {
-                        ui.label(RichText::new(*k).strong().small());
-                        ui.label(RichText::new(*v).small());
-                        ui.add_space(6.0);
-                    }
-                    ui.separator();
-                    ui.label(
-                        RichText::new("docs/USER_GUIDE.md · docs/DASHBOARD_METRICS.md")
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                match &self.detail {
+                    DetailPane::Idle => {
+                        ui.label(
+                            RichText::new(
+                                "Passe o mouse sobre um medidor · clique T0x = ficha · \
+                                 demos organism/daemon desenham gráficos abaixo.",
+                            )
                             .small()
-                            .color(Color32::GRAY),
-                    );
-                }
-                DetailPane::Hover { title, body } => {
-                    ui.label(RichText::new(title).strong().size(15.0));
-                    ui.add_space(6.0);
-                    for para in body.split('\n') {
-                        if para.is_empty() {
+                            .color(Color32::from_rgb(160, 170, 180)),
+                        );
+                        ui.add_space(8.0);
+                        ui.label(RichText::new("Glossário").strong());
+                        for (k, v) in glossary_entries() {
+                            ui.label(RichText::new(*k).strong().small());
+                            ui.label(RichText::new(*v).small());
                             ui.add_space(4.0);
-                        } else {
-                            ui.label(RichText::new(para).size(13.0));
+                        }
+                    }
+                    DetailPane::Hover { title, body } => {
+                        ui.label(RichText::new(title).strong().size(15.0));
+                        ui.add_space(6.0);
+                        for para in body.split('\n') {
+                            if para.is_empty() {
+                                ui.add_space(4.0);
+                            } else {
+                                ui.label(RichText::new(para).size(13.0));
+                            }
+                        }
+                    }
+                    DetailPane::Ficha(ficha) => {
+                        let ficha = *ficha;
+                        ui.label(
+                            RichText::new(format!("{} — {}", ficha.id, ficha.title))
+                                .strong()
+                                .size(15.0),
+                        );
+                        ui.add_space(6.0);
+                        for para in ficha.tooltip.split('\n') {
+                            if para.is_empty() {
+                                ui.add_space(4.0);
+                            } else {
+                                ui.label(RichText::new(para).small());
+                            }
+                        }
+                        ui.separator();
+                        ui.label(RichText::new("Como interpretar").strong());
+                        ui.label(ficha.interpret);
+                        ui.add_space(4.0);
+                        ui.label(RichText::new("Se baixo, o que falha").strong());
+                        ui.label(ficha.if_low);
+                        ui.add_space(4.0);
+                        ui.label(RichText::new("Proveniência").strong());
+                        ui.label(RichText::new(ficha.provenance).italics().small());
+                        ui.add_space(8.0);
+                        if ui.button("Limpar ficha").clicked() {
+                            self.detail = DetailPane::Idle;
                         }
                     }
                 }
-                DetailPane::Ficha(ficha) => {
-                    let ficha = *ficha;
-                    ui.label(
-                        RichText::new(format!("{} — {}", ficha.id, ficha.title))
-                            .strong()
-                            .size(15.0),
-                    );
-                    ui.add_space(6.0);
-                    for para in ficha.tooltip.split('\n') {
-                        if para.is_empty() {
-                            ui.add_space(4.0);
-                        } else {
-                            ui.label(RichText::new(para).small());
-                        }
-                    }
-                    ui.separator();
-                    ui.label(RichText::new("Como interpretar").strong());
-                    ui.label(ficha.interpret);
-                    ui.add_space(4.0);
-                    ui.label(RichText::new("Se baixo, o que falha").strong());
-                    ui.label(ficha.if_low);
-                    ui.add_space(4.0);
-                    ui.label(RichText::new("Proveniência").strong());
-                    ui.label(RichText::new(ficha.provenance).italics().small());
-                    ui.add_space(8.0);
-                    if ui.button("Limpar ficha").clicked() {
-                        self.detail = DetailPane::Idle;
-                    }
-                }
+
+                ui.add_space(10.0);
+                ui.separator();
+                self.draw_demo_graphs(ui);
             });
+        }
+
+        fn draw_demo_graphs(&self, ui: &mut egui::Ui) {
+            let trace = self
+                .jobs
+                .trace
+                .lock()
+                .map(|g| g.clone())
+                .unwrap_or_default();
+
+            ui.label(RichText::new("Gráficos do demo").strong().size(15.0));
+            if trace.title.is_empty() && trace.samples.is_empty() {
+                ui.label(
+                    RichText::new(
+                        "Ainda sem série. Clique em “Demo organismo” ou “Demo daemon”.",
+                    )
+                    .small()
+                    .color(Color32::GRAY),
+                );
+                return;
+            }
+
+            let status = if trace.running { "ao vivo" } else { "última corrida" };
+            ui.label(
+                RichText::new(format!("{} · {} · {} pts", trace.title, status, trace.samples.len()))
+                    .small()
+                    .color(Color32::from_rgb(120, 160, 180)),
+            );
+            ui.add_space(4.0);
+
+            if !trace.samples.is_empty() {
+                let r = trace.series(|s| s.r);
+                let e = trace.series(|s| s.energy);
+                let s = trace.series(|s| s.entropy);
+                let c = trace.series(|s| s.chatter);
+                let cost = trace.series(|s| s.cost_us);
+
+                // Legenda: organismo = R/H/S/chatter; daemon = R(LAN)/F/S
+                sparkline(ui, "R / R(LAN)", &r, Color32::from_rgb(60, 180, 140));
+                sparkline(ui, "H / F (energia ou surpresa)", &e, Color32::from_rgb(200, 140, 70));
+                sparkline(ui, "S (entropia)", &s, Color32::from_rgb(90, 140, 200));
+                if c.iter().any(|v| *v > 0.0) {
+                    sparkline(ui, "chatter ‖Δu‖", &c, Color32::from_rgb(180, 90, 120));
+                }
+                if cost.iter().any(|v| *v > 0.0) {
+                    sparkline(ui, "custo quadro (µs)", &cost, Color32::from_rgb(140, 140, 160));
+                }
+            }
+
+            if !trace.energy_trace.is_empty() {
+                ui.add_space(4.0);
+                sparkline(
+                    ui,
+                    "H(t) último relaxamento",
+                    &trace.energy_trace,
+                    Color32::from_rgb(100, 200, 160),
+                );
+            }
         }
 
         fn draw_top_bar(&mut self, ui: &mut egui::Ui) {
@@ -676,6 +741,60 @@ mod aether_dashboard_win {
         } else {
             "off"
         }
+    }
+
+    /// Sparkline simples (sem crate plot).
+    fn sparkline(ui: &mut egui::Ui, label: &str, ys: &[f32], color: Color32) {
+        if ys.is_empty() {
+            return;
+        }
+        let last = *ys.last().unwrap_or(&0.0);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(label).small());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.label(
+                    RichText::new(fmt_compact(last as f64))
+                        .small()
+                        .strong()
+                        .color(color),
+                );
+            });
+        });
+        let height = 52.0;
+        let (rect, _) = ui.allocate_exact_size(
+            Vec2::new(ui.available_width().max(40.0), height),
+            Sense::hover(),
+        );
+        let painter = ui.painter_at(rect);
+        painter.rect_filled(rect, 3.0, Color32::from_rgb(20, 26, 32));
+        painter.rect_stroke(
+            rect,
+            3.0,
+            Stroke::new(1.0_f32, Color32::from_rgb(50, 60, 70)),
+        );
+
+        let min = ys.iter().copied().fold(f32::INFINITY, f32::min);
+        let max = ys.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        let span = (max - min).abs().max(1e-6);
+        let n = ys.len();
+        let w = rect.width().max(1.0);
+        let h = rect.height().max(1.0);
+        let pad = 3.0;
+
+        let mut points: Vec<egui::Pos2> = Vec::with_capacity(n);
+        for (i, y) in ys.iter().enumerate() {
+            let x = rect.left() + pad + (i as f32 / (n.saturating_sub(1).max(1) as f32)) * (w - 2.0 * pad);
+            let yn = (*y - min) / span;
+            let py = rect.bottom() - pad - yn * (h - 2.0 * pad);
+            points.push(egui::Pos2::new(x, py));
+        }
+        if points.len() >= 2 {
+            painter.add(egui::Shape::line(
+                points,
+                Stroke::new(1.6_f32, color),
+            ));
+        }
+        ui.add_space(4.0);
     }
 
     /// Formata com **4 dígitos** + sufixo `k`/`kk`/`kkk` (sem `eN`).
