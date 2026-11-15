@@ -262,12 +262,17 @@ mod tests {
         let path = dir.join(format!("aether_state_unit_{}.bin", std::process::id()));
         let _ = fs::remove_file(&path);
         let mut bridge = StateBridge::new(Some(path.clone())).expect("bridge");
-        bridge.set_interval(Duration::from_millis(10));
+        // Intervalo longo: garante que a 1ª gravação acontece e a 2ª não.
+        bridge.set_interval(Duration::from_secs(3600));
         assert!(bridge.maybe_write(&sample()).expect("write"));
         assert_eq!(read_state_file(&path).expect("read"), sample());
-        // Imediatamente depois, o intervalo ainda não venceu.
-        assert!(!bridge.maybe_write(&sample()).expect("skip"));
-        std::thread::sleep(Duration::from_millis(15));
+        assert!(
+            !bridge.maybe_write(&sample()).expect("skip"),
+            "nao deveria gravar antes do intervalo"
+        );
+        // Intervalo curto: a 3ª gravação acontece.
+        bridge.set_interval(Duration::from_millis(1));
+        std::thread::sleep(Duration::from_millis(10));
         assert!(bridge.maybe_write(&sample()).expect("write 2"));
         assert_eq!(bridge.writes(), 2);
         let _ = fs::remove_file(&path);
