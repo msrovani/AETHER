@@ -593,7 +593,8 @@ A tarefa só está concluída quando, em **uma única execução limpa**:
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test --release            # 3 invariantes físicos + alocação zero + codec + determinismo
-cargo run --release --bin organism -- --duration 10s   # painel mostra R>0.95 e H(t) decrescente
+cargo run --release --features m4 --bin aether-organism -- --duration 10s --plain
+bash scripts/check_organism.sh 10s   # asserts: R>0.95, entropia menor, H(s*) < H(s0)
 ```
 
 produzem saída exitosa, e o painel do Módulo 4 exibe, na ordem: $R(t) > 0.95$ antes da perturbação,

@@ -84,3 +84,20 @@ jobs:
       - name: check (feature isolada)
         if: matrix.feature != 'none'
         run: cargo check --release --no-default-features --features ${{ matrix.feature }}
+
+  organismo:
+    name: organismo (Definição de Pronto §8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Roda 10 s em modo headless e exige, na mesma execução:
+      #   R > 0.95 · redução de entropia < 0 · H(s*) < H(s0) estritamente.
+      - name: definição de pronto (headless)
+        run: bash scripts/check_organism.sh 10s
