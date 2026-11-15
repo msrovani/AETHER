@@ -114,6 +114,11 @@ required-features = ["m5"]
 name = "bam_probe"
 harness = false
 
+[[bench]]
+name = "t12_probe"
+harness = false
+required-features = ["m5"]
+
 [profile.release]
 opt-level = 3
 lto = "fat"
