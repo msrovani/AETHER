@@ -229,7 +229,7 @@ cargo run --release --bin aether-daemon -- --duration 30s
 # subirem por ressonância de fase na outra — sem um único pacote JSON.
 ```
 
-## 6. Medições de hardening (2026-11-15, v0.0.35)
+## 6. Medições de hardening (2026-11-15; crate atual **v0.0.43**)
 
 * **M5 (projeção complexa):** p0 = 0,000035 / p1 = 0,000039 / p2 = 0,000085 rad
   (30 seeds, 12 ocultos); 13 testes em `tests/phase2_m5_hardening.rs`.
@@ -246,5 +246,7 @@ cargo run --release --bin aether-daemon -- --duration 30s
   preempção do SO — o contador expõe, não é custo do ciclo.
 * **M3:** peers deduplicados e `rx_bytes` zera ao estourar `u32` (preserva
   `%40==0`); testes de dedup e overflow adicionados.
-* Gate final: **79 testes / 17 suítes**, `cargo test --release` 2×, clippy
-  `-D warnings` e `fmt --check` verdes.
+* Gate final (atualizado P0): **95 testes** (`cargo test --offline -- --list`) /
+  **15 suítes** em `tests/*.rs` + unitários no lib; clippy `-D warnings` e
+  `fmt --check` verdes. Histórico do hardening M5–M8 acima foi medido em
+  v0.0.35 e permanece válido como baseline.

@@ -3,6 +3,22 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.45] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 8 arquivo(s) (.:4, docs:2, tests:1, tools:1).
+- Gate: ok (2s).
+
+- `ARCHITECTURE_PHASE2.md`
+- `Cargo.lock`
+- `FORUM_PROTOCOL.md`
+- `README.md`
+- `docs/COGNITIVE_AUDIT_REPORT.md`
+- `docs/HARDENING_REPORT.md`
+- `tests/cognitive_audit.rs`
+- `tools/forum.py`
+
 ## [0.0.44] - 2026-11-15
 
 ### Changed

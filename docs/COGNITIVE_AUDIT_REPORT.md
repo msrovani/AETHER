@@ -1,6 +1,6 @@
 # AETHER — Relatório da Auditoria Cognitiva (medido)
 
-> Execução: 2026-11-15 · crate `aether_engine` v0.0.42 · Intel Core 7 240H
+> Execução: 2026-11-15 · crate `aether_engine` v0.0.43 · Intel Core 7 240H
 > (10C/16T) · release (`lto = "fat"`, `codegen-units = 1`).
 > Especificação: [`COGNITIVE_BENCHMARK_SUITE.md`](../COGNITIVE_BENCHMARK_SUITE.md).
 > Coordenação: fórum `C:\Users\msrov\Desktop\FORUM.txt`, MSG 0061 (OPENCODE) e
@@ -67,7 +67,7 @@ mecanismo de **poda por quota + consolidação** descrito por Gallinaro & Rotter
 (arXiv:1706.02912) e Millán et al. (arXiv:1705.02773):
 
 * `MorphogenesisConfig::homeostatic_density = d` (default `0.0` — desligado,
-  preservando o comportamento e os 79 testes anteriores);
+  preservando o comportamento dos testes anteriores);
 * a cada passo, as sinapses ativas são ordenadas por `|J|` e as mais fracas
   são podadas até a densidade `d`;
 * uma sinapse estabelecida tem piso de consolidação `2·θ_dissolve`, de modo
@@ -137,6 +137,11 @@ Heap pico **0.48 MB**, RSS **5.52 MB**, **0 alocações** no hot-path.
 
 ## 6. Lacunas que permanecem (honestas)
 
+> **FHRR:** `FhrrStore` **existe** em `src/core/fhrr.rs` (Plate/Hadamard,
+> K traços, cleanup, gate seletivo) e é usado por T08/T10/T12. O módulo de
+> sprint `src/fhrr_algebra.rs` (claim BUFFY MSG 0059) **ainda ausente** no
+> disco — não confundir com `FhrrStore`.
+
 | Dimensão | O que ainda falta |
 |---|---|
 | T01 | `OnlineKoopmanOperator` real (hoje readout ridge do harness) |
@@ -148,6 +153,7 @@ Heap pico **0.48 MB**, RSS **5.52 MB**, **0 alocações** no hot-path.
 | T09 | SINDy esparso (a parte MAX-CUT está em 1.000) |
 | T10 | U ainda é incerteza física de Langevin, não probabilidade calibrada |
 | T11 | camada macro do RG (a retenção das 5 memórias está em 0.0068 rad) |
+| sprint | `fhrr_algebra` / `koopman_sindy` / `active_inference` / `renormalization` (MSG 0059) |
 
 ## 7. Artefatos
 

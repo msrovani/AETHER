@@ -1,6 +1,6 @@
 ﻿[package]
 name = "aether_engine"
-version = "0.0.44"
+version = "0.0.45"
 edition = "2021"
 rust-version = "1.78"
 description = "AETHER Ã¢â‚¬â€ motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"

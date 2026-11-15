@@ -1,13 +1,13 @@
 # AETHER — Relatório de Hardening (2026-11-15)
 
-**Versão:** `0.0.35` (ciclo automático)  
+**Versão:** `0.0.43` (`Cargo.toml`; medições históricas da seção 2 datam de 0.0.35)  
 **Escopo:** fases 1–2 (`m1`..`m8`), auditoria independente, correções e medições.
 
 ## 1. Gate final
 
 | Verificação | Resultado |
 |---|---|
-| `cargo test --release --offline` | **79 testes / 17 suítes**, 2 execuções consecutivas |
+| `cargo test --release --offline` | **95 testes** (`--list`, 2026-11-15) / **15 suítes** `tests/*.rs` + unitários no lib |
 | `cargo clippy --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |
 | `aether-organism --duration 5s --plain` | R=0,9989; entropia −0,0686; H(s\*)<H(s₀) |

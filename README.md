@@ -26,7 +26,7 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 ## Build
 
 ```bash
-cargo test --release          # 79 testes: fase 1 + fase 2 + engenharia
+cargo test --release          # 95 testes: fase 1 + fase 2 + engenharia + FHRR
 cargo clippy --all-targets -- -D warnings
 cargo run --release --bin aether-organism   # Fase 1: painel em tempo real
 cargo run --release --bin aether-daemon     # Fase 2: organismo encarnado
@@ -68,7 +68,7 @@ subir a ~1.0 e a Surpresa `F(t)` reagir a carga de CPU na outra máquina, sem um
 
 ## Status (2026-11-15)
 
-- Versao **0.0.35**; gate **79 testes / 17 suites**, clippy -D warnings e fmt --check verdes.
+- Versao **0.0.43** (`Cargo.toml`); gate **95 testes** (`cargo test -- --list`) / **15 suítes** em `tests/*.rs` + unitários no lib; clippy -D warnings e fmt --check verdes.
 - M5: projecao complexa (p0/p1/p2 < 0,001 rad).
 - M2: orward_into L2048 = **35,7 us** (meta 300 us).
 - Organismo: entropia interferida menor (sensor_noise=0.35), R~0,999 e H decrescente.
