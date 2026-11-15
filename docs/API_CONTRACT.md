@@ -224,8 +224,9 @@ implementados e aprovados:
 
 * **M5** `recall()` retorna `(Vec<f32>, f32)` (normativo) e aloca; o caminho
   **zero-alloc** é `recall_into(...)`. `sparsity_ratio`/`density` e
-  `try_imprint`/`try_recall` são extensões. Limite medido do invariante:
-  p0 < 0.20, p1/p2 < 0.15 (ver §3/M5).
+  `try_imprint`/`try_recall` são extensões. O `imprint` usa projeção complexa
+  (pseudo-inversa de Gram) e atinge p0/p1/p2 < 0.001 rad no invariante de
+  3 padrões/40% mascarado (ver §3/M5).
 * **M6** `temperature`/`dt` são `f64` (convenção física); há
   `imagine_futures_into(...)` zero-alloc e `try_imagine_futures(...)`.
 * **M7** `sparsity_ratio()` = fração dissolvida; `density()` = fração ativa.

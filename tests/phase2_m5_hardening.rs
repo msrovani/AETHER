@@ -694,7 +694,7 @@ fn janela_deslizante_respeita_capacidade() {
     let mut rng = ChaCha8Rng::seed_from_u64(0xA37E);
     let mut memory = ComplexPhaseMemory::with_config(N, inv_cfg());
     let cap = memory.pattern_capacity();
-    assert!(cap >= 3 && cap < N);
+    assert!((3..N).contains(&cap));
     let mut seq: Vec<Vec<f32>> = Vec::new();
     for _ in 0..(cap + 13) {
         let p: Vec<f32> = (0..N)

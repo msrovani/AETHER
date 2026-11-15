@@ -1,5 +1,7 @@
 //! SONDA TEMPORARIA (BUFFY) — diagnostico do recall do padrao harmonico 2.
-//! Nao faz parte da suite: sera removida apos a investigacao.
+//! Hipotese: o erro vem de herdar o estado deixado pelo recall anterior
+//! (recall e stateful), nao do acoplamento gravado.
+//! Sera removida apos a investigacao.
 
 #![cfg(feature = "m6")]
 
@@ -23,13 +25,7 @@ fn harmonic(n: usize, order: usize) -> Vec<f32> {
 }
 
 fn ang(a: f32, b: f32) -> f32 {
-    let mut d = (a - b) % std::f32::consts::TAU;
-    if d > std::f32::consts::PI {
-        d -= std::f32::consts::TAU;
-    } else if d < -std::f32::consts::PI {
-        d += std::f32::consts::TAU;
-    }
-    d.abs()
+    ((a - b + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI).abs()
 }
 
 fn mask_exact(seed: u64, hidden: usize) -> Vec<bool> {
@@ -56,47 +52,7 @@ fn mean_err(rec: &[f32], tgt: &[f32], mask: &[bool]) -> f32 {
     s / c as f32
 }
 
-/// Roda uma configuracao e devolve (media p0,p1,p2) e (pior p0,p1,p2).
-fn run(
-    label: &str,
-    cycles: usize,
-    steps: usize,
-    dt: f32,
-    cfg: PhaseMemoryConfig,
-) -> (f32, f32, f32, f32) {
-    let pats = [harmonic(N, 0), harmonic(N, 1), harmonic(N, 2)];
-    let mut mem = ComplexPhaseMemory::with_config(N, cfg);
-    for p in &pats {
-        mem.imprint(p, cycles);
-    }
-    let seeds = 30u64;
-    let mut sum = [0.0f32; 3];
-    let mut worst = [0.0f32; 3];
-    for seed in 0..seeds {
-        let mask = mask_exact(seed, HIDDEN);
-        for (k, p) in pats.iter().enumerate() {
-            mem.reset_phases(0.0);
-            let (rec, _e) = mem.recall(p, &mask, steps, dt);
-            let e = mean_err(&rec, p, &mask);
-            sum[k] += e;
-            worst[k] = worst[k].max(e);
-        }
-    }
-    let mean = [
-        sum[0] / seeds as f32,
-        sum[1] / seeds as f32,
-        sum[2] / seeds as f32,
-    ];
-    let worst = [worst[0], worst[1], worst[2]];
-    let worst_overall = worst.iter().cloned().fold(0.0f32, f32::max);
-    println!(
-        "{label:>34} | p0={:.4} p1={:.4} p2={:.4} | pior p0={:.4} p1={:.4} p2={:.4}",
-        mean[0], mean[1], mean[2], worst[0], worst[1], worst[2]
-    );
-    (mean[0], mean[1], mean[2], worst_overall)
-}
-
-fn base_cfg() -> PhaseMemoryConfig {
+fn cfg() -> PhaseMemoryConfig {
     PhaseMemoryConfig {
         omega0: 0.0,
         clamp_strength: 8.0,
@@ -106,38 +62,56 @@ fn base_cfg() -> PhaseMemoryConfig {
     }
 }
 
+/// `cold = true` zera as fases antes de cada recall (estado limpo).
+/// `cold = false` reproduz o comportamento anterior: herda o estado do recall
+/// imediatamente anterior, na mesma seed.
+fn sweep(cold: bool, order: &[usize]) -> Vec<(f32, f32)> {
+    let pats: Vec<Vec<f32>> = order.iter().map(|k| harmonic(N, *k)).collect();
+    let mut mem = ComplexPhaseMemory::with_config(N, cfg());
+    for p in &pats {
+        mem.imprint(p, 40);
+    }
+    let seeds = 30u64;
+    let mut sum = vec![0.0f32; pats.len()];
+    let mut worst = vec![0.0f32; pats.len()];
+    for seed in 0..seeds {
+        let mask = mask_exact(seed, HIDDEN);
+        for (k, p) in pats.iter().enumerate() {
+            if cold {
+                mem.reset_phases(0.0);
+            }
+            let (rec, _e) = mem.recall(p, &mask, 600, 0.05);
+            let e = mean_err(&rec, p, &mask);
+            sum[k] += e;
+            worst[k] = worst[k].max(e);
+        }
+    }
+    (0..pats.len())
+        .map(|k| (sum[k] / seeds as f32, worst[k]))
+        .collect()
+}
+
 #[test]
-fn sonda_parametros_recall() {
-    println!("\n=== SONDA: causa do erro no padrao harmonico 2 ===");
-    run("base (40c,600,s=.05,K=8)", 40, 600, 0.05, base_cfg());
-    run("mais passos de recall (1800)", 40, 1800, 0.05, base_cfg());
-    run("recall muito mais longo (4000)", 40, 4000, 0.05, base_cfg());
-    run("dt menor (0.02, 1500 passos)", 40, 1500, 0.02, base_cfg());
-    run("imprint mais relaxado (160c)", 160, 600, 0.05, base_cfg());
-    run("imprint 160c + eta_delta .20", 160, 600, 0.05, {
-        let mut c = base_cfg();
-        c.eta_delta = 0.20;
-        c
-    });
-    run("eta_delta .20 (40c)", 40, 600, 0.05, {
-        let mut c = base_cfg();
-        c.eta_delta = 0.20;
-        c
-    });
-    run("clamp forte (K=20)", 40, 600, 0.05, {
-        let mut c = base_cfg();
-        c.clamp_strength = 20.0;
-        c
-    });
-    run("clamp fraco (K=3)", 40, 600, 0.05, {
-        let mut c = base_cfg();
-        c.clamp_strength = 3.0;
-        c
-    });
-    run("eta_w .30 (40c)", 40, 600, 0.05, {
-        let mut c = base_cfg();
-        c.eta_w = 0.30;
-        c
-    });
-    println!("=== fim da sonda ===\n");
+fn sonda_causa_do_erro() {
+    println!("\n=== SONDA: causa do erro do padrao 2 ===");
+    for (label, cold) in [("COLD (reset 0 antes de cada recall)", true), (
+        "WARM (herda recall anterior, mesmo seed)",
+        false,
+    )] {
+        let r = sweep(cold, &[0, 1, 2]);
+        println!("{label}:");
+        for (k, (m, w)) in r.iter().enumerate() {
+            println!("   p{k}: media={m:.6} pior={w:.6}");
+        }
+    }
+    // Ordem invertida: se o erro for contaminacao, p2 melhora ao vir primeiro.
+    println!("COLD, ordem 2,1,0:");
+    for (k, (m, w)) in sweep(true, &[2, 1, 0]).iter().enumerate() {
+        println!("   pos{k}: media={m:.6} pior={w:.6}");
+    }
+    println!("WARM, ordem 2,1,0:");
+    for (k, (m, w)) in sweep(false, &[2, 1, 0]).iter().enumerate() {
+        println!("   pos{k}: media={m:.6} pior={w:.6}");
+    }
+    println!("=== fim ===\n");
 }

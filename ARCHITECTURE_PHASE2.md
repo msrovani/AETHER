@@ -78,13 +78,17 @@ $$E_{\text{phase}}(\boldsymbol{\phi}) = -\frac{1}{2N} \sum_{i,j} W_{ij}
   energia final $E_{\text{phase}}$.
 
 **Invariantes (testes):** com 3 padrões ortogonais imprints em $N = 32$ e 40%
-dos osciladores mascarados, o erro angular médio do `recall` é $< 0.15$ rad
-para p1/p2. **Limite medido (honesto):** p0 fica em ~0.169 (pior seed 0.222);
-o crosstalk é sistemático (não decai com $N$) porque a família harmônica tem
-uma componente não uniforme em $\psi^\nu$. Para p0, use $P \lesssim 2$ ou uma
-regra com decorrelação (Storkey/projeção); com Hebb local a meta 0.15 fica na
-borda da arquitetura. Medido com 30 seeds e 12 ocultos: p1=0.039, p2=0.121,
-p0=0.169. O `tests/phase2_m5_hardening.rs` fixa esse envelope.
+dos osciladores mascarados, o erro angular médio do `recall` é $< 0.15$ rad.
+O `imprint` usa **projeção complexa** (pseudo-inversa):
+$G_{\mu\nu}=\sum_i \overline{\psi_i^\mu}\psi_i^\nu$ (ridge $10^{-6}N$),
+$C_{ij}=\sum_{\mu\nu}\overline{\psi_i^\mu}(G^{-1})_{\nu\mu}\psi_j^\nu$,
+$W=|C|/\langle|C|\rangle$, $\delta=\arg C$. A transposta de $G^{-1}$ é
+obrigatória: sem ela $\operatorname{Im}(C_{ii})\neq0$ e o crosstalk volta.
+Medido com 30 seeds e 12 ocultos: **p0=0.000035, p1=0.000039, p2=0.000085**
+(piores 0.00028/0.00011/0.00063); 0 seeds acima de 0.15. A projeção também
+deduplica rotações rígidas e usa janela FIFO `min(N/4,64)`; acima de ~N/4 os
+padrões são pontos fixos exatos, mas a bacia encolhe (limite documentado em
+`pattern_capacity()`).
 
 ### Módulo 6: `src/thermodynamic_dreamer.rs` — Borda do Caos e Imaginação
 
@@ -204,9 +208,9 @@ daemon ainda **não** consome `MorphogeneticField::coupling()` no sonhador
 
 1. **`test_complex_phase_memory_recall`:** 3 padrões ortogonais imprints em
    `ComplexPhaseMemory` ($N = 32$); com 40% dos osciladores mascarados, o erro
-   angular médio do `recall()` é $< 0.15$ rad para p1/p2 e $< 0.20$ rad para p0
-   (limite medido; a meta 0.15 para p0 não é atingida por Hebb local — ver
-   §3/M5 e `tests/phase2_m5_hardening.rs`).
+   angular médio do `recall()` é $< 0.15$ rad para p0/p1/p2 (medido:
+   $<10^{-3}$ com a projeção complexa; `tests/phase2_m5_hardening.rs` fixa o
+   envelope de regressão).
 2. **`test_thermodynamic_dreamer_uncertainty`:** $\mathcal{U}(T=1.5) >
    \mathcal{U}(T=0.001)$ sobre a mesma `J` frustrada ($N = 32$, 32 amostras) e
    todas as amostras com energia menor que estados aleatórios.
