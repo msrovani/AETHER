@@ -183,9 +183,82 @@ fn teste_identidade() {
     println!("  pior diferenca absoluta = {pior:.3e}\n");
 }
 
+/// T10(b): uma pista vazia (tudo zero) faz o recall convergir para um padrao
+/// gravado. Pergunta: existe sinal barato que separe pista real de pista vazia?
+/// Candidatos: residuo medio nos nos grampeados e coerencia final R.
+fn teste_abstencao() {
+    for nm in [32usize, 64] {
+        abstencao_n(nm);
+    }
+}
+
+fn abstencao_n(NM: usize) {
+    let cfg = PhaseMemoryConfig {
+        omega0: 0.0,
+        clamp_strength: 8.0,
+        eta_w: 0.12,
+        eta_delta: 0.08,
+        gamma_w: 0.002,
+    };
+    let patterns: Vec<Vec<f32>> = (0..5)
+        .map(|o| {
+            (0..NM)
+                .map(|i| {
+                    let x = i as f32 / NM as f32;
+                    let base = (TAU * (o as f32 + 1.0) * x).sin() * 2.0;
+                    let tilt = 0.4 * (o as f32 + 1.0);
+                    (base + tilt).rem_euclid(TAU)
+                })
+                .collect()
+        })
+        .collect();
+    let mut mem = ComplexPhaseMemory::with_config(NM, cfg);
+    for p in &patterns {
+        mem.imprint(p, 40);
+    }
+
+    let mask = mask_exact(0x99, NM, NM * 40 / 100);
+    for (rotulo, cue) in [
+        ("pista real (padrao 3)", patterns[3].clone()),
+        ("pista vazia (zeros)", vec![0.0f32; NM]),
+    ] {
+        mem.reset_phases(0.0);
+        let (rec, energy) = mem.recall(&cue, &mask, 200, 0.05);
+        let mut sims: Vec<f32> = patterns.iter().map(|p| cosine_sim(&rec, p)).collect();
+        sims.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+        let max_sim = sims[0];
+        let second = sims[1];
+        // residuo nos grampeados: o campo esta em paz com a pista?
+        let mut res = 0.0f32;
+        let mut cnt = 0usize;
+        for i in 0..NM {
+            if mask[i] {
+                res += ang(rec[i], cue[i]);
+                cnt += 1;
+            }
+        }
+        res /= cnt as f32;
+        // coerencia global do estado recordado
+        let (mut sr, mut si) = (0.0f32, 0.0f32);
+        for i in 0..NM {
+            let (s, c) = rec[i].sin_cos();
+            sr += c;
+            si += s;
+        }
+        let r = (sr * sr + si * si).sqrt() / NM as f32;
+        println!(
+            "  N={NM} {rotulo:<22} max_sim={max_sim:+.4} 2o={second:+.4} margem={:+.4} residuo={res:.4} R={r:.4} E={energy:.4}",
+            max_sim - second
+        );
+    }
+    println!();
+}
+
 fn main() {
     println!("=== teste da identidade (sem dinamica) ===");
     teste_identidade();
+    println!("=== T10(b): sinal de abstencao ===");
+    teste_abstencao();
     let cfg = PhaseMemoryConfig {
         omega0: 0.0,
         clamp_strength: 8.0,

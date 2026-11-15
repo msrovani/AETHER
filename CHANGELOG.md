@@ -3,6 +3,17 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.40] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 3 arquivo(s) (examples:1, tests:2).
+- Gate: ok (1s).
+
+- `examples/zz_proto_m5.rs`
+- `tests/cognitive_audit.rs`
+- `tests/phase2_m7_hardening.rs`
+
 ## [0.0.39] - 2026-11-15
 
 ### Changed

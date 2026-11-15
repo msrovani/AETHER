@@ -665,6 +665,7 @@ fn test_m7_edge_cases_never_panic_or_nan() {
         homeostasis_period: 0,
         max_dt: f32::NAN,
         gershgorin_cap: f32::NAN,
+        homeostatic_density: f32::NAN,
     };
     let mut resilient = MorphogeneticField::new(N, &dense_j0(N, 0.05, 0x5A5A), bad_cfg);
     let f = resilient
