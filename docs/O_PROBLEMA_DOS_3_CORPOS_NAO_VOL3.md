@@ -382,7 +382,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | **E1** | I | linguagem em fase (papel–filler) | SNR > 5σ, 0 alloc | R2 |
 | **E1b** | II | ACF/IMF no `FhrrStore` | ≥10× capacidade, ciclo-limite <1% | R2 |
 | **E2** | I | lógica como Ising + certificado | 3-SAT n≤20 = força bruta | R1 |
-| **E2b** | II | presolve simbólico + roof dual antes do BSB | **0 fixações insound** (validado por força bruta); ≥40% de variáveis fixadas em CNF com unidades; precisão do certificado = 100% | R1, R3 |
+| **E2b** ✅ | II | presolve simbólico antes do BSB — **executado** | **0 insound** · **64,8% redução** (+39,8 pp de cascata) · **200/200** resolvidas vs 183/200 | R1, R3 |
 | **E3** | I | transplantação de embeddings | analogia medida, sem alvo de marketing | R3 |
 | **E3b** ✅ | II/III | verificador de coerência + proveniência | **spins: nulo (AUC 0,46–0,55)** · **2-SAT: precisão 100%** | R3, R10 |
 | **E4** | I | self-field + ablação | ECE melhora; T01 não regride | K5 |
@@ -491,12 +491,13 @@ Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 1º ✅ E6   perfil                     ← FEITO: solver = 84,4% do ciclo
 2º ✅ E6b  kernel do solver            ← FEITO: 7,44 → 17,10 GFLOP/s (2,30×)
 3º ✅ E3b  certificado + proveniência  ← FEITO: verifica factibilidade, não acerto
-4º  E2b  roof dual + presolve        ← agora é a **condição de existência** do certificado
-5º  E1b  capacidade/ciclo-limite     ← decide se VSA é viável em D=160
-6º  F1   ponte read-only             ← fecha K6 sem risco de drift
-7º  E1/E2/E3  os três "NÃO"          ← o programa científico
-8º  E4/E5/E7/E8  self, currículo, corpo, treino
-9º  F2/F3  consolidação e fusão 2D
+4º ✅ E2b  presolve simbólico          ← FEITO: 64,8% redução, 0 insound, 200/200
+5º  E2c  roof dual (max-flow)          ← alcance maior que a implicação
+6º  E1b  capacidade/ciclo-limite       ← decide se VSA é viável em D=160
+7º  F1   ponte read-only               ← fecha K6 sem risco de drift
+8º  E1/E2/E3  os três "NÃO"            ← o programa científico
+9º  E4/E5/E7/E8  self, currículo, corpo, treino
+10º F2/F3  consolidação e fusão 2D
 ```
 
 ### 12.5 As sete perguntas — placar
@@ -506,16 +507,17 @@ Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 | 1 | **Onde vão os 146 µs?** | ✅ **respondida** (E6) | **84,4% no solver** (133,1 de 157,7 µs). readout 7,0% · entropy 3,0% · wave 2,5% · actuator 1,7% · ring_copy 1,1%. Cobertura 99,98%. |
 | 2 | **ΔE prevê acerto?** | ✅ **respondida** (E3b) | **Não em otimização livre** (AUC 0,46–0,55; bound 0,058 anti-preditivo). **Sim com restrições exatas**: 383 decisivas, precisão 100%. |
 | 3 | **Quantos padrões cabem em D=160?** | ⏳ **aberta** (E1b) | Teoria: `M_max ∝ D²` (arXiv:1906.11684) — mas **a constante não foi medida** para FHRR complexo. Ordem de grandeza entre 10³ e 10⁴. Fecha medindo Recall@1 vs nº de fatos superpostos. |
-| 4 | **Roof dual reduz o suficiente em CNF de circuito?** | ⏳ **aberta** (E2b) | Evidência externa: 5.800× no BQP100 e 100% de redução em MAX-CUT de VLSI — **nada medido aqui**. Fecha com 0 fixações insound + ≥40% de variáveis fixadas em CNF com unidades. |
+| 4 | **Roof dual reduz o suficiente em CNF de circuito?** | ⏳ **parcial** (E2b v1) | **Presolve simbólico (unidades + implicações): 64,8% de redução, +39,8 pp de cascata, 0 insound, 200/200 resolvidas vs 183/200.** Falta o **roof dual completo** (max-flow), que tem alcance maior. |
 | 5 | **O self-field melhora calibração ou só replica a surpresa?** | ⏳ **aberta** (E4) | Falsificável: melhora ECE de abstenção **sem** melhorar T01. Se T01 também melhorar, a hipótese "metacognição é separada" cai. |
 | 6 | **Um atrator pode virar "gist" sem perder a habilidade?** | ⏳ **aberta** (F2) | Hoje o atrator é binário: está ou não está. Fecha consolidando no L4 (texto/energia) e medindo retenção após N consolidações. |
 | 7 | **A ponte de fase preserva o suficiente?** | ⏳ **aberta** (F3) | Fecha com `cue_into` (ledger → vetor → semente de atrator) e medindo recall@1 no round-trip **vs** recall direto; gate: perda < 5%. |
 
-**Placar: 2 respondidas, 5 abertas — e cada aberta tem um experimento que a fecha.**
-Nenhuma resposta foi inferida: as duas fechadas têm artefato em `target/`.
+**Placar: 2 respondidas, 1 parcial (E2b v1), 4 abertas — e cada aberta tem um
+experimento que a fecha.** Nenhuma resposta foi inferida: as fechadas têm artefato
+em `target/`.
 
-> *"Duas perguntas tinham resposta e não sabíamos; cinco continuam abertas e agora
-> sabemos exatamente como fechá-las."*
+> *"Duas perguntas tinham resposta e não sabíamos; uma está meio respondida;
+> quatro continuam abertas — e agora sabemos exatamente como fechá-las."*
 
 ---
 

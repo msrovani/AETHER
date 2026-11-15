@@ -32,10 +32,7 @@ fn unit_clause_fixes_variable() {
 #[test]
 fn implication_chain_forces_literal() {
     // (x ∨ y) e (¬x ∨ y): de ¬y vem x, e de x vem y ⇒ y é verdadeiro.
-    let clauses = [
-        Clause2::new(0, 1, 1, 1),
-        Clause2::new(0, -1, 1, 1),
-    ];
+    let clauses = [Clause2::new(0, 1, 1, 1), Clause2::new(0, -1, 1, 1)];
     let p = presolve_2sat(2, &clauses);
     assert!(!p.conflict);
     assert_eq!(p.fixed[1], Some(1), "y deveria ser forçado a +1");
@@ -67,7 +64,9 @@ fn residual_clauses_are_over_residual_space() {
     let res = residual_clauses(&clauses, &p.fixed, &p.residual).expect("residual");
     // a cláusula (¬x0 ∨ x1) é satisfeita por x0=+1? não — vira unidade em x1
     // (o presolve deve ter fixado x1; então sobra só a cláusula de x1/x2)
-    assert!(res.iter().all(|c| c.i < p.residual.len() && c.j < p.residual.len()));
+    assert!(res
+        .iter()
+        .all(|c| c.i < p.residual.len() && c.j < p.residual.len()));
 }
 
 #[test]
@@ -92,7 +91,11 @@ fn soundness_against_brute_force() {
             }
             let si = if rng.gen::<bool>() { 1 } else { -1 };
             let sj = if s_star[i] == si {
-                if rng.gen::<bool>() { 1 } else { -1 }
+                if rng.gen::<bool>() {
+                    1
+                } else {
+                    -1
+                }
             } else {
                 s_star[j]
             };

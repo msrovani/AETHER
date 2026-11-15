@@ -5,40 +5,32 @@ Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto
 
 ## [0.0.89] - 2026-11-15
 
-### Changed
+### Added
 
-- Ciclo automatico: 4 arquivo(s) (examples:1, src:2, tests:1).
-- Gate: ok (4s).
+- `core::presolve` — presolve simbólico para lógica em Ising: propagação de
+  unidades + fixação por implicação (`l ⇒ ¬l`), fixpoint, detecção de conflito e
+  reescrita das cláusulas sobre o espaço residual.
+- `examples/e2b_presolve.rs` — 2-SAT plantado (`n=16`) com ground truth e
+  validação de soundness por força bruta.
+- `tests/e2b_presolve.rs` — 6 gates: unidade, cadeia de implicação, contradição,
+  espaço residual, soundness e preservação de satisfatibilidade.
 
-- `src/core/mod.rs`
-- `examples/e2b_presolve.rs`
-- `src/core/presolve.rs`
-- `tests/e2b_presolve.rs`
+### Measured
 
-## [0.0.88] - 2026-11-15
-
-### Changed
-
-- Ciclo automatico: 6 arquivo(s) (.:1, docs:2, examples:1, src:1, tests:1).
-- Gate: ok (3s).
-
-- `CHANGELOG.md`
-- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL2.md`
-- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md`
-- `examples/e3b_certificate.rs`
-- `src/core/certificate.rs`
-- `tests/e3b_certificate.rs`
-
-## [0.0.87] - 2026-11-15
+| Métrica | Valor |
+|---|---:|
+| Redução de variáveis | **64,8%** |
+| cascata (além das unidades) | **+39,8 pp** |
+| Fixações insound | **0** |
+| Precisão das decisivas | **100%** |
+| BSB puro | 183/200 |
+| **Presolve + BSB** | **200/200** |
 
 ### Changed
 
-- Ciclo automatico: 3 arquivo(s) (examples:1, src:2).
-- Gate: ok (4s).
-
-- `src/core/mod.rs`
-- `examples/e3b_certificate.rs`
-- `src/core/certificate.rs`
+- Vol. II §2.6 e Vol. III (§11, §12) com o resultado do E2b v1.
+- Plano: **E2c (roof dual/max-flow)** entra como próximo refinamento de alcance;
+  E1b desce para 6º.
 
 ## [0.0.88] - 2026-11-15
 

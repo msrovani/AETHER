@@ -272,6 +272,41 @@ toca o Módulo 1 — e agora recebe instâncias que cabem no L1 (N≤64 ⇒ `J` 
 | Custo do passe simbólico | ≤ 5% do ciclo |
 | Determinismo | bit-a-bit com seed fixa |
 
+### 2.6 E2b v1 — presolve simbólico: medido e *sound*
+
+**Executado em 2026-11-15.** `examples/e2b_presolve.rs` + `src/core/presolve.rs`.
+Instâncias 2-SAT **plantadas** (`n=16`, `m=24`, 4 unidades, 200 instâncias,
+satisfatíveis por construção), ground truth e validação de soundness por força bruta.
+
+| Métrica | Valor |
+|---|---:|
+| Redução de variáveis | **64,8%** |
+| · plantadas (unidades) | 25,0% |
+| · **cascata** (unidades + implicação) | **+39,8 pp** |
+| Variáveis residuais | 5,6 de 16 |
+| **Fixações insound** | **0** |
+| Precisão das decisivas | **100,0%** |
+| BSB puro resolve | 183/200 (91,5%) |
+| **Presolve + BSB resolve** | **200/200 (100%)** |
+
+**Três achados:**
+
+1. **O presolve é sound por construção e validado.** Fixar por unidade e por
+   implicação (`l ⇒ ¬l`) é consequência lógica; a força bruta confirmou 0
+   contradições em 200 instâncias.
+2. **A cascata existe e é grande.** 25% de unidades plantadas viram **64,8%** de
+   variáveis fixadas — o resto vem da implicação. É o análogo do que o
+   pré-processamento faz em CNF de circuito (arXiv:2511.21046).
+3. **Ganho de completude, não só de velocidade.** O BSB puro erra 17/200
+   (91,5%); com presolve, **200/200** — porque o resíduo de 5,6 variáveis cabe
+   folgado na capacidade do solver. Isso é E2b pagando o E3b: menos variáveis,
+   menos mínimos locais espúrios, certificado com dentes.
+
+**Limite honesto:** isto **não** é roof dual. Roof dual (max-flow sobre a
+posiform quadrática) fixa variáveis constantes em **algum ótimo** — alcance maior,
+garantia diferente. O E2b v2 deve implementá-lo e comparar a cascata; o gate de
+soundness já está pronto para os dois.
+
 ---
 
 ## 3. Risco 2 — Interferência em VSA

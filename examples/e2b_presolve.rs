@@ -114,7 +114,11 @@ fn make_instance(n: usize, m: usize, k_units: usize, seed: u64) -> (Vec<Clause2>
         let si = if rng.gen::<bool>() { 1 } else { -1 };
         // se o primeiro literal já é falso sob s*, o segundo tem de ser verdadeiro
         let sj = if s_star[i] == si {
-            if rng.gen::<bool>() { 1 } else { -1 }
+            if rng.gen::<bool>() {
+                1
+            } else {
+                -1
+            }
         } else {
             s_star[j]
         };
@@ -139,11 +143,7 @@ fn count_violations(clauses: &[Clause2], s: &[i8]) -> u32 {
 
 /// Enumera todas as soluções; devolve `(satisfatível, nº de soluções)` e valida
 /// as fixações contra elas.
-fn brute_force(
-    n: usize,
-    clauses: &[Clause2],
-    fixed: &[Option<i8>],
-) -> (bool, u64, u64) {
+fn brute_force(n: usize, clauses: &[Clause2], fixed: &[Option<i8>]) -> (bool, u64, u64) {
     let mut s = vec![0i8; n];
     let mut sat = false;
     let mut count = 0u64;
@@ -336,9 +336,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sat_count, args.instances
     );
     println!();
-    println!("redução média de variáveis       : {:.1}%", 100.0 * reduction);
+    println!(
+        "redução média de variáveis       : {:.1}%",
+        100.0 * reduction
+    );
     println!("  · plantadas (unidades)         : {:.1}%", 100.0 * plant);
-    println!("  · cascata (unidades+implicação): {:+.1} pp", 100.0 * (reduction - plant));
+    println!(
+        "  · cascata (unidades+implicação): {:+.1} pp",
+        100.0 * (reduction - plant)
+    );
     println!("variáveis residuais (média)      : {res_n:.1} de {n}");
     println!("fixações insound                 : {unsound_total}");
     println!(
@@ -346,17 +352,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         conflict_ok, args.instances
     );
     println!();
-    println!("resolvidas por BSB puro          : {full_solved}/{}", args.instances);
-    println!("resolvidas com presolve+BSB      : {presolved_solved}/{}", args.instances);
+    println!(
+        "resolvidas por BSB puro          : {full_solved}/{}",
+        args.instances
+    );
+    println!(
+        "resolvidas com presolve+BSB      : {presolved_solved}/{}",
+        args.instances
+    );
     println!("decisivas (0 violações)          : {decisive}");
-    println!("precisão das decisivas           : {:.1}%", 100.0 * precision);
+    println!(
+        "precisão das decisivas           : {:.1}%",
+        100.0 * precision
+    );
     println!();
 
     let g_sound = unsound_total == 0;
     let g_reduce = reduction >= 0.40;
     let g_prec = precision >= 0.999;
     println!("  G1 soundness (0 fixações insound) : {}", pass(g_sound));
-    println!("  G2 redução ≥ 40%                  : {}  ({:.1}%)", pass(g_reduce), 100.0 * reduction);
+    println!(
+        "  G2 redução ≥ 40%                  : {}  ({:.1}%)",
+        pass(g_reduce),
+        100.0 * reduction
+    );
     println!("  G3 precisão das decisivas = 100%  : {}", pass(g_prec));
     println!();
 
