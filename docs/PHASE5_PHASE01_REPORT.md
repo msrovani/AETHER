@@ -1,6 +1,6 @@
-# AETHER — Fases 0/1/2: perfilamento, hardware opt-in e decisões
+# AETHER — Fases 0/1/2 + encerramento da Fase 5
 
-> Execução: 2026-11-15 · `aether_engine` v0.0.68 · Intel Core 7 240H
+> Execução: 2026-11-15 · `aether_engine` v0.0.71 · Intel Core 7 240H
 > (10C/16T, Windows) · `cargo test --release`, clippy all-features, fmt 0.
 > Autorização: usuário (Fase 0 + Fase 1, `deny(unsafe_code)` mantido).
 
@@ -202,7 +202,115 @@ Ambos ficam fora do gate de ACQ; exigem bancada própria e não bloqueiam
 | Auditoria cognitiva | **12/12 MEASURED, ACQ 100.00, real_coverage 1.00** |
 | `hot_path_bytes` | **0 B** |
 | T12 (BAM) | Recall 1.0, SNR 5.96, **2.4 µs**, 0 allocs |
-| Throughput Basal | **143–146 µs** p50 · p99.9 418–437 µs · 6 353–6 440 cycles/s · **813–824 k eq-t/s** · 0 allocs |
+| Throughput Basal | **143–147 µs** p50 · p99.9 418–437 µs · 6 329–6 440 cycles/s · **810–824 k eq-t/s** · 0 allocs |
 | Throughput Vigilante / Crítico | 260–262 / 490–504 µs p50 · 0 allocs |
 | RSS / heap | 5.6–14.3 MB / 0.48 MB |
 | `#![deny(unsafe_code)]` | mantido nos arquivos novos |
+
+---
+
+# Encerramento da Fase 5 — `benches/hardware_extremus.rs` e CI
+
+> Medições: `cargo bench --bench hardware_extremus` (default e
+> `--features jit,affinity`). Bench já registrado em `Cargo.toml`
+> (`harness = false`, `required-features = ["m1", "m5"]`).
+
+## 12. Benchmark A — SINDy RHS e break-even do JIT
+
+Equação de teste com **4 termos ativos** (`x' = y`; `y' = x − x³ − 0,3y`),
+2 M avaliações por avaliador:
+
+| Avaliador | ns/avaliação |
+|---|---:|
+| nativo especializado (referência) | **0,80–0,82** |
+| interpretado (`eval_interpreted`) | **8,85–9,10** |
+| JIT Cranelift (`integ.eval` com `--features jit`) | **4,98–5,46** |
+| fallback com `jit` off | 8,01 (= interpretado) |
+
+Compilação Cranelift medida (republicações com Ξ levemente diferente):
+
+| Métrica | Valor medido |
+|---|---:|
+| 1ª compilação (cold start, ISA incluída) | **173–418 µs** |
+| recompilação em regime | 173–418 µs (mesma ordem) |
+| ganho JIT vs interpretado | 3,64–3,88 ns/avaliação |
+| **`break_even_evals`** | **45 461–107 854 avaliações** |
+| tempo equivalente | **0,2–0,6 ms** de avaliação contínua |
+
+O `~622 µs` da MSG 0087 é a ordem de grandeza de um *cold start* mais frio
+(ISA + primeira alocação de módulo); com ele o break-even seria
+`622 µs / 3,88 ns ≈ 160 mil avaliações ≈ 0,8 ms` — mesma conclusão: o JIT só
+amortiza em execuções longas, e mesmo assim perde para o avaliador nativo
+especializado (0,82 ns). Por isso **`jit` segue opt-in**.
+
+## 13. Benchmark B — p50/p99/p99.9 do ciclo reflexivo com e sem pinning
+
+`EventDrivenCore::process`, 4 M eventos por modo (~1,2 s), melhor de 2
+passadas, carga em 16 núcleos lógicos (solta) e em 14 (fixada, excluindo o
+núcleo 9 e seu irmão SMT):
+
+| Modo | p50 | p99 | p99.9 |
+|---|---:|---:|---:|
+| solto | 0,30–0,50 µs | 0,40–0,60 µs | **0,50–0,80 µs** |
+| fixado (core físico 9) | **0,30 µs** | **0,40 µs** | **0,40 µs** |
+| redução p99.9 | — | — | **20%** |
+
+Sem `--features affinity` o pinning é no-op (`pin_ok=false`) e a redução é
+**0%** — é exatamente o contrato do caminho opt-in.
+
+No ciclo reflexivo isolado a cauda é sub-microssegundo e dominada por
+interrupções/DPC; o ganho de pinning aparece em escala maior no **ciclo Basal
+completo** (Fase 0): p99.9 **14 854,9 µs → 401,7 µs (−97,3%)** com p50 apenas
+~2% pior. Conclusão mantida: afinidade é opt-in, valiosa sob carga real.
+
+## 14. Benchmark C — BAM u16 vs FHRR f32 (D=160, 256, 512)
+
+50 fatos, K=6, 40% de oclusão, ±0,25 rad, n=2 000:
+
+| Storage | Recall@1 | p50 | p95 | p99 |
+|---|---:|---:|---:|---:|
+| BAM D=160 | 1,000 | **2,00–2,20 µs** | 2,10–3,20 | 2,30–3,70 |
+| BAM D=256 | 1,000 | **3,10–3,20 µs** | 3,30–3,90 | 4,10–5,10 |
+| BAM D=512 | 1,000 | 5,90–6,00 µs | 7,00–7,20 | 9,70–9,90 |
+| FHRR f32 D=160 | 1,000 | 7,50–7,90 µs | 9,00–11,80 | 13,00–16,20 |
+| FHRR f32 D=256 | 1,000 | 12,50 µs | 14,00–15,40 | 18,10–24,60 |
+
+Ganho p50: **×3,4–4,0** em D=160 e D=256; memória 52 440 B vs 264 880 B.
+Micro-operações: `sin_cos` LUT **×16** mais rápido que `f32` (0,48 vs 7,7 µs
+por 256 fases); bind 16–18 ns; unbind 17–18 ns; similaridade 75–79 ns.
+
+## 15. Blindagem contra regressão silenciosa
+
+1. **Testes do JIT** (`tests/phase5_hardware.rs`): com a feature ligada,
+   `#[cfg(feature = "jit")] assert!(jit_compiled_in() && compiles > 0)` em
+   `sindy_descobre_duffing_e_jit_publica_sem_interromper` e em
+   `jit_hot_swap_sob_avaliacao_continua_nunca_rasga_estado`. Cair no
+   interpretador com `--all-features` agora **falha o teste**.
+2. **CI em duas matrizes obrigatórias** (`.github/workflows/ci.yml`, Linux +
+   Windows em ambas):
+   - **matriz 1** (build padrão, `#![deny(unsafe_code)]`):
+     `cargo fmt --all --check` · `cargo clippy --all-targets -- -D warnings` ·
+     `cargo test --release`;
+   - **matriz 2** (`--all-features`):
+     `cargo clippy --all-targets --all-features -- -D warnings` ·
+     `cargo test --release --all-features`.
+   Mantidos os jobs de feature isolada (m1..m8) e organismo headless.
+3. **fmt do repositório**: `cargo fmt --all` foi aplicado; `src/bin/
+   aether_dashboard.rs` e `src/dashboard/*` estavam fora do formato e
+   quebravam a matriz 1 (aviso para a CURSOR).
+
+## 16. Gate final da Fase 5
+
+| Item | Resultado |
+|---|---|
+| `cargo fmt --all --check` | **0** |
+| `clippy --all-targets` (default) | **0** |
+| `clippy --all-targets --all-features` | **0** |
+| `cargo test --release` | **21 blocos, exit 0** |
+| `cargo test --release --all-features` | **22 blocos, exit 0** (inclui `phase5_hardware` com 10 testes e os guards de JIT) |
+| `cargo bench --bench hardware_extremus` | A/B/C medidos acima; JSON em `target/aether_bench_hardware.json` |
+| Auditoria cognitiva | **12/12, ACQ 100.00, real_coverage 1.00, hot_path_bytes 0** |
+| Throughput Basal (pós-gate) | 147,2 µs p50 · p99.9 423,4 µs · **810 100 eq-t/s** · 0 allocs |
+
+**Fase 5 encerrada sem pendências**: bench A/B/C medido e versionado, JIT e
+afinidade blindados por CI + asserts, e nenhum claim aberto.

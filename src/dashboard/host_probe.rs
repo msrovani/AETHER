@@ -53,61 +53,38 @@ impl From<&Gap> for GapDto {
     }
 }
 
-fn wmic_value(args: &[&str], key: &str) -> Option<String> {
-    let out = std::process::Command::new("wmic")
-        .args(args)
+/// Lê uma propriedade CIM via PowerShell (WMIC removido em Windows recentes).
+fn cim_number(class: &str, prop: &str) -> Option<f64> {
+    let script = format!(
+        "(Get-CimInstance -ClassName {class}).{prop} | Select-Object -First 1"
+    );
+    let out = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &script])
         .output()
         .ok()?;
-    let s = String::from_utf8_lossy(&out.stdout);
-    let prefix = format!("{key}=");
-    for line in s.lines() {
-        if let Some(v) = line.strip_prefix(&prefix) {
-            let t = v.trim();
-            if !t.is_empty() {
-                return Some(t.to_string());
-            }
-        }
+    if !out.status.success() {
+        return None;
     }
-    None
+    let s = String::from_utf8_lossy(&out.stdout);
+    s.lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .and_then(|v| v.parse().ok())
 }
 
 fn ram_windows() -> (Option<f64>, Option<f64>) {
-    // Sem FFI novo: WMIC best-effort (sem unsafe no dashboard).
-    let total = wmic_value(
-        &["ComputerSystem", "get", "TotalPhysicalMemory", "/value"],
-        "TotalPhysicalMemory",
-    )
-    .and_then(|v| v.parse::<f64>().ok())
-    .map(|n| n / (1024.0 * 1024.0));
-    let avail = wmic_value(
-        &["OS", "get", "FreePhysicalMemory", "/value"],
-        "FreePhysicalMemory",
-    )
-    .and_then(|v| v.parse::<f64>().ok())
-    .map(|n| n / 1024.0); // KB → MB
+    // Sem FFI novo: CIM via PowerShell (sem unsafe no dashboard).
+    let total = cim_number("Win32_ComputerSystem", "TotalPhysicalMemory")
+        .map(|n| n / (1024.0 * 1024.0));
+    let avail = cim_number("Win32_OperatingSystem", "FreePhysicalMemory")
+        .map(|n| n / 1024.0); // KB → MB
     (total, avail)
 }
 
-fn cpu_counts_wmic() -> (Option<usize>, Option<usize>) {
-    let logical = wmic_value(
-        &[
-            "ComputerSystem",
-            "get",
-            "NumberOfLogicalProcessors",
-            "/value",
-        ],
-        "NumberOfLogicalProcessors",
-    )
-    .and_then(|v| v.parse().ok());
-    let physical = wmic_value(
-        &["ComputerSystem", "get", "NumberOfProcessors", "/value"],
-        "NumberOfProcessors",
-    )
-    .and_then(|v| v.parse().ok())
-    .or_else(|| {
-        wmic_value(&["CPU", "get", "NumberOfCores", "/value"], "NumberOfCores")
-            .and_then(|v| v.parse().ok())
-    });
+fn cpu_counts_cim() -> (Option<usize>, Option<usize>) {
+    let logical =
+        cim_number("Win32_ComputerSystem", "NumberOfLogicalProcessors").map(|n| n as usize);
+    let physical = cim_number("Win32_Processor", "NumberOfCores").map(|n| n as usize);
     (logical, physical)
 }
 
@@ -223,10 +200,10 @@ pub fn host_report_path() -> PathBuf {
 /// Executa a sonda e grava `target/aether_host_report.json`.
 pub fn probe_and_save(scorecard: Option<&ScorecardView>) -> Result<HostReport> {
     let plan = CorePlan::detect();
-    let (wmic_logical, wmic_physical) = cpu_counts_wmic();
+    let (cim_logical, cim_physical) = cpu_counts_cim();
     let logical = if plan.logical > 0 {
         plan.logical
-    } else if let Some(n) = wmic_logical {
+    } else if let Some(n) = cim_logical {
         n
     } else {
         std::thread::available_parallelism()
@@ -235,7 +212,7 @@ pub fn probe_and_save(scorecard: Option<&ScorecardView>) -> Result<HostReport> {
     };
     let physical = if plan.physical > 0 {
         plan.physical
-    } else if let Some(n) = wmic_physical {
+    } else if let Some(n) = cim_physical {
         n
     } else {
         logical
