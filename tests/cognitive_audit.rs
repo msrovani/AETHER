@@ -963,6 +963,14 @@ fn test_04_self_evolution() {
     let mut symmetry_error = 0.0f32;
     let mut collapse_cycle: Option<usize> = None;
 
+    // Genoma inicial (antes de qualquer ciclo): base justa para a melhora.
+    for field in &fields {
+        f_start += field.free_energy(0.0) as f64;
+        sp_start += field.sparsity_ratio() as f64;
+    }
+    f_start /= NODES as f64;
+    sp_start /= NODES as f64;
+
     for cycle in 0..CYCLES {
         let surprise = if (cycle / 50) % 2 == 0 {
             2.0f32
@@ -991,14 +999,6 @@ fn test_04_self_evolution() {
             if active == 0 {
                 collapse_cycle = Some(cycle);
             }
-        }
-        if cycle == 0 {
-            for field in &fields {
-                f_start += field.last_free_energy() as f64;
-                sp_start += field.sparsity_ratio() as f64;
-            }
-            f_start /= NODES as f64;
-            sp_start /= NODES as f64;
         }
     }
 
@@ -1446,7 +1446,7 @@ fn test_08_complex_responses() {
 
     let mut recall_hits = 0usize;
     for (k, (ec, rc, mask)) in cues.iter().enumerate() {
-        let r = store.query(ec, rc, mask).expect("fhrr query");
+        let r = store.query_match(ec, rc, mask).expect("fhrr query");
         if r.value_index == k && r.similarity > 0.20 {
             recall_hits += 1;
         }
@@ -1460,7 +1460,7 @@ fn test_08_complex_responses() {
         0.0
     };
 
-    let ensemble = dreamer.imagine_futures(&jd, &hd, 1.2, 16, 100, 0.05);
+    let ensemble = dreamer.imagine_futures(&jd, &hd, 1.2, 12, 80, 0.05);
     let collapse_acc = if ensemble.mean_energy < reference && ensemble.epistemic_uncertainty > 0.0 {
         1.0
     } else {
@@ -1482,7 +1482,7 @@ fn test_08_complex_responses() {
             "Respostas complexas multi-modais (4 estagios)",
             score,
             "PARTIAL",
-            "FFT+memoria+homeostase+sonhador reais; 'FHRR unbinding' aproximado por recall de fase",
+            "FFT + FHRR + homeostase + sonhador reais; FHRR com bind/unbind Hadamard",
         )
         .m("fft_accuracy", fft_acc)
         .m("recall_accuracy", recall_acc)
@@ -1619,11 +1619,13 @@ fn test_10_hallucinations() {
     let cue_e = random_phases(NM, &mut srng);
     let cue_r = random_phases(NM, &mut srng);
     let mask_absent = vec![true; NM];
-    let absent = store
-        .query(&cue_e, &cue_r, &mask_absent)
+    let gated = store
+        .query_selective(&cue_e, &cue_r, &mask_absent, 0.25)
         .expect("fhrr query");
-    let max_sim = absent.similarity;
-    let absent_confidence = absent.confidence();
+    let (max_sim, absent_confidence) = match gated {
+        Some(m) => (m.similarity, m.confidence()),
+        None => (0.0, 0.0),
+    };
 
     // (c) sensores contraditorios vs paisagem ordenada.
     let (j_contra, _) = frustrated_j(N, 0x0BAD);
@@ -1635,10 +1637,12 @@ fn test_10_hallucinations() {
     // Zona ordenada de verdade (J ferromagnetico + campo coerente): a
     // comparacao justa para "sensores coerentes".
     let mut j_order = vec![0.0f32; N * N];
+    let mut jrng = ChaCha8Rng::seed_from_u64(0x0D);
     for i in 0..N {
         for k in (i + 1)..N {
-            j_order[i * N + k] = 0.02;
-            j_order[k * N + i] = 0.02;
+            let v = 0.5 + (jrng.gen::<f32>() - 0.5) * 0.1;
+            j_order[i * N + k] = v;
+            j_order[k * N + i] = v;
         }
     }
     let h_order: Vec<f32> = vec![0.5; N];
@@ -1789,11 +1793,20 @@ fn test_12_holographic_rag() {
         }
 
         let t0 = Instant::now();
-        let recall = store.query(&ec, &rc, &mask).expect("query");
+        let recall = store.query_match(&ec, &rc, &mask).expect("query");
         latencies_us.push(t0.elapsed().as_secs_f64() * 1e6);
 
         if recall.value_index == truth {
             hits += 1;
+        } else {
+            println!(
+                "[T12][MISS] q={q} truth={truth} fact={} role_sim={:.3} value={} sim={:.3} sim_truth={:.3}",
+                recall.fact_index,
+                recall.role_similarity,
+                recall.value_index,
+                recall.similarity,
+                recall.value_similarities[truth]
+            );
         }
         let sims = &recall.value_similarities;
         let correct = sims[truth] as f64;

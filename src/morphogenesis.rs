@@ -479,6 +479,16 @@ impl MorphogeneticField {
                 if !new_val.is_finite() {
                     return Err(MorphogenesisError::NonFiniteUpdate { index: idx_ik });
                 }
+                // Consolidação homeostática: uma sinapse estabelecida não
+                // atravessa o limiar de dissolução por decaimento. A remoção
+                // só acontece pela poda por quota (abaixo), que preserva as
+                // sinapses mais fortes — plasticidade estrutural homeostática.
+                if self.cfg.homeostatic_density > 0.0 && jv != 0.0 && new_val != 0.0 {
+                    let floor = 2.0 * dissolve;
+                    if new_val.abs() < floor {
+                        new_val = floor.copysign(new_val);
+                    }
+                }
                 if new_val.abs() < dissolve {
                     new_val = 0.0;
                 }

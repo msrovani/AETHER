@@ -118,6 +118,8 @@ pub struct FhrrMatch {    /// Índice do fato cujo papel `e ⊙ r` teve maior si
     pub entity_similarity: f32,
     /// Similaridade da relação eleita com a pista parcial.
     pub relation_similarity: f32,
+    /// Similaridade do papel `e ⊙ r` da pista com o fato eleito (evidência).
+    pub role_similarity: f32,
     /// Similaridade com todos os valores (SNR/calibração).
     pub value_similarities: Vec<f32>,
 }
@@ -392,8 +394,31 @@ impl FhrrStore {
             margin,
             entity_similarity: es,
             relation_similarity: rs,
+            role_similarity: best_s,
             value_similarities: sims,
         })
+    }
+
+    /// Consulta com **abstenção seletiva** (warrant-based confidence).
+    ///
+    /// Retorna `None` quando a evidência da pista — similaridade do papel
+    /// `e ⊙ r` com o fato eleito — é menor que `min_evidence`. É o gate de
+    /// predição seletiva: a confiança do readout é limitada pelo que a entrada
+    /// observada sustenta (arXiv:2203.00211; arXiv:2601.00138), em vez de
+    /// aceitar cegamente o atrator mais próximo da cleanup memory.
+    pub fn query_selective(
+        &self,
+        entity_cue: &[f32],
+        relation_cue: &[f32],
+        mask: &[bool],
+        min_evidence: f32,
+    ) -> Result<Option<FhrrMatch>> {
+        let m = self.query_match(entity_cue, relation_cue, mask)?;
+        if m.role_similarity < min_evidence {
+            Ok(None)
+        } else {
+            Ok(Some(m))
+        }
     }
 
     /// Bytes ocupados pelos buffers (diagnóstico de pegada).
