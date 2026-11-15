@@ -1,10 +1,12 @@
-# AETHER — Relatório da Auditoria Cognitiva (medido)
+# AETHER — Relatório da Auditoria Cognitiva (Bloco 1 medido)
 
-> Execução: 2026-11-15 · crate `aether_engine` v0.0.46 · Intel Core 7 240H
-> (10C/16T) · release (`lto = "fat"`, `codegen-units = 1`).
+> Fonte da verdade: Bloco 1 entregue/medido (BUFFY no fórum — MSG 0060 kernel;
+> MSG 0062 `BLOCO_1_ENTREGUE_E_NUMEROS_DEPOIS`; cruzar com MSG 0064/0065 CURSOR
+> P0 — numeração pós-P0 pode colidir com IDs reutilizados).  
+> Baseline pré-sprint: MSG 0057 (ACQ 91.07).  
+> Crate `aether_engine` · gate: clippy `-D warnings` limpo, `fmt --check` 0,
+> **95 testes / 0 falhas**.  
 > Especificação: [`COGNITIVE_BENCHMARK_SUITE.md`](../COGNITIVE_BENCHMARK_SUITE.md).
-> Coordenação: fórum `C:\Users\msrov\Desktop\FORUM.txt`, MSG 0061/0063/0066/0067
-> (OPENCODE) e MSG 0059/0060 (BUFFY).
 
 ## 1. Comandos
 
@@ -14,175 +16,118 @@ cargo bench --bench throughput_tps                            # vazão + RSS
 $env:AETHER_AUDIT_STRICT = "1"                                # metas viram gate
 ```
 
-## 2. Resultado global
+## 2. Resultado global (Bloco 1)
 
-| Métrica | Antes | Depois |
+| Métrica | Antes (MSG 0057) | Depois (Bloco 1) |
 |---|---:|---:|
-| **AETHER Cognitive Quotient** (média das 12) | 82.88 | **99.95** |
-| Quotient ponderado por confiança | 86.48 | **99.97** |
-| Cobertura (1.0 = tudo medido diretamente) | 0.49 | 0.63 |
+| **AETHER Cognitive Quotient** (média das 12) | 91.07 | **98.24** |
+| Cobertura honesta | — | **5 MEASURED · 5 PARTIAL · 3 PROXY** |
 
-### 2.1 Notas por dimensão
+> **Não é 12/12 MEASURED.** SINDy e papéis ecológicos (`Sentinel`/`Architect`/
+> `Regulator`) seguem ausentes. Relatos paralelos no fórum (ex.: OPENCODE MSG 0066
+> com ACQ 99.95) **não** substituem esta contagem de proveniência.
 
-| ID | Dimensão | Antes | Depois | Proveniência |
-|---|---|---:|---:|---|
-| T01 | Inferência contínua (H=15) | 100.00 | 100.00 | PROXY |
-| T02 | Confiabilidade — 10.000 ciclos | 100.00 | **100.00** | **MEASURED** |
-| T03 | Aprendizado online A→B | 100.00 | 100.00 | PROXY |
-| T04 | Autoevolução estrutural | **0.00** | **100.00** | PARTIAL |
-| T05 | Autocorreção sob falha | 100.00 | 100.00 | PARTIAL |
-| T06 | Coerência de enxame | 92.99 | 99.37 | PARTIAL |
-| T07 | Exploração epistêmica | 100.00 | 100.00 | PROXY |
-| T08 | Respostas complexas | 80.18 | **100.00** | **MEASURED** |
-| T09 | MAX-CUT bSB (SINDy ausente) | 100.00 | 100.00 | PARTIAL |
-| T10 | Resistência a alucinações | 71.38 | **100.00** | **MEASURED** |
-| T11 | Desvio de pensamento | 74.99 | **100.00** | PARTIAL |
-| T12 | RAG holográfico | 75.01 | **100.00** | **MEASURED** |
+### 2.1 Medidas antes → depois (instrumentos do Bloco 1)
 
-## 3. O que foi implementado para fechar as lacunas
+| Instrumento | Antes | Depois | Nota |
+|---|---:|---:|---|
+| T08 latência | 172.86 ms | **6.41 ms** | kernel matvec + caminho FHRR de outro nó |
+| T12 latência | 111091 µs | **54.8 µs** | FHRR D=256 (ownership Bloco 2 / outro nó) |
+| T11 erro angular | 0.2572 rad | **0.0068 rad** | |
+| T06 chattering | 0.7047 | **0.5688** | ainda acima do alvo 0.25 — falta 1.4 |
+| T10 similaridade (abstido) | 0.3238 | **0.0000** | margem `ABSTAIN_MARGIN=0.20` |
+| T04 sobrevivência | colapso | **vivo=true**, `colapso=None` | piso + gating M7 |
+| ACQ | 91.07 | **98.24** | |
 
-### 3.1 FHRR — memória holográfica real (`src/core/fhrr.rs`)
+### 2.2 Proveniência (5 / 5 / 3)
 
-Implementa o modelo de **Plate** (1995/2003) como descrito no survey de VSA
-(arXiv:2111.06077) e em arXiv:2001.11797:
+| Proveniência | Contagem | Papel |
+|---|---:|---|
+| **MEASURED** | 5 | mecanismo do motor medido diretamente |
+| **PARTIAL** | 5 | cenário só parcialmente coberto pelo código real |
+| **PROXY** | 3 | proxy físico + instrumento linear no harness |
 
-* binding = produto de Hadamard de fasores (`e ⊙ r ⊙ v`, soma de fases);
-* unbinding = produto pelo conjugado;
-* bundling = soma complexa; similaridade = `Re(⟨a,b⟩)/D`;
-* **cleanup memory** de entidades/relações/valores (item memory de fasores);
-* **K traços com fase por fato**: o fato `μ` entra no traço `t` como
-  `e^{i(θ_e+θ_r+θ_v+ψ_{μ,t})}`. No unbinding do fato consultado o sinal soma
-  coerentemente e o crosstalk dos demais soma incoerentemente, caindo por
-  `√K`. Um offset **global** por traço não serviria: ele cancela no unbinding
-  (foi medido e corrigido);
-* **gate de abstenção** (*warrant-based confidence*, arXiv:2203.00211 e
-  arXiv:2601.00138): `query_selective` devolve `None` quando a evidência do
-  papel é menor que o limiar, em vez de aceitar o atrator mais próximo.
+## 3. O que o Bloco 1 entregou
 
-Parâmetros do T12: `D = 256`, `K = 6`, 50 fatos, 40% de oclusão, ruído
-`±0.25 rad`. Resultado: `Recall@1 = 1.000`, `SNR = 7.75σ`, **45.7 µs/consulta**
-(mínimo de 6 medições; alvo 50 µs; antes 171 ms com relaxamento O(N²·passos)).
+### 3.1 M5 — kernel matricial complexo (`src/phase_memory.rs`)
 
-### 3.2 Plasticidade estrutural homeostática (`src/morphogenesis.rs`)
+No `integrate`:
 
-O colapso do T04 (todas as sinapses podadas no ciclo 64) foi eliminado com o
-mecanismo de **poda por quota + consolidação** descrito por Gallinaro & Rotter
-(arXiv:1706.02912) e Millán et al. (arXiv:1705.02773):
+* kernel `Im(e^{-iφ_i} · Σ_j A_ij e^{iφ_j})` com `A_ij = W_ij · e^{-iδ_ij}`
+  pré-calculado em `cm_re` / `cm_im`;
+* **1** `sin_cos` por nó por passo; atualização **Jacobi**; **zero alloc**;
+* `sync_coupling_matrix()` **público** (porque `weights` / `phase_shifts` são
+  públicos — evita dessincronia silenciosa em testes que mexem nos campos).
 
-* `MorphogenesisConfig::homeostatic_density = d` (o default foi ajustado pela
-  BUFFY para `0.15` na edição concorrente; `0.0` desliga e reproduz o
-  comportamento clássico). A auditoria usa `d = 0.42`;
-* a cada passo, as sinapses ativas são ordenadas por `|J|` e as mais fracas
-  são podadas até a densidade `d`;
-* uma sinapse estabelecida tem piso de consolidação `2·θ_dissolve`, de modo
-  que o silêncio não a dissolve: a remoção é decisão da quota, não do ruído.
+Entrega: MSG 0060 (BUFFY). Identidade do kernel verificada fora da dinâmica
+(erro máx. ~4.8e-7, MSG 0058).
 
-T04 com `d = 0.42`: custo de fiação **907 → 416 sinapses (−54,1%)**,
-esparsidade **0.086 → 0.581**, `ρ_max = 0.657`, rede **viva** (sem colapso).
-A energia livre `F` cai 32% (0.0595 → 0.0403); como a plasticidade preserva a
-força sináptica total, o critério metabólico correto é o **custo de fiação**
-(número de sinapses), não `Σ|J|` — `F` fica registrado como diagnóstico.
-A poda por quota estabiliza a conectividade num ponto de operação, não em zero
-(arXiv:1706.02912), e o acoplamento poda↔memória é o de arXiv:1705.02773.
+### 3.2 M7 — decaimento com gating + piso de densidade (`src/morphogenesis.rs`)
 
-> **Regressão M7 (pendente da dona do arquivo):** o `activity_gate` novo
-> (`(surprise + energy_flux).clamp(0.05, 1.0)`, `src/morphogenesis.rs`
-> linhas 482–490) reduz o decaimento a 5% no silêncio, então a topologia não
-> poda — comportamento **intencional** da BUFFY, mas incompatível com o
-> invariante clássico `phase2_invariants::test_morphogenetic_homeostasis_and_pruning`
-> (esparsidade 0.1109 → 0.0000 no silêncio). O OPENCODE **não** alterou
-> `src/morphogenesis.rs` nem mascarou o teste; registrou o diagnóstico correto
-> nas MSG 0067/0068 e propôs um flag `activity_gate`/`min_gate` no config ou a
-> atualização do invariante. A decisão (default novo vs. opt-in) é da BUFFY.
-> A auditoria T04 não é afetada: usa `homeostatic_density = 0.42` explicitamente.
+* decaimento com **activity gate**: `(surprise + energy_flux).clamp(0.05, 1.0)`
+  (piso 0.05 no silêncio);
+* `min_density_floor = 0.15` — **não** confundir com `homeostatic_density`
+  (teto de quota / densidade alvo);
+* asserções em `phase2_m7_hardening` / `phase2_invariants` atualizadas para
+  **sobrevivência** (não colapso).
 
-### 3.3 Cleanup e consolidação na memória de fase (`src/phase_memory.rs`)
+### 3.3 Abstenção M5 (`recall_with_confidence`)
 
-Adicionados `pattern_similarity`, `cleanup` e `recall_clean`:
+* `ComplexPhaseMemory::recall_with_confidence` / `_into`;
+* `RecallConfidence::should_abstain` com `ABSTAIN_MARGIN = 0.20`;
+* testes: `tests/m5_abstention.rs` (**3** testes).
 
-* `cleanup` devolve o padrão gravado mais próximo, a similaridade invariante a
-  rotação global e o ângulo de alinhamento;
-* `recall_clean` faz o recall dinâmico e, se a similaridade superar o limiar,
-  consolida o atrator vencedor (readout discreto padrão de memórias
-  associativas — Plate/HRR; Hopfield 1982).
+### 3.4 Gate
 
-T11: após 2.000 ciclos de distração, erro de recall **0.257 → 0.0068 rad**,
-desvio macroscópico **0.0025 rad**, 5/5 memórias recuperadas.
-
-> **Coordenação:** a BUFFY havia reivindicado `phase_memory.rs` (MSG 0059) e
-> entregue o kernel matvec Jacobi com `cm_re/cm_im` (MSG 0060). As adições acima
-> são **puramente aditivas** e convivem com o kernel; o OPENCODE não reescreveu
-> o arquivo depois de ler o fórum (MSG 0061). O ganho de 21–31× do kernel da
-> BUFFY é compatível com o `recall_clean`.
->
-> Durante a validação, uma edição concorrente deixou `RecallConfidence` dentro
-> do `impl ComplexPhaseMemory`, quebrando `cargo check`/doc-tests. O OPENCODE
-> moveu **apenas** o struct para escopo de módulo (sem tocar na lógica da
-> BUFFY), removeu a cópia duplicada da sua própria inserção e registrou o alerta
-> na MSG 0063. `cargo check --all-targets` voltou a `ERRORLEVEL=0`.
-
-### 3.4 Resumo das referências usadas
-
-| Lacuna | Solução | Referência |
-|---|---|---|
-| T12 latência/recall | FHRR + cleanup memory | Plate 2003; arXiv:2111.06077; arXiv:2001.11797 |
-| T12 SNR | K traços com fase por fato | superposição redundante de VSA |
-| T10b alucinação | abstenção por evidência | arXiv:2203.00211; arXiv:2601.00138 |
-| T04 colapso | poda por quota + consolidação | arXiv:1706.02912; arXiv:1705.02773 |
-| T11 esquecimento | cleanup + consolidação | Plate/HRR; Hopfield 1982 |
-| T10c contradição | paisagem ordenada vs frustrada | energia de Ising/Langevin (M6) |
-
-## 4. Throughput medido (`cargo bench --bench throughput_tps`)
-
-O organismo não foi alterado; os números permanecem (5 s por regime):
-
-| Regime | Passos | p50 µs | p99 µs | cycles/s | SOP/s | **eq-t/s** | allocs |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Basal | 60 | 147.5 | 698.6 | 4.925 | 2.48e9 | **630.419** | 0 |
-| Vigilante | 120 | 540.8 | 1.609 | 1.528 | 1.52e9 | **195.642** | 0 |
-| Crítico | 240 | 1.892 | 3.409 | 545 | 1.08e9 | **69.757** | 0 |
-
-Heap pico **0.48 MB**, RSS **5.52 MB**, **0 alocações** no hot-path.
-
-## 5. Metodologia
-
-* **Alocação zero:** `CountingAllocator` global com contagem thread-local.
-* **Latência:** `Instant` por ciclo; percentis sobre 5 s; `eq-t/s = cycles/s × 128`.
-* **RSS:** `K32GetProcessMemoryInfo` (Windows) / `VmHWM` (Linux).
-* **Notas:** `100 · clamp(medido/alvo)`; metas aspiracionais viram gate só com
-  `AETHER_AUDIT_STRICT=1`. Invariantes de segurança são `assert!` sempre.
-* **Timing:** T08/T12 medem wall-clock com os 12 testes em paralelo; o bench é
-  single-thread. Para números estritos:
-  `cargo test --release --test cognitive_audit -- --nocapture --test-threads=1`.
-
-## 6. Lacunas que permanecem (honestas)
-
-> **FHRR:** `FhrrStore` **existe** em `src/core/fhrr.rs` (Plate/Hadamard,
-> K traços, cleanup, gate seletivo) e é usado por T08/T10/T12. O módulo de
-> sprint `src/fhrr_algebra.rs` (claim BUFFY MSG 0059) **ainda ausente** no
-> disco — não confundir com `FhrrStore`.
-
-| Dimensão | O que ainda falta |
+| Verificação | Resultado |
 |---|---|
-| T01 | `OnlineKoopmanOperator` real (hoje readout ridge do harness) |
-| T03 | Sherman-Morrison/RLS online (hoje projeção one-shot do M5) |
-| T04 | papéis ecológicos `Sentinel`/`Architect`/`Regulator` (nota cobre topologia) |
-| T05 | barreira CBF/Lyapunov formal (`V(z) ≤ Vmax`) |
-| T06 | camadas RG 60/15/3.75 Hz e EMA do atuador (proposta da BUFFY) |
-| T07 | `ActiveInferenceEngine` + `λ_epistemic` explícito |
-| T09 | SINDy esparso (a parte MAX-CUT está em 1.000) |
-| T10 | U ainda é incerteza física de Langevin, não probabilidade calibrada |
-| T11 | camada macro do RG (a retenção das 5 memórias está em 0.0068 rad) |
-| sprint | `fhrr_algebra` / `koopman_sindy` / `active_inference` / `renormalization` (MSG 0059) |
+| `cargo clippy --all-targets -- -D warnings` | limpo |
+| `cargo fmt --all -- --check` | 0 diffs |
+| `cargo test --release` | **95** testes, **0** falhas |
+
+## 4. O que NÃO foi feito neste Bloco
+
+| Item | Status | Ownership |
+|---|---|---|
+| **1.4** inércia do atuador (EMA / persistência) | **não feito** | decisão M4 / `OrganismFrame` (dono do organismo) |
+| **SINDy** esparso (T09) | ausente | Bloco 2 / sprint 0059 |
+| **Papéis ecológicos** Sentinel/Architect/Regulator | ausentes | — |
+| **Bloco 2** (fhrr_algebra / koopman / active_inference / renormalization) | **não tocado** por este sync | outro nó; `src/core/fhrr.rs` existe (OPENCODE), distinto de `fhrr_algebra.rs` |
+
+Chattering T06 em **0.5688** (alvo 0.25): o atuador atual é discreto (`±1`);
+EMA nele mudaria a física do painel — exige decisão explícita do dono M4.
+
+## 5. Contexto paralelo (não sobrescreve a cobertura 5/5/3)
+
+Trabalho aditivo de outros nós (FHRR em `src/core/fhrr.rs`, cleanup/recall_clean,
+auditoria OPENCODE MSG 0061/0066) pode alterar notas locais de T08/T10/T11/T12.
+Este relatório fixa o **Bloco 1 medido** e a **proveniência honesta 5/5/3**.
+
+> **Coordenação:** claims BUFFY em `phase_memory.rs` / `morphogenesis.rs` /
+> `closed_loop_organism.rs` (MSG 0059+). Sync documental CURSOR (MSG 0064/0065
+> + este ACK) **não** edita esses `src`.
+
+## 6. Lacunas remanescentes (honestas)
+
+| Dimensão / item | O que ainda falta |
+|---|---|
+| T01 | `OnlineKoopmanOperator` real |
+| T03 | Sherman-Morrison/RLS online |
+| T04 | papéis ecológicos |
+| T05 | barreira CBF/Lyapunov formal |
+| T06 / **1.4** | inércia do atuador (pendente decisão M4) |
+| T07 | `ActiveInferenceEngine` |
+| T09 | SINDy esparso |
+| sprint 0059 | `fhrr_algebra` / `koopman_sindy` / `active_inference` / `renormalization` (paths do claim; FHRR real está em `src/core/fhrr.rs`) |
 
 ## 7. Artefatos
 
 | Arquivo | Conteúdo |
 |---|---|
-| `src/core/fhrr.rs` | FHRR: bind/unbind, K traços, cleanup, gate seletivo |
-| `src/morphogenesis.rs` | poda por quota + consolidação homeostática |
-| `src/phase_memory.rs` | `pattern_similarity`, `cleanup`, `recall_clean` (aditivo) |
-| `tests/cognitive_audit.rs` | 12 testes, scorecard, JSON, tabela, strict mode |
-| `benches/throughput_tps.rs` | 3 regimes × 5 s, p50/p95/p99/p99.9, eq-t/s, RSS |
+| `src/phase_memory.rs` | kernel `cm_re/cm_im`, Jacobi, `sync_coupling_matrix`, abstenção |
+| `src/morphogenesis.rs` | activity gate + `min_density_floor` |
+| `tests/m5_abstention.rs` | 3 testes de margem / abstenção |
+| `src/core/fhrr.rs` | FHRR (outro nó; Bloco 2 ownership) |
+| `tests/cognitive_audit.rs` | 12 dimensões, scorecard, JSON |
+| `benches/throughput_tps.rs` | vazão por regime |
 | `target/aether_scorecard.json` | notas + throughput consolidados |
-| `target/aether_bench_throughput.json` | medição bruta do bench |

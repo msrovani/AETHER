@@ -172,16 +172,34 @@ impl LyapunovCbf {
             self.cand[i] = z[i] + u[i] + lambda * self.grad[i];
         }
 
-        // Contração exata se a projeção linear ainda violar o teto.
+        // Contração radial exata até a fronteira `V(z + α d) = Vmax`.
+        // V(z + αd) = A α² + B α + C, com C = V(z) − Vmax ≤ 0.
+        let mut aa = 0.0f32;
+        let mut bb = 0.0f32;
+        for i in 0..self.dim {
+            let d = self.cand[i] - z[i];
+            aa += 0.5 * self.p[i] * d * d;
+            bb += self.p[i] * z[i] * d;
+        }
+        let cc = v0 - self.v_max;
         let mut alpha = 1.0f32;
-        while alpha > 1e-4 {
-            for i in 0..self.dim {
-                self.safe[i] = z[i] + alpha * (self.cand[i] - z[i]);
+        if aa > 1e-12 {
+            let disc = bb * bb - 4.0 * aa * cc;
+            if disc >= 0.0 {
+                let root = (-bb + disc.sqrt()) / (2.0 * aa);
+                if root.is_finite() {
+                    alpha = root.clamp(0.0, 1.0);
+                }
+            } else {
+                alpha = 0.0;
             }
-            if self.value(&self.safe) <= self.v_max {
-                break;
-            }
-            alpha *= 0.5;
+        } else if bb.abs() > 1e-12 {
+            alpha = (-cc / bb).clamp(0.0, 1.0);
+        }
+        // Margem de 0.1% para absorver arredondamento de f32.
+        alpha *= 0.999;
+        for i in 0..self.dim {
+            self.safe[i] = z[i] + alpha * (self.cand[i] - z[i]);
         }
         out.copy_from_slice(&self.safe);
         Ok(self.value(out))

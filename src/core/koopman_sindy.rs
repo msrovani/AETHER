@@ -279,7 +279,6 @@ pub struct SindyEquationDiscoverer {
     b: Vec<f64>,
     active: Vec<usize>,
     coef: Vec<f64>,
-    work: Vec<f64>,
 }
 
 impl Default for SindyEquationDiscoverer {
@@ -304,7 +303,6 @@ impl SindyEquationDiscoverer {
             b: vec![0.0; terms],
             active: Vec::with_capacity(terms),
             coef: vec![0.0; terms],
-            work: vec![0.0; terms * terms],
         }
     }
 

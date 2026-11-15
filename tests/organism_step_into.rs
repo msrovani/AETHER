@@ -233,3 +233,67 @@ fn step_e_step_into_equivalentes() {
     // os estados caem em {-1, +1}
     assert!(fa.states.iter().all(|s| *s == -1 || *s == 1));
 }
+
+// ---------------------------------------------------------------------------
+// Inércia do atuador: comando contínuo suavizado, estado discreto intacto.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn inercia_do_atuador_reduz_chattering_sem_tocar_no_estado() {
+    let cfg = test_config();
+    let mut org = new_organism(&cfg);
+    let mut frame = OrganismFrame::with_capacity(cfg.steps, cfg.decision_dim);
+
+    org.step_into(&mut frame).expect("warmup");
+    let mut prev_states = frame.states.clone();
+    let mut state_chatter = 0.0f32;
+    let mut act_chatter = 0.0f32;
+    let mut fractionario = false;
+
+    for step in 0..8 {
+        org.step_into(&mut frame).expect("step");
+
+        // O estado emergente continua EXATAMENTE discreto.
+        assert!(
+            frame.states.iter().all(|s| *s == 1 || *s == -1),
+            "estado saiu de {{-1,+1}} no passo {step}"
+        );
+        // O comando contínuo fica no intervalo físico e é finito.
+        assert!(
+            frame
+                .actuation
+                .iter()
+                .all(|u| u.is_finite() && u.abs() <= 1.0 + 1e-6),
+            "atuação fora de [-1,1] no passo {step}"
+        );
+        if frame
+            .actuation
+            .iter()
+            .any(|u| u.abs() > 0.05 && u.abs() < 0.95)
+        {
+            fractionario = true;
+        }
+
+        let mut ds = 0.0f32;
+        for i in 0..cfg.decision_dim {
+            let d = frame.states[i] as f32 - prev_states[i] as f32;
+            ds += d * d;
+        }
+        state_chatter += ds.sqrt();
+        act_chatter += frame.actuation_delta;
+        prev_states.clone_from_slice(&frame.states);
+    }
+
+    assert!(
+        state_chatter > 0.0,
+        "o estado não oscilou: o teste não exercita a inércia"
+    );
+    assert!(
+        fractionario,
+        "a atuação ficou idêntica ao estado discreto (filtro não agiu)"
+    );
+    assert!(
+        act_chatter < 0.5 * state_chatter,
+        "inércia insuficiente: atuação {act_chatter:.3} vs estado {state_chatter:.3}"
+    );
+}

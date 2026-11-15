@@ -69,6 +69,13 @@ pub struct OrganismConfig {
     pub acoustic_hz: f64,
     /// Amplitude da assinatura acústica (rad/s sobre `dθ/dt`).
     pub acoustic_amplitude: f32,
+    /// Constante de tempo da inércia do atuador (s). `0.0` desliga o filtro.
+    ///
+    /// O estado emergente `s*` continua discreto em `{-1, +1}`; a inércia age
+    /// só no sinal contínuo derivado dele (`OrganismFrame::actuation`), que é o
+    /// que um consumidor aciona. Com `τ = 0.1 s` e 60 Hz, `α = dt/(τ+dt) ≈
+    /// 0.143`, o que derruba o chattering de troca de sinal em ~7×.
+    pub actuator_tau: f64,
 }
 
 impl Default for OrganismConfig {
@@ -87,6 +94,7 @@ impl Default for OrganismConfig {
             sensor_noise: 0.35,
             acoustic_hz: 10.0,
             acoustic_amplitude: 20.0,
+            actuator_tau: 0.1,
         }
     }
 }
@@ -112,6 +120,16 @@ pub struct OrganismFrame {
     pub energy_trace: Vec<f64>,
     /// Estado emergente `s*`.
     pub states: Vec<i8>,
+    /// Atuação **contínua** em `[-1, +1]`: o estado emergente passado por um
+    /// filtro passa-baixa exponencial (`τ = OrganismConfig::actuator_tau`).
+    ///
+    /// Existe porque `states` troca de sinal a cada quadro (chattering), o que
+    /// é ruído de acionamento: a inércia suaviza o comando sem tocar no estado
+    /// discreto que a física decide.
+    pub actuation: Vec<f32>,
+    /// Custo de troca do comando neste quadro, `‖u_t − u_{t−1}‖₂` — o
+    /// *chattering* que a inércia existe para reduzir.
+    pub actuation_delta: f32,
     /// Fase atual do `Nó_Bancada`.
     pub phase_bancada: [f64; 4],
     /// A perturbação já foi injetada?
@@ -140,6 +158,8 @@ impl OrganismFrame {
             energy_initial: 0.0,
             energy_trace: vec![0.0; steps + 1],
             states: vec![0; n],
+            actuation: vec![0.0; n],
+            actuation_delta: 0.0,
             phase_bancada: [0.0; 4],
             perturbed: false,
             dropped_frames: 0,
@@ -151,6 +171,8 @@ impl OrganismFrame {
 /// Organismo cognitivo integrado.
 pub struct ClosedLoopOrganism {
     cfg: OrganismConfig,
+    /// Comando contínuo do quadro anterior (memória do filtro de inércia).
+    actuation: Vec<f32>,
     handles: Vec<NodeHandle>,
     wave: WaveInterferenceBlock,
     solver: ThermodynamicIsingSolver,
@@ -266,6 +288,7 @@ impl ClosedLoopOrganism {
         let window = cfg.window;
 
         Ok(Self {
+            actuation: vec![0.0; cfg.decision_dim],
             cfg,
             handles,
             wave,
@@ -332,7 +355,10 @@ impl ClosedLoopOrganism {
         let n = self.cfg.decision_dim;
 
         // --- validação de formas (sem alocar/redimensionar no caminho feliz) ---
-        if out.energy_trace.len() != steps + 1 || out.states.len() != n {
+        if out.energy_trace.len() != steps + 1
+            || out.states.len() != n
+            || out.actuation.len() != n
+        {
             return Err(AetherError::shape(
                 [steps + 1, n],
                 [out.energy_trace.len(), out.states.len()],
@@ -451,6 +477,28 @@ impl ClosedLoopOrganism {
             .as_slice()
             .ok_or_else(|| AetherError::Config("out.states deve ser C-contiguo".into()))?;
         out.states.copy_from_slice(st_slice);
+
+        // Inércia do atuador: EMA de primeira ordem sobre o estado emergente.
+        // `states` continua exatamente o que a física decidiu; só o comando
+        // contínuo é suavizado, e o custo de troca é reportado no quadro.
+        let dt = 1.0 / self.cfg.hz.max(1e-6);
+        let tau = self.cfg.actuator_tau.max(0.0);
+        let alpha = if tau > 0.0 {
+            (dt / (tau + dt)).clamp(0.0, 1.0) as f32
+        } else {
+            1.0f32
+        };
+        let mut delta2 = 0.0f32;
+        for i in 0..n {
+            let target = out.states[i] as f32;
+            let prev = self.actuation[i];
+            let next = prev + alpha * (target - prev);
+            self.actuation[i] = next;
+            out.actuation[i] = next;
+            let d = next - prev;
+            delta2 += d * d;
+        }
+        out.actuation_delta = delta2.sqrt();
 
         out.elapsed = self.started.elapsed();
         out.order_parameter = order_parameter;

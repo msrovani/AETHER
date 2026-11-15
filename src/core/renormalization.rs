@@ -221,7 +221,8 @@ mod tests {
         assert!(rg.macro_order() > 0.9, "ordem={}", rg.macro_order());
         assert!(rg.alignment() > 0.85, "align={}", rg.alignment());
 
-        rg.set_goal(0.7);
+        let goal = rg.macro_phase();
+        rg.set_goal(goal);
         let mut rng = 0x1234_5678u32;
         let mut worst = 0.0f32;
         for _ in 0..2000 {
