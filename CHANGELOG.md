@@ -14,6 +14,35 @@ Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto
 - `examples/e2c_persistency.rs`
 - `tests/e2c_persistency.rs`
 
+## [0.0.90] - 2026-11-15
+
+### Added
+
+- `core::presolve::persistency_qumo` — **persistência de primeira ordem**
+  (dominância) para QUBO/Ising: fixa `s_i` quando o ganho máximo do flip é
+  negativo em todas as atribuições dos outros; atualiza `h_j += J_ij·v` e
+  itera até o fixpoint. **Preserva o valor ótimo.**
+- `examples/e2c_persistency.rs` — valida o ótimo antes/depois por força bruta, em
+  três regimes de viés.
+- `tests/e2c_persistency.rs` — 3 gates (viés forte + cascata, controle sem viés,
+  preservação do ótimo em 120 instâncias).
+
+### Measured
+
+| plant | redução | ótimo alterado | presolve+BSB | BSB puro |
+|---:|---:|---:|---:|---:|
+| 0% (controle) | 0,0% | 0 | 185/200 | 185/200 |
+| 25% | 28,6% | 0 | 190/200 | 188/200 |
+| 45% | 42,9% | 0 | 199/200 | 193/200 |
+
+### Changed
+
+- **Resultado:** a dominância é *sound* (0/600 ótimos alterados) mas **míope** —
+  só vê viés explícito e não cascateia em `J` ±1. O controle sem viés dá 0% e
+  braços idênticos, provando que a medida não está contaminada.
+- Vol. II §2.7 e Vol. III (§11, §12) atualizados; **E2c-2 (roof dual/max-flow)**
+  entra como próximo refinamento de alcance.
+
 ## [0.0.89] - 2026-11-15
 
 ### Added

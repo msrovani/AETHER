@@ -142,7 +142,13 @@ fn brute_force(n: usize, j: &[f64], h: &[f64]) -> f64 {
 }
 
 /// Ótimo com as fixações aplicadas (enumera só o resíduo).
-fn optimum_with_fixed(n: usize, j: &[f64], h: &[f64], fixed: &[Option<i8>], residual: &[usize]) -> f64 {
+fn optimum_with_fixed(
+    n: usize,
+    j: &[f64],
+    h: &[f64],
+    fixed: &[Option<i8>],
+    residual: &[usize],
+) -> f64 {
     let rn = residual.len();
     let mut s = vec![0i8; n];
     for (i, f) in fixed.iter().enumerate() {
@@ -246,7 +252,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // reconstrói com BSB no resíduo
-        let sol = solve_residual(&pre.residual, &j, &pre.h_eff, n, args.steps, args.restarts, seed);
+        let sol = solve_residual(
+            &pre.residual,
+            &j,
+            &pre.h_eff,
+            n,
+            args.steps,
+            args.restarts,
+            seed,
+        );
         let mut s = vec![0i8; n];
         for (i, f) in pre.fixed.iter().enumerate() {
             if let Some(v) = f {
@@ -262,7 +276,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // BSB puro (sem presolve), para comparação de completude
-        let full = solve_residual(&(0..n).collect::<Vec<_>>(), &j, &h, n, args.steps, args.restarts, seed);
+        let full = solve_residual(
+            &(0..n).collect::<Vec<_>>(),
+            &j,
+            &h,
+            n,
+            args.steps,
+            args.restarts,
+            seed,
+        );
         let mut s_full = vec![0i8; n];
         s_full.copy_from_slice(&full);
         if (energy(&j, &h, n, &s_full) - e_star).abs() <= 1e-9 {
@@ -286,18 +308,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         args.restarts
     );
     println!();
-    println!("redução média de variáveis       : {:.1}%", 100.0 * reduction);
+    println!(
+        "redução média de variáveis       : {:.1}%",
+        100.0 * reduction
+    );
     println!("fixações que mudaram o ótimo     : {unsound}");
     if unsound > 0 {
         println!("déficit acumulado no ótimo       : {deficit:.6}");
     }
-    println!("reconstruções no ótimo           : {solved}/{}", args.instances);
-    println!("BSB puro no ótimo                : {full_solved}/{}", args.instances);
+    println!(
+        "reconstruções no ótimo           : {solved}/{}",
+        args.instances
+    );
+    println!(
+        "BSB puro no ótimo                : {full_solved}/{}",
+        args.instances
+    );
     println!();
 
-    println!("  G1 soundness (ótimo preservado)   : {}", pass(unsound == 0));
-    println!("  G2 redução ≥ 40%                  : {}  ({:.1}%)", pass(reduction >= 0.40), 100.0 * reduction);
-    println!("  G3 reconstrução no ótimo = 100%   : {}", pass(solved == args.instances));
+    println!(
+        "  G1 soundness (ótimo preservado)   : {}",
+        pass(unsound == 0)
+    );
+    println!(
+        "  G2 redução ≥ 40%                  : {}  ({:.1}%)",
+        pass(reduction >= 0.40),
+        100.0 * reduction
+    );
+    println!(
+        "  G3 reconstrução no ótimo = 100%   : {}",
+        pass(solved == args.instances)
+    );
     println!();
 
     std::fs::create_dir_all("target").ok();

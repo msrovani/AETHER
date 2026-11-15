@@ -307,6 +307,42 @@ posiform quadrática) fixa variáveis constantes em **algum ótimo** — alcance
 garantia diferente. O E2b v2 deve implementá-lo e comparar a cascata; o gate de
 soundness já está pronto para os dois.
 
+### 2.7 E2c v1 — persistência de primeira ordem: sound, mas míope
+
+**Executado em 2026-11-15.** `examples/e2c_persistency.rs` +
+`persistency_qumo` em `src/core/presolve.rs`. Regra de **dominância**:
+
+```
+Δ_i(s) = 2·s_i·(h_i + (Js)_i)
+s_i = +1 : max Δ = 2(h_i + Σ|J_ij|) < 0  ⇒  existe ótimo com s_i = −1
+s_i = −1 : max Δ = 2(Σ|J_ij| − h_i) < 0  ⇒  existe ótimo com s_i = +1
+```
+
+Fixar assim **preserva o valor ótimo** (pode descartar ótimos alternativos,
+nunca o valor). `n=14`, `J` ±1 simétrico, viés plantado em `plant·n` variáveis:
+
+| plant | redução | ótimo mudou? | presolve+BSB | BSB puro |
+|---:|---:|---:|---:|---:|
+| **0%** (controle) | **0,0%** | 0 | 185/200 | **185/200** |
+| 25% | **28,6%** | 0 | **190/200** | 188/200 |
+| 45% | **42,9%** | 0 | **199/200** | 193/200 |
+
+**Três achados:**
+
+1. **Soundness perfeita:** 0 fixações mudaram o ótimo em **600 instâncias** (200
+   por regime), validado por força bruta.
+2. **A regra é míope por construção:** ela só vê viés **já presente**. No
+   controle (`plant=0`) a redução é **0,0%** e os dois braços dão exatamente o
+   mesmo resultado (185/185) — prova de que a comparação não está contaminada.
+3. **Não há cascata em `J` ±1.** Depois de fixar uma variável, `h_eff` dos
+   vizinhos muda em ±1 enquanto `Σ|J|` é ~6–13: nunca cruza o limiar. A cascata
+   do E2b vem da **implicação lógica**, que é de outra natureza.
+
+**Conclusão do E2c v1:** a persistência de primeira ordem é o análogo QUBO da
+implicação — **rigorosa e barata, mas limitada ao que já está explícito**. Para
+alcançar variáveis que não são dominadas por `h` mas são constantes em algum
+ótimo, é preciso o **roof dual completo (max-flow)** — o E2c-2.
+
 ---
 
 ## 3. Risco 2 — Interferência em VSA

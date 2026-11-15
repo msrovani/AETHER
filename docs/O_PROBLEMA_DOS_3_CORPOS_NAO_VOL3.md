@@ -383,6 +383,8 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | **E1b** | II | ACF/IMF no `FhrrStore` | ≥10× capacidade, ciclo-limite <1% | R2 |
 | **E2** | I | lógica como Ising + certificado | 3-SAT n≤20 = força bruta | R1 |
 | **E2b** ✅ | II | presolve simbólico antes do BSB — **executado** | **0 insound** · **64,8% redução** (+39,8 pp de cascata) · **200/200** resolvidas vs 183/200 | R1, R3 |
+| **E2c** ✅ | II | persistência de 1ª ordem (dominância) — **executado** | **0/600 ótimos alterados** · 0% sem viés (controle) · 42,9% com viés 45% | R1, R3 |
+| **E2c-2** | II | roof dual completo (max-flow) | alcance além da dominância; mesmo gate de soundness | R1 |
 | **E3** | I | transplantação de embeddings | analogia medida, sem alvo de marketing | R3 |
 | **E3b** ✅ | II/III | verificador de coerência + proveniência | **spins: nulo (AUC 0,46–0,55)** · **2-SAT: precisão 100%** | R3, R10 |
 | **E4** | I | self-field + ablação | ECE melhora; T01 não regride | K5 |
@@ -492,7 +494,8 @@ Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 2º ✅ E6b  kernel do solver            ← FEITO: 7,44 → 17,10 GFLOP/s (2,30×)
 3º ✅ E3b  certificado + proveniência  ← FEITO: verifica factibilidade, não acerto
 4º ✅ E2b  presolve simbólico          ← FEITO: 64,8% redução, 0 insound, 200/200
-5º  E2c  roof dual (max-flow)          ← alcance maior que a implicação
+5º ✅ E2c  persistência de 1ª ordem     ← FEITO: sound (0/600), míope por construção
+6º  E2c-2 roof dual (max-flow)         ← alcance além da dominância
 6º  E1b  capacidade/ciclo-limite       ← decide se VSA é viável em D=160
 7º  F1   ponte read-only               ← fecha K6 sem risco de drift
 8º  E1/E2/E3  os três "NÃO"            ← o programa científico
@@ -507,7 +510,7 @@ Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 | 1 | **Onde vão os 146 µs?** | ✅ **respondida** (E6) | **84,4% no solver** (133,1 de 157,7 µs). readout 7,0% · entropy 3,0% · wave 2,5% · actuator 1,7% · ring_copy 1,1%. Cobertura 99,98%. |
 | 2 | **ΔE prevê acerto?** | ✅ **respondida** (E3b) | **Não em otimização livre** (AUC 0,46–0,55; bound 0,058 anti-preditivo). **Sim com restrições exatas**: 383 decisivas, precisão 100%. |
 | 3 | **Quantos padrões cabem em D=160?** | ⏳ **aberta** (E1b) | Teoria: `M_max ∝ D²` (arXiv:1906.11684) — mas **a constante não foi medida** para FHRR complexo. Ordem de grandeza entre 10³ e 10⁴. Fecha medindo Recall@1 vs nº de fatos superpostos. |
-| 4 | **Roof dual reduz o suficiente em CNF de circuito?** | ⏳ **parcial** (E2b v1) | **Presolve simbólico (unidades + implicações): 64,8% de redução, +39,8 pp de cascata, 0 insound, 200/200 resolvidas vs 183/200.** Falta o **roof dual completo** (max-flow), que tem alcance maior. |
+| 4 | **Roof dual reduz o suficiente em CNF de circuito?** | ⏳ **parcial** (E2b/E2c) | **CNF:** presolve por unidades+implicação dá **64,8%** (cascata +39,8 pp), 0 insound, 200/200. **QUBO:** dominância é sound (**0/600 ótimos alterados**) mas míope — **0% sem viés**, 42,9% com viés 45%. Falta o **roof dual completo (max-flow)**. |
 | 5 | **O self-field melhora calibração ou só replica a surpresa?** | ⏳ **aberta** (E4) | Falsificável: melhora ECE de abstenção **sem** melhorar T01. Se T01 também melhorar, a hipótese "metacognição é separada" cai. |
 | 6 | **Um atrator pode virar "gist" sem perder a habilidade?** | ⏳ **aberta** (F2) | Hoje o atrator é binário: está ou não está. Fecha consolidando no L4 (texto/energia) e medindo retenção após N consolidações. |
 | 7 | **A ponte de fase preserva o suficiente?** | ⏳ **aberta** (F3) | Fecha com `cue_into` (ledger → vetor → semente de atrator) e medindo recall@1 no round-trip **vs** recall direto; gate: perda < 5%. |
