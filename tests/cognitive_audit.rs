@@ -945,6 +945,7 @@ fn test_04_self_evolution() {
     let mut sp_end = 0.0f64;
     let mut rho_max = 0.0f32;
     let mut symmetry_error = 0.0f32;
+    let mut collapse_cycle: Option<usize> = None;
 
     for cycle in 0..CYCLES {
         let surprise = if (cycle / 50) % 2 == 0 {
@@ -968,6 +969,12 @@ fn test_04_self_evolution() {
             }
             let free = field.evolve_topology(surprise, &spins, 0.05);
             assert!(free.is_finite());
+        }
+        if collapse_cycle.is_none() {
+            let active: usize = fields.iter().map(|f| f.active_synapses()).sum();
+            if active == 0 {
+                collapse_cycle = Some(cycle);
+            }
         }
         if cycle == 0 {
             for field in &fields {
@@ -1007,11 +1014,13 @@ fn test_04_self_evolution() {
     assert!(symmetry_error < 1e-5, "J assimetrico: {symmetry_error}");
     assert!(rho_max.is_finite() && rho_max <= 1.01, "rho={rho_max}");
 
-    // Papeis ecologicos nao existem no motor: contabilizados como 0.
+    // Poda saudavel preserva funcao. Rede 100% podada (morta) NAO pontua.
+    let alive = sp_end < 0.999 && rho_max > 1e-3;
     let roles_emergent = 0.0;
-    let score = 0.45 * score_hi(f_improvement, 0.50)
+    let structural = 0.45 * score_hi(f_improvement, 0.50)
         + 0.35 * score_hi(sparsity_gain, 0.30)
         + 0.20 * score_lo(rho_max as f64, 1.0);
+    let score = if alive { structural } else { 0.0 };
 
     record(
         Dimension::new(
@@ -1019,7 +1028,7 @@ fn test_04_self_evolution() {
             "Autoevolucao estrutural (6 nos x 800 ciclos)",
             score,
             "PARTIAL",
-            "morfogenese real (F, poda, homeostase); papeis Sentinel/Architect/Regulator ausentes",
+            "morfogenese real (F, poda, homeostase); papeis ausentes; colapso topologico zera a nota",
         )
         .m("free_energy_start", f_start)
         .m("free_energy_end", f_end)
@@ -1028,18 +1037,30 @@ fn test_04_self_evolution() {
         .m("sparsity_end", sp_end)
         .m("sparsity_gain", sparsity_gain)
         .m("rho_max", rho_max as f64)
+        .m("alive", if alive { 1.0 } else { 0.0 })
+        .m(
+            "collapse_cycle",
+            collapse_cycle.map(|c| c as f64).unwrap_or(-1.0),
+        )
         .m("roles_emergent", roles_emergent),
     );
     println!(
-        "[T04] F {f_start:.4}->{f_end:.4} (melhora {:.1}%), esparsidade {sp_start:.3}->{sp_end:.3}, rho_max={rho_max:.4}, papeis=0",
-        f_improvement * 100.0
+        "[T04] F {f_start:.4}->{f_end:.4} (melhora {:.1}%), esparsidade {sp_start:.3}->{sp_end:.3}, rho_max={rho_max:.4}, vivo={alive}, colapso={:?}, papeis=0",
+        f_improvement * 100.0,
+        collapse_cycle
     );
 
     assert!(
         sp_end > sp_start,
         "poda nao cresceu: {sp_start:.3} -> {sp_end:.3}"
     );
-    target_gate(sparsity_gain >= 0.30 && f_improvement >= 0.50, "T04 metas");
+    if !alive {
+        println!("[AUDIT][WARN] T04: topologia colapsou (todas as sinapses podadas); nota zerada");
+    }
+    target_gate(
+        alive && sparsity_gain >= 0.30 && f_improvement >= 0.50,
+        "T04 metas",
+    );
 }
 
 // ---------------------------------------------------------------------------
