@@ -31,6 +31,17 @@ mod aether_dashboard_win {
         ScorecardView,
     };
 
+    /// Conteúdo da coluna direita (explicação).
+    #[derive(Clone, Debug)]
+    enum DetailPane {
+        /// Nada sob o mouse: glossário curto.
+        Idle,
+        /// Hover sobre medidor/botão.
+        Hover { title: String, body: String },
+        /// Clique em T0x: ficha fixa até outro clique/hover.
+        Ficha(DimFicha),
+    }
+
     /// App do hub.
     pub struct DashboardApp {
         view: ScorecardView,
@@ -38,8 +49,9 @@ mod aether_dashboard_win {
         path_arg: Option<String>,
         jobs: JobRunner,
         host: Option<HostReport>,
-        selected: Option<DimFicha>,
-        show_help: bool,
+        detail: DetailPane,
+        /// Preenchido durante o frame se algo estiver sob o mouse.
+        hover_scratch: Option<(String, String)>,
         confirm_daemon: bool,
         last_job_done: bool,
     }
@@ -70,6 +82,18 @@ mod aether_dashboard_win {
                 self.status = format!("job: {}…", kind.label());
             } else {
                 self.status = "já há um job em execução (single-flight)".into();
+            }
+        }
+
+        fn note_hover(&mut self, title: impl Into<String>, body: impl Into<String>) {
+            self.hover_scratch = Some((title.into(), body.into()));
+        }
+
+        fn commit_hover(&mut self) {
+            if let Some((title, body)) = self.hover_scratch.take() {
+                self.detail = DetailPane::Hover { title, body };
+            } else if !matches!(self.detail, DetailPane::Ficha(_)) {
+                self.detail = DetailPane::Idle;
             }
         }
 
@@ -111,6 +135,7 @@ mod aether_dashboard_win {
     impl App for DashboardApp {
         fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
             self.poll_jobs();
+            self.hover_scratch = None;
             if self.jobs.snapshot().phase == aether_engine::dashboard::JobPhase::Running {
                 ctx.request_repaint_after(std::time::Duration::from_millis(250));
             }
@@ -119,31 +144,17 @@ mod aether_dashboard_win {
                 self.draw_top_bar(ui);
             });
 
-            if self.show_help {
-                egui::SidePanel::right("help")
-                    .default_width(280.0)
-                    .show(ctx, |ui| {
-                        ui.heading("Ajuda / glossário");
-                        ui.separator();
-                        for (k, v) in glossary_entries() {
-                            ui.label(RichText::new(*k).strong());
-                            ui.label(RichText::new(*v).small());
-                            ui.add_space(6.0);
-                        }
-                        ui.separator();
-                        ui.label(
-                            RichText::new("Docs: docs/USER_GUIDE.md · docs/DASHBOARD_METRICS.md")
-                                .small()
-                                .color(Color32::GRAY),
-                        );
-                    });
-            }
+            egui::SidePanel::right("detail")
+                .default_width(320.0)
+                .min_width(260.0)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    self.draw_detail_pane(ui);
+                });
 
             egui::CentralPanel::default().show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     self.draw_globals(ui);
-                    ui.add_space(8.0);
-                    self.draw_glossary_inline(ui);
                     ui.add_space(12.0);
                     self.draw_dimensions(ui);
                     ui.add_space(12.0);
@@ -153,7 +164,7 @@ mod aether_dashboard_win {
                     ui.add_space(8.0);
                     ui.label(
                         RichText::new(
-                            "Hover = tooltip · clique em T0x = ficha · botões = testes práticos.",
+                            "Passe o mouse nos medidores → coluna direita · clique em T0x = ficha.",
                         )
                         .small()
                         .color(Color32::from_rgb(140, 150, 160)),
@@ -161,27 +172,7 @@ mod aether_dashboard_win {
                 });
             });
 
-            if let Some(ficha) = self.selected {
-                egui::Window::new(format!("{} — {}", ficha.id, ficha.title))
-                    .collapsible(false)
-                    .resizable(true)
-                    .default_width(420.0)
-                    .show(ctx, |ui| {
-                        ui.label(RichText::new(ficha.tooltip).small());
-                        ui.separator();
-                        ui.label(RichText::new("Como interpretar").strong());
-                        ui.label(ficha.interpret);
-                        ui.add_space(4.0);
-                        ui.label(RichText::new("Se baixo, o que falha").strong());
-                        ui.label(ficha.if_low);
-                        ui.add_space(4.0);
-                        ui.label(RichText::new("Proveniência").strong());
-                        ui.label(RichText::new(ficha.provenance).italics().small());
-                        if ui.button("Fechar").clicked() {
-                            self.selected = None;
-                        }
-                    });
-            }
+            self.commit_hover();
 
             if self.confirm_daemon {
                 egui::Window::new("Demo daemon — aviso multicast")
@@ -207,6 +198,79 @@ mod aether_dashboard_win {
     }
 
     impl DashboardApp {
+        fn draw_detail_pane(&mut self, ui: &mut egui::Ui) {
+            ui.heading(RichText::new("Detalhe").strong().size(18.0));
+            ui.separator();
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                match &self.detail {
+                    DetailPane::Idle => {
+                        ui.label(
+                            RichText::new(
+                                "Passe o mouse sobre ACQ, T0x, vazão ou um botão \
+                                 para ler a explicação aqui — sem caixa flutuante.",
+                            )
+                            .small()
+                            .color(Color32::from_rgb(160, 170, 180)),
+                        );
+                        ui.add_space(10.0);
+                        ui.label(RichText::new("Glossário").strong());
+                        ui.add_space(4.0);
+                        for (k, v) in glossary_entries() {
+                            ui.label(RichText::new(*k).strong().small());
+                            ui.label(RichText::new(*v).small());
+                            ui.add_space(6.0);
+                        }
+                        ui.separator();
+                        ui.label(
+                            RichText::new("docs/USER_GUIDE.md · docs/DASHBOARD_METRICS.md")
+                                .small()
+                                .color(Color32::GRAY),
+                        );
+                    }
+                    DetailPane::Hover { title, body } => {
+                        ui.label(RichText::new(title).strong().size(15.0));
+                        ui.add_space(6.0);
+                        for para in body.split('\n') {
+                            if para.is_empty() {
+                                ui.add_space(4.0);
+                            } else {
+                                ui.label(RichText::new(para).size(13.0));
+                            }
+                        }
+                    }
+                    DetailPane::Ficha(ficha) => {
+                        let ficha = *ficha;
+                        ui.label(
+                            RichText::new(format!("{} — {}", ficha.id, ficha.title))
+                                .strong()
+                                .size(15.0),
+                        );
+                        ui.add_space(6.0);
+                        for para in ficha.tooltip.split('\n') {
+                            if para.is_empty() {
+                                ui.add_space(4.0);
+                            } else {
+                                ui.label(RichText::new(para).small());
+                            }
+                        }
+                        ui.separator();
+                        ui.label(RichText::new("Como interpretar").strong());
+                        ui.label(ficha.interpret);
+                        ui.add_space(4.0);
+                        ui.label(RichText::new("Se baixo, o que falha").strong());
+                        ui.label(ficha.if_low);
+                        ui.add_space(4.0);
+                        ui.label(RichText::new("Proveniência").strong());
+                        ui.label(RichText::new(ficha.provenance).italics().small());
+                        ui.add_space(8.0);
+                        if ui.button("Limpar ficha").clicked() {
+                            self.detail = DetailPane::Idle;
+                        }
+                    }
+                }
+            });
+        }
+
         fn draw_top_bar(&mut self, ui: &mut egui::Ui) {
             ui.horizontal(|ui| {
                 ui.heading(RichText::new("AETHER").strong().size(22.0));
@@ -215,9 +279,6 @@ mod aether_dashboard_win {
                         .color(Color32::from_rgb(120, 140, 150)),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Ajuda").clicked() {
-                        self.show_help = !self.show_help;
-                    }
                     if ui.button("Recarregar").clicked() {
                         self.reload();
                     }
@@ -227,44 +288,40 @@ mod aether_dashboard_win {
                 });
             });
             ui.horizontal_wrapped(|ui| {
-                if action_btn(
+                self.action_with_detail(
                     ui,
                     "Rodar auditoria cognitiva",
                     "Regenera target/aether_scorecard.json (T01–T12 / ACQ).",
                     !self.jobs.is_busy(),
-                ) {
-                    self.start_job(JobKind::Audit);
-                }
-                if action_btn(
+                    JobKind::Audit,
+                );
+                self.action_with_detail(
                     ui,
                     "Benchmark de vazão",
                     "Basal/Vigilante/Crítico (~5 s/regime) via throughput_tps.",
                     !self.jobs.is_busy(),
-                ) {
-                    self.start_job(JobKind::Bench);
-                }
-                if action_btn(
+                    JobKind::Bench,
+                );
+                self.action_with_detail(
                     ui,
                     "Sondar hardware",
                     "CPU/RAM/features + gaps → target/aether_host_report.json.",
                     !self.jobs.is_busy(),
-                ) {
-                    self.start_job(JobKind::HostProbe);
-                }
-                if action_btn(
+                    JobKind::HostProbe,
+                );
+                self.action_with_detail(
                     ui,
                     "Demo organismo",
                     "Lança aether-organism --duration 15s --plain.",
                     !self.jobs.is_busy(),
-                ) {
-                    self.start_job(JobKind::OrganismDemo);
+                    JobKind::OrganismDemo,
+                );
+                let tip = "Lança aether-daemon curto (exige confirmação — multicast).";
+                let resp = ui.add_enabled(!self.jobs.is_busy(), egui::Button::new("Demo daemon"));
+                if resp.hovered() {
+                    self.note_hover("Demo daemon", tip);
                 }
-                if action_btn(
-                    ui,
-                    "Demo daemon",
-                    "Lança aether-daemon curto (exige confirmação — multicast).",
-                    !self.jobs.is_busy(),
-                ) {
+                if resp.clicked() {
                     self.confirm_daemon = true;
                 }
             });
@@ -285,24 +342,43 @@ mod aether_dashboard_win {
             });
         }
 
-        fn draw_globals(&self, ui: &mut egui::Ui) {
+        fn action_with_detail(
+            &mut self,
+            ui: &mut egui::Ui,
+            label: &str,
+            tip: &str,
+            enabled: bool,
+            kind: JobKind,
+        ) {
+            let resp = ui.add_enabled(enabled, egui::Button::new(label));
+            if resp.hovered() {
+                self.note_hover(label, tip);
+            }
+            if resp.clicked() {
+                self.start_job(kind);
+            }
+        }
+
+        fn draw_globals(&mut self, ui: &mut egui::Ui) {
             ui.label(RichText::new("Visão global").strong().size(16.0));
             ui.horizontal_wrapped(|ui| {
-                meter_card(
+                if meter_card(
                     ui,
                     "ACQ",
                     format!("{:.2}", self.view.quotient),
                     score_color(self.view.quotient),
-                    global_tooltip("acq"),
-                );
-                meter_card(
+                ) {
+                    self.note_hover("ACQ", global_tooltip("acq"));
+                }
+                if meter_card(
                     ui,
                     "Cobertura",
                     format!("{:.2}", self.view.real_coverage),
                     Color32::from_rgb(40, 140, 130),
-                    global_tooltip("coverage"),
-                );
-                meter_card(
+                ) {
+                    self.note_hover("Cobertura", global_tooltip("coverage"));
+                }
+                if meter_card(
                     ui,
                     "Hot-path B",
                     format!("{:.0}", self.view.hot_path_bytes),
@@ -311,29 +387,18 @@ mod aether_dashboard_win {
                     } else {
                         Color32::from_rgb(180, 90, 50)
                     },
-                    global_tooltip("hot_path"),
-                );
-                meter_card(
+                ) {
+                    self.note_hover("Hot-path B", global_tooltip("hot_path"));
+                }
+                if meter_card(
                     ui,
                     "Dimensões",
                     format!("{}", self.view.dimensions.len()),
                     Color32::from_rgb(70, 110, 150),
-                    global_tooltip("dims"),
-                );
+                ) {
+                    self.note_hover("Dimensões", global_tooltip("dims"));
+                }
             });
-        }
-
-        fn draw_glossary_inline(&self, ui: &mut egui::Ui) {
-            egui::CollapsingHeader::new("O que estou vendo?")
-                .default_open(false)
-                .show(ui, |ui| {
-                    for (k, v) in glossary_entries() {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.label(RichText::new(format!("{k}:")).strong().small());
-                            ui.label(RichText::new(*v).small());
-                        });
-                    }
-                });
         }
 
         fn draw_dimensions(&mut self, ui: &mut egui::Ui) {
@@ -349,6 +414,9 @@ mod aether_dashboard_win {
                 );
                 return;
             }
+            // Coleta hover/click sem emprestar self no loop.
+            let mut hovered: Option<(String, String)> = None;
+            let mut clicked: Option<DimFicha> = None;
             egui::Grid::new("dims")
                 .num_columns(4)
                 .spacing([10.0, 10.0])
@@ -359,44 +427,59 @@ mod aether_dashboard_win {
                         if let Some((k, v)) = d.metrics.first() {
                             body.push_str(&format!("\n{k}={v:.3}"));
                         }
-                        if dim_card(ui, &d.id, &d.name, &body, score_color(d.score), tip) {
-                            self.selected = Some(dimension_ficha(&d.id));
+                        let (hov, clk) =
+                            dim_card(ui, &d.id, &d.name, &body, score_color(d.score));
+                        if hov {
+                            hovered = Some((d.id.clone(), tip.to_string()));
+                        }
+                        if clk {
+                            clicked = Some(dimension_ficha(&d.id));
                         }
                         if (i + 1) % 4 == 0 {
                             ui.end_row();
                         }
                     }
                 });
+            if let Some(f) = clicked {
+                self.detail = DetailPane::Ficha(f);
+            } else if let Some((title, body)) = hovered {
+                self.note_hover(title, body);
+            }
         }
 
-        fn draw_throughput(&self, ui: &mut egui::Ui) {
+        fn draw_throughput(&mut self, ui: &mut egui::Ui) {
             ui.label(
                 RichText::new("Vazão (cycles/s · eq-t/s · SOP/s · TOP/s)")
                     .strong()
                     .size(16.0),
             );
-            let Some(tp) = &self.view.throughput else {
+            let Some(tp) = self.view.throughput.clone() else {
                 ui.label(
                     RichText::new("Sem throughput. Use “Benchmark de vazão”.").color(Color32::GRAY),
                 );
                 return;
             };
             ui.horizontal(|ui| {
-                meter_card(
+                if meter_card(
                     ui,
                     "Heap MB",
                     format!("{:.2}", tp.peak_heap_mb),
                     Color32::from_rgb(80, 100, 120),
-                    "Pico de heap do processo durante o bench de vazão.",
-                );
-                meter_card(
+                ) {
+                    self.note_hover(
+                        "Heap MB",
+                        "Pico de heap do processo durante o bench de vazão.",
+                    );
+                }
+                if meter_card(
                     ui,
                     "RSS MB",
                     format!("{:.2}", tp.peak_rss_mb),
                     Color32::from_rgb(80, 100, 120),
-                    "Pico de memória residente (RSS) do processo.",
-                );
-                meter_card(
+                ) {
+                    self.note_hover("RSS MB", "Pico de memória residente (RSS) do processo.");
+                }
+                if meter_card(
                     ui,
                     "Allocs",
                     format!("{}", tp.hot_path_allocations),
@@ -405,8 +488,9 @@ mod aether_dashboard_win {
                     } else {
                         Color32::from_rgb(180, 90, 50)
                     },
-                    throughput_tooltip("allocs"),
-                );
+                ) {
+                    self.note_hover("Allocs", throughput_tooltip("allocs"));
+                }
             });
             for r in &tp.regimes {
                 let regime_key = match r.name.to_lowercase().as_str() {
@@ -420,105 +504,125 @@ mod aether_dashboard_win {
                     .stroke(Stroke::new(1.0_f32, Color32::from_rgb(55, 70, 80)))
                     .inner_margin(10.0)
                     .show(ui, |ui| {
-                        ui.horizontal(|ui| {
+                        let title_resp = ui.horizontal(|ui| {
                             ui.label(
                                 RichText::new(format!("{} ({} passos)", r.name, r.steps))
                                     .strong()
                                     .color(Color32::from_rgb(200, 210, 215)),
                             );
-                        })
-                        .response
-                        .on_hover_text(throughput_tooltip(regime_key));
+                        });
+                        if title_resp.response.hovered() {
+                            self.note_hover(
+                                format!("Regime {}", r.name),
+                                throughput_tooltip(regime_key),
+                            );
+                        }
                         ui.horizontal_wrapped(|ui| {
-                            meter_card(
+                            if meter_card(
                                 ui,
                                 "p50 µs",
                                 format!("{:.1}", r.p50_us),
                                 Color32::from_rgb(50, 130, 120),
-                                throughput_tooltip("p50"),
-                            );
-                            meter_card(
+                            ) {
+                                self.note_hover("p50 µs", throughput_tooltip("p50"));
+                            }
+                            if meter_card(
                                 ui,
                                 "p99.9 µs",
                                 format!("{:.1}", r.p99_9_us),
                                 Color32::from_rgb(150, 100, 60),
-                                throughput_tooltip("p99.9"),
-                            );
-                            meter_card(
+                            ) {
+                                self.note_hover("p99.9 µs", throughput_tooltip("p99.9"));
+                            }
+                            if meter_card(
                                 ui,
                                 "cycles/s",
                                 format!("{:.0}", r.cycles_per_s),
                                 Color32::from_rgb(60, 120, 150),
-                                throughput_tooltip("cycles"),
-                            );
-                            meter_card(
+                            ) {
+                                self.note_hover("cycles/s", throughput_tooltip("cycles"));
+                            }
+                            if meter_card(
                                 ui,
                                 "eq-t/s",
                                 format!("{:.2e}", r.eq_t_per_s),
                                 Color32::from_rgb(70, 110, 160),
-                                throughput_tooltip("eq-t"),
-                            );
-                            meter_card(
+                            ) {
+                                self.note_hover("eq-t/s", throughput_tooltip("eq-t"));
+                            }
+                            if meter_card(
                                 ui,
                                 "SOP/s",
                                 format!("{:.2e}", r.sop_per_s),
                                 Color32::from_rgb(70, 100, 140),
-                                throughput_tooltip("sop"),
-                            );
-                            meter_card(
+                            ) {
+                                self.note_hover("SOP/s", throughput_tooltip("sop"));
+                            }
+                            if meter_card(
                                 ui,
                                 "TOP/s",
                                 format!("{:.3e}", r.tops()),
                                 Color32::from_rgb(90, 90, 140),
-                                throughput_tooltip("tops"),
-                            );
+                            ) {
+                                self.note_hover("TOP/s", throughput_tooltip("tops"));
+                            }
                         });
                     });
                 ui.add_space(6.0);
             }
         }
 
-        fn draw_host(&self, ui: &mut egui::Ui) {
+        fn draw_host(&mut self, ui: &mut egui::Ui) {
             ui.label(RichText::new("Máquina hospedeira").strong().size(16.0));
-            let Some(h) = &self.host else {
+            let Some(h) = self.host.clone() else {
                 ui.label(
                     RichText::new("Ainda sem sonda. Use “Sondar hardware”.").color(Color32::GRAY),
                 );
                 return;
             };
             ui.horizontal_wrapped(|ui| {
-                meter_card(
+                if meter_card(
                     ui,
                     "CPU lógico",
                     format!("{}", h.logical_cpus),
                     Color32::from_rgb(70, 120, 140),
-                    "Núcleos lógicos detectados (SMT incluso).",
-                );
-                meter_card(
+                ) {
+                    self.note_hover(
+                        "CPU lógico",
+                        "Núcleos lógicos detectados (SMT incluso).",
+                    );
+                }
+                if meter_card(
                     ui,
                     "CPU físico",
                     format!("{}", h.physical_cpus),
                     Color32::from_rgb(70, 120, 140),
-                    "Núcleos físicos (ou packages via WMIC).",
-                );
-                meter_card(
+                ) {
+                    self.note_hover(
+                        "CPU físico",
+                        "Núcleos físicos (CIM Win32_Processor / topologia).",
+                    );
+                }
+                if meter_card(
                     ui,
                     "RAM MB",
                     h.ram_total_mb
                         .map(|v| format!("{v:.0}"))
                         .unwrap_or_else(|| "?".into()),
                     Color32::from_rgb(90, 110, 130),
-                    "Memória física total (WMIC).",
-                );
-                meter_card(
+                ) {
+                    self.note_hover("RAM MB", "Memória física total (CIM).");
+                }
+                if meter_card(
                     ui,
                     "Livre MB",
                     h.ram_available_mb
                         .map(|v| format!("{v:.0}"))
                         .unwrap_or_else(|| "?".into()),
                     Color32::from_rgb(90, 110, 130),
-                    "Memória física disponível.",
-                );
+                ) {
+                    self.note_hover("Livre MB", "Memória física disponível.");
+                }
             });
             ui.label(
                 RichText::new(format!(
@@ -548,7 +652,7 @@ mod aether_dashboard_win {
                         "aviso" => Color32::from_rgb(180, 140, 50),
                         _ => Color32::from_rgb(120, 140, 160),
                     };
-                    ui.group(|ui| {
+                    let resp = ui.group(|ui| {
                         ui.label(
                             RichText::new(format!("[{}] {} — {}", g.severity, g.code, g.title))
                                 .color(color)
@@ -561,6 +665,12 @@ mod aether_dashboard_win {
                                 .italics(),
                         );
                     });
+                    if resp.response.hovered() {
+                        self.note_hover(
+                            format!("Gap {}", g.code),
+                            format!("{}\n\n→ {}", g.detail, g.remediation),
+                        );
+                    }
                 }
             }
         }
@@ -574,12 +684,6 @@ mod aether_dashboard_win {
         }
     }
 
-    fn action_btn(ui: &mut egui::Ui, label: &str, tip: &str, enabled: bool) -> bool {
-        let resp = ui.add_enabled(enabled, egui::Button::new(label));
-        resp.clone().on_hover_text(tip);
-        resp.clicked()
-    }
-
     fn score_color(score: f64) -> Color32 {
         if score >= 99.0 {
             Color32::from_rgb(35, 145, 100)
@@ -590,7 +694,8 @@ mod aether_dashboard_win {
         }
     }
 
-    fn meter_card(ui: &mut egui::Ui, title: &str, value: String, accent: Color32, tip: &str) {
+    /// Card de medidor; retorna `true` se o mouse está sobre ele.
+    fn meter_card(ui: &mut egui::Ui, title: &str, value: String, accent: Color32) -> bool {
         let size = Vec2::new(118.0, 72.0);
         let (rect, resp) = ui.allocate_exact_size(size, Sense::hover());
         let fill = Color32::from_rgb(24, 30, 36);
@@ -611,17 +716,17 @@ mod aether_dashboard_win {
             egui::FontId::proportional(18.0),
             Color32::from_rgb(230, 235, 238),
         );
-        resp.on_hover_text(tip);
+        resp.hovered()
     }
 
+    /// Card T0x; `(hovered, clicked)`.
     fn dim_card(
         ui: &mut egui::Ui,
         id: &str,
         name: &str,
         body: &str,
         accent: Color32,
-        tip: &str,
-    ) -> bool {
+    ) -> (bool, bool) {
         let size = Vec2::new(200.0, 96.0);
         let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
         ui.painter()
@@ -649,8 +754,7 @@ mod aether_dashboard_win {
             egui::FontId::proportional(12.0),
             Color32::from_rgb(220, 225, 228),
         );
-        resp.clone().on_hover_text(tip);
-        resp.clicked()
+        (resp.hovered(), resp.clicked())
     }
 
     fn truncate(s: &str, max: usize) -> String {
@@ -693,8 +797,8 @@ mod aether_dashboard_win {
             path_arg,
             jobs: JobRunner::new(),
             host: None,
-            selected: None,
-            show_help: false,
+            detail: DetailPane::Idle,
+            hover_scratch: None,
             confirm_daemon: false,
             last_job_done: true,
         };
@@ -702,7 +806,7 @@ mod aether_dashboard_win {
 
         let native = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
-                .with_inner_size([1180.0, 820.0])
+                .with_inner_size([1280.0, 820.0])
                 .with_title("AETHER — Hub de métricas"),
             ..Default::default()
         };
