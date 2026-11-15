@@ -212,6 +212,14 @@ pub fn collect_gaps(report: &HostReport, scorecard: Option<&ScorecardView>) -> V
     gaps
 }
 
+/// Caminho do relatório de host (respeita `CARGO_TARGET_DIR`).
+pub fn host_report_path() -> PathBuf {
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("target"));
+    target.join("aether_host_report.json")
+}
+
 /// Executa a sonda e grava `target/aether_host_report.json`.
 pub fn probe_and_save(scorecard: Option<&ScorecardView>) -> Result<HostReport> {
     let plan = CorePlan::detect();
@@ -255,7 +263,7 @@ pub fn probe_and_save(scorecard: Option<&ScorecardView>) -> Result<HostReport> {
     let gaps = collect_gaps(&report, scorecard);
     report.gaps = gaps.iter().map(GapDto::from).collect();
 
-    let path = PathBuf::from("target/aether_host_report.json");
+    let path = host_report_path();
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -263,4 +271,21 @@ pub fn probe_and_save(scorecard: Option<&ScorecardView>) -> Result<HostReport> {
         .map_err(|e| AetherError::Config(format!("host_report serialize: {e}")))?;
     fs::write(&path, json).map_err(|e| AetherError::Config(format!("host_report write: {e}")))?;
     Ok(report)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn probe_writes_report_with_gaps_or_ok() {
+        let report = probe_and_save(None).expect("probe");
+        assert!(report.logical_cpus >= 1);
+        assert!(
+            !report.gaps.is_empty()
+                || report.cargo_on_path && report.affinity_feature,
+            "esperado >=1 gap heurístico ou ambiente limpo"
+        );
+        assert!(host_report_path().is_file());
+    }
 }

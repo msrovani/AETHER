@@ -241,13 +241,15 @@ fn workspace_root() -> PathBuf {
 }
 
 fn release_bin(name: &str) -> PathBuf {
-    let root = workspace_root();
     let exe = if cfg!(windows) {
         format!("{name}.exe")
     } else {
         name.to_string()
     };
-    root.join("target").join("release").join(exe)
+    let target_root = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| workspace_root().join("target"));
+    target_root.join("release").join(exe)
 }
 
 fn run_bin_or_cargo(
