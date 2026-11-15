@@ -36,8 +36,15 @@ fn parse_args() -> Result<(OrganismConfig, Duration), String> {
         };
         match a.as_str() {
             "--duration" => {
-                let v = value(&mut i)?;
+                let raw = value(&mut i)?;
+                let v = raw
+                    .strip_suffix('s')
+                    .or_else(|| raw.strip_suffix('S'))
+                    .unwrap_or(&raw);
                 let secs: f64 = v.parse().map_err(|e| format!("--duration inválido: {e}"))?;
+                if !secs.is_finite() || secs <= 0.0 {
+                    return Err("--duration deve ser > 0 e finito".into());
+                }
                 duration = Duration::from_secs_f64(secs);
             }
             "--seed" => {
@@ -53,10 +60,17 @@ fn parse_args() -> Result<(OrganismConfig, Duration), String> {
                 cfg.window = v.parse().map_err(|e| format!("--window inválido: {e}"))?;
             }
             "--perturb-at" => {
-                let v = value(&mut i)?;
+                let raw = value(&mut i)?;
+                let v = raw
+                    .strip_suffix('s')
+                    .or_else(|| raw.strip_suffix('S'))
+                    .unwrap_or(&raw);
                 let secs: f64 = v
                     .parse()
                     .map_err(|e| format!("--perturb-at inválido: {e}"))?;
+                if !secs.is_finite() || secs < 0.0 {
+                    return Err("--perturb-at deve ser >= 0 e finito".into());
+                }
                 cfg.perturb_after = Duration::from_secs_f64(secs);
             }
             "--hz" => {

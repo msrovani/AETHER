@@ -228,3 +228,23 @@ cargo run --release --bin aether-daemon -- --duration 30s
 # abra um compilador / estresse a CPU em uma e observe Surpresa e Incerteza
 # subirem por ressonância de fase na outra — sem um único pacote JSON.
 ```
+
+## 6. Medições de hardening (2026-11-15, v0.0.33)
+
+* **M5 (projeção complexa):** p0 = 0,000035 / p1 = 0,000039 / p2 = 0,000085 rad
+  (30 seeds, 12 ocultos); 13 testes em `tests/phase2_m5_hardening.rs`.
+* **M2 (bench isolado, `benches/wave.rs`):** `forward_into` L128 = 2,54 µs,
+  L512 = 8,67 µs, **L2048 = 35,7 µs**, L8192 = 159 µs (meta 300 µs; 8,4× de
+  folga). Os 488 µs de uma medição concorrente eram contenção de CPU.
+* **Organismo (M4):** `sensor_noise = 0.35` (piso branco do sensor; SNR ≈ 11 dB,
+  fase ainda dominante) faz a interferência reduzir a entropia: −0,051 a
+  −0,069 em 3 execuções, 100% dos quadros negativos em 5 seeds; R > 0,98 e
+  H(s*) < H(s0) estritos no quadro final.
+* **M8 (daemon):** 22 → 0 alocações por ciclo (buffers de spins/bias/pattern,
+  `field_into`, `imagine_futures_into`); 0 drops em 468 ciclos/8 s idle;
+  0–1 drop sob 10 busy-loops. Build storms (17 `rustc`) ainda causam drops por
+  preempção do SO — o contador expõe, não é custo do ciclo.
+* **M3:** peers deduplicados e `rx_bytes` zera ao estourar `u32` (preserva
+  `%40==0`); testes de dedup e overflow adicionados.
+* Gate final: **79 testes / 17 suítes**, `cargo test --release` 2×, clippy
+  `-D warnings` e `fmt --check` verdes.
