@@ -1,0 +1,86 @@
+# CI do AETHER — porta de qualidade da ARCHITECTURE.md §7.
+#
+# Contratos cobertos aqui:
+#   - fmt / clippy -D warnings / test --release em Linux (alvo primário) e
+#     Windows (alvo secundário obrigatório, §7);
+#   - compilação de cada pilar isolado (features m1..m8), que é a promessa de
+#     paralelismo de agentes sem colisão de código;
+#   - benchmarks NÃO rodam aqui (§7: ruído de CI; rodam em runner dedicado).
+#
+# `RUSTFLAGS` fixa `x86-64-v2` para reprodutibilidade, como pede a §7. O job
+# noturno de `--features simd` da §7 não existe porque a feature `simd` não foi
+# implementada; quando existir, basta acrescentar o job com
+# `continue-on-error: true`.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-C target-cpu=x86-64-v2"
+
+jobs:
+  gate:
+    name: gate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: toolchain (stable + rustfmt + clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: fmt
+        run: cargo fmt --all --check
+
+      - name: clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: test (release)
+        run: cargo test --release
+
+  features:
+    name: feature isolada (${{ matrix.feature }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: [none, m1, m2, m3, m4, m5, m6, m7, m8]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: feature-${{ matrix.feature }}
+
+      - name: check (sem nenhuma feature)
+        if: matrix.feature == 'none'
+        run: cargo check --release --no-default-features
+
+      - name: check (feature isolada)
+        if: matrix.feature != 'none'
+        run: cargo check --release --no-default-features --features ${{ matrix.feature }}
