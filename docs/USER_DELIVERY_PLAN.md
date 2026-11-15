@@ -115,8 +115,22 @@ Prioridade de entrega ao **usuário** (não ao agente):
 | 0.3 | Script `scripts/run-demo.ps1` | um comando: build release + organism 15 s + tip daemon |
 | 0.4 | Alinhar telemetria daemon com `--help` já existente | banner legível: o que é R, F, SONHANDO |
 | 0.5 | Congelar superfície: **não** expor BAM/JIT/governor no CLI | docs dizem “lab only” |
+| **0.6 / (5)** | **Dashboard Windows de métricas** (`aether-dashboard`) | tela com ACQ, T01–T12, vazão (cycles/s, eq-t/s, SOP/s); **hover** explica inferência, coerência, RAG, inteligência, t/s, TOP/s |
 
-**Resultado:** qualquer dev com Rust+MinGW roda a demo sem ler ARCHITECTURE.
+**Resultado:** qualquer dev com Rust+MinGW roda a demo sem ler ARCHITECTURE;
+no Windows, abre um dashboard visual das métricas da auditoria/vazão.
+
+### Entrega (5) — Dashboard Windows (detalhe)
+
+| Item | Spec |
+|---|---|
+| Binário | `aether-dashboard` · feature `dashboard` · **somente Windows** (`cfg(windows)`) |
+| Fonte | `target/aether_scorecard.json` (+ `throughput` se presente); botão Recarregar |
+| Layout | cards/gauges: ACQ, coverage, hot-path bytes, 12 dimensões, regimes Basal/Vigilante/Crítico |
+| Hover | tooltip em cada medidor (o que mede + por que importa para o organismo) |
+| Fora de escopo agora | live streaming do daemon, macOS/Linux GUI, cloud |
+
+Implementação: `src/dashboard/*` + `src/bin/aether_dashboard.rs` (egui/eframe).
 
 ### Onda 1 — “Produto C MVP” (3–6 semanas) · **usuário = operador de lab/ops**
 
@@ -175,11 +189,12 @@ Só depois das Ondas 0–2 estáveis — senão embalamos um lab.
 ## 7. Ordem de implementação sugerida (próximos PRs)
 
 1. **PR-U0** — organism: `--help` + wiring Ratatui (`--tui`).  
-2. **PR-U1** — `docs/USER_GUIDE.md` + README “5 minutos” + `run-demo.ps1`.  
-3. **PR-U2** — daemon `--human` + glossário R/F no banner.  
-4. **PR-U3** — `SystemTelemetryTransducer` + integração no daemon.  
-5. **PR-U4** — artefato zip Windows + smoke test.  
-6. **PR-U5+** — backends A/B conforme hardware disponível.
+2. **PR-U0b / (5)** — **dashboard Windows** (`aether-dashboard`) com hover/tooltips.  
+3. **PR-U1** — `docs/USER_GUIDE.md` + README “5 minutos” + `run-demo.ps1`.  
+4. **PR-U2** — daemon `--human` + glossário R/F no banner.  
+5. **PR-U3** — `SystemTelemetryTransducer` + integração no daemon.  
+6. **PR-U4** — artefato zip Windows + smoke test.  
+7. **PR-U5+** — backends A/B conforme hardware disponível.
 
 Cada PR: claim no fórum, não tocar ownership BUFFY (`phase_memory`,
 `morphogenesis`, testes M5/M7 hardening) sem coordenação.

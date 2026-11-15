@@ -3,24 +3,33 @@
 //! Mede, sem descarte de amostras (percentis reais, protocolo declarado):
 //!
 //! 1. micro-operações BAM (D=256): `sin_cos` f32 vs LUT, bind, similaridade;
-//! 2. T12 (RAG holográfico): 50 fatos, K=6, 40 % visível, ±0,25 rad,
-//!    p50/p95/p99 por consulta em D = 160 / 256 / 512, e o baseline
-//!    `FhrrStore` f32 em D=160;
-//! 3. entropia de silício (ns/gaussiana) vs. semente determinística;
-//! 4. `dx = Θ(x)·Ξ` SINDy: nativo vs. interpretado vs. JIT (ns/avaliação);
-//! 5. SPSC: vazão produtor→consumidor entre duas threads (Mmsg/s).
+//! 2. **A** — SINDy `dx = Θ(x)·Ξ`: nativo vs. interpretado vs. JIT (ns/avaliação)
+//!    com 4 termos ativos, custo de compilação e `break_even_evals`;
+//! 3. **B** — cauda `p50/p99/p99.9` do ciclo reflexivo (`EventDrivenCore`)
+//!    com e sem pinning, sob carga nos demais núcleos lógicos;
+//! 4. **C** — T12 (RAG holográfico): 50 fatos, K=6, 40 % visível, ±0,25 rad,
+//!    p50/p95/p99 por consulta em D = 160 / 256 / 512, contra `FhrrStore` f32
+//!    em D = 160 e D = 256;
+//! 5. entropia de silício (ns/gaussiana) vs. semente determinística;
+//! 6. SPSC: vazão produtor→consumidor entre duas threads (Mmsg/s).
 //!
 //! `harness = false` (laço único com `Instant`, mesma convenção de
 //! `throughput_tps`). Saída: tabela no terminal e
 //! `target/aether_bench_hardware.json`.
 //!
 //! Execução: `cargo bench --bench hardware_extremus`
-//! (com `RUSTFLAGS="-C target-cpu=native"` para o AVX2 da máquina).
+//! (adicione `--features jit,affinity` para as linhas de JIT e pinning).
 
 use std::fs;
 use std::hint::black_box;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 
+use aether_engine::core::affinity::{core_ids, pin_reflex_core, pin_to_core};
+use aether_engine::core::aether_governor::{
+    EventDrivenCore, ReflexConfig, ReflexEvent, LATENT_DIM,
+};
 use aether_engine::core::bam_phase::{
     BamHolographicStore, BamHolographicVector, BamLut, BamMask, BamPhase,
 };
@@ -180,12 +189,29 @@ fn bench_entropy() -> (f64, f64) {
     )
 }
 
-fn bench_sindy() -> (f64, f64, f64, bool) {
+/// Resultado do benchmark A (SINDy RHS + break-even do JIT).
+struct SindyBench {
+    native_ns: f64,
+    interp_ns: f64,
+    jit_ns: f64,
+    jitted: bool,
+    /// Custo da última compilação Cranelift (µs); 0 se a feature `jit` está off.
+    compile_us: f64,
+    /// Termos ativos da equação de teste.
+    active_terms: usize,
+    /// Avaliações para amortizar a compilação; `NaN` se o JIT não ganha/não existe.
+    break_even_evals: f64,
+}
+
+/// Benchmark A: `dx = Θ(x)·Ξ` com 4 termos ativos
+/// (`x' = y`; `y' = x − x³ − 0,3y`), interpretado vs. JIT, e break-even.
+fn bench_sindy() -> SindyBench {
     let mut xi = [[0.0f64; 10]; 2];
     xi[0][2] = 1.0; // x' = y
     xi[1][1] = 1.0; // y' = x − x³ − 0,3 y
     xi[1][6] = -1.0;
     xi[1][2] = -0.3;
+    let active_terms = xi.iter().flatten().filter(|v| **v != 0.0).count();
     let (mut jit, integ) = SindyJit::new();
     let out = jit.publish_coefficients(&xi).expect("publish");
     let mut xi32 = [0.0f32; 20];
@@ -204,20 +230,129 @@ fn bench_sindy() -> (f64, f64, f64, bool) {
         eval_interpreted(black_box(&xi32), black_box(&x), &mut dx);
         black_box(&dx);
     });
-    let jitted = ns_per_iter(2_000_000, || {
+    let jit_ns = ns_per_iter(2_000_000, || {
         integ.eval(black_box(&x), &mut dx);
         black_box(&dx);
     });
-    (
-        native,
-        interp,
+
+    // Custo de compilação: republica com Ξ levemente diferente para forçar
+    // recompilação (publicação idêntica é ignorada por design).
+    let mut samples: Vec<f64> = Vec::new();
+    let mut varied = xi;
+    for i in 0..5 {
+        varied[1][2] = -0.3 - 1e-9 * (i as f64 + 1.0);
+        if jit.publish_coefficients(&varied).is_err() {
+            break;
+        }
+        let st = jit.stats();
+        if st.compiles > 0 {
+            samples.push(st.last_compile_us as f64);
+        }
+    }
+    samples.sort_by(|a, b| a.total_cmp(b));
+    let compile_us = samples.get(samples.len() / 2).copied().unwrap_or(0.0);
+    let jitted = matches!(
+        out,
+        aether_engine::core::sindy_jit::PublishOutcome::Jitted { .. }
+    );
+
+    let gain_ns = interp - jit_ns;
+    let break_even_evals = if jitted && gain_ns > 0.0 && compile_us > 0.0 {
+        compile_us * 1000.0 / gain_ns
+    } else {
+        f64::NAN
+    };
+
+    SindyBench {
+        native_ns: native,
+        interp_ns: interp,
+        jit_ns,
         jitted,
-        matches!(
-            out,
-            aether_engine::core::sindy_jit::PublishOutcome::Jitted { .. }
-        ),
+        compile_us,
+        active_terms,
+        break_even_evals,
+    }
+}
+
+/// Amostra latente sintética do reflexo (mesma escala do teste do governador).
+fn latent_z(k: usize) -> [f32; LATENT_DIM] {
+    let t = k as f32 * 0.01;
+    let mut z = [0.0f32; LATENT_DIM];
+    if LATENT_DIM >= 6 {
+        z[0] = 0.5;
+        z[1] = 0.2;
+        z[2] = 0.2 * (t * 1.3).sin();
+        z[3] = 0.2 * (t * 0.7).cos();
+        z[4] = 0.1 * (t * 2.1).sin();
+        z[5] = 0.1 * (t * 0.3).cos();
+    }
+    z
+}
+
+/// Benchmark B: cauda do ciclo reflexivo sob carga, com e sem pinning.
+///
+/// Devolve `(p50, p99, p99.9, n, pinned)` em µs.
+fn reflex_tail(pin_reflex: bool, load_ids: &[usize], events: usize) -> (f64, f64, f64, usize, bool) {
+    let stop = Arc::new(AtomicBool::new(false));
+    let mut load = Vec::with_capacity(load_ids.len());
+    for &id in load_ids {
+        let stop = Arc::clone(&stop);
+        load.push(std::thread::spawn(move || {
+            let _ = pin_to_core(id);
+            let mut x = (id as u64) | 1;
+            while !stop.load(Ordering::Relaxed) {
+                x = x.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+                black_box(x);
+            }
+        }));
+    }
+
+    let pinned = if pin_reflex {
+        pin_reflex_core(0).pinned
+    } else {
+        false
+    };
+
+    let (_jit, integ) = SindyJit::new();
+    let mut core = EventDrivenCore::new(
+        ReflexConfig::default(),
+        integ,
+        SiliconEntropy::from_seed(3),
+    )
+    .expect("core reflexivo");
+    for k in 0..64 {
+        let ev = ReflexEvent {
+            t_ns: k as u64,
+            z: latent_z(k),
+        };
+        core.process(&ev).expect("warmup");
+    }
+
+    let mut lat = Vec::with_capacity(events);
+    for k in 0..events {
+        let ev = ReflexEvent {
+            t_ns: k as u64 * 1_000_000,
+            z: latent_z(k),
+        };
+        let t = Instant::now();
+        core.process(&ev).expect("process");
+        lat.push(t.elapsed().as_nanos() as f64 / 1000.0);
+    }
+
+    stop.store(true, Ordering::Relaxed);
+    for h in load {
+        let _ = h.join();
+    }
+    lat.sort_by(|a, b| a.total_cmp(b));
+    (
+        pct(&lat, 0.50),
+        pct(&lat, 0.99),
+        pct(&lat, 0.999),
+        lat.len(),
+        pinned,
     )
 }
+
 
 fn bench_spsc() -> f64 {
     const N: u64 = 5_000_000;

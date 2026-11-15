@@ -31,7 +31,11 @@ cargo test --release          # 95 testes: fase 1 + fase 2 + engenharia + FHRR
 cargo clippy --all-targets -- -D warnings
 cargo run --release --bin aether-organism   # Fase 1: painel em tempo real
 cargo run --release --bin aether-daemon     # Fase 2: organismo encarnado
+# Windows — dashboard de métricas (hover explica cada medidor):
+cargo test --release --test cognitive_audit
+cargo run --release --bin aether-dashboard --features dashboard
 ```
+
 
 No Windows com a toolchain `x86_64-pc-windows-gnu`, use o wrapper
 `.\scripts\cargo.ps1` (ajusta o PATH para os binutils do MinGW) ou coloque
