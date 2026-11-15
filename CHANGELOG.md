@@ -3,6 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.63] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 4 arquivo(s) (.:1, docs:1, src:1, tests:1).
+- Gate: ok (4s).
+
+- `Cargo.lock`
+- `docs/COGNITIVE_AUDIT_REPORT.md`
+- `src/core/sindy_jit.rs`
+- `tests/bam_precision.rs`
+
 ## [0.0.62] - 2026-11-15
 
 ### Changed

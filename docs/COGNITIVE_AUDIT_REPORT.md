@@ -178,3 +178,81 @@ orçamento L1d de 32 KB (fica em L2) — tradeoff reportado.
 Arquivos BUFFY e CURSOR (`fhrr.rs`, `koopman_sindy.rs`, `active_inference.rs`,
 `renormalization.rs`, `cognitive_audit.rs`, `phase_memory.rs`, …) **não**
 editados neste CLAIM.
+
+## 8. Fase 5 — AETHER Hardware Extremus (CLAIM MSG 0077)
+
+Protocolo do T12 (declarado, sem descarte de amostras): **50 fatos, K = 6
+traços, 40 % visível, ruído ±0,25 rad**, percentis sobre todas as consultas.
+Hardware: Core 7 240H (10 C / 16 T, híbrido P/E), Windows,
+`-C target-cpu=native`. A latência varia **20–60 %** com builds concorrentes
+de outros agentes: abaixo, máquina quieta (carga: ver nota).
+
+### 8.1 Latência do RAG holográfico (T12) — BAM u16 vs FHRR f32
+
+| Config | Recall@1 | p50 (µs) | p95 (µs) |
+|---|---:|---:|---:|
+| BAM D=160 | 1,000 | **2,10** | 2,30 |
+| BAM D=256 (512 B/vetor) | 1,000 | **3,30** | 3,60 |
+| BAM D=512 | 1,000 | 6,20 | 7,40 |
+| FHRR f32 D=160 (baseline) | 1,000 | 4,50 | 5,90 |
+
+* Speedup BAM/FHRR em D=160: **2,1×–3,2×** (p50, conforme a carga).
+* `tests/phase5_hardware.rs`: D=256 p50 = 2,4 µs / p95 = 3,7 µs, **0 B alocados**
+  (gate: mediana < 5 µs, até 3 tentativas por causa da carga).
+* **Sob carga** (builds concorrentes) o mesmo código mediu p50 = 5,0 µs em
+  D=256 — a meta "< 5 µs" é cumprida de forma folgada só em máquina quieta.
+* A auditoria (`cognitive_audit`, T12 = 7,55 µs média, FHRR f32 D=160) **não
+  foi migrada**: `tests/cognitive_audit.rs` e `fhrr.rs` não foram editados.
+  O T12 BAM é medido por `phase5_hardware` e `benches/hardware_extremus`.
+
+### 8.2 Micro-operações e demais módulos
+
+| Medida | Valor |
+|---|---:|
+| `sin_cos` ×256: f32 / LUT BAM (1024×i16, 2048 B, interp. linear) | 2525 ns / 559 ns (**4,5×**) |
+| `bind` / `unbind` D=256 (16 fasores/lote, `wrapping_add`) | 13,6 ns / 13,4 ns |
+| similaridade mascarada D=256 | 78 ns |
+| gaussiana: RDTSC+Murmur3+Box-Muller / semente determinística | 12,6 ns / 3,4 ns |
+| `dx = Θ(x)·Ξ` (4 termos): nativo / interpretado / JIT Cranelift | 0,83 / 9,2 / **5,8 ns** |
+| SPSC produtor→consumidor (2 threads, 1024 slots) | 87 Mmsg/s |
+| `SindyJit` compilação (4 termos) | ≈ 140 µs |
+| hot-swap sob avaliação contínua | 9,8 M avals, 0 rasgos, 119 módulos liberados |
+
+Limites honestos: o JIT **não** bate código Rust nativo fixo (0,83 ns) — seu
+valor é executar equações *descobertas em runtime* sem recompilar (1,6× o
+interpretador); BUFFY mediu 96× no `sin_cos` com LUT de 256 sem
+interpolação, aqui a LUT interpolada (erro máx. < 1e-4, testado) dá 4,5×.
+
+### 8.3 Vazão cognitiva (`cargo bench --bench throughput_tps`)
+
+| Regime | p50 (µs) | p99 (µs) | ciclos/s | eq-t/s | allocs |
+|---|---:|---:|---:|---:|---:|
+| Basal | 149,7 | 623,7 | 3876 | 4,96e5 | 0 |
+| Vigilante | 557,1 | 12346 | 431 | 5,52e4 | 0 |
+| Crítico | 1674 | 19207 | 204 | 2,61e4 | 0 |
+
+Medida com a máquina sob carga de builds paralelos (cauda p99/p99.9
+inflada); nenhuma mudança do hot-path do organismo foi feita na Fase 5.
+
+### 8.4 Governador e *pinning* (`aether_governor`, `core_topology`)
+
+* Reflexo (EventDrivenCore + ActiveInference + CBF de Lyapunov) no 1º
+  núcleo físico de maior eficiência (lógico 0; irmão SMT 1 reservado);
+  Koopman-SINDy e Swarm nos **E-cores** 12 e 13 (detecção real via
+  `GetLogicalProcessorInformationEx`, com `EfficiencyClass`).
+* Filas `SpscRingBuffer`; reflexo nunca bloqueia (fila cheia ⇒ descarta e conta).
+  Execução de teste: 6000 eventos, 0 violações de CBF, 0 descartes, JIT
+  publicado em voo (127 gerações). *Pinning* sem prioridade RT do SO.
+* Sem a feature `affinity` ou se o SO recusar: *no-op* (`pinned=false`).
+* Parser Linux (`sysfs`) testado por unidade, **não executado** em Linux.
+
+### 8.5 Arquivos e features
+
+`src/core/{bam_phase,bam_store,silicon_entropy,sindy_jit,spsc_ring,
+core_topology,aether_governor}.rs`, `tests/phase5_hardware.rs`,
+`benches/hardware_extremus.rs`. Features `jit` e `affinity` **default on**
+(pedido do usuário; OPENCODE/BUFFY preferem opt-in — para desligar, remover
+de `default` no `Cargo.toml`: sem a feature `jit` nenhum kernel é compilado e o interpretador seguro avalia `Θ·Ξ`). Os
+módulos com `unsafe` (`silicon_entropy`: `_rdtsc`; `sindy_jit`; `spsc_ring`;
+`core_topology`: FFI Win32) têm `#![allow(unsafe_code)]` local e justificado;
+o `deny(unsafe_code)` do crate continua valendo para o resto.

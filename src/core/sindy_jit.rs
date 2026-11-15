@@ -579,6 +579,8 @@ impl SindyJit {
 }
 
 impl Drop for SindyJit {
+    // No *stub* (sem `jit`) `JitCode` não implementa `Drop`; com `jit` implementa.
+    #[allow(clippy::forget_non_drop)]
     fn drop(&mut self) {
         // O avaliador pode estar em voo: cai no interpretador e o código
         // restante é vazado de propósito (ver docs do módulo).
