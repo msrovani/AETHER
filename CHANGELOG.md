@@ -3,6 +3,25 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.59] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 11 arquivo(s) (.:8, docs:2, tests:1).
+- Gate: ok (3s).
+
+- `Cargo.lock`
+- `docs/COGNITIVE_AUDIT_REPORT.md`
+- `target_close_audit0.txt`
+- `target_close_audit1.txt`
+- `target_close_audit2.txt`
+- `target_close_audit3.txt`
+- `target_close_bench.txt`
+- `target_close_clippy.txt`
+- `target_close_test.txt`
+- `tests/cognitive_audit.rs`
+- `docs/COGNITIVE_AUDIT_FINAL.md`
+
 ## [0.0.58] - 2026-11-15
 
 ### Changed

@@ -1807,15 +1807,19 @@ fn test_08_complex_responses() {
         )
     };
 
+    // Precisao/estabilidade vem do 1o estimulo (RNG do sonhador determinista);
+    // a latencia e' o menor tempo entre as repeticoes (contra contencao).
     let mut best = (f64::INFINITY, 0.0, 0.0, 0.0f32, 0.0, 0.0, 0.0);
-    for _ in 0..10 {
+    for rep in 0..10 {
         std::thread::yield_now();
         let t0 = Instant::now();
         let (f, r, rho, h, c, me, u) = run();
         let _ = u;
         let ms = t0.elapsed().as_secs_f64() * 1e3;
-        if ms < best.0 {
+        if rep == 0 {
             best = (ms, f, r, rho, h, c, me);
+        } else if ms < best.0 {
+            best.0 = ms;
         }
     }
     let (elapsed_ms, fft_acc, recall_acc, rho, homeo_acc, collapse_acc, mean_energy) =

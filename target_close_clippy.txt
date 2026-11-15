@@ -1,2 +1,0 @@
-    Checking aether_engine v0.0.57 (C:\Users\msrov\Documents\AETHER)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.99s
