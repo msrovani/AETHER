@@ -202,7 +202,7 @@ Ambos ficam fora do gate de ACQ; exigem bancada própria e não bloqueiam
 | Auditoria cognitiva | **12/12 MEASURED, ACQ 100.00, real_coverage 1.00** |
 | `hot_path_bytes` | **0 B** |
 | T12 (BAM) | Recall 1.0, SNR 5.96, **2.4 µs**, 0 allocs |
-| Throughput Basal | **143–146 µs** p50 · p99.9 418–428 µs · 6 353–6 440 cycles/s · **813–824 k eq-t/s** · 0 allocs |
+| Throughput Basal | **143–146 µs** p50 · p99.9 418–437 µs · 6 353–6 440 cycles/s · **813–824 k eq-t/s** · 0 allocs |
 | Throughput Vigilante / Crítico | 260–262 / 490–504 µs p50 · 0 allocs |
-| RSS / heap | 14.33 MB / 0.48 MB |
+| RSS / heap | 5.6–14.3 MB / 0.48 MB |
 | `#![deny(unsafe_code)]` | mantido nos arquivos novos |
