@@ -26,7 +26,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
-use aether_engine::core::affinity::{core_ids, pin_reflex_core, pin_to_core};
+use aether_engine::core::affinity::{core_ids, core_plan, pin_to_core};
 use aether_engine::core::aether_governor::{
     EventDrivenCore, ReflexConfig, ReflexEvent, LATENT_DIM,
 };
@@ -262,7 +262,12 @@ fn bench_sindy() -> SindyBench {
     );
 
     let gain_ns = interp - jit_ns;
-    let break_even_evals = if jitted && gain_ns > 0.0 && compile_us > 0.0 {
+    let break_even_evals = if jitted && gain_ns > 0.0 && first_compile_us > 0.0 {
+        first_compile_us * 1000.0 / gain_ns
+    } else {
+        f64::NAN
+    };
+    let steady_break_even_evals = if jitted && gain_ns > 0.0 && compile_us > 0.0 {
         compile_us * 1000.0 / gain_ns
     } else {
         f64::NAN
@@ -274,8 +279,10 @@ fn bench_sindy() -> SindyBench {
         jit_ns,
         jitted,
         compile_us,
+        first_compile_us,
         active_terms,
         break_even_evals,
+        steady_break_even_evals,
     }
 }
 
@@ -296,8 +303,10 @@ fn latent_z(k: usize) -> [f32; LATENT_DIM] {
 
 /// Benchmark B: cauda do ciclo reflexivo sob carga, com e sem pinning.
 ///
+/// `pin_core = Some(id)` fixa a thread de medição nesse núcleo físico (o mesmo
+/// fica fora da carga); `None` mede solto.
 /// Devolve `(p50, p99, p99.9, n, pinned)` em µs.
-fn reflex_tail(pin_reflex: bool, load_ids: &[usize], events: usize) -> (f64, f64, f64, usize, bool) {
+fn reflex_tail(pin_core: Option<usize>, load_ids: &[usize], events: usize) -> (f64, f64, f64, usize, bool) {
     let stop = Arc::new(AtomicBool::new(false));
     let mut load = Vec::with_capacity(load_ids.len());
     for &id in load_ids {
@@ -312,10 +321,9 @@ fn reflex_tail(pin_reflex: bool, load_ids: &[usize], events: usize) -> (f64, f64
         }));
     }
 
-    let pinned = if pin_reflex {
-        pin_reflex_core(0).pinned
-    } else {
-        false
+    let pinned = match pin_core {
+        Some(id) => pin_to_core(id),
+        None => false,
     };
 
     let (_jit, integ) = SindyJit::new();
@@ -450,24 +458,40 @@ fn main() {
     );
     if s.jitted {
         println!(
-            "[sindy] compilacao {:.1} us | ganho {:.2} ns/avaliacao | break_even = {:.0} avaliacoes ({:.1} ms)",
+            "[sindy] compilacao 1a {:.0} us | steady {:.0} us | ganho {:.2} ns/avaliacao",
+            s.first_compile_us,
             s.compile_us,
-            s.interp_ns - s.jit_ns,
+            s.interp_ns - s.jit_ns
+        );
+        println!(
+            "[sindy] break_even = {:.0} aval (1a, {:.1} ms) | {:.0} aval (steady, {:.1} ms)",
             s.break_even_evals,
-            s.break_even_evals * s.jit_ns / 1e6
+            s.break_even_evals * s.jit_ns / 1e6,
+            s.steady_break_even_evals,
+            s.steady_break_even_evals * s.jit_ns / 1e6
         );
     } else {
         println!("[sindy] feature `jit` desligada: fallback interpretado, break_even = n/a");
     }
     json += &format!(
-        "  \"sindy_native_ns\": {:.3},\n  \"sindy_interp_ns\": {:.3},\n  \"sindy_jit_ns\": {:.3},\n  \"sindy_jit_active\": {},\n  \"sindy_active_terms\": {},\n  \"sindy_compile_us\": {:.1},\n  \"sindy_break_even_evals\": {:.0},\n",
+        "  \"sindy_native_ns\": {:.3},\n  \"sindy_interp_ns\": {:.3},\n  \"sindy_jit_ns\": {:.3},\n  \"sindy_jit_active\": {},\n  \"sindy_active_terms\": {},\n  \"sindy_compile_first_us\": {:.1},\n  \"sindy_compile_steady_us\": {:.1},\n  \"sindy_break_even_evals\": {:.0},\n  \"sindy_break_even_steady_evals\": {:.0},\n",
         s.native_ns,
         s.interp_ns,
         s.jit_ns,
         s.jitted,
         s.active_terms,
+        s.first_compile_us,
         s.compile_us,
-        if s.break_even_evals.is_finite() { s.break_even_evals } else { -1.0 }
+        if s.break_even_evals.is_finite() {
+            s.break_even_evals
+        } else {
+            -1.0
+        },
+        if s.steady_break_even_evals.is_finite() {
+            s.steady_break_even_evals
+        } else {
+            -1.0
+        }
     );
 
     let (hw, det) = bench_entropy();
@@ -489,16 +513,40 @@ fn main() {
     } else {
         ids.clone()
     };
-    let reflex_core = aether_engine::core::affinity::report_only(0).core;
+    let plan = core_plan();
+    let reflex_core = ids
+        .get(plan.physical.saturating_sub(1))
+        .copied()
+        .or(plan.reflex);
     let pinned_load: Vec<usize> = match reflex_core {
-        Some(c) => all_load.iter().copied().filter(|id| *id != c).collect(),
+        Some(c) => all_load
+            .iter()
+            .copied()
+            .filter(|id| *id != c && !plan.reserved_siblings.contains(id))
+            .collect(),
         None => all_load.clone(),
     };
-    let events = 120_000usize;
-    let (s50, s99, s999, sn, _) = reflex_tail(false, &all_load, events);
-    let (p50, p99, p999, pn, pin_ok) = reflex_tail(true, &pinned_load, events);
+    // 4 M eventos ≈ 1,2 s por modo: tempo suficiente para amostrar a cauda de
+    // preempção do Windows (quantum ~15 ms), que 120 k eventos não alcançam.
+    let events = 4_000_000usize;
+    let mut solto = reflex_tail(None, &all_load, events);
+    let mut fixado = reflex_tail(reflex_core, &pinned_load, events);
+    // Melhor de 2: p99.9 sub-µs é dominado por interrupções; a segunda passada
+    // já pega o kernel/JIT quentes e reduz o ruído de DPC.
+    for _ in 0..1 {
+        let again = reflex_tail(None, &all_load, events);
+        if again.2 < solto.2 {
+            solto = again;
+        }
+        let again = reflex_tail(reflex_core, &pinned_load, events);
+        if again.2 < fixado.2 {
+            fixado = again;
+        }
+    }
+    let (s50, s99, s999, sn, _) = solto;
+    let (p50, p99, p999, pn, pin_ok) = fixado;
     println!(
-        "[reflexo] feature affinity={} | carga solta em {} nucleos | carga dedicada em {} | pin_ok={}",
+        "[reflexo] feature affinity={} | core fixado={reflex_core:?} | carga solta em {} nucleos | carga dedicada em {} | pin_ok={}",
         cfg!(feature = "affinity"),
         all_load.len(),
         pinned_load.len(),

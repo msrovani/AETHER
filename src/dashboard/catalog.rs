@@ -1,4 +1,4 @@
-//! Textos de hover: o que cada medidor demonstra no organismo.
+//! Textos de hover / glossário / fichas — fonte única para UI e docs.
 
 /// Tooltip de um medidor global (ACQ, coverage, hot-path…).
 pub fn global_tooltip(key: &str) -> &'static str {
@@ -29,6 +29,165 @@ pub fn global_tooltip(key: &str) -> &'static str {
              O suite completo tem 12 (T01…T12)."
         }
         _ => "Medidor global do scorecard AETHER.",
+    }
+}
+
+/// Entradas do glossário “O que estou vendo?”.
+pub fn glossary_entries() -> &'static [(&'static str, &'static str)] {
+    &[
+        (
+            "Inferência",
+            "Previsão da trajetória do estado (Koopman/RLS) sem backprop — o organismo antecipa.",
+        ),
+        (
+            "Coerência",
+            "Alinhamento multi-escala (RG) + comando estável (EMA). Sem tremor no atuador.",
+        ),
+        (
+            "RAG",
+            "Memória holográfica FHRR/BAM: recall associativo sob oclusão/ruído (T12).",
+        ),
+        (
+            "Inteligência / ACQ",
+            "Nota operacional 0–100: média T01–T12. Gate de lab ≥ 99.",
+        ),
+        (
+            "cycles/s",
+            "Quadros cognitivos completos por segundo (ritmo do organismo).",
+        ),
+        (
+            "eq-t/s",
+            "Tokens equivalentes/s ≈ cycles/s × 128 — comparação com mundos tokenizados.",
+        ),
+        (
+            "SOP/s",
+            "Operações sinápticas/espectrais por segundo — densidade de trabalho numérico.",
+        ),
+        (
+            "TOP/s",
+            "Tera-operações/s aproximadas (SOP/s ÷ 1e12) para comparar regimes.",
+        ),
+    ]
+}
+
+/// Ficha demonstrativa ao clicar em T0x.
+#[derive(Clone, Copy, Debug)]
+pub struct DimFicha {
+    pub id: &'static str,
+    pub title: &'static str,
+    pub tooltip: &'static str,
+    pub interpret: &'static str,
+    pub if_low: &'static str,
+    pub provenance: &'static str,
+}
+
+/// Ficha por ID (T01…T12).
+pub fn dimension_ficha(id: &str) -> DimFicha {
+    match id {
+        "T01" => DimFicha {
+            id: "T01",
+            title: "Inferência contínua",
+            tooltip: dimension_tooltip("T01"),
+            interpret: "R²/NRMSE altos = o Koopman prevê bem a dinâmica observada.",
+            if_low: "Previsão fraca: o organismo reage tarde ou erra o horizonte.",
+            provenance: "cognitive_audit · closed_loop / Koopman-RLS (MEASURED).",
+        },
+        "T02" => DimFicha {
+            id: "T02",
+            title: "Confiabilidade sob ruído",
+            tooltip: dimension_tooltip("T02"),
+            interpret: "10k ciclos hostis sem NaN/alloc = coerência numérica dura.",
+            if_low: "Instabilidade numérica: risco de queda em produção suja.",
+            provenance: "cognitive_audit · stress noise harness (MEASURED).",
+        },
+        "T03" => DimFicha {
+            id: "T03",
+            title: "Aprendizado online",
+            tooltip: dimension_tooltip("T03"),
+            interpret: "Após ruptura, o modelo reaprende sem gradiente.",
+            if_low: "Plasticidade baixa: trava no regime antigo.",
+            provenance: "cognitive_audit · regime shift (MEASURED).",
+        },
+        "T04" => DimFicha {
+            id: "T04",
+            title: "Autoevolução estrutural",
+            tooltip: dimension_tooltip("T04"),
+            interpret: "Poda/especiação mantém papéis vivos (Sentinel/Architect/Regulator).",
+            if_low: "Topologia colapsa ou silencia — morfologia morta.",
+            provenance: "cognitive_audit · morphogenesis/swarm (MEASURED).",
+        },
+        "T05" => DimFicha {
+            id: "T05",
+            title: "Autocorreção",
+            tooltip: dimension_tooltip("T05"),
+            interpret: "CBF Lyapunov + ressync após falha = organismo se estabiliza.",
+            if_low: "Não recupera após choque — risco de runaway.",
+            provenance: "cognitive_audit · CBF / resync (MEASURED).",
+        },
+        "T06" => DimFicha {
+            id: "T06",
+            title: "Coerência multi-escala",
+            tooltip: dimension_tooltip("T06"),
+            interpret: "RG 64→16→4 + EMA: R alinhado, comando sem chatter.",
+            if_low: "Intenção macro e atuador dessincronizam (tremor/chatter).",
+            provenance: "cognitive_audit · continuous_action / RG (MEASURED).",
+        },
+        "T07" => DimFicha {
+            id: "T07",
+            title: "Busca epistêmica",
+            tooltip: dimension_tooltip("T07"),
+            interpret: "Explora U sob barreira de Lyapunov — curiosidade dirigida.",
+            if_low: "Passividade ou passeio aleatório sem ganho de informação.",
+            provenance: "cognitive_audit · active inference (MEASURED).",
+        },
+        "T08" => DimFicha {
+            id: "T08",
+            title: "Resposta multimodal",
+            tooltip: dimension_tooltip("T08"),
+            interpret: "FFT + memória + homeostase + sonhador em cadeia respondem juntos.",
+            if_low: "Pipeline composto falha em algum elo — resposta imprecisa.",
+            provenance: "cognitive_audit · multimodal chain (MEASURED).",
+        },
+        "T09" => DimFicha {
+            id: "T09",
+            title: "Matemática descoberta",
+            tooltip: dimension_tooltip("T09"),
+            interpret: "SINDy + MAX-CUT bSB recuperam leis esparsas do sinal.",
+            if_low: "Não extrai equações úteis — descoberta simbólica fraca.",
+            provenance: "cognitive_audit · SINDy / bSB (MEASURED).",
+        },
+        "T10" => DimFicha {
+            id: "T10",
+            title: "Resistência a alucinações",
+            tooltip: dimension_tooltip("T10"),
+            interpret: "Sem evidência (warrant), confiança → 0; não inventa atrator.",
+            if_low: "Afirma sem chave — alucinação operacional.",
+            provenance: "cognitive_audit · warrant / Langevin U (MEASURED).",
+        },
+        "T11" => DimFicha {
+            id: "T11",
+            title: "Imunidade a desvio",
+            tooltip: dimension_tooltip("T11"),
+            interpret: "Objetivo macro RG + cleanup M5: intenção não deriva.",
+            if_low: "Distração/ruído desvia a meta — pensamento drift.",
+            provenance: "cognitive_audit · RG objective / M5 (MEASURED).",
+        },
+        "T12" => DimFicha {
+            id: "T12",
+            title: "RAG holográfico",
+            tooltip: dimension_tooltip("T12"),
+            interpret: "Recall@1 + SNR + latência µs: memória associativa em tempo real.",
+            if_low: "Esquece sob oclusão/ruído ou recall lento demais.",
+            provenance: "cognitive_audit · BAM FHRR store (MEASURED).",
+        },
+        _ => DimFicha {
+            id: "?",
+            title: "Dimensão desconhecida",
+            tooltip: dimension_tooltip(id),
+            interpret: "Sem ficha canônica para este ID.",
+            if_low: "—",
+            provenance: "—",
+        },
     }
 }
 

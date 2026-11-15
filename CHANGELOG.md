@@ -3,6 +3,22 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.71] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 8 arquivo(s) (.:1, benches:1, src:6).
+- Gate: ok (3s).
+
+- `Cargo.lock`
+- `benches/hardware_extremus.rs`
+- `src/bin/aether_dashboard.rs`
+- `src/dashboard/catalog.rs`
+- `src/dashboard/mod.rs`
+- `src/dashboard/gaps.rs`
+- `src/dashboard/host_probe.rs`
+- `src/dashboard/jobs.rs`
+
 ## [0.0.70] - 2026-11-15
 
 ### Changed
