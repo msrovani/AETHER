@@ -398,10 +398,13 @@ falha que o risco aponta.
 | **Similaridade** (está perto do que se sabe) | Sim, geometricamente — **mas não é verdade** |
 | **Factualidade** (o mundo é assim) | **NÃO** — depende da fonte transplantada |
 
-> **Achado #4:** o certificado de energia certifica *consistência*, não *verdade*.
+> **Achado #4:** o certificado de factibilidade certifica *consistência*, não *verdade*.
 > Chamar isso de "anti-alucinação" seria o mesmo erro que o risco denuncia. O nome
-> correto é **certificado de coerência**, e a resposta deve carregar a proveniência
+> correto é **certificado de factibilidade** — e a resposta deve carregar a proveniência
 > (`transplantado de X`, `observado em T`, `inferido de regra R`).
+>
+> **Confirmado por medição no E3b (§4.6):** ele também **não** certifica *otimalidade*.
+> Em otimização livre o gap não prediz acerto; só a contagem de violações tem dentes.
 
 ### 4.3 A evidência mais forte a favor do verificador
 
@@ -471,7 +474,7 @@ verificação é **exata** (restrições contáveis), o certificado é exato:
 | satisfatíveis resolvidas | 96,5% |
 | não-satisfatíveis | sempre abstém |
 
-> **Conclusão do P0 (R3):** o certificado de coerência **não** é um detector de
+> **Conclusão do P0 (R3):** o certificado de factibilidade **não** é um detector de
 > acerto — é um **verificador de factibilidade**. Ele tem dentes onde existe
 > restrição contável (lógica, E2b) e é inútil onde só existe paisagem de energia
 > (otimização pura). A tese do Vol. I sobrevive **com esta correção**: o "certificado
@@ -649,14 +652,14 @@ independente, (iii) plausibilidade física.
 
 | Código | Severidade | Descrição | Remediação |
 |---|---|---|---|
-| `NO_PROFILE_BREAKDOWN` | ✅ **resolvido (E6)** | medido: solver 84,8% · 7,5 GFLOP/s (~19% do pico AVX2) | — |
+| `NO_PROFILE_BREAKDOWN` | ✅ **resolvido (E6)** | medido: solver 84,4% · 7,5 GFLOP/s (~19% do pico AVX2) | — |
 | `SOLVER_KERNEL_SCALAR` | **crítico** | gemv + energia por passo são laços escalares; 5× de headroom até o pico f64 | E6b (SIMD/f32) |
 | `NO_ROOF_DUAL` | alto | sem passe simbólico; Ising recebe instância crua | E2b |
 | `NO_LIMIT_CYCLE_GUARD` | alto | cleanup determinístico pode ciclar | E1b |
 | `NO_PROVENANCE` | alto | resposta não diz de onde veio (transplantado/observado/inferido) | E3b |
 | `D_CAPACITY_UNMEASURED` | médio | capacidade real em D=160 desconhecida | E1 |
 | `NO_ACTUATOR_LOOP` | alto | metas sem consequência (S0 incompleto) | E7 |
-| `CERT_SEMANTICS` | médio | "certificado de energia" pode ser lido como "verdade" | renomear para **certificado de coerência** |
+| `CERT_SEMANTICS` | médio | "certificado de energia" pode ser lido como "verdade" ou "ótimo" | ✅ resolvido: **certificado de factibilidade** (Vol. II §4.6) |
 
 ---
 
@@ -683,7 +686,7 @@ a métrica — nunca por moda.*
 
 | # | Entrega | Mede | Gate |
 |---|---|---|---|
-| **E6** ✅ | `examples/e6_profile.rs` + `tests/e6_profile_gate.rs` | perfil por estágio — **executado 2026-11-15** | cobertura **99,98%**; solver **84,8%** |
+| **E6** ✅ | `examples/e6_profile.rs` + `tests/e6_profile_gate.rs` | perfil por estágio — **executado 2026-11-15** | cobertura **99,98%**; solver **84,4%** |
 | **E6b** | otimizar o kernel do solver (SIMD f64 ou f32 + fusão) | GFLOP/s do solver | ≥ 2× o baseline (de ~7,5 para ≥ 15 GFLOP/s) |
 | **E2b** | roof dual + presolve antes do BSB | redução de variáveis, tempo, acerto | ≥40% redução; ≥90% das instâncias que o BSB puro erra |
 | **E1b** | ACF/IMF no cleanup do `FhrrStore` | capacidade e taxa de ciclo-limite com/sem ruído | ≥10× capacidade; ciclo-limite < 1% |
@@ -705,7 +708,7 @@ E1–E5 do Volume I permanecem válidos; E6 vem **primeiro** (é diagnóstico e 
 | Corpo | "Produto C é fraco mas real" | **laço fechado basta**; 3 estágios S0–S2; teste anti-passeio H1–H3 |
 | Treino | "40× mais lento é o gargalo" | **gargalo evitável**: congelar física (reservoir); DEER só rende 25% em n=64 |
 | Preprints | "trate como hipótese" | **protocolo de triangulação** com selos [A]/[B]/[C] e regra de decisão |
-| Hardware | "cabe no L2; penhasco em N≈512" | **+ sem AVX-512**; **medido: solver = 84,8% do ciclo, ~7,5 GFLOP/s (~19% do pico)** |
+| Hardware | "cabe no L2; penhasco em N≈512" | **+ sem AVX-512**; **medido: solver = 84,4% do ciclo, ~7,5 GFLOP/s (~19% do pico)** |
 | Energia | não calculado | **0,88% de um core/dia; ~1–3 Wh/dia** |
 
 ---
@@ -810,7 +813,7 @@ O Volume II mostra que **as seis objeções eram corretas — e todas têm preç
 
 E um achado que não estava em nenhuma das seis objeções — e que o **E6 resolveu
 depois deste volume ter sido escrito**: **o motor é matvec-bound.** O solver consome
-**84,8%** do quadro e entrega **7,5 GFLOP/s** (~19% do pico AVX2 f64). A estimativa
+**84,4%** do quadro e entrega **7,5 GFLOP/s** (~19% do pico AVX2 f64). A estimativa
 "0,07%" que aparecia no §1.1 estava errada e está corrigida lá.
 
 Isso reordena a fila: antes de qualquer física nova, **otimizar o kernel do solver**
@@ -819,4 +822,4 @@ depois dele, o próximo experimento honesto continua sendo medir o que ainda nã
 mediu: `ΔE` prevê acerto? (E3b).
 
 > *"Seis corpos, seis preços. O sétimo era não saber onde o tempo ia — agora sabemos:
-> 84,8% vai para o solver."*
+> 84,4% vai para o solver."*

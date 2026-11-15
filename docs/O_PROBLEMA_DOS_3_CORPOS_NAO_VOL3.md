@@ -283,7 +283,7 @@ O AETHER tem *warrant* físico (gap de energia). O SGDB tem *warrant* social
   Vol. II §4.2, e ninguém hoje consegue nomeá-lo.
 
 **Decisão de vocabulário (fecha `CERT_SEMANTICS`):** o artefato emitido é um
-**certificado de coerência** `(E, ΔE, violações)`, não de verdade. A resposta carrega
+**certificado de factibilidade** `(E, ΔE, violações, proveniência)`, não de verdade. A resposta carrega
 `proveniência` obrigatória. Sem os dois campos, a resposta é inválida por construção.
 
 ---
@@ -377,12 +377,12 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 
 | ID | Vol. | Objetivo | Gate | Fecha |
 |---|---|---|---|---|
-| **E6** ✅ | II | perfil por estágio — **executado** | cobertura **99,98%**; solver **84,8%** · 7,5 GFLOP/s | bloqueio transversal **removido** |
+| **E6** ✅ | II | perfil por estágio — **executado** | cobertura **99,98%**; solver **84,4%** · 7,5 GFLOP/s | bloqueio transversal **removido** |
 | **E6b** ✅ | II | kernel do solver (16 acumuladores, Rust safe) | **17,10 GFLOP/s (2,30×)** · ACQ 100 · 24 suítes verdes | R1, R5 |
 | **E1** | I | linguagem em fase (papel–filler) | SNR > 5σ, 0 alloc | R2 |
 | **E1b** | II | ACF/IMF no `FhrrStore` | ≥10× capacidade, ciclo-limite <1% | R2 |
 | **E2** | I | lógica como Ising + certificado | 3-SAT n≤20 = força bruta | R1 |
-| **E2b** | II | roof dual + presolve antes do BSB | ≥40% redução; ≥90% dos casos que o BSB erra | R1 |
+| **E2b** | II | presolve simbólico + roof dual antes do BSB | **0 fixações insound** (validado por força bruta); ≥40% de variáveis fixadas em CNF com unidades; precisão do certificado = 100% | R1, R3 |
 | **E3** | I | transplantação de embeddings | analogia medida, sem alvo de marketing | R3 |
 | **E3b** ✅ | II/III | verificador de coerência + proveniência | **spins: nulo (AUC 0,46–0,55)** · **2-SAT: precisão 100%** | R3, R10 |
 | **E4** | I | self-field + ablação | ECE melhora; T01 não regride | K5 |
@@ -406,7 +406,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | `CAPACITY_CLIFF_UNDOC` | I | médio | `docs/HW_TARGET.md` |
 | `TRANSPLANT_UNVALIDATED` | I | alto | E3 |
 | `PREPRINT_RISK` | I/II | info | protocolo §7 Vol. II |
-| `NO_PROFILE_BREAKDOWN` | II | ✅ **resolvido (E6)** | medido 2026-11-15: solver 84,8% | — |
+| `NO_PROFILE_BREAKDOWN` | II | ✅ **resolvido (E6)** | medido 2026-11-15: solver 84,4% | — |
 | `SOLVER_KERNEL_SCALAR` | II | ✅ **resolvido (E6b)** | 16 acumuladores safe: 7,44 → 17,10 GFLOP/s | — |
 | `NO_ROOF_DUAL` | II | alto | E2b |
 | `NO_LIMIT_CYCLE_GUARD` | II | alto | E1b |
@@ -488,7 +488,7 @@ Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 ### 12.4 Ordem de ataque recomendada
 
 ```
-1º ✅ E6   perfil                     ← FEITO: solver = 84,8% do ciclo
+1º ✅ E6   perfil                     ← FEITO: solver = 84,4% do ciclo
 2º ✅ E6b  kernel do solver            ← FEITO: 7,44 → 17,10 GFLOP/s (2,30×)
 3º ✅ E3b  certificado + proveniência  ← FEITO: verifica factibilidade, não acerto
 4º  E2b  roof dual + presolve        ← agora é a **condição de existência** do certificado
@@ -499,17 +499,23 @@ Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 9º  F2/F3  consolidação e fusão 2D
 ```
 
-### 12.5 O que ainda **não** sabemos (e deveria estar num post-it)
+### 12.5 As sete perguntas — placar
 
-1. ~~**Onde vão os 146 µs.** (E6)~~ → **respondido: 84,8% no solver.** ∎
-2. ~~**Se ΔE prevê acerto.**~~ → **respondido: não em otimização livre (AUC 0,46–0,55); sim com restrições exatas (precisão 100%).** ∎
-3. **Quantos padrões cabem em D=160** antes de interferir. (E1b)
-4. **Se roof dual reduz o suficiente** em CNF de circuito (não em 3-SAT aleatório). (E2b)
-5. **Se o self-field melhora calibração** ou só replica a surpresa. (E4)
-6. **Se um atrator pode virar gist** sem perder a habilidade. (F2)
-7. **Se a ponte de fase preserva o suficiente** para valer o custo. (F3)
+| # | Pergunta | Status | Resposta / o que a fecharia |
+|---|---|---|---|
+| 1 | **Onde vão os 146 µs?** | ✅ **respondida** (E6) | **84,4% no solver** (133,1 de 157,7 µs). readout 7,0% · entropy 3,0% · wave 2,5% · actuator 1,7% · ring_copy 1,1%. Cobertura 99,98%. |
+| 2 | **ΔE prevê acerto?** | ✅ **respondida** (E3b) | **Não em otimização livre** (AUC 0,46–0,55; bound 0,058 anti-preditivo). **Sim com restrições exatas**: 383 decisivas, precisão 100%. |
+| 3 | **Quantos padrões cabem em D=160?** | ⏳ **aberta** (E1b) | Teoria: `M_max ∝ D²` (arXiv:1906.11684) — mas **a constante não foi medida** para FHRR complexo. Ordem de grandeza entre 10³ e 10⁴. Fecha medindo Recall@1 vs nº de fatos superpostos. |
+| 4 | **Roof dual reduz o suficiente em CNF de circuito?** | ⏳ **aberta** (E2b) | Evidência externa: 5.800× no BQP100 e 100% de redução em MAX-CUT de VLSI — **nada medido aqui**. Fecha com 0 fixações insound + ≥40% de variáveis fixadas em CNF com unidades. |
+| 5 | **O self-field melhora calibração ou só replica a surpresa?** | ⏳ **aberta** (E4) | Falsificável: melhora ECE de abstenção **sem** melhorar T01. Se T01 também melhorar, a hipótese "metacognição é separada" cai. |
+| 6 | **Um atrator pode virar "gist" sem perder a habilidade?** | ⏳ **aberta** (F2) | Hoje o atrator é binário: está ou não está. Fecha consolidando no L4 (texto/energia) e medindo retenção após N consolidações. |
+| 7 | **A ponte de fase preserva o suficiente?** | ⏳ **aberta** (F3) | Fecha com `cue_into` (ledger → vetor → semente de atrator) e medindo recall@1 no round-trip **vs** recall direto; gate: perda < 5%. |
 
-**Sete perguntas. Nenhuma respondida. Esse é o backlog real.**
+**Placar: 2 respondidas, 5 abertas — e cada aberta tem um experimento que a fecha.**
+Nenhuma resposta foi inferida: as duas fechadas têm artefato em `target/`.
+
+> *"Duas perguntas tinham resposta e não sabíamos; cinco continuam abertas e agora
+> sabemos exatamente como fechá-las."*
 
 ---
 

@@ -252,17 +252,25 @@ raciocina sobre ele com a álgebra que já existe. O LLM vira **fonte de átomos
 não runtime. Isso é a ponte mais promissora do dossiê — e a mais arriscada
 (ver §9).
 
-**A contribuição revolucionária: certificado de energia.** Toda resposta é um
-*ground state* com gap mensurável:
+**A contribuição revolucionária: certificado de factibilidade.** Toda resposta é
+um estado com atestado mensurável:
 
 ```
-(resposta, E, ΔE, nº de violações)  →  ΔE grande ⇒ confiança alta
-                                    →  ΔE pequeno ⇒ ambíguo ⇒ abster
+(resposta, E, ΔE, violações, proveniência)
+    ↓
+ΔE grande + violações = 0  ⇒  resposta factível e inequívoca ⇒ usar
+ΔE pequeno ou violações > 0 ⇒  ambíguo ⇒ abster
 ```
 
-Nenhum LLM tem isso. Não existe "prova" de que a resposta é a de menor energia.
-Aqui existe: auditável, determinístico, 0 alloc. Casa com o T10 (abstenção sem
-*warrant*) e com `RecallConfidence`.
+> **Correção pós-E3b (Vol. II §4.6):** o atestado **não** mede acerto. Em
+> otimização não restrita, todo mínimo local é "coerente" e `ΔE` **não prediz
+> sucesso** (AUC 0,46–0,55). Em problemas com restrições contáveis, `violações = 0`
+> é **prova** (precisão 100% em MAX-2-SAT). O nome correto é **certificado de
+> factibilidade** — nunca "de energia", nunca "de verdade".
+
+Nenhum LLM tem isso: não existe "prova" de que a resposta satisfaz um contrato
+explícito. Aqui existe — auditável, determinístico, 0 alloc. Casa com o T10
+(abstenção sem *warrant*) e com `RecallConfidence`.
 
 **Experimento E2:** `examples/ising_logic_probe.rs` — 3-SAT aleatório `n ≤ 20`
 contra força bruta; medir acerto, gap e calibração gap↔acerto (ECE). Repetir com
@@ -347,7 +355,7 @@ pós-ruptura contra o baseline T03 (150 ciclos).
 |---|---|---|---|
 | **Mundo** | `WaveInterference` + Koopman/SINDy + `SurpriseTracker` | — | (base) |
 | **Linguagem** | `FhrrStore` (papel–filler) + RG como árvore | PLH na borda (onda↔texto) | 1 |
-| **Logos** | solver BSB/Ising + `cleanup` | SAT/QUBO + Lagrange + certificado de energia | 2 |
+| **Logos** | solver BSB/Ising + `cleanup` | presolve/roof dual + restrições + certificado de factibilidade | 2 |
 | **Self** | `ActiveInference` (G=custo−λU) + `MorphogeneticField` + EMA | self-field 16ch + currículo por progresso | 3 |
 
 ### 5.1 A aposta forte
@@ -364,7 +372,8 @@ self precisa de um operador dedicado.
 
 ### 5.2 Diferenciais que um LLM não copia
 
-1. Resposta com **certificado de energia** (gap = confiança).
+1. Resposta com **certificado de factibilidade** (`E`, `ΔE`, violações, proveniência)
+   — verificação de consistência, **não** de verdade (Vol. II §4.6).
 2. **Determinismo bit-a-bit** com 0 alloc (auditável, reproduzível).
 3. Self-model de **16 dimensões**, não um vetor de ativações opaco.
 4. **Zero token no núcleo** → sem *prompt injection*, sem PII textual na borda.
@@ -503,8 +512,12 @@ Todos com: `--release`, seed fixa (`ChaCha8Rng`), `alloc_invariants` verde,
 | **E5** | currículo por progresso | `tests/curriculum_audit.rs` | readaptação pós-ruptura < T03 (150 ciclos) |
 
 Ordem sugerida: **E1 → E2 → E3 → E4 → E5**. E1 é o de menor risco e maior valor
-demonstrativo; E2 é o de maior valor científico (certificado de energia); E3 é o
+demonstrativo; E2 é o de maior valor científico (certificado de factibilidade); E3 é o
 de maior risco e maior potencial de ruptura.
+
+> **Plano revisado (pós-E3b, 2026-11-15):** a ordem vigente é a do **Vol. III §12.4**:
+> E6 ✅ → E6b ✅ → **E3b ✅** → **E2b (agora condição de existência do certificado)** →
+> E1b → E1/E2/E3 → E4/E5/E7/E8 → F1–F3.
 
 ### 8.1 Critério de "revolução"
 
@@ -513,7 +526,7 @@ um** destes:
 
 1. Generalização sistemática (composicional) em tarefa relacional sem treino por
    gradiente — comparável a Rel-SAR/RPM.
-2. Resposta lógica com **certificado de energia verificável** e abstenção
+2. Resposta lógica com **certificado de factibilidade verificável** e abstenção
    calibrada — algo que nenhum LLM entrega.
 3. **Self-consistência estrutural**: prever o próprio pós-plasticidade com erro
    mensurável e menor que um baseline sem self-field.
@@ -691,7 +704,7 @@ Propostas deste dossiê (ainda inexistentes):
 # E1 — linguagem em fase
 .\scripts\cargo.ps1 run --release --example phase_language_probe
 
-# E2 — lógica como Ising + certificado de energia
+# E2 — lógica como Ising + certificado de factibilidade
 .\scripts\cargo.ps1 run --release --example ising_logic_probe
 
 # E3 — transplantação de embeddings
