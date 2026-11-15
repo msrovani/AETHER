@@ -217,7 +217,9 @@ impl RenormalizationHierarchy {
             return Err(AetherError::shape([self.micro], [omega_eff.len()]));
         }
         if !k.is_finite() {
-            return Err(AetherError::Degenerate("Renormalization: k nao finito".into()));
+            return Err(AetherError::Degenerate(
+                "Renormalization: k nao finito".into(),
+            ));
         }
         let per_macro = self.micro / self.macro_dim.max(1);
         for i in 0..self.micro {
@@ -269,5 +271,18 @@ mod tests {
             }
         }
         assert!(worst < 0.20, "drift macro={worst}");
+    }
+
+    #[test]
+    fn torque_top_down_aponta_para_a_fase_macro() {
+        let mut rg = RenormalizationHierarchy::new(64).expect("rg");
+        rg.set_gain(0.0);
+        rg.set_goal(1.0);
+        let field = vec![0.2f32; 64]; // atrás do objetivo (1.0)
+        rg.forward(&field).expect("forward");
+        let mut omega = vec![0.0f32; 64];
+        rg.torque_into(&mut omega, 2.0).expect("torque");
+        assert!(omega.iter().all(|w| *w > 0.0), "torque deve acelerar");
+        assert!(rg.torque_into(&mut omega[..3], 2.0).is_err());
     }
 }

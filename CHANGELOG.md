@@ -3,6 +3,20 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.56] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 6 arquivo(s) (.:1, src:4, tests:1).
+- Gate: ok (75s).
+
+- `Cargo.lock`
+- `src/core/active_inference.rs`
+- `src/core/fhrr.rs`
+- `src/core/koopman_sindy.rs`
+- `src/core/renormalization.rs`
+- `tests/cognitive_audit.rs`
+
 ## [0.0.55] - 2026-11-15
 
 ### Changed

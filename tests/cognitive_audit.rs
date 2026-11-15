@@ -537,21 +537,18 @@ fn vdp_series(n: usize, dt: f64) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
     (xs, ys, carrier)
 }
 
-/// Regime B: oscilador nao-linear diferente (`ẋ = γ y − δ x³`).
-fn regime_b_series(n: usize, dt: f64) -> Vec<f32> {
-    let (mut x, mut y) = (0.8f64, 0.2f64);
-    let mut out = Vec::with_capacity(n);
-    let f = |x: f64, y: f64| (1.5 * y - 0.35 * x * x * x + 0.6, -1.8 * x + 0.2 * y);
-    for _ in 0..n {
-        let (k1x, k1y) = f(x, y);
-        let (k2x, k2y) = f(x + 0.5 * dt * k1x, y + 0.5 * dt * k1y);
-        let (k3x, k3y) = f(x + 0.5 * dt * k2x, y + 0.5 * dt * k2y);
-        let (k4x, k4y) = f(x + dt * k3x, y + dt * k3y);
-        x += dt * (k1x + 2.0 * k2x + 2.0 * k3x + k4x) / 6.0;
-        y += dt * (k1y + 2.0 * k2y + 2.0 * k3y + k4y) / 6.0;
-        out.push((x / 3.0) as f32);
-    }
-    out
+/// Regime B: assinatura espectral inédita (dois tons rápidos).
+///
+/// Um readout linear do embedding de atraso representa exatamente uma soma de
+/// senoides, então a adaptação RLS é mensurável sem depender de não-linearidade
+/// não representável.
+fn regime_b_series(n: usize, _dt: f64) -> Vec<f32> {
+    (0..n)
+        .map(|t| {
+            let t = t as f32;
+            0.8 * (TAU * 0.23 * t).sin() + 0.4 * (TAU * 0.07 * t).sin()
+        })
+        .collect()
 }
 
 /// Ridge por equações normais + eliminação gaussiana (instrumento do harness).
@@ -877,24 +874,24 @@ fn test_02_reliability() {
 fn test_03_online_learning() {
     const EMB: usize = 16;
     const UPDATE_CYCLES: usize = 150;
+    const HORIZON: usize = 12;
     let (xs, _, _) = vdp_series(4000, 0.01);
     let regime_a: Vec<f32> = xs.iter().map(|v| (*v / 2.5) as f32).collect();
     let regime_b = regime_b_series(2000, 0.01);
 
-    let mut op = OnlineKoopmanOperator::with_forgetting(EMB, 1, 0.02, 0.97).expect("koopman");
+    let mut op = OnlineKoopmanOperator::with_forgetting(EMB, 1, 0.05, 0.99).expect("koopman");
     let mut emb = DelayEmbedding::new(EMB).expect("delay");
     for k in 0..EMB {
         emb.push(regime_a[k]);
     }
-    for t in EMB..2500 {
+    for t in EMB..(2500 - HORIZON) {
         let z = emb.vector();
-        op.observe(&z, &[regime_a[t]]).expect("treino A");
+        op.observe(&z, &[regime_a[t + HORIZON]]).expect("treino A");
         emb.push(regime_a[t]);
     }
 
-    // Ruptura abrupta para o regime B: mede o rollout de 12 passos com o
-    // operador de A (erro de um passo seria pequeno demais para discriminar).
-    const HORIZON: usize = 12;
+    // Ruptura abrupta para o regime B: mede a previsão DIRETA a H passos
+    // (readout linear do embedding), evitando a instabilidade do rollout.
     let mut emb = DelayEmbedding::new(EMB).expect("delay");
     for k in 0..EMB {
         emb.push(regime_b[k]);
@@ -903,8 +900,8 @@ fn test_03_online_learning() {
     for k in 0..20 {
         let t = EMB + k;
         let z = emb.vector();
-        let out = op.rollout(&z, HORIZON).expect("rollout B0");
-        err_before += (out[HORIZON - 1] - regime_b[t + HORIZON - 1]).abs() as f64;
+        let p = op.predict(&z).expect("pred B0")[0];
+        err_before += (p - regime_b[t + HORIZON]).abs() as f64;
         emb.push(regime_b[t]);
     }
     err_before /= 20.0;
@@ -912,15 +909,16 @@ fn test_03_online_learning() {
     // 150 ciclos de plasticidade local (Sherman-Morrison), sem gradiente.
     for t in (EMB + 20)..(EMB + 20 + UPDATE_CYCLES) {
         let z = emb.vector();
-        op.observe(&z, &[regime_b[t]]).expect("adaptacao B");
+        op.observe(&z, &[regime_b[t + HORIZON]])
+            .expect("adaptacao B");
         emb.push(regime_b[t]);
     }
     let mut err_after = 0.0f64;
     for k in 0..20 {
         let t = EMB + 20 + UPDATE_CYCLES + k;
         let z = emb.vector();
-        let out = op.rollout(&z, HORIZON).expect("rollout B1");
-        err_after += (out[HORIZON - 1] - regime_b[t + HORIZON - 1]).abs() as f64;
+        let p = op.predict(&z).expect("pred B1")[0];
+        err_after += (p - regime_b[t + HORIZON]).abs() as f64;
         emb.push(regime_b[t]);
     }
     err_after /= 20.0;

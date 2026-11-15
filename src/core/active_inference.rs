@@ -233,6 +233,10 @@ pub struct ActiveInferenceEngine {
     lambda_epistemic: f32,
     obs_var: f32,
     visits: Vec<u32>,
+    /// Boltzmann p_k (pré-alocado, K = número de zonas/políticas).
+    probs: Vec<f32>,
+    /// Deslocamento desejado ẑ_k − z (pré-alocado por [with_policy_dim]).
+    u_buf: Vec<f32>,
 }
 
 impl ActiveInferenceEngine {
@@ -259,6 +263,8 @@ impl ActiveInferenceEngine {
             lambda_epistemic,
             obs_var,
             visits: vec![0u32; n],
+            probs: vec![0.0f32; n],
+            u_buf: Vec::new(),
         })
     }
 
@@ -307,6 +313,107 @@ impl ActiveInferenceEngine {
     /// Número de zonas.
     pub fn zone_count(&self) -> usize {
         self.zones.len()
+    }
+
+    /// Habilita [`plan_step`](Self::plan_step) para estados latentes de
+    /// dimensão `dim` (aloca o buffer de deslocamento uma única vez).
+    pub fn with_policy_dim(mut self, dim: usize) -> Self {
+        self.u_buf = vec![0.0f32; dim];
+        self
+    }
+
+    /// Distribuição de Boltzmann `p_k ∝ exp(−G_k / T)` da última chamada a
+    /// [`plan_step`](Self::plan_step).
+    pub fn policy_probs(&self) -> &[f32] {
+        &self.probs
+    }
+
+    /// Planeja e aplica um passo seguro (zero alocação).
+    ///
+    /// Política `k` ↔ zona `k` com previsão `ẑ_k` (`z_hats`, `K × dim`
+    /// linha-a-linha) e incerteza epistêmica `U_k = var_k`:
+    ///
+    /// `G(k) = ½‖ẑ_k − z*‖² − λ_epistêmico · U_k`, `p_k ∝ exp(−G_k/T)`.
+    ///
+    /// A política é amostrada por CDF inversa com `u_rand ∈ [0,1)` (o chamador
+    /// controla o RNG ⇒ determinismo). O deslocamento desejado `ẑ_k − z` passa
+    /// pelo [`LyapunovCbf`], garantindo `V(z_{t+1}) ≤ V_max`; `z_next` recebe
+    /// o estado seguro. Retorna `(k, V(z_{t+1}))`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn plan_step(
+        &mut self,
+        cbf: &mut LyapunovCbf,
+        z: &[f32],
+        z_hats: &[f32],
+        z_star: &[f32],
+        temperature: f32,
+        u_rand: f32,
+        gamma: f32,
+        z_next: &mut [f32],
+    ) -> Result<(usize, f32)> {
+        let k_pol = self.zones.len();
+        let dim = self.u_buf.len();
+        if dim == 0 {
+            return Err(AetherError::Config(
+                "ActiveInference: chame with_policy_dim antes de plan_step".into(),
+            ));
+        }
+        if z.len() != dim
+            || z_star.len() != dim
+            || z_next.len() != dim
+            || z_hats.len() != k_pol * dim
+        {
+            return Err(AetherError::shape([k_pol * dim], [z_hats.len()]));
+        }
+        if !temperature.is_finite() || temperature <= 0.0 {
+            return Err(AetherError::Config("ActiveInference: T > 0".into()));
+        }
+        // Custo pragmático ½‖ẑ_k − z*‖² e G(k).
+        let mut g_min = f32::INFINITY;
+        for k in 0..k_pol {
+            let row = &z_hats[k * dim..(k + 1) * dim];
+            let mut c = 0.0f32;
+            for i in 0..dim {
+                let d = row[i] - z_star[i];
+                c += d * d;
+            }
+            self.zones[k].cost = 0.5 * c;
+            let g = self.expected_free_energy(k);
+            self.probs[k] = g;
+            g_min = g_min.min(g);
+        }
+        // Softmax estável: p_k ∝ exp(−(G_k − G_min)/T).
+        let mut sum = 0.0f32;
+        for k in 0..k_pol {
+            let e = (-(self.probs[k] - g_min) / temperature).exp();
+            self.probs[k] = e;
+            sum += e;
+        }
+        let inv = 1.0 / sum.max(1e-30);
+        for p in self.probs.iter_mut() {
+            *p *= inv;
+        }
+        // CDF inversa.
+        let u_rand = if u_rand.is_finite() {
+            u_rand.clamp(0.0, 0.999_999)
+        } else {
+            0.0
+        };
+        let mut acc = 0.0f32;
+        let mut pick = k_pol - 1;
+        for k in 0..k_pol {
+            acc += self.probs[k];
+            if u_rand < acc {
+                pick = k;
+                break;
+            }
+        }
+        let row = &z_hats[pick * dim..(pick + 1) * dim];
+        for i in 0..dim {
+            self.u_buf[i] = row[i] - z[i];
+        }
+        let v = cbf.project_into(z, &self.u_buf, gamma, z_next)?;
+        Ok((pick, v))
     }
 }
 
@@ -474,5 +581,57 @@ mod tests {
             }
         }
         assert!(distinct.len() >= 2, "papeis={distinct:?}");
+    }
+
+    #[test]
+    fn plan_step_boltzmann_e_cbf_respeitam_vmax() {
+        const D: usize = 4;
+        let zones = vec![
+            Zone {
+                mean: 0.0,
+                var: 0.1,
+                cost: 0.0,
+            },
+            Zone {
+                mean: 0.0,
+                var: 0.1,
+                cost: 0.0,
+            },
+            Zone {
+                mean: 0.0,
+                var: 0.1,
+                cost: 0.0,
+            },
+        ];
+        let mut ai = ActiveInferenceEngine::new(zones, 1.0, 0.05)
+            .expect("ai")
+            .with_policy_dim(D);
+        let mut cbf = LyapunovCbf::new(D, 1.0).expect("cbf");
+        let z = [0.1f32; D];
+        let z_star = [0.0f32; D];
+        // Política 0 aproxima de z*; 1 e 2 empurram para fora da região segura.
+        let hats = [
+            0.0, 0.0, 0.0, 0.0, //
+            2.0, 2.0, 2.0, 2.0, //
+            -3.0, 0.0, 0.0, 0.0,
+        ];
+        let mut out = [0.0f32; D];
+        let (k, v) = ai
+            .plan_step(&mut cbf, &z, &hats, &z_star, 0.05, 0.5, 0.1, &mut out)
+            .expect("plan");
+        let s: f32 = ai.policy_probs().iter().sum();
+        assert!((s - 1.0).abs() < 1e-4);
+        assert!(ai.policy_probs()[0] > ai.policy_probs()[1]);
+        assert_eq!(k, 0);
+        assert!(v <= 1.0 + 1e-5);
+        // Força uma política insegura: o CBF deve conter V(z_{t+1}).
+        let (k2, v2) = ai
+            .plan_step(&mut cbf, &z, &hats, &z_star, 1e3, 0.99, 0.1, &mut out)
+            .expect("plan");
+        assert!(k2 >= 1);
+        assert!(v2 <= 1.0 + 1e-5, "V={v2}");
+        assert!(ai
+            .plan_step(&mut cbf, &z, &hats, &z_star, 0.0, 0.1, 0.1, &mut out)
+            .is_err());
     }
 }

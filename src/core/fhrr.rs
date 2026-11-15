@@ -124,6 +124,57 @@ impl FhrrMatch {
     }
 }
 
+/// Resultado escalar de [`FhrrStore::query_into`] (sem alocação).
+#[derive(Clone, Copy, Debug)]
+pub struct FhrrHit {
+    /// Fato eleito pela cleanup memory.
+    pub fact_index: usize,
+    /// Valor com maior similaridade.
+    pub value_index: usize,
+    /// Similaridade do valor vencedor.
+    pub similarity: f32,
+    /// Margem para o segundo valor.
+    pub margin: f32,
+    /// Evidência: similaridade do papel da pista com o fato eleito.
+    pub role_similarity: f32,
+}
+
+/// Workspace pré-alocado de [`FhrrStore::query_into`].
+#[derive(Clone, Debug)]
+pub struct FhrrScratch {
+    cue_re: Vec<f32>,
+    cue_im: Vec<f32>,
+    z_re: Vec<f32>,
+    z_im: Vec<f32>,
+    sims: Vec<f32>,
+    n_sims: usize,
+}
+
+impl FhrrScratch {
+    /// Similaridades com todos os valores da última consulta.
+    pub fn sims(&self) -> &[f32] {
+        &self.sims[..self.n_sims]
+    }
+}
+
+/// Produto interno em blocos de 8 (vetoriza; sem normas redundantes).
+#[inline]
+fn dot8(a: &[f32], b: &[f32]) -> f32 {
+    let mut lane = [0.0f32; 8];
+    let ca = a.chunks_exact(8);
+    let cb = b.chunks_exact(8);
+    let (ra, rb) = (ca.remainder(), cb.remainder());
+    for (x, y) in ca.zip(cb) {
+        for l in 0..8 {
+            lane[l] += x[l] * y[l];
+        }
+    }
+    let mut acc = 0.0f32;
+    for (x, y) in ra.iter().zip(rb) {
+        acc += x * y;
+    }
+    acc + ((lane[0] + lane[4]) + (lane[1] + lane[5])) + ((lane[2] + lane[6]) + (lane[3] + lane[7]))
+}
 /// Memória holográfica de fatos `(entidade, relação, valor)`.
 #[derive(Debug)]
 pub struct FhrrStore {
@@ -135,6 +186,9 @@ pub struct FhrrStore {
     /// Fase aleatória por `(fato, traço)`: decorrelaciona o crosstalk entre
     /// traços; o offset global cancelaria no unbinding e não reduziria ruído.
     fact_phase: Vec<f32>,
+    /// cos ψ / sin ψ por (fato, traço) (evita sin_cos na consulta).
+    fact_cos: Vec<f32>,
+    fact_sin: Vec<f32>,
     /// RNG determinístico das fases por fato/traço.
     phase_rng: u32,
     entities: Vec<Phasor>,
@@ -183,6 +237,8 @@ impl FhrrStore {
             trace_re: vec![0.0f32; dim * traces],
             trace_im: vec![0.0f32; dim * traces],
             fact_phase: Vec::new(),
+            fact_cos: Vec::new(),
+            fact_sin: Vec::new(),
             phase_rng: 0xA37E_0001u32 ^ (dim as u32) ^ ((traces as u32) << 16),
             entities: Vec::new(),
             relations: Vec::new(),
@@ -260,6 +316,8 @@ impl FhrrStore {
             };
             psis.push(psi);
             let (sp, cp) = psi.sin_cos();
+            self.fact_cos.push(cp);
+            self.fact_sin.push(sp);
             let base = t * self.dim;
             for j in 0..self.dim {
                 let th = entity[j] + relation[j] + value[j];
@@ -346,14 +404,31 @@ impl FhrrStore {
         })
     }
 
-    /// Consulta compacta (sem fases): cleanup do papel, unbinding e
-    /// similaridade com todos os valores.
-    pub fn query_match(
+    /// Cria o workspace de consulta para até `max_values` átomos de valor.
+    ///
+    /// Aloca **uma vez**; [`query_into`](Self::query_into) não aloca mais.
+    pub fn scratch(&self, max_values: usize) -> FhrrScratch {
+        FhrrScratch {
+            cue_re: vec![0.0; self.dim],
+            cue_im: vec![0.0; self.dim],
+            z_re: vec![0.0; self.dim],
+            z_im: vec![0.0; self.dim],
+            sims: vec![0.0; max_values.max(self.values.len())],
+            n_sims: 0,
+        }
+    }
+
+    /// Consulta **zero-alocação**: cleanup do papel `e ⊙ r` (produto interno
+    /// em blocos de 8, pista mascarada ⇒ sem gather), unbinding coerente dos
+    /// `K` traços (`z = conj(papel) ⊙ Σ_t M_t e^{-iψ_t}`) e similaridade com
+    /// todos os valores em `sc.sims()`.
+    pub fn query_into(
         &self,
         entity_cue: &[f32],
         relation_cue: &[f32],
         mask: &[bool],
-    ) -> Result<FhrrMatch> {
+        sc: &mut FhrrScratch,
+    ) -> Result<FhrrHit> {
         if self.is_empty() {
             return Err(AetherError::Config(
                 "FHRR: consulta em memoria vazia".into(),
@@ -361,68 +436,70 @@ impl FhrrStore {
         }
         self.check("entity_cue", entity_cue)?;
         self.check("relation_cue", relation_cue)?;
-        if mask.len() != self.dim {
-            return Err(AetherError::shape([self.dim], [mask.len()]));
+        let dim = self.dim;
+        if mask.len() != dim || sc.cue_re.len() != dim {
+            return Err(AetherError::shape([dim], [mask.len().min(sc.cue_re.len())]));
+        }
+        if sc.sims.len() < self.values.len() {
+            return Err(AetherError::shape([self.values.len()], [sc.sims.len()]));
         }
 
-        let e_cue = Phasor::from_phases(entity_cue);
-        let r_cue = Phasor::from_phases(relation_cue);
-
-        // Papel da pista: e_cue ⊙ r_cue.
-        let mut rq_re = Vec::with_capacity(self.dim);
-        let mut rq_im = Vec::with_capacity(self.dim);
-        for j in 0..self.dim {
-            rq_re.push(e_cue.re[j] * r_cue.re[j] - e_cue.im[j] * r_cue.im[j]);
-            rq_im.push(e_cue.re[j] * r_cue.im[j] + e_cue.im[j] * r_cue.re[j]);
+        // Papel da pista e⊙r: uma única sin_cos por posição visível; as
+        // ocultas ficam em zero (não contribuem ao produto interno).
+        let mut nvis = 0usize;
+        for j in 0..dim {
+            if mask[j] {
+                let (s, c) = (entity_cue[j] + relation_cue[j]).sin_cos();
+                sc.cue_re[j] = c;
+                sc.cue_im[j] = s;
+                nvis += 1;
+            } else {
+                sc.cue_re[j] = 0.0;
+                sc.cue_im[j] = 0.0;
+            }
         }
-        let role_cue = Phasor {
-            re: rq_re,
-            im: rq_im,
-        };
 
-        let visible = Self::visible(mask);
-
-        // Cleanup memory: fato cujo papel combinado mais se aproxima.
+        // Cleanup memory: fato com maior Re⟨papel_cue, papel_k⟩.
         let mut best_k = 0usize;
         let mut best_s = f32::NEG_INFINITY;
         for (k, role) in self.roles.iter().enumerate() {
-            let s = role_cue.similarity_visible(role, &visible);
+            let s = dot8(&sc.cue_re, &role.re) + dot8(&sc.cue_im, &role.im);
             if s > best_s {
                 best_s = s;
                 best_k = k;
             }
         }
+        let role_similarity = if nvis == 0 { 0.0 } else { best_s / nvis as f32 };
 
-        let (value_re, value_im) = self.unbind(&self.roles[best_k], best_k);
-
-        // Similaridade com todos os valores: varredura em blocos de 8, uma
-        // única normalização no fim (a soma crua é K× o sinal; argmax/SNR não
-        // dependem da escala, mas a similaridade reportada precisa ser ~1).
-        let inv = 1.0f32 / (self.dim as f32 * self.traces as f32);
-        let mut sims = vec![0.0f32; self.values.len()];
-        for (k, v) in self.values.iter().enumerate() {
-            let mut acc = 0.0f32;
-            let mut j = 0usize;
-            while j + 8 <= self.dim {
-                let mut lane = 0.0f32;
-                for l in 0..8 {
-                    let idx = j + l;
-                    lane += value_re[idx] * v.re[idx] + value_im[idx] * v.im[idx];
-                }
-                acc += lane;
-                j += 8;
+        // Unbinding: S = Σ_t M_t e^{-iψ_t}; z = S ⊙ conj(papel_best).
+        sc.z_re.fill(0.0);
+        sc.z_im.fill(0.0);
+        let pbase = best_k * self.traces;
+        for t in 0..self.traces {
+            let cp = self.fact_cos[pbase + t];
+            let sp = self.fact_sin[pbase + t];
+            let tr = &self.trace_re[t * dim..(t + 1) * dim];
+            let ti = &self.trace_im[t * dim..(t + 1) * dim];
+            for j in 0..dim {
+                sc.z_re[j] += tr[j] * cp + ti[j] * sp;
+                sc.z_im[j] += ti[j] * cp - tr[j] * sp;
             }
-            while j < self.dim {
-                acc += value_re[j] * v.re[j] + value_im[j] * v.im[j];
-                j += 1;
-            }
-            sims[k] = acc * inv;
+        }
+        let role = &self.roles[best_k];
+        for j in 0..dim {
+            let (sr, si) = (sc.z_re[j], sc.z_im[j]);
+            sc.z_re[j] = sr * role.re[j] + si * role.im[j];
+            sc.z_im[j] = si * role.re[j] - sr * role.im[j];
         }
 
+        // Similaridade com todos os valores (uma normalização final).
+        let inv = 1.0f32 / (dim as f32 * self.traces as f32);
         let mut best_v = 0usize;
         let mut best_sim = f32::NEG_INFINITY;
         let mut second = f32::NEG_INFINITY;
-        for (k, &s) in sims.iter().enumerate() {
+        for (k, v) in self.values.iter().enumerate() {
+            let s = (dot8(&sc.z_re, &v.re) + dot8(&sc.z_im, &v.im)) * inv;
+            sc.sims[k] = s;
             if s > best_sim {
                 second = best_sim;
                 best_sim = s;
@@ -431,28 +508,48 @@ impl FhrrStore {
                 second = s;
             }
         }
-        let margin = if sims.len() > 1 {
+        sc.n_sims = self.values.len();
+        let margin = if sc.n_sims > 1 {
             best_sim - second
         } else {
             best_sim
         };
-
-        let fe = self.fact_entity[best_k];
-        let fr = self.fact_relation[best_k];
-        let es = e_cue.similarity_visible(&self.entities[fe], &visible);
-        let rs = r_cue.similarity_visible(&self.relations[fr], &visible);
-
-        Ok(FhrrMatch {
+        Ok(FhrrHit {
             fact_index: best_k,
+            value_index: best_v,
+            similarity: best_sim,
+            margin,
+            role_similarity,
+        })
+    }
+
+    /// Consulta compacta (sem fases): cleanup do papel, unbinding e
+    /// similaridade com todos os valores. Aloca o resultado; para o caminho
+    /// quente use [`query_into`](Self::query_into).
+    pub fn query_match(
+        &self,
+        entity_cue: &[f32],
+        relation_cue: &[f32],
+        mask: &[bool],
+    ) -> Result<FhrrMatch> {
+        let mut sc = self.scratch(self.values.len());
+        let hit = self.query_into(entity_cue, relation_cue, mask, &mut sc)?;
+        let e_cue = Phasor::from_phases(entity_cue);
+        let r_cue = Phasor::from_phases(relation_cue);
+        let visible = Self::visible(mask);
+        let fe = self.fact_entity[hit.fact_index];
+        let fr = self.fact_relation[hit.fact_index];
+        Ok(FhrrMatch {
+            fact_index: hit.fact_index,
             entity_index: fe,
             relation_index: fr,
-            value_index: best_v,
-            similarity: sims[best_v],
-            margin,
-            entity_similarity: es,
-            relation_similarity: rs,
-            role_similarity: best_s,
-            value_similarities: sims,
+            value_index: hit.value_index,
+            similarity: hit.similarity,
+            margin: hit.margin,
+            entity_similarity: e_cue.similarity_visible(&self.entities[fe], &visible),
+            relation_similarity: r_cue.similarity_visible(&self.relations[fr], &visible),
+            role_similarity: hit.role_similarity,
+            value_similarities: sc.sims[..sc.n_sims].to_vec(),
         })
     }
 

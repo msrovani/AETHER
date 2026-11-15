@@ -20,6 +20,26 @@
 
 use crate::error::{AetherError, Result};
 
+/// Dimensão do estado do operador *lifted*.
+pub const KOOPMAN_D: usize = 6;
+/// Dimensão do dicionário `ψ(x)` do operador *lifted*.
+pub const KOOPMAN_P: usize = 20;
+/// Fator de esquecimento (`λ`) do operador *lifted*.
+pub const KOOPMAN_LAMBDA: f32 = 0.99;
+
+/// Dicionário `ψ: R^6 → R^20`: `[1, x_i (6), x_i² (6), x_i x_{i+1} (6), x_0 x_2 x_4]`.
+///
+/// Os observáveis lineares ficam em `ψ[1..7]` (decodificação direta de `x`).
+pub fn lift_state(x: &[f32], psi: &mut [f32; KOOPMAN_P]) {
+    psi[0] = 1.0;
+    for i in 0..KOOPMAN_D {
+        psi[1 + i] = x[i];
+        psi[7 + i] = x[i] * x[i];
+        psi[13 + i] = x[i] * x[(i + 1) % KOOPMAN_D];
+    }
+    psi[19] = x[0] * x[2] * x[4];
+}
+
 /// Operador linear online `y = W z` com covariância inversa `P` (RLS).
 #[derive(Debug)]
 pub struct OnlineKoopmanOperator {
@@ -224,16 +244,85 @@ impl OnlineKoopmanOperator {
         if out.len() < h {
             return Err(AetherError::shape([h], [out.len()]));
         }
-        let mut buf = z.to_vec();
+        // Janela deslizante virtual: `buf[i] = z[step+i]` enquanto houver
+        // amostras originais, depois as previsões já escritas em `out`.
         for step in 0..h {
             let mut acc = 0.0f64;
             for i in 0..self.dim {
-                acc += self.w[i] * buf[i] as f64;
+                let k = step + i;
+                let v = if k < self.dim {
+                    z[k]
+                } else {
+                    out[k - self.dim]
+                };
+                acc += self.w[i] * v as f64;
             }
-            let next = acc as f32;
-            out[step] = next;
-            buf.remove(0);
-            buf.push(next);
+            out[step] = acc as f32;
+        }
+        Ok(())
+    }
+
+    /// Operador **lifted** do sprint: `x ∈ R^6 → ψ(x) ∈ R^20`, `λ = 0.99`.
+    ///
+    /// `K` (20×20) e `P` (20×20) evoluem por Sherman-Morrison com fator de
+    /// esquecimento `0.99`. Use [`observe_state`](Self::observe_state) e
+    /// [`predict_steps`](Self::predict_steps) (zero alocação).
+    pub fn lifted() -> Result<Self> {
+        Self::with_forgetting(KOOPMAN_P, KOOPMAN_P, 1e-2, KOOPMAN_LAMBDA)
+    }
+
+    fn require_lifted(&self) -> Result<()> {
+        if self.dim != KOOPMAN_P || self.out_dim != KOOPMAN_P {
+            return Err(AetherError::Config(
+                "Koopman: operador nao e `lifted()` (dim=out_dim=20)".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Aprende `K` com o par de estados `(x_t, x_{t+1})`, `x ∈ R^6`.
+    pub fn observe_state(&mut self, x: &[f32], x_next: &[f32]) -> Result<()> {
+        self.require_lifted()?;
+        if x.len() != KOOPMAN_D || x_next.len() != KOOPMAN_D {
+            return Err(AetherError::shape([KOOPMAN_D], [x.len().min(x_next.len())]));
+        }
+        let mut z = [0.0f32; KOOPMAN_P];
+        let mut zn = [0.0f32; KOOPMAN_P];
+        lift_state(x, &mut z);
+        lift_state(x_next, &mut zn);
+        self.observe(&z, &zn)
+    }
+
+    /// Prevê `horizon` passos: `ψ_{k+1} = K ψ_k`, decodificando `x` dos
+    /// observáveis lineares de `ψ`. Escreve `horizon × 6` valores em `out`
+    /// (linha `k` = `x̂_{t+k+1}`), sem alocar.
+    pub fn predict_steps(&self, x0: &[f32], horizon: usize, out: &mut [f32]) -> Result<()> {
+        self.require_lifted()?;
+        if x0.len() != KOOPMAN_D {
+            return Err(AetherError::shape([KOOPMAN_D], [x0.len()]));
+        }
+        if out.len() < horizon * KOOPMAN_D {
+            return Err(AetherError::shape([horizon * KOOPMAN_D], [out.len()]));
+        }
+        let mut z32 = [0.0f32; KOOPMAN_P];
+        lift_state(x0, &mut z32);
+        let mut z = [0.0f64; KOOPMAN_P];
+        for i in 0..KOOPMAN_P {
+            z[i] = z32[i] as f64;
+        }
+        for k in 0..horizon {
+            let mut nz = [0.0f64; KOOPMAN_P];
+            for o in 0..KOOPMAN_P {
+                let mut acc = 0.0f64;
+                for i in 0..KOOPMAN_P {
+                    acc += self.w[o * KOOPMAN_P + i] * z[i];
+                }
+                nz[o] = acc;
+            }
+            z = nz;
+            for d in 0..KOOPMAN_D {
+                out[k * KOOPMAN_D + d] = z[1 + d] as f32;
+            }
         }
         Ok(())
     }
@@ -313,7 +402,22 @@ pub struct SindyEquationDiscoverer {
     b: Vec<f64>,
     active: Vec<usize>,
     coef: Vec<f64>,
+    /// Buffer circular `SINDY_WINDOW × 2` do modo streaming.
+    ring: Vec<f64>,
+    head: usize,
+    filled: usize,
+    dt: f64,
+    tau_sparse: f64,
+    /// `Θ` da janela (`(W−4) × 10`) e alvo `ẋ` (`W−4`), pré-alocados.
+    ws_theta: Vec<f64>,
+    ws_dx: Vec<f64>,
+    xi: [[f64; SINDY_TERMS]; 2],
 }
+
+/// Janela circular do SINDy streaming.
+pub const SINDY_WINDOW: usize = 128;
+/// Termos da biblioteca polinomial (grau ≤ 3 em 2 variáveis).
+pub const SINDY_TERMS: usize = 10;
 
 impl Default for SindyEquationDiscoverer {
     fn default() -> Self {
@@ -337,7 +441,112 @@ impl SindyEquationDiscoverer {
             b: vec![0.0; terms],
             active: Vec::with_capacity(terms),
             coef: vec![0.0; terms],
+            ring: vec![0.0; SINDY_WINDOW * 2],
+            head: 0,
+            filled: 0,
+            dt: 1e-3,
+            tau_sparse: 0.02,
+            ws_theta: vec![0.0; (SINDY_WINDOW - 4) * SINDY_TERMS],
+            ws_dx: vec![0.0; SINDY_WINDOW - 4],
+            xi: [[0.0; SINDY_TERMS]; 2],
         }
+    }
+
+    /// Descobridor *streaming*: janela circular `W=128`, passo `dt` e limiar
+    /// de esparsidade `tau_sparse` (STLSQ).
+    pub fn streaming(dt: f32, tau_sparse: f64) -> Result<Self> {
+        if !dt.is_finite() || dt <= 0.0 {
+            return Err(AetherError::Config("SINDy: dt invalido".into()));
+        }
+        if !tau_sparse.is_finite() || tau_sparse < 0.0 {
+            return Err(AetherError::Config("SINDy: tau_sparse >= 0".into()));
+        }
+        let mut s = Self::new();
+        s.dt = dt as f64;
+        s.tau_sparse = tau_sparse;
+        Ok(s)
+    }
+
+    /// Insere uma amostra `(x1, x2)` no buffer circular (zero alocação).
+    pub fn push(&mut self, x: [f32; 2]) {
+        if !(x[0].is_finite() && x[1].is_finite()) {
+            return;
+        }
+        self.ring[self.head * 2] = x[0] as f64;
+        self.ring[self.head * 2 + 1] = x[1] as f64;
+        self.head = (self.head + 1) % SINDY_WINDOW;
+        self.filled = (self.filled + 1).min(SINDY_WINDOW);
+    }
+
+    /// Amostras na janela.
+    pub fn window_len(&self) -> usize {
+        self.filled
+    }
+
+    /// Coeficientes `Ξ` atuais (`[ẋ1; ẋ2] × 10 termos`).
+    pub fn coefficients(&self) -> &[[f64; SINDY_TERMS]; 2] {
+        &self.xi
+    }
+
+    /// Avalia `ẋ = Θ(x) Ξ` em `x`.
+    pub fn rhs(&self, x: [f64; 2]) -> [f64; 2] {
+        let th = Self::library(x[0], x[1]);
+        let mut d = [0.0f64; 2];
+        for c in 0..2 {
+            for t in 0..SINDY_TERMS {
+                d[c] += th[t] * self.xi[c][t];
+            }
+        }
+        d
+    }
+
+    #[inline]
+    fn sample(&self, t: usize, c: usize) -> f64 {
+        let start = (self.head + SINDY_WINDOW - self.filled) % SINDY_WINDOW;
+        self.ring[((start + t) % SINDY_WINDOW) * 2 + c]
+    }
+
+    /// Ajusta `Ξ` na janela atual: derivadas centradas de **4ª ordem**
+    /// `ẋ_t = (−x_{t+2} + 8x_{t+1} − 8x_{t−1} + x_{t−2}) / 12dt` e STLSQ
+    /// (workspace pré-alocado). Retorna o erro relativo
+    /// `‖ẋ − Θ Ξ‖ / ‖ẋ‖` sobre a janela.
+    pub fn fit_window(&mut self) -> Result<f64> {
+        if self.filled < 4 + 2 * SINDY_TERMS {
+            return Err(AetherError::Config("SINDy: janela curta".into()));
+        }
+        let rows = self.filled - 4;
+        let inv = 1.0 / (12.0 * self.dt);
+        for r in 0..rows {
+            let t = r + 2;
+            let x1 = self.sample(t, 0);
+            let x2 = self.sample(t, 1);
+            let th = Self::library(x1, x2);
+            self.ws_theta[r * SINDY_TERMS..(r + 1) * SINDY_TERMS].copy_from_slice(&th);
+        }
+        let mut num = 0.0f64;
+        let mut den = 0.0f64;
+        for c in 0..2 {
+            for r in 0..rows {
+                let t = r + 2;
+                self.ws_dx[r] = (-self.sample(t + 2, c) + 8.0 * self.sample(t + 1, c)
+                    - 8.0 * self.sample(t - 1, c)
+                    + self.sample(t - 2, c))
+                    * inv;
+            }
+            let mut xi = [0.0f64; SINDY_TERMS];
+            stlsq_ws(&self.ws_theta, &self.ws_dx, rows, self.tau_sparse, &mut xi);
+            for r in 0..rows {
+                let mut p = 0.0f64;
+                for t in 0..SINDY_TERMS {
+                    p += self.ws_theta[r * SINDY_TERMS + t] * xi[t];
+                }
+                let e = self.ws_dx[r] - p;
+                num += e * e;
+                den += self.ws_dx[r] * self.ws_dx[r];
+            }
+            self.xi[c] = xi;
+        }
+        Ok((num / den.max(1e-30)).sqrt())
     }
 
     /// Avalia a biblioteca em `(x1, x2)`.
@@ -443,6 +652,101 @@ impl SindyEquationDiscoverer {
     }
 }
 
+/// STLSQ em workspace de pilha (zero alocação): `min ‖y − Θ ξ‖` com
+/// limiarização sequencial `|ξ_t| < tau` e re-ajuste nos termos ativos.
+fn stlsq_ws(theta: &[f64], y: &[f64], rows: usize, tau: f64, xi: &mut [f64; SINDY_TERMS]) {
+    const T: usize = SINDY_TERMS;
+    let mut active = [true; T];
+    for _ in 0..T {
+        let mut idx = [0usize; T];
+        let mut m = 0usize;
+        for t in 0..T {
+            if active[t] {
+                idx[m] = t;
+                m += 1;
+            }
+        }
+        if m == 0 {
+            xi.fill(0.0);
+            return;
+        }
+        // Sistema aumentado [A | b] (m × (m+1)), A = ΘᵀΘ + ridge, b = Θᵀy.
+        let w = m + 1;
+        let mut aug = [0.0f64; T * (T + 1)];
+        for i in 0..m {
+            for j in i..m {
+                let mut acc = 0.0f64;
+                for r in 0..rows {
+                    acc += theta[r * T + idx[i]] * theta[r * T + idx[j]];
+                }
+                aug[i * w + j] = acc;
+                aug[j * w + i] = acc;
+            }
+            let mut acc = 0.0f64;
+            for r in 0..rows {
+                acc += theta[r * T + idx[i]] * y[r];
+            }
+            aug[i * w + m] = acc;
+            aug[i * w + i] += 1e-10;
+        }
+        if !gauss_jordan_inplace(&mut aug, m) {
+            return;
+        }
+        xi.fill(0.0);
+        let mut changed = false;
+        for i in 0..m {
+            let c = aug[i * w + m];
+            if c.abs() < tau {
+                active[idx[i]] = false;
+                changed = true;
+            } else {
+                xi[idx[i]] = c;
+            }
+        }
+        if !changed {
+            return;
+        }
+    }
+}
+
+/// Gauss-Jordan com pivoteamento parcial sobre `[A | b]` (`m × (m+1)`).
+fn gauss_jordan_inplace(aug: &mut [f64], m: usize) -> bool {
+    let w = m + 1;
+    for col in 0..m {
+        let mut piv = col;
+        for r in (col + 1)..m {
+            if aug[r * w + col].abs() > aug[piv * w + col].abs() {
+                piv = r;
+            }
+        }
+        if aug[piv * w + col].abs() < 1e-14 {
+            return false;
+        }
+        if piv != col {
+            for j in 0..w {
+                aug.swap(col * w + j, piv * w + j);
+            }
+        }
+        let p = aug[col * w + col];
+        for j in col..w {
+            aug[col * w + j] /= p;
+        }
+        for r in 0..m {
+            if r == col {
+                continue;
+            }
+            let f = aug[r * w + col];
+            if f == 0.0 {
+                continue;
+            }
+            for j in col..w {
+                aug[r * w + j] -= f * aug[col * w + j];
+            }
+        }
+    }
+    true
+}
+
 /// Resolve `A x = b` (n ≤ ~16) por eliminação gaussiana com pivoteamento.
 fn solve_dense(a: &[f64], b: &[f64], n: usize) -> Option<Vec<f64>> {
     let mut m = vec![0.0f64; n * (n + 1)];
@@ -494,6 +798,80 @@ fn solve_dense(a: &[f64], b: &[f64], n: usize) -> Option<Vec<f64>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn lcg(s: &mut u64) -> f32 {
+        *s = s
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        ((*s >> 40) as f32 / (1u64 << 24) as f32) * 2.0 - 1.0
+    }
+
+    #[test]
+    fn koopman_lifted_preve_sistema_linear_6d() {
+        // 3 rotações 2D amortecidas com frequências distintas.
+        let th = [0.20f32, 0.35, 0.50];
+        let step = |x: &[f32; 6]| -> [f32; 6] {
+            let mut y = [0.0f32; 6];
+            for b in 0..3 {
+                let (s, c) = th[b].sin_cos();
+                y[2 * b] = 0.99 * (c * x[2 * b] - s * x[2 * b + 1]);
+                y[2 * b + 1] = 0.99 * (s * x[2 * b] + c * x[2 * b + 1]);
+            }
+            y
+        };
+        let mut op = OnlineKoopmanOperator::lifted().expect("lifted");
+        let mut seed = 7u64;
+        for _ in 0..200 {
+            let mut x = [0.0f32; 6];
+            for v in x.iter_mut() {
+                *v = lcg(&mut seed);
+            }
+            for _ in 0..30 {
+                let n = step(&x);
+                op.observe_state(&x, &n).expect("observe");
+                x = n;
+            }
+        }
+        let x0 = [0.6f32, -0.4, 0.3, 0.5, -0.7, 0.2];
+        let mut out = [0.0f32; 6 * 10];
+        op.predict_steps(&x0, 10, &mut out).expect("predict");
+        let mut x = x0;
+        let mut err = 0.0f32;
+        for k in 0..10 {
+            x = step(&x);
+            for d in 0..6 {
+                err = err.max((out[k * 6 + d] - x[d]).abs());
+            }
+        }
+        assert!(err < 0.05, "erro max de predicao {err}");
+        assert!(op.predict_steps(&x0[..3], 2, &mut out).is_err());
+    }
+
+    #[test]
+    fn sindy_streaming_recupera_oscilador_duffing() {
+        // ẋ1 = x2 ; ẋ2 = −4 x1 − 0.2 x2 − 1.0 x1³ (RK4, dt = 0.01).
+        let f = |x: [f64; 2]| [x[1], -4.0 * x[0] - 0.2 * x[1] - 1.0 * x[0].powi(3)];
+        let dt = 0.01f64;
+        let mut x = [1.0f64, 0.0];
+        let mut s = SindyEquationDiscoverer::streaming(dt as f32, 0.05).expect("sindy");
+        for _ in 0..(SINDY_WINDOW + 40) {
+            s.push([x[0] as f32, x[1] as f32]);
+            let k1 = f(x);
+            let k2 = f([x[0] + 0.5 * dt * k1[0], x[1] + 0.5 * dt * k1[1]]);
+            let k3 = f([x[0] + 0.5 * dt * k2[0], x[1] + 0.5 * dt * k2[1]]);
+            let k4 = f([x[0] + dt * k3[0], x[1] + dt * k3[1]]);
+            for i in 0..2 {
+                x[i] += dt / 6.0 * (k1[i] + 2.0 * k2[i] + 2.0 * k3[i] + k4[i]);
+            }
+        }
+        assert_eq!(s.window_len(), SINDY_WINDOW);
+        let err = s.fit_window().expect("fit");
+        assert!(err < 0.04, "erro relativo de dx/dt = {err}");
+        let xi = s.coefficients();
+        assert!((xi[0][2] - 1.0).abs() < 0.05, "x2 em dx1 = {}", xi[0][2]);
+        assert!((xi[1][1] + 4.0).abs() < 0.3, "x1 em dx2 = {}", xi[1][1]);
+        assert!((xi[1][6] + 1.0).abs() < 0.3, "x1^3 em dx2 = {}", xi[1][6]);
+    }
 
     #[test]
     fn rls_aprende_ar_e_sindy_recupera_equacoes() {
