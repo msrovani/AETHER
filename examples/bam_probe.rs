@@ -222,7 +222,7 @@ fn t12_comparison() {
     println!("speedup BAM/f32 na consulta completa = {speedup:.2}x");
 
     breakdown(&facts, &queries);
-    (f32_store.memory_bytes(), bam.memory_bytes())
+    affinity_section(bam.memory_bytes());
 }
 
 fn breakdown(facts: &[Fact], queries: &[Query]) {
@@ -495,7 +495,6 @@ fn roofline() {
 
 fn main() {
     println!("AETHER — Fase 0/1 hardware probe");
-    let (_f32_mem, bam_mem) = t12_comparison();
-    affinity_section(bam_mem);
+    t12_comparison();
     roofline();
 }

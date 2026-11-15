@@ -132,3 +132,49 @@ genérico deixou de alocar (janela virtual sobre `z`/`out`).
 | `src/simulation/closed_loop_organism.rs` | `continuous_action` |
 | `tests/cognitive_audit.rs` | 12 dimensões, scorecard, JSON |
 | `target/aether_scorecard.json` | notas + `real_coverage` + `hot_path_bytes` |
+
+## 7. Fase 0 + Fase 1 (perfilamento + BAM opt-in) — CLAIM MSG 0083
+
+Gate preservado após a entrega: **ACQ = 100.00**, **12/12 MEASURED**,
+`real_coverage = 1.00`, `hot_path_bytes = 0`, `#![deny(unsafe_code)]` no
+`lib.rs` (sem novos `unsafe` em `noise` / `affinity` / `fhrr_bam`).
+
+Instrumento: `cargo run --release --example bam_probe --features "m4,m5,affinity"`.
+
+### 7.1 Fase 0 — números reais
+
+| Medida | Valor |
+|---|---|
+| T12 breakdown proxy f32 (D=160,K=6,P=50) | cue 2.18 µs · cleanup papel 2.95 µs · unbind 0.20 µs · cleanup valores 3.03 µs · **soma 8.37 µs** |
+| T12 e2e FHRR f32 (mesmo harness) | **10.09 µs**, Recall@1=1.000, SNR=6.06σ |
+| Basal p50/p99/p99.9 **solto** (carga em 16 núcleos) | 198.2 / 2145.8 / **8838.8 µs** |
+| Basal p50/p99/p99.9 **pinado** (reflex isolado) | 194.7 / 391.7 / **416.8 µs** |
+| Redução p99.9 com afinidade | **95.3%** (≥ 20% exigido) ✔ |
+| Roofline wgpu (80 passos, analítico) | N=512 → 5.03 ms@50GB/s · N=1024 → 20.1 ms · N=4096 → 322 ms (GPU@300GB/s: 0.84 / 3.36 / 53.7 ms) |
+
+### 7.2 Fase 1 — BAM vs FHRR
+
+| | FHRR f32 | BAM u16 (`T12Bam`) |
+|---|---:|---:|
+| Recall@1 | 1.000 | **1.000** |
+| SNR (σ) | 6.06 | 5.62 |
+| latência consulta (µs) | 10.09 | **3.64** |
+| mem bytes | 264880 | 52440 |
+| speedup e2e | — | **2.77×** (≥ 1.5×) ✔ |
+
+**Veredito:** `READY_FOR_INTEGRATION` na próxima rodada (não migrado neste
+CLAIM — `fhrr.rs` permanece intocado). Store T12 BAM (~52 KB) **excede** o
+orçamento L1d de 32 KB (fica em L2) — tradeoff reportado.
+
+### 7.3 Artefatos novos (CLAIM 0083)
+
+| Arquivo | Papel |
+|---|---|
+| `src/core/noise.rs` | `NoiseSource` + `DeterministicNoise`; `hw-entropy` opt-in |
+| `src/core/affinity.rs` | pinagem via `core_affinity` (sem `unsafe` nosso) + orçamento L1d |
+| `src/core/fhrr_bam.rs` | `T12Bam` + roofline + proxy de breakdown |
+| `examples/bam_probe.rs` | medição Fase 0/1 |
+
+Arquivos BUFFY e CURSOR (`fhrr.rs`, `koopman_sindy.rs`, `active_inference.rs`,
+`renormalization.rs`, `cognitive_audit.rs`, `phase_memory.rs`, …) **não**
+editados neste CLAIM.
