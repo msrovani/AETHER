@@ -40,7 +40,11 @@ pub struct Workload {
 impl Workload {
     /// Cria um workload.
     pub const fn new(n: usize, steps: usize, target_us: f64) -> Self {
-        Self { n, steps, target_us }
+        Self {
+            n,
+            steps,
+            target_us,
+        }
     }
 
     /// Arestas por passo (`n²`).
@@ -170,8 +174,16 @@ mod tests {
         let mb = w.bytes() / 1e6;
         assert!((mb - 251.7).abs() < 0.1, "mb={mb}");
         // 50 GB/s ⇒ 5.03 ms; 300 GB/s ⇒ 0.84 ms.
-        assert!((w.cpu_us() / 1e3 - 5.033).abs() < 0.01, "cpu={}", w.cpu_us());
-        assert!((w.gpu_us() / 1e3 - 0.839).abs() < 0.01, "gpu={}", w.gpu_us());
+        assert!(
+            (w.cpu_us() / 1e3 - 5.033).abs() < 0.01,
+            "cpu={}",
+            w.cpu_us()
+        );
+        assert!(
+            (w.gpu_us() / 1e3 - 0.839).abs() < 0.01,
+            "gpu={}",
+            w.gpu_us()
+        );
     }
 
     #[test]
@@ -196,8 +208,9 @@ mod tests {
 
     #[test]
     fn lote_grande_justifica_gpu_com_fallback_cpu() {
-        // Streaming contínuo de 200 mil passos: 251.7 MB × 2 500 ≈ 629 GB.
-        let w = Workload::new(512, 200_000, 2e6);
+        // Streaming contínuo de 200 mil passos: 251.7 MB × 2 500 ≈ 629 GB,
+        // que a 300 GB/s projeta 2 097 ms — alvo de 3 s o absorve.
+        let w = Workload::new(512, 200_000, 3e6);
         let v = decide(w);
         match v {
             GpuVerdict::WorthIt { speedup, .. } => {

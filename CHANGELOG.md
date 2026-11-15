@@ -3,6 +3,16 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.69] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 2 arquivo(s) (.:1, src:1).
+- Gate: ok (3s).
+
+- `Cargo.lock`
+- `src/core/gpu_gate.rs`
+
 ## [0.0.68] - 2026-11-15
 
 ### Changed
