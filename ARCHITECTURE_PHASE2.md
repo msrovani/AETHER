@@ -229,7 +229,7 @@ cargo run --release --bin aether-daemon -- --duration 30s
 # subirem por ressonância de fase na outra — sem um único pacote JSON.
 ```
 
-## 6. Medições de hardening (2026-11-15, v0.0.33)
+## 6. Medições de hardening (2026-11-15, v0.0.35)
 
 * **M5 (projeção complexa):** p0 = 0,000035 / p1 = 0,000039 / p2 = 0,000085 rad
   (30 seeds, 12 ocultos); 13 testes em `tests/phase2_m5_hardening.rs`.

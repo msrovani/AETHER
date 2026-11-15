@@ -8,6 +8,7 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
   morfogênese e encarnação em LAN.
 * **docs/API_CONTRACT.md** — contrato normativo de API entre módulos.
 * **docs/HW_TARGET.md** — hardware alvo (PC/note/servidor, CPU multithread + GPU AMD/Intel/NVIDIA).
+* **docs/HARDENING_REPORT.md** - auditoria, correcoes e medicoes finais (2026-11-15).
 
 ## Pilares
 
@@ -25,7 +26,7 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 ## Build
 
 ```bash
-cargo test --release          # 34 testes: invariantes físicos + engenharia
+cargo test --release          # 79 testes: fase 1 + fase 2 + engenharia
 cargo clippy --all-targets -- -D warnings
 cargo run --release --bin aether-organism   # Fase 1: painel em tempo real
 cargo run --release --bin aether-daemon     # Fase 2: organismo encarnado
@@ -64,3 +65,12 @@ subir a ~1.0 e a Surpresa `F(t)` reagir a carga de CPU na outra máquina, sem um
 6. **Morfogênese** — simetria estrita de `J`, poda no silêncio, zero NaN/Inf.
 7. **Engenharia** — `relax_into`/`forward_into` com zero alocação, codec de
    40 bytes com round-trip e rejeição de tamanho, determinismo bit-a-bit.
+
+## Status (2026-11-15)
+
+- Versao **0.0.35**; gate **79 testes / 17 suites**, clippy -D warnings e fmt --check verdes.
+- M5: projecao complexa (p0/p1/p2 < 0,001 rad).
+- M2: orward_into L2048 = **35,7 us** (meta 300 us).
+- Organismo: entropia interferida menor (sensor_noise=0.35), R~0,999 e H decrescente.
+- M8: 22 -> 0 alocacoes/ciclo; 0 drops em 8 s idle.
+- Detalhes: docs/HARDENING_REPORT.md e ARCHITECTURE_PHASE2.md secao 6.
