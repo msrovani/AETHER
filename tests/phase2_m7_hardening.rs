@@ -257,27 +257,32 @@ fn test_m7_silence_prunes_and_surprise_grows() {
         zeros_monotone,
         "silêncio ressuscitou sinapse (zeros não monotônico)"
     );
+    // Este campo nasce com densidade 0,10 — abaixo do piso 0,15. O contrato
+    // novo é não colapsar: o decaimento fica congelado e a poda não age.
+    let floor = MorphogenesisConfig::default().min_density_floor;
+    let density_initial = 1.0 - sparsity_initial;
     assert!(
-        zeros_silence > zeros_initial,
-        "silêncio não podou: zeros {zeros_initial} → {zeros_silence}"
+        density_silence >= floor.min(density_initial) - 1e-3,
+        "densidade caiu abaixo do protegido: {density_initial:.4} → {density_silence:.4}"
     );
     assert!(
-        sparsity_silence > sparsity_initial,
-        "esparsidade não subiu: {sparsity_initial:.4} → {sparsity_silence:.4}"
+        sparsity_silence >= sparsity_initial - 1e-6,
+        "silêncio fez crescer sinapse: esparsidade {sparsity_initial:.4} → {sparsity_silence:.4}"
     );
-    assert_eq!(
-        zeros_silence,
-        pairs,
-        "silêncio deveria drenar TODAS as sinapses; sobraram {}",
-        pairs - zeros_silence
+    // Contrato atual: o silêncio poda até o piso estrutural e para. A poda
+    // total (densidade 0, ρ 0) era o colapso que o T04 da auditoria apontou.
+    let floor = MorphogenesisConfig::default().min_density_floor;
+    assert!(
+        density_silence >= floor - 1e-3,
+        "colapsou abaixo do piso: densidade {density_silence:.4} < {floor}"
     );
     assert!(
-        density_silence <= 1e-6,
-        "densidade deveria ir a zero no silêncio; obtido {density_silence}"
+        zeros_silence < pairs,
+        "poda total: {zeros_silence}/{pairs} sinapses zeradas"
     );
     assert!(
-        rho_silence == 0.0,
-        "ρ deveria zerar com J=0; obtido {rho_silence}"
+        rho_silence > 0.0 && rho_silence.is_finite(),
+        "ρ zerou com o silêncio: a topologia morreu ({rho_silence})"
     );
 
     // ---- Surpresa alta: crescimento real (e ρ continua sob controle) ----
@@ -389,10 +394,17 @@ fn test_m7_two_thousand_alternating_cycles() {
 
     // O último bloco (1950..2000) é silêncio: deve terminar podado.
     assert_eq!(max_asym, 0.0, "assimetria acumulada {max_asym}");
-    assert_eq!(
-        field.zero_synapses(),
-        N * (N - 1),
-        "último bloco de silêncio não podou tudo"
+    // Contrato atual: o último bloco de silêncio poda até o piso estrutural e
+    // para. Exigir poda total aqui seria exigir o colapso do organismo.
+    let floor = MorphogenesisConfig::default().min_density_floor;
+    let densidade_final = field.density();
+    assert!(
+        densidade_final >= floor - 1e-3 && densidade_final <= 1.0,
+        "densidade final {densidade_final:.4} fora do contrato (piso {floor})"
+    );
+    assert!(
+        field.zero_synapses() < N * (N - 1),
+        "poda total no fim: a topologia colapsou"
     );
     println!(
         "M7 2000 ciclos: max_asym={max_asym} max_rho={max_rho:.4} zeros_finais={}",
@@ -666,6 +678,7 @@ fn test_m7_edge_cases_never_panic_or_nan() {
         max_dt: f32::NAN,
         gershgorin_cap: f32::NAN,
         homeostatic_density: f32::NAN,
+        min_density_floor: f32::NAN,
     };
     let mut resilient = MorphogeneticField::new(N, &dense_j0(N, 0.05, 0x5A5A), bad_cfg);
     let f = resilient

@@ -98,6 +98,14 @@ pub struct MorphogenesisConfig {
     /// (arXiv:1706.02912) e Millán et al. (arXiv:1705.02773). Impede o
     /// colapso ρ→0 sob silêncio prolongado.
     pub homeostatic_density: f32,
+    /// Piso estrutural de densidade (`≥ 0`, `0` desliga).
+    ///
+    /// Diferente de `homeostatic_density` — que é um **teto** de quota — este
+    /// é um piso: quando `density() <= min_density_floor` o decaimento para de
+    /// agir. Impede a dissolução completa da topologia sob silêncio prolongado
+    /// (T04 da auditoria: a rede ia a 100% de poda em ~50 ciclos) sem inventar
+    /// pesos: as sinapses restantes são exatamente as que sobreviveram.
+    pub min_density_floor: f32,
 }
 
 impl Default for MorphogenesisConfig {
@@ -112,10 +120,9 @@ impl Default for MorphogenesisConfig {
             homeostasis_period: 2,
             max_dt: 0.5,
             gershgorin_cap: 4.0,
-            // Piso estrutural que impede o colapso total sob silêncio
-            // prolongado (T04 da auditoria: a rede dissolvia 100% em ~50
-            // ciclos). `0.0` desliga e reproduz o comportamento clássico.
-            homeostatic_density: 0.15,
+            homeostatic_density: 0.0,
+            // Piso estrutural: sobrevive a silêncio prolongado.
+            min_density_floor: 0.15,
         }
     }
 }
@@ -149,6 +156,10 @@ impl MorphogenesisConfig {
         if !self.gershgorin_cap.is_finite() || self.gershgorin_cap < 1.0 {
             self.gershgorin_cap = d.gershgorin_cap;
         }
+        if !self.min_density_floor.is_finite() || self.min_density_floor < 0.0 {
+            self.min_density_floor = d.min_density_floor;
+        }
+        self.min_density_floor = self.min_density_floor.min(1.0);
         if !self.homeostatic_density.is_finite() || self.homeostatic_density < 0.0 {
             self.homeostatic_density = 0.0;
         } else {
@@ -478,8 +489,13 @@ impl MorphogeneticField {
             (e / (1.0 + e)).clamp(0.0, 1.0)
         };
         let activity_gate = (surprise + energy_flux).clamp(0.05, 1.0);
-        let decay_rate =
-            self.cfg.k_decay * (1.0 + self.cfg.k_density * density) * activity_gate;
+        // No piso estrutural o decaimento congela; crescimento continua livre.
+        let at_floor = self.cfg.min_density_floor > 0.0 && density <= self.cfg.min_density_floor;
+        let decay_rate = if at_floor {
+            0.0
+        } else {
+            self.cfg.k_decay * (1.0 + self.cfg.k_density * density) * activity_gate
+        };
         let dissolve = self.cfg.dissolve;
 
         for i in 0..n {
