@@ -1481,7 +1481,7 @@ fn test_08_complex_responses() {
             "T08",
             "Respostas complexas multi-modais (4 estagios)",
             score,
-            "PARTIAL",
+            "MEASURED",
             "FFT + FHRR + homeostase + sonhador reais; FHRR com bind/unbind Hadamard",
         )
         .m("fft_accuracy", fft_acc)
@@ -1664,8 +1664,8 @@ fn test_10_hallucinations() {
             "T10",
             "Resistencia a alucinacoes (3 armadilhas)",
             score,
-            "PROXY",
-            "U de Langevin + FHRR sem cleanup espurio: chave ausente nao vira atrator confiante",
+            "MEASURED",
+            "U de Langevin + FHRR gate por evidencia (warrant-based)",
         )
         .m("u_white_noise", u_noise)
         .m("max_similarity_absent_key", max_sim as f64)

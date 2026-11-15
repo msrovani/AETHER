@@ -3,6 +3,19 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.44] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 5 arquivo(s) (docs:1, src:2, tests:2).
+- Gate: ok (26s).
+
+- `docs/COGNITIVE_AUDIT_REPORT.md`
+- `src/morphogenesis.rs`
+- `src/phase_memory.rs`
+- `tests/cognitive_audit.rs`
+- `tests/m5_abstention.rs`
+
 ## [0.0.43] - 2026-11-15
 
 ### Changed

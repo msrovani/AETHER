@@ -278,6 +278,37 @@ fn pattern_capacity(n: usize) -> usize {
     (n / 4).clamp(2, PATTERN_CAP_MAX)
 }
 
+/// Confiança de uma consulta: quão melhor o primeiro atrator bate em relação
+/// ao segundo.
+///
+/// `margin = best_similarity − second_similarity`. Medido no harness da
+/// auditoria cognitiva (MSG 0058): pista real dá margem 0,71 (N=32) e 0,87
+/// (N=64); pista vazia, 0,01 e 0,06. É este sinal que separa "lembrou" de
+/// "inventou", ao contrário da similaridade absoluta (dependente de N), do
+/// resíduo nos nós grampeados e da coerência global — os três medidos e
+/// descartados.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RecallConfidence {
+    /// Margem entre o melhor e o segundo melhor casamento (`< 1`).
+    pub margin: f32,
+    /// Similaridade com o melhor atrator guardado.
+    pub best_similarity: f32,
+    /// Índice (na janela de padrões) do melhor casamento.
+    pub best: usize,
+    /// Índice do segundo melhor casamento.
+    pub second: usize,
+}
+
+impl RecallConfidence {
+    /// Limiar de margem abaixo do qual a consulta deve ser **abstida**.
+    pub const ABSTAIN_MARGIN: f32 = 0.20;
+
+    /// Vale abster-se (pista sem correspondência confiável)?
+    pub fn should_abstain(&self) -> bool {
+        !(self.margin >= Self::ABSTAIN_MARGIN)
+    }
+}
+
 impl ComplexPhaseMemory {
     /// Cria a memória com acoplamento nulo (superfície plana, pronta para o
     /// primeiro imprint). `n = 0` é aceito: a memória fica inerte e
@@ -764,37 +795,6 @@ impl ComplexPhaseMemory {
         let mut out = vec![0.0f32; n];
         let energy = self.recall_into(partial_cue, mask, steps, dt, &mut out);
         (out, energy)
-    }
-
-    /// Confiança de uma consulta: quão melhor o primeiro atrator bate em
-    /// relação ao segundo.
-    ///
-    /// `margin = best_similarity − second_similarity`. Medido no harness da
-    /// auditoria cognitiva (MSG 0058): pista real dá margem 0,71 (N=32) e 0,87
-    /// (N=64); pista vazia, 0,01 e 0,06. É este sinal que separa "lembrou" de
-    /// "inventou", ao contrário da similaridade absoluta (dependente de N), do
-    /// resíduo nos nós grampeados e da coerência global — os três medidos e
-    /// descartados.
-    #[derive(Clone, Copy, Debug, PartialEq)]
-    pub struct RecallConfidence {
-        /// Margem entre o melhor e o segundo melhor casamento (`< 1`).
-        pub margin: f32,
-        /// Similaridade com o melhor atrator guardado.
-        pub best_similarity: f32,
-        /// Índice (na janela de padrões) do melhor casamento.
-        pub best: usize,
-        /// Índice do segundo melhor casamento.
-        pub second: usize,
-    }
-
-    impl RecallConfidence {
-        /// Limiar de margem abaixo do qual a consulta deve ser **abstida**.
-        pub const ABSTAIN_MARGIN: f32 = 0.20;
-
-        /// Vale abster-se (pista sem correspondência confiável)?
-        pub fn should_abstain(&self) -> bool {
-            !(self.margin >= Self::ABSTAIN_MARGIN)
-        }
     }
 
     /// Versão de [`Self::recall`] que **não aloca** após o warmup: escreve em

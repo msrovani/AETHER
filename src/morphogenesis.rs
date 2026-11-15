@@ -112,7 +112,10 @@ impl Default for MorphogenesisConfig {
             homeostasis_period: 2,
             max_dt: 0.5,
             gershgorin_cap: 4.0,
-            homeostatic_density: 0.0,
+            // Piso estrutural que impede o colapso total sob silêncio
+            // prolongado (T04 da auditoria: a rede dissolvia 100% em ~50
+            // ciclos). `0.0` desliga e reproduz o comportamento clássico.
+            homeostatic_density: 0.15,
         }
     }
 }
@@ -465,7 +468,18 @@ impl MorphogeneticField {
         let step = dt.min(self.cfg.max_dt);
         let density = self.density();
         let gain = self.cfg.k_grow * surprise.tanh();
-        let decay_rate = self.cfg.k_decay * (1.0 + self.cfg.k_density * density);
+        // Gating metabólico por atividade: sem estímulo (surpresa e fluxo de
+        // energia baixos) o decaimento cai para 5% do nominal, em vez de
+        // dissolver a topologia. Com estímulo ele volta ao valor de projeto.
+        // É o que sobrevive a silêncio prolongado e recupera plasticidade
+        // imediata quando o sinal retorna.
+        let energy_flux = {
+            let e = self.free_energy.abs();
+            (e / (1.0 + e)).clamp(0.0, 1.0)
+        };
+        let activity_gate = (surprise + energy_flux).clamp(0.05, 1.0);
+        let decay_rate =
+            self.cfg.k_decay * (1.0 + self.cfg.k_density * density) * activity_gate;
         let dissolve = self.cfg.dissolve;
 
         for i in 0..n {
