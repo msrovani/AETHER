@@ -9,9 +9,9 @@ cada rodada de benchmark (`criterion` compara contra `.base`).
 | Campo | Valor |
 |---|---|
 | Classe | desktop/workstation (ver `docs/HW_TARGET.md`) |
-| CPU | x86-64, multithread, preencher modelo/geração na primeira medição |
-| Núcleos | preencher (lógicos/físicos) |
-| RAM | preencher |
+| CPU | Intel Core 7 240H (x86-64, 10 núcleos / 16 threads) |
+| Núcleos | 10 físicos / 16 lógicos |
+| RAM | 15.7 GB |
 | SO | Windows (toolchain `x86_64-pc-windows-gnu` via `scripts/cargo.ps1`) ou Linux |
 | Governor/plano | Linux: `performance`; Windows: "Alto desempenho" |
 | `isolcpus`/afinidade | não usado por padrão (`--features affinity` é opcional) |
@@ -24,6 +24,7 @@ cada rodada de benchmark (`criterion` compara contra `.base`).
 .\scripts\cargo.ps1 bench --bench wave
 .\scripts\cargo.ps1 bench --bench organism
 .\scripts\cargo.ps1 bench --bench kuramoto_latency
+.\scripts\cargo.ps1 bench --bench throughput_tps
 ```
 
 * TUI/daemon desligado; nada rodando em paralelo.
@@ -40,3 +41,4 @@ cada rodada de benchmark (`criterion` compara contra `.base`).
 | `wave.rs` — FFT ida+volta `C=8`, `L=2048` | ≤ 300 µs |
 | `kuramoto_latency.rs` — loopback 40 B | p99 ≤ 200 µs |
 | `organism.rs` — quadro completo | ≤ 8 ms (60 Hz) |
+| `throughput_tps.rs` — 3 regimes × 5 s | auditoria de `eq-t/s`/p99.9; sem meta contratada (ver `docs/COGNITIVE_AUDIT_REPORT.md`) |

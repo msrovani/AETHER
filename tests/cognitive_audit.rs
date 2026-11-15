@@ -236,8 +236,17 @@ fn json_escape(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+fn preserved_throughput() -> Option<String> {
+    let text = fs::read_to_string("target/aether_scorecard.json").ok()?;
+    let pos = text.find("\"throughput\":")?;
+    let tail = text[pos..].trim_end();
+    let body = tail.strip_suffix('}')?.trim_end();
+    Some(body.trim_end_matches(',').to_string())
+}
+
 fn write_scorecard(dims: &[Dimension]) {
     let _ = fs::create_dir_all("target");
+    let preserved = preserved_throughput();
     let acq: f64 = dims.iter().map(|d| d.score).sum::<f64>() / dims.len().max(1) as f64;
     let weighted: f64 = dims.iter().map(|d| d.score * d.confidence).sum::<f64>()
         / dims.iter().map(|d| d.confidence).sum::<f64>().max(1e-9);
@@ -288,8 +297,15 @@ fn write_scorecard(dims: &[Dimension]) {
     out.push_str(&format!(
         "\"quotient_confidence_weighted\": {weighted:.4},\n"
     ));
-    out.push_str(&format!("\"coverage\": {coverage:.4}\n"));
-    out.push_str("}\n");
+    out.push_str(&format!("\"coverage\": {coverage:.4}"));
+    if let Some(block) = preserved {
+        out.push_str(",\n  ");
+        out.push_str(&block);
+        out.push('\n');
+    } else {
+        out.push('\n');
+    }
+    out.push('}');
     let _ = fs::write("target/aether_scorecard.json", out);
 }
 

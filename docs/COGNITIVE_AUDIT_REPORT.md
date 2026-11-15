@@ -1,6 +1,6 @@
 # AETHER — Relatório da Auditoria Cognitiva (medido)
 
-> Execução: 2026-11-15 · crate `aether_engine` v0.0.37 · Intel Core 7 240H ·
+> Execução: 2026-11-15 · crate `aether_engine` v0.0.38 · Intel Core 7 240H ·
 > release (`lto = "fat"`, `codegen-units = 1`, `panic = "abort"`).
 > Especificação: [`COGNITIVE_BENCHMARK_SUITE.md`](../COGNITIVE_BENCHMARK_SUITE.md).
 
@@ -22,9 +22,12 @@ cargo test --release --test cognitive_audit -- --nocapture
 
 | Métrica | Valor |
 |---|---|
-| **AETHER Cognitive Quotient** (média das 12 dimensões) | **83.45** |
-| Quotient ponderado por confiança da medição | 86.90 |
+| **AETHER Cognitive Quotient** (média das 12 dimensões) | **82.88** |
+| Quotient ponderado por confiança da medição | 86.48 |
 | Cobertura (1.0 = tudo medido diretamente) | 0.49 |
+
+> Variação entre execuções da suíte completa: **82.9–83.5**. As dimensões com
+> rede UDP e tempo de parede (T05/T06/T08/T12) oscilam alguns décimos.
 
 ### 2.1 Notas por dimensão
 
@@ -35,9 +38,9 @@ cargo test --release --test cognitive_audit -- --nocapture
 | T03 | Aprendizado online sem backprop (A→B) | 100.00 | PROXY |
 | T04 | Autoevolução estrutural (6 nós × 800 ciclos) | **0.00** | PARTIAL |
 | T05 | Autocorreção sob falha crítica | 100.00 | PARTIAL |
-| T06 | Coerência de enxame (4 nós) e chattering | 100.00 | PARTIAL |
+| T06 | Coerência de enxame (4 nós) e chattering | 92.99 | PARTIAL |
 | T07 | Exploração epistêmica (U do sonhador) | 100.00 | PROXY |
-| T08 | Respostas complexas multi-modais | 80.06 | PARTIAL |
+| T08 | Respostas complexas multi-modais | 80.18 | PARTIAL |
 | T09 | MAX-CUT bSB (SINDy ausente) | 100.00 | PARTIAL |
 | T10 | Resistência a alucinações | 71.38 | PROXY |
 | T11 | Imunidade a desvio de pensamento | 74.99 | PARTIAL |
@@ -82,15 +85,17 @@ medido.
    de recall foi **0.257 rad** (alvo < 0.15). A fase macroscópica resistiu
    (desvio 0.002 rad), mas uma das 5 memórias degradou.
 4. **T12 — latência.** `Recall@1 = 1.000` e SNR = 12.4σ, porém a consulta
-   custa **184 ms** em N=200 (O(N²·steps) com `sin` em libm), não 50 µs. O
-   alvo da especificação está ~3.600× abaixo do fisicamente possível nesta
+   custa **171 ms** em N=200 (O(N²·steps) com `sin` em libm), não 50 µs. O
+   alvo da especificação está ~3.400× abaixo do fisicamente possível nesta
    implementação.
 5. **T08 — custo do estímulo composto.** Precisão composta 100%, tempo
-   **520 ms** (medido em paralelo com outros testes; 178 ms quando executado
-   sozinho) contra o alvo de 1.5 ms. O gargalo são 4 recalls de 300 passos.
-6. **T05/T06** — a física de fase é sólida: R volta a >0.92 em **4.5 ciclos**
-   após uma perturbação severa (ξ=120), e a memória recupera 100% das fases
-   corrompidas. O que não existe é a barreira formal de segurança.
+   **170 ms** contra o alvo de 1.5 ms. O gargalo são 4 recalls de 300 passos
+   (o número oscila com a contenção dos testes paralelos).
+6. **T05/T06** — a física de fase é sólida: R volta a >0.92 em **10.4 ciclos**
+   (0.17 s) após uma perturbação severa (ξ=120, R mínimo 0.78), e a memória
+   recupera 100% das fases corrompidas. O chattering medido do atuador foi
+   **0.653** (alvo < 0.50), o que custou 7 pontos em T06. O que não existe é a
+   barreira formal de segurança.
 
 ## 5. Throughput medido (`cargo bench --bench throughput_tps`)
 
