@@ -26,10 +26,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
-use aether_engine::core::affinity::{core_ids, core_plan, pin_to_core};
 use aether_engine::core::aether_governor::{
     EventDrivenCore, ReflexConfig, ReflexEvent, LATENT_DIM,
 };
+use aether_engine::core::affinity::{core_ids, core_plan, pin_to_core};
 use aether_engine::core::bam_phase::{
     BamHolographicStore, BamHolographicVector, BamLut, BamMask, BamPhase,
 };
@@ -306,7 +306,11 @@ fn latent_z(k: usize) -> [f32; LATENT_DIM] {
 /// `pin_core = Some(id)` fixa a thread de medição nesse núcleo físico (o mesmo
 /// fica fora da carga); `None` mede solto.
 /// Devolve `(p50, p99, p99.9, n, pinned)` em µs.
-fn reflex_tail(pin_core: Option<usize>, load_ids: &[usize], events: usize) -> (f64, f64, f64, usize, bool) {
+fn reflex_tail(
+    pin_core: Option<usize>,
+    load_ids: &[usize],
+    events: usize,
+) -> (f64, f64, f64, usize, bool) {
     let stop = Arc::new(AtomicBool::new(false));
     let mut load = Vec::with_capacity(load_ids.len());
     for &id in load_ids {
@@ -327,12 +331,9 @@ fn reflex_tail(pin_core: Option<usize>, load_ids: &[usize], events: usize) -> (f
     };
 
     let (_jit, integ) = SindyJit::new();
-    let mut core = EventDrivenCore::new(
-        ReflexConfig::default(),
-        integ,
-        SiliconEntropy::from_seed(3),
-    )
-    .expect("core reflexivo");
+    let mut core =
+        EventDrivenCore::new(ReflexConfig::default(), integ, SiliconEntropy::from_seed(3))
+            .expect("core reflexivo");
     for k in 0..64 {
         let ev = ReflexEvent {
             t_ns: k as u64,
@@ -365,7 +366,6 @@ fn reflex_tail(pin_core: Option<usize>, load_ids: &[usize], events: usize) -> (f
         pinned,
     )
 }
-
 
 fn bench_spsc() -> f64 {
     const N: u64 = 5_000_000;

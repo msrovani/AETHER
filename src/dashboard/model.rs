@@ -103,7 +103,10 @@ fn parse_metrics(v: &Value) -> Vec<(String, f64)> {
 }
 
 fn parse_throughput(v: &Value) -> ThroughputView {
-    let peak_heap_mb = v.get("peak_heap_mb").and_then(|x| x.as_f64()).unwrap_or(0.0);
+    let peak_heap_mb = v
+        .get("peak_heap_mb")
+        .and_then(|x| x.as_f64())
+        .unwrap_or(0.0);
     let peak_rss_mb = v.get("peak_rss_mb").and_then(|x| x.as_f64()).unwrap_or(0.0);
     let hot_path_allocations = v
         .get("hot_path_allocations")
@@ -132,10 +135,7 @@ fn parse_throughput(v: &Value) -> ThroughputView {
                     .and_then(|x| x.as_f64())
                     .unwrap_or(0.0),
                 sop_per_s: r.get("sop_per_s").and_then(|x| x.as_f64()).unwrap_or(0.0),
-                eq_t_per_s: r
-                    .get("eq_t_per_s")
-                    .and_then(|x| x.as_f64())
-                    .unwrap_or(0.0),
+                eq_t_per_s: r.get("eq_t_per_s").and_then(|x| x.as_f64()).unwrap_or(0.0),
                 hot_path_allocations: r
                     .get("hot_path_allocations")
                     .and_then(|x| x.as_u64())

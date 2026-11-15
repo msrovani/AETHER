@@ -19,6 +19,4 @@ pub use catalog::{
 pub use gaps::{Gap, GapSeverity};
 pub use host_probe::{probe_and_save, HostReport};
 pub use jobs::{JobKind, JobPhase, JobRunner, JobSnapshot};
-pub use model::{
-    load_scorecard, DimCard, ScorecardView, ThroughputRegime, ThroughputView,
-};
+pub use model::{load_scorecard, DimCard, ScorecardView, ThroughputRegime, ThroughputView};

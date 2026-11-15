@@ -1,6 +1,6 @@
 //! Runner single-flight de jobs do hub (auditoria, bench, demos).
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -81,6 +81,14 @@ struct Shared {
 pub struct JobRunner {
     shared: Arc<Shared>,
     worker: Mutex<Option<JoinHandle<()>>>,
+}
+
+impl std::fmt::Debug for JobRunner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JobRunner")
+            .field("snapshot", &self.snapshot())
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for JobRunner {
@@ -331,9 +339,4 @@ fn wait_cmd(
             Err(e) => return Err(format!("{label} wait: {e}")),
         }
     }
-}
-
-/// Verifica se `path` parece um scorecard válido (existência).
-pub fn scorecard_exists(path: &Path) -> bool {
-    path.is_file()
 }

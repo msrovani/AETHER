@@ -99,10 +99,8 @@ mod aether_dashboard_win {
                         self.host = Some(r);
                     }
                 }
-                if matches!(
-                    snap.kind,
-                    Some(JobKind::Audit) | Some(JobKind::Bench)
-                ) && snap.phase == aether_engine::dashboard::JobPhase::Done
+                if matches!(snap.kind, Some(JobKind::Audit) | Some(JobKind::Bench))
+                    && snap.phase == aether_engine::dashboard::JobPhase::Done
                 {
                     self.reload();
                 }
@@ -134,11 +132,9 @@ mod aether_dashboard_win {
                         }
                         ui.separator();
                         ui.label(
-                            RichText::new(
-                                "Docs: docs/USER_GUIDE.md · docs/DASHBOARD_METRICS.md",
-                            )
-                            .small()
-                            .color(Color32::GRAY),
+                            RichText::new("Docs: docs/USER_GUIDE.md · docs/DASHBOARD_METRICS.md")
+                                .small()
+                                .color(Color32::GRAY),
                         );
                     });
             }
@@ -160,7 +156,7 @@ mod aether_dashboard_win {
                             "Hover = tooltip · clique em T0x = ficha · botões = testes práticos.",
                         )
                         .small()
-                        .color(Color32::from_rgb(140.0 as u8, 150, 160)),
+                        .color(Color32::from_rgb(140, 150, 160)),
                     );
                 });
             });
@@ -231,43 +227,46 @@ mod aether_dashboard_win {
                 });
             });
             ui.horizontal_wrapped(|ui| {
-                action_btn(
+                if action_btn(
                     ui,
                     "Rodar auditoria cognitiva",
                     "Regenera target/aether_scorecard.json (T01–T12 / ACQ).",
                     !self.jobs.is_busy(),
-                )
-                .then(|| self.start_job(JobKind::Audit));
-                action_btn(
+                ) {
+                    self.start_job(JobKind::Audit);
+                }
+                if action_btn(
                     ui,
                     "Benchmark de vazão",
                     "Basal/Vigilante/Crítico (~5 s/regime) via throughput_tps.",
                     !self.jobs.is_busy(),
-                )
-                .then(|| self.start_job(JobKind::Bench));
-                action_btn(
+                ) {
+                    self.start_job(JobKind::Bench);
+                }
+                if action_btn(
                     ui,
                     "Sondar hardware",
                     "CPU/RAM/features + gaps → target/aether_host_report.json.",
                     !self.jobs.is_busy(),
-                )
-                .then(|| self.start_job(JobKind::HostProbe));
-                action_btn(
+                ) {
+                    self.start_job(JobKind::HostProbe);
+                }
+                if action_btn(
                     ui,
                     "Demo organismo",
                     "Lança aether-organism --duration 15s --plain.",
                     !self.jobs.is_busy(),
-                )
-                .then(|| self.start_job(JobKind::OrganismDemo));
-                action_btn(
+                ) {
+                    self.start_job(JobKind::OrganismDemo);
+                }
+                if action_btn(
                     ui,
                     "Demo daemon",
                     "Lança aether-daemon curto (exige confirmação — multicast).",
                     !self.jobs.is_busy(),
-                )
-                .then(|| {
+                ) {
                     self.confirm_daemon = true;
-                });
+                }
             });
             let snap = self.jobs.snapshot();
             let phase_color = match snap.phase {
@@ -378,8 +377,7 @@ mod aether_dashboard_win {
             );
             let Some(tp) = &self.view.throughput else {
                 ui.label(
-                    RichText::new("Sem throughput. Use “Benchmark de vazão”.")
-                        .color(Color32::GRAY),
+                    RichText::new("Sem throughput. Use “Benchmark de vazão”.").color(Color32::GRAY),
                 );
                 return;
             };
@@ -484,8 +482,7 @@ mod aether_dashboard_win {
             ui.label(RichText::new("Máquina hospedeira").strong().size(16.0));
             let Some(h) = &self.host else {
                 ui.label(
-                    RichText::new("Ainda sem sonda. Use “Sondar hardware”.")
-                        .color(Color32::GRAY),
+                    RichText::new("Ainda sem sonda. Use “Sondar hardware”.").color(Color32::GRAY),
                 );
                 return;
             };

@@ -54,7 +54,10 @@ impl From<&Gap> for GapDto {
 }
 
 fn wmic_value(args: &[&str], key: &str) -> Option<String> {
-    let out = std::process::Command::new("wmic").args(args).output().ok()?;
+    let out = std::process::Command::new("wmic")
+        .args(args)
+        .output()
+        .ok()?;
     let s = String::from_utf8_lossy(&out.stdout);
     let prefix = format!("{key}=");
     for line in s.lines() {
@@ -87,7 +90,12 @@ fn ram_windows() -> (Option<f64>, Option<f64>) {
 
 fn cpu_counts_wmic() -> (Option<usize>, Option<usize>) {
     let logical = wmic_value(
-        &["ComputerSystem", "get", "NumberOfLogicalProcessors", "/value"],
+        &[
+            "ComputerSystem",
+            "get",
+            "NumberOfLogicalProcessors",
+            "/value",
+        ],
         "NumberOfLogicalProcessors",
     )
     .and_then(|v| v.parse().ok());
@@ -97,11 +105,8 @@ fn cpu_counts_wmic() -> (Option<usize>, Option<usize>) {
     )
     .and_then(|v| v.parse().ok())
     .or_else(|| {
-        wmic_value(
-            &["CPU", "get", "NumberOfCores", "/value"],
-            "NumberOfCores",
-        )
-        .and_then(|v| v.parse().ok())
+        wmic_value(&["CPU", "get", "NumberOfCores", "/value"], "NumberOfCores")
+            .and_then(|v| v.parse().ok())
     });
     (logical, physical)
 }

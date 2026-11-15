@@ -11,10 +11,10 @@ ainda falta para um humano não-agente usar o AETHER como produto.
 
 ## 1. Veredito em uma frase
 
-O AETHER hoje é um **motor cognitivo pós-token maduro em bancada** com duas
-portas de demonstração em terminal (`aether-organism`, `aether-daemon`).
-**Não** há ainda empacotamento, guia de usuário, TUI ligada, backends de
-produto A/B, nem superfície cloud/GUI/auth.
+O AETHER hoje é um **motor cognitivo pós-token maduro em bancada** com demos
+CLI (`aether-organism`, `aether-daemon`) e **hub Windows** (`aether-dashboard`)
+para métricas, jobs e gaps de host. Ainda faltam empacote MSI, TUI ligada no
+fluxo padrão, backends de produto A/B e superfície cloud/auth.
 
 ---
 
@@ -115,22 +115,25 @@ Prioridade de entrega ao **usuário** (não ao agente):
 | 0.3 | Script `scripts/run-demo.ps1` | um comando: build release + organism 15 s + tip daemon |
 | 0.4 | Alinhar telemetria daemon com `--help` já existente | banner legível: o que é R, F, SONHANDO |
 | 0.5 | Congelar superfície: **não** expor BAM/JIT/governor no CLI | docs dizem “lab only” |
-| **0.6 / (5)** | **Dashboard Windows de métricas** (`aether-dashboard`) | tela com ACQ, T01–T12, vazão (cycles/s, eq-t/s, SOP/s); **hover** explica inferência, coerência, RAG, inteligência, t/s, TOP/s |
+| **0.6 / (5)** | **Hub Windows** (`aether-dashboard`) | ACQ + T01–T12 + vazão; hover/fichas; jobs Auditoria / Benchmark / HW / demos; gaps heurísticos |
 
 **Resultado:** qualquer dev com Rust+MinGW roda a demo sem ler ARCHITECTURE;
-no Windows, abre um dashboard visual das métricas da auditoria/vazão.
+no Windows, o hub é a superfície única de métricas + testes práticos.
 
-### Entrega (5) — Dashboard Windows (detalhe)
+### Entrega (5) — Hub Windows (detalhe)
 
 | Item | Spec |
 |---|---|
 | Binário | `aether-dashboard` · feature `dashboard` · **somente Windows** (`cfg(windows)`) |
-| Fonte | `target/aether_scorecard.json` (+ `throughput` se presente); botão Recarregar |
-| Layout | cards/gauges: ACQ, coverage, hot-path bytes, 12 dimensões, regimes Basal/Vigilante/Crítico |
-| Hover | tooltip em cada medidor (o que mede + por que importa para o organismo) |
-| Fora de escopo agora | live streaming do daemon, macOS/Linux GUI, cloud |
+| Fonte | `target/aether_scorecard.json` (+ throughput); `target/aether_host_report.json` |
+| Layout | barra de ações + ACQ/coverage/hot-path + grade T01–T12 + vazão + HW/gaps |
+| Hover / clique | tooltips pedagógicos; ficha demonstrativa T0x no click |
+| Jobs | single-flight: auditoria, bench vazão, sonda HW, demo organism/daemon |
+| Gaps | `SCORECARD_MISSING`, `TAIL_LATENCY_HIGH`, `L1D_PRESSURE`, `AFFINITY_OFF`, `TOOLCHAIN_PATH`, … |
+| Docs | [USER_GUIDE.md](USER_GUIDE.md) · [DASHBOARD_METRICS.md](DASHBOARD_METRICS.md) |
+| Fora de escopo agora | live streaming do daemon, macOS/Linux GUI, MSI, cloud |
 
-Implementação: `src/dashboard/*` + `src/bin/aether_dashboard.rs` (egui/eframe).
+Implementação: `src/dashboard/*` (`catalog`, `jobs`, `host_probe`, `gaps`, `model`) + `src/bin/aether_dashboard.rs` (egui/eframe).
 
 ### Onda 1 — “Produto C MVP” (3–6 semanas) · **usuário = operador de lab/ops**
 
