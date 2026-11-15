@@ -1,6 +1,6 @@
-# AETHER — Fase 0/1: perfilamento e hardware opt-in
+# AETHER — Fases 0/1/2: perfilamento, hardware opt-in e decisões
 
-> Execução: 2026-11-15 · `aether_engine` v0.0.62 · Intel Core 7 240H
+> Execução: 2026-11-15 · `aether_engine` v0.0.68 · Intel Core 7 240H
 > (10C/16T, Windows) · `cargo test --release`, clippy all-features, fmt 0.
 > Autorização: usuário (Fase 0 + Fase 1, `deny(unsafe_code)` mantido).
 
@@ -110,3 +110,99 @@ integração na próxima rodada (sem tocar em `fhrr.rs`, sob claim da CURSOR).
 A versão dela foi preservada; apenas corrigi imports/Debug e o borrow
 mecânico, e o `examples/bam_probe.rs` usa a API pública resultante. Nenhum
 arquivo de `phase_memory`/`morphogenesis`/organismo foi tocado.
+
+---
+
+# Fase 2 — execução da sequência estipulada
+
+> Execução: 2026-11-15 · `aether_engine` v0.0.68 · mesmo host.
+> Claim da CURSOR liberado (MSG 0087, `LIBERO_CLAIM=sim`), então a integração
+> no T12 deixou de ser bloqueada.
+
+## 6. BAM integrado ao T12 da auditoria
+
+`tests/cognitive_audit.rs::test_12_holographic_rag` passou a usar `T12Bam`
+(u16 + LUT Q15) no lugar de `FhrrStore::query_into`:
+
+| Storage no T12 | Recall@1 | SNR | Latência | Memória | Alocações |
+|---|---:|---:|---:|---:|---:|
+| FHRR f32 (`query_into`, otimizado pela CURSOR) | 1.000 | 5.96 | 7.55–8.0 µs | 264 880 B | 0 |
+| **BAM u16 (`T12Bam`)** | **1.000** | **5.96** | **2.4–3.0 µs** | **52 440 B** | **0** |
+
+Ganho e2e: **2.5–3.1×** contra o f32 já otimizado e **~7.5×** contra o
+`query_match` original (16.0 µs). Memória 5× menor; `hot_path_allocs = 0`.
+
+O exemplo `bam_probe` mantém a comparação lado a lado e o breakdown
+(pista 8.26 µs → 0 no BAM, que não usa `sin_cos`):
+`cargo run --release --example bam_probe --features m4,m5,affinity`.
+
+## 7. Defaults opt-in (JIT / afinidade / entropia)
+
+`Cargo.toml` passou a ter `default = ["m1".."m8"]`:
+
+| Feature | Estado | Motivo |
+|---|---|---|
+| `jit` | **opt-in** | 5.24 ns vs 0.82 ns nativo; não paga o custo/`unsafe` |
+| `affinity` | **opt-in** | p99.9 −97.3%, mas p50 +2% e no-op em CI |
+| `hw-entropy` | **opt-in** | auditoria precisa ser reprodutível (ChaCha default) |
+
+## 8. SINDy: avaliador especializado antes de JIT — resultado negativo
+
+Implementado `SindyEquationDiscoverer::rhs_active` (termos ativos por equação,
+potências pré-computadas, `TERM_EXP`) com teste de equivalência
+`rhs ≡ rhs_active` (erro < 1e-12). Medição (2 M avaliações):
+
+| Avaliador | ns/avaliação |
+|---|---:|
+| nativo fixo (referência da Fase 5) | 0.82 |
+| `rhs` completo (10 termos, laço direto) | **2.42** |
+| JIT Cranelift | 5.24 |
+| `rhs_active` genérico (termos ativos) | **10.33** |
+
+**Conclusão:** a indireção por tabela quebra a vetorização; o laço fixo de 10
+termos é o caminho mais rápido. `rhs` permanece default, `rhs_active` fica
+como API documentada (sem uso interno) e **JIT continua fora do default**.
+
+## 9. wgpu: fechado para o laço reflexivo, com portão mensurável
+
+Novo módulo `src/core/gpu_gate.rs` (sem dependências, sem `unsafe`) decide por
+*roofline* se um workload justifica backend GPU:
+
+- `Workload { n, steps, target_us }` → `bytes()`, `cpu_us()`, `gpu_us()`;
+- `decide()` → `BelowMinN | CpuFaster | TooSlowForTarget | WorthIt`;
+- `roofline_table(80)` reproduz exatamente a tabela da Fase 0.
+
+Veredito medido: para `N ∈ {512, 1024, 4096}` e 80 passos, **todos** caem em
+`TooSlowForTarget` para alvo de 200 µs (0.84 / 3.36 / 53.69 ms de GPU). O
+único caso `WorthIt` é streaming longo (≥ ~2 GB de tráfego, ex.: 200 mil
+passos), onde o ganho projetado é ~6× (50 → 300 GB/s).
+
+**Decisão:** Fase 2 fecha sem backend `wgpu` no laço reflexivo — não é
+justificado pelos números. O portão fica como critério de admissão para uma
+frente de *streaming/batch*, que exigirá fallback CPU obrigatório e
+`N ≥ 512`.
+
+## 10. Tracks separados (não executáveis neste host)
+
+| Track | Pré-requisito | Estado |
+|---|---|---|
+| eBPF / AF_XDP | Linux + root, `aya`/`libbpf` | não iniciado (host Windows) |
+| Ultrassom (demo acústico) | hardware de áudio + DSP | não iniciado (fora do núcleo) |
+
+Ambos ficam fora do gate de ACQ; exigem bancada própria e não bloqueiam
+12/12.
+
+## 11. Gate final da Fase 2
+
+| Item | Resultado |
+|---|---|
+| `cargo fmt --all --check` | **0** |
+| `cargo clippy --all-targets --all-features -D warnings` | **0** |
+| `cargo test --release --no-fail-fast` | **21 blocos, exit 0, 0 falhas** |
+| Auditoria cognitiva | **12/12 MEASURED, ACQ 100.00, real_coverage 1.00** |
+| `hot_path_bytes` | **0 B** |
+| T12 (BAM) | Recall 1.0, SNR 5.96, **2.4 µs**, 0 allocs |
+| Throughput Basal | **143–146 µs** p50 · p99.9 418–428 µs · 6 353–6 440 cycles/s · **813–824 k eq-t/s** · 0 allocs |
+| Throughput Vigilante / Crítico | 260–262 / 490–504 µs p50 · 0 allocs |
+| RSS / heap | 14.33 MB / 0.48 MB |
+| `#![deny(unsafe_code)]` | mantido nos arquivos novos |

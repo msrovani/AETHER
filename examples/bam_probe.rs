@@ -24,6 +24,7 @@ use std::time::{Duration, Instant};
 use aether_engine::core::affinity::{core_ids, core_plan, pin_reflex_core, pin_to_core};
 use aether_engine::core::fhrr::FhrrStore;
 use aether_engine::core::fhrr_bam::{T12Bam, T12_D, T12_FACTS, T12_TRACES};
+use aether_engine::core::gpu_gate::{decide, roofline_table, GpuVerdict, Workload};
 use aether_engine::core::koopman_sindy::SindyEquationDiscoverer;
 use aether_engine::simulation::closed_loop_organism::{
     ClosedLoopOrganism, OrganismConfig, OrganismFrame,
@@ -474,24 +475,31 @@ fn affinity_section(active_bytes: usize) {
 }
 
 fn roofline() {
-    println!("\n=== Roofline de memoria para wgpu (80 passos, referencia) ===");
+    println!("\n=== Roofline / portao wgpu (80 passos, alvo 200 us) ===");
     println!(
-        "{:>6} {:>12} {:>14} {:>14} {:>14}",
-        "N", "edges", "MB f32", "ms CPU 50GB/s", "ms GPU 300GB/s"
+        "{:>6} {:>12} {:>10} {:>12} {:>12} {:>16}",
+        "N", "edges", "MB", "ms CPU", "ms GPU", "veredito"
     );
-    for n in [512usize, 1024, 4096] {
-        let edges = (n * n) as f64;
-        let bytes = edges * 12.0 * 80.0; // re+im+valor aproximado por aresta
+    for row in roofline_table(80) {
+        let verdict = match decide(Workload::new(row.n, 80, 200.0)) {
+            GpuVerdict::BelowMinN => "below_min_N",
+            GpuVerdict::CpuFaster => "cpu_faster",
+            GpuVerdict::TooSlowForTarget { .. } => "too_slow",
+            GpuVerdict::WorthIt { .. } => "worth_it",
+        };
         println!(
-            "{:>6} {:>12.0} {:>14.1} {:>14.2} {:>14.2}",
-            n,
-            edges,
-            bytes / 1e6,
-            bytes / 50e9 * 1e3,
-            bytes / 300e9 * 1e3
+            "{:>6} {:>12} {:>10.1} {:>12.2} {:>12.2} {:>16}",
+            row.n, row.edges, row.mb, row.cpu_ms, row.gpu_ms, verdict
         );
     }
-    println!("(a medida real do backend wgpu fica para a Fase 2)");
+    match decide(Workload::new(512, 200_000, 3e6)) {
+        GpuVerdict::WorthIt { speedup, gpu_us } => println!(
+            "streaming N=512 x 200k passos: worth_it ({speedup:.2}x, {:.1} ms GPU)",
+            gpu_us / 1e3
+        ),
+        other => println!("streaming N=512 x 200k passos: {other:?}"),
+    }
+    println!("(backend wgpu segue fechado para o laco reflexivo; ver src/core/gpu_gate.rs)");
 }
 
 fn sindy_section() {
