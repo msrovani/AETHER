@@ -355,9 +355,7 @@ impl ClosedLoopOrganism {
         let n = self.cfg.decision_dim;
 
         // --- validação de formas (sem alocar/redimensionar no caminho feliz) ---
-        if out.energy_trace.len() != steps + 1
-            || out.states.len() != n
-            || out.actuation.len() != n
+        if out.energy_trace.len() != steps + 1 || out.states.len() != n || out.actuation.len() != n
         {
             return Err(AetherError::shape(
                 [steps + 1, n],

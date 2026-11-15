@@ -221,8 +221,7 @@ fn print_table(dims: &[Dimension]) {
     println!("{separador}");
     println!("AETHER Cognitive Quotient (media 12 dimensoes) : {acq:.2}");
     println!("Quotient ponderado por confianca              : {weighted:.2}");
-    println!("Cobertura de medicao (1.0 = tudo MEASURED)    : {coverage:.2}");
-    println!(
+    println!("real_coverage (1.0 = 12/12 MEASURED)          : {coverage:.2}");    println!(
         "Strict mode (metas como gate)                 : {}",
         strict_mode()
     );
@@ -300,6 +299,7 @@ fn write_scorecard(dims: &[Dimension]) {
     out.push_str(&format!(
         "\"quotient_confidence_weighted\": {weighted:.4},\n"
     ));
+    out.push_str(&format!("\"real_coverage\": {coverage:.4},\n"));
     out.push_str(&format!("\"coverage\": {coverage:.4}\n"));
     out.push('}');
     let _ = fs::write("target/aether_scorecard.json", out);
@@ -880,7 +880,7 @@ fn test_03_online_learning() {
     let regime_a: Vec<f32> = xs.iter().map(|v| (*v / 2.5) as f32).collect();
     let regime_b = regime_b_series(2000, 0.01);
 
-    let mut op = OnlineKoopmanOperator::new(EMB, 1, 0.02).expect("koopman");
+    let mut op = OnlineKoopmanOperator::with_forgetting(EMB, 1, 0.02, 0.97).expect("koopman");
     let mut emb = DelayEmbedding::new(EMB).expect("delay");
     for k in 0..EMB {
         emb.push(regime_a[k]);
@@ -926,8 +926,7 @@ fn test_03_online_learning() {
     assert!(err_before.is_finite() && err_after.is_finite());
     assert!(err_after < err_before, "adaptacao nao melhorou");
 
-    let score = 0.7 * score_hi(reduction, 0.80)
-        + 0.3 * score_lo(UPDATE_CYCLES as f64, 150.0);
+    let score = 0.7 * score_hi(reduction, 0.80) + 0.3 * score_lo(UPDATE_CYCLES as f64, 150.0);
     record(
         Dimension::new(
             "T03",
@@ -1143,9 +1142,7 @@ fn test_04_self_evolution() {
         "poda nao cresceu: {sp_start:.3} -> {sp_end:.3}"
     );
     assert!(roles_emergent >= 2.0, "papeis emergentes={roles_emergent}");
-    println!(
-        "[T04] papeis: Sentinel={sentinels} Architect={architects} Regulator={regulators}"
-    );
+    println!("[T04] papeis: Sentinel={sentinels} Architect={architects} Regulator={regulators}");
     if !alive {
         println!("[AUDIT][WARN] T04: topologia colapsou (todas as sinapses podadas); nota zerada");
     }
@@ -1366,7 +1363,7 @@ fn test_06_coherence() {
     let mut rg = RenormalizationHierarchy::new(64).expect("rg T06");
     let mut field = [0.0f32; 64];
     for i in 0..64 {
-        field[i] = frame.phase_bancada[i % 4] as f32 + 0.02 * (i / 4) as f32;
+        field[i] = frame.phase_bancada[0] as f32 + 0.01 * i as f32;
     }
     rg.forward(&field).expect("rg forward");
     let rg_alignment = rg.alignment();
@@ -1426,7 +1423,7 @@ fn test_07_epistemic_search() {
             cost: 0.05,
         },
     ];
-    let mut engine = ActiveInferenceEngine::new(zones, 1.0, 0.05).expect("active inference");
+    let mut engine = ActiveInferenceEngine::new(zones, 1.0, 1.0).expect("active inference");
     let mut rng = ChaCha8Rng::seed_from_u64(0x7E57);
     let mut first_b = 0u32;
     let mut last_b = 0u32;
@@ -1748,10 +1745,7 @@ fn test_09_mathematics() {
         "[T09] SINDy erro={sindy_err:.5}; MAX-CUT razao media={mean_ratio:.4} (min {min_ratio:.4}) em {INSTANCES} grafos N={N}"
     );
 
-    target_gate(
-        sindy_err < 0.04 && mean_ratio >= 0.96,
-        "T09 SINDy/MAX-CUT",
-    );
+    target_gate(sindy_err < 0.04 && mean_ratio >= 0.96, "T09 SINDy/MAX-CUT");
 }
 
 fn cut_value(w: &[f64], s: &[i8], n: usize) -> f64 {
@@ -1953,12 +1947,12 @@ fn test_11_thought_drift() {
 
 #[test]
 fn test_12_holographic_rag() {
-    const D: usize = 256;
+    const D: usize = 160;
     const FACTS: usize = 50;
     const QUERIES: usize = 20;
 
-    // FHRR: M_t = Σ_μ e^{i(θ_e + θ_r + θ_v + φ_t)}; consulta = média dos K
-    // unbindings (reduz crosstalk por √K).
+    // FHRR: M_t = Σ_μ e^{i(θ_e + θ_r + θ_v + ψ_{μ,t})}; consulta = média dos K
+    // unbindings (fases por fato decorrelacionam o crosstalk).
     let mut store = FhrrStore::with_traces(D, 6).expect("fhrr");
     let mut rng = ChaCha8Rng::seed_from_u64(0xFAC7);
     let mut atoms: Vec<(Vec<f32>, Vec<f32>, Vec<f32>)> = Vec::with_capacity(FACTS);

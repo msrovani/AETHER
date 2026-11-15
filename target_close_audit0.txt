@@ -1,0 +1,132 @@
+﻿cargo :    Compiling proc-macro2 v1.0.107
+No linha:1 caractere:170
++ ... get_close"; cargo test --release --test cognitive_audit '--' --nocapt ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling proc-macro2 v1.0.107:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.27
+   Compiling autocfg v1.5.1
+   Compiling crossbeam-utils v0.8.23
+   Compiling zerocopy v0.8.63
+   Compiling rustversion v1.0.23
+   Compiling winapi-x86_64-pc-windows-gnu v0.4.0
+   Compiling crossbeam-epoch v0.9.21
+   Compiling cfg-if v1.0.5
+   Compiling crossbeam-deque v0.8.8
+   Compiling winapi v0.3.9
+   Compiling parking_lot_core v0.9.12
+   Compiling windows_x86_64_gnu v0.52.6
+   Compiling windows-link v0.2.1
+   Compiling rayon-core v1.13.0
+   Compiling ident_case v1.0.1
+   Compiling strsim v0.11.1
+   Compiling heck v0.5.0
+   Compiling either v1.19.0
+   Compiling num-traits v0.2.19
+   Compiling matrixmultiply v0.3.11
+   Compiling paste v1.0.15
+   Compiling windows-sys v0.61.2
+   Compiling smallvec v1.16.5
+   Compiling scopeguard v1.2.0
+   Compiling indoc v2.0.8
+   Compiling serde_core v1.0.229
+   Compiling thiserror v2.0.21
+   Compiling lock_api v0.4.14
+   Compiling getrandom v0.2.17
+   Compiling strength_reduce v0.2.4
+   Compiling itoa v1.0.19
+   Compiling foldhash v0.1.5
+   Compiling equivalent v1.0.3
+   Compiling allocator-api2 v0.2.21
+   Compiling castaway v0.2.4
+   Compiling rand_core v0.6.4
+   Compiling parking_lot v0.12.5
+   Compiling crossterm_winapi v0.9.1
+   Compiling num-integer v0.1.47
+   Compiling num-complex v0.4.6
+   Compiling syn v2.0.119
+   Compiling syn v3.0.10
+   Compiling windows-targets v0.52.6
+   Compiling itertools v0.13.0
+   Compiling hashbrown v0.15.5
+   Compiling primal-check v0.3.4
+   Compiling transpose v0.2.3
+   Compiling static_assertions v1.1.0
+   Compiling unicode-width v0.1.14
+   Compiling ryu v1.0.23
+   Compiling bitflags v2.13.2
+   Compiling serde v1.0.229
+   Compiling zmij v1.0.23
+   Compiling rawpointer v0.2.1
+   Compiling unicode-segmentation v1.13.3
+   Compiling crossterm v0.28.1
+   Compiling rayon v1.12.0
+   Compiling lru v0.12.5
+   Compiling compact_str v0.8.2
+   Compiling rustfft v6.4.1
+   Compiling windows-sys v0.52.0
+   Compiling unicode-truncate v1.1.0
+   Compiling cassowary v0.3.0
+   Compiling serde_json v1.0.154
+   Compiling log v0.4.35
+   Compiling unicode-width v0.2.0
+   Compiling socket2 v0.5.10
+   Compiling ndarray v0.16.1
+   Compiling darling_core v0.24.1
+   Compiling mio v1.2.5
+   Compiling crossbeam-channel v0.5.17
+   Compiling winapi-util v0.1.11
+   Compiling memchr v2.8.3
+   Compiling anstyle v1.0.14
+   Compiling regex-syntax v0.8.11
+   Compiling ciborium-io v0.2.2
+   Compiling clap_lex v1.1.1
+   Compiling clap_builder v4.6.7
+   Compiling same-file v1.0.6
+   Compiling regex-automata v0.4.18
+   Compiling itertools v0.10.5
+   Compiling cast v0.3.0
+   Compiling regex v1.13.1
+   Compiling criterion-plot v0.5.0
+   Compiling clap v4.6.7
+   Compiling walkdir v2.5.0
+   Compiling is-terminal v0.4.17
+   Compiling oorandom v11.1.5
+   Compiling once_cell v1.21.4
+   Compiling anes v0.1.6
+   Compiling zerocopy-derive v0.8.63
+   Compiling strum_macros v0.26.4
+   Compiling darling_macro v0.24.1
+   Compiling thiserror-impl v2.0.21
+   Compiling serde_derive v1.0.229
+   Compiling realfft v3.5.1
+   Compiling darling v0.24.1
+   Compiling strum v0.26.3
+   Compiling instability v0.3.14
+   Compiling ratatui v0.29.0
+   Compiling tinytemplate v1.2.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling half v2.7.1
+   Compiling ciborium-ll v0.2.2
+   Compiling rand_chacha v0.3.1
+   Compiling ciborium v0.2.2
+   Compiling rand v0.8.8
+   Compiling criterion v0.5.1
+   Compiling aether_engine v0.0.53 (C:\Users\msrov\Documents\AETHER)
+error[E0599]: no associated function or constant named `with_forgetting` found for struct `OnlineKoopmanOperator` in 
+the current scope
+   --> tests\cognitive_audit.rs:883:41
+    |
+883 |     let mut op = OnlineKoopmanOperator::with_forgetting(EMB, 1, 0.02, 0.97).expect("koopman");
+    |                                         ^^^^^^^^^^^^^^^ associated function or constant not found in 
+`OnlineKoopmanOperator`
+    |
+note: if you're trying to build a new `OnlineKoopmanOperator`, consider using `OnlineKoopmanOperator::new` which 
+returns `Result<OnlineKoopmanOperator, AetherError>`
+   --> src\core\koopman_sindy.rs:41:4
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `aether_engine` (test "cognitive_audit") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

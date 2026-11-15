@@ -26,6 +26,8 @@ pub struct OnlineKoopmanOperator {
     dim: usize,
     out_dim: usize,
     lambda: f32,
+    /// Fator de esquecimento (1.0 = RLS clássico; <1 = adaptação rápida).
+    forgetting: f32,
     /// `dim × dim` (ordem C).
     p: Vec<f64>,
     /// `out_dim × dim`.
@@ -39,6 +41,20 @@ pub struct OnlineKoopmanOperator {
 impl OnlineKoopmanOperator {
     /// Cria o operador com fator de esquecimento `lambda > 0` (RLS).
     pub fn new(dim: usize, out_dim: usize, lambda: f32) -> Result<Self> {
+        Self::with_forgetting(dim, out_dim, lambda, 1.0)
+    }
+
+    /// Cria o operador com **fator de esquecimento** `forgetting ∈ (0,1]`.
+    ///
+    /// `forgetting < 1` multiplica `P` por `1/forgetting` a cada passo,
+    /// permitindo que o operador troque de regime (adaptação não-estacionária;
+    /// Ljung, *System Identification*, cap. 11).
+    pub fn with_forgetting(
+        dim: usize,
+        out_dim: usize,
+        lambda: f32,
+        forgetting: f32,
+    ) -> Result<Self> {
         if dim == 0 || out_dim == 0 {
             return Err(AetherError::Config(
                 "Koopman: dim e out_dim devem ser > 0".into(),
@@ -49,6 +65,11 @@ impl OnlineKoopmanOperator {
         } else {
             1e-3
         };
+        let forgetting = if forgetting.is_finite() && forgetting > 0.0 && forgetting <= 1.0 {
+            forgetting
+        } else {
+            1.0
+        };
         let mut p = vec![0.0f64; dim * dim];
         for i in 0..dim {
             p[i * dim + i] = 1.0 / lambda as f64;
@@ -57,6 +78,7 @@ impl OnlineKoopmanOperator {
             dim,
             out_dim,
             lambda,
+            forgetting,
             p,
             w: vec![0.0f64; out_dim * dim],
             pz: vec![0.0f64; dim],
@@ -64,6 +86,11 @@ impl OnlineKoopmanOperator {
             pred: vec![0.0f64; out_dim],
             updates: 0,
         })
+    }
+
+    /// Fator de esquecimento atual.
+    pub fn forgetting(&self) -> f32 {
+        self.forgetting
     }
 
     /// Dimensão do embedding.
@@ -115,6 +142,13 @@ impl OnlineKoopmanOperator {
             )));
         }
         let dim = self.dim;
+        // Esquecimento exponencial: P cresce 1/f por passo.
+        if self.forgetting < 1.0 {
+            let inv = 1.0 / self.forgetting as f64;
+            for v in self.p.iter_mut() {
+                *v *= inv;
+            }
+        }
         for i in 0..dim {
             let mut s = 0.0f64;
             for j in 0..dim {
@@ -326,12 +360,7 @@ impl SindyEquationDiscoverer {
     ///
     /// Derivadas por diferença central; STLSQ com até 3 passes. Retorna
     /// `[coef_x1; coef_x2]` (2 × 10).
-    pub fn discover(
-        &mut self,
-        x: &[[f32; 2]],
-        dt: f32,
-        threshold: f64,
-    ) -> Result<Vec<Vec<f64>>> {
+    pub fn discover(&mut self, x: &[[f32; 2]], dt: f32, threshold: f64) -> Result<Vec<Vec<f64>>> {
         let n = x.len();
         if n < self.terms + 2 {
             return Err(AetherError::Config(

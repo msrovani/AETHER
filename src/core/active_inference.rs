@@ -32,9 +32,7 @@ impl EmaActuator {
     /// Cria o filtro para `dim` atuadores; `alpha ∈ (0,1]`.
     pub fn new(dim: usize, alpha: f32) -> Result<Self> {
         if dim == 0 {
-            return Err(AetherError::Config(
-                "EmaActuator: dim deve ser > 0".into(),
-            ));
+            return Err(AetherError::Config("EmaActuator: dim deve ser > 0".into()));
         }
         let alpha = if alpha.is_finite() && alpha > 0.0 && alpha <= 1.0 {
             alpha
@@ -140,7 +138,11 @@ impl LyapunovCbf {
         if z.len() != self.dim || u.len() != self.dim || out.len() != self.dim {
             return Err(AetherError::shape([self.dim], [z.len()]));
         }
-        let gamma = if gamma.is_finite() { gamma.clamp(0.0, 1.0) } else { 0.1 };
+        let gamma = if gamma.is_finite() {
+            gamma.clamp(0.0, 1.0)
+        } else {
+            0.1
+        };
 
         let v0 = self.value(z);
         for i in 0..self.dim {
