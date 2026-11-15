@@ -230,8 +230,10 @@ pub struct DaemonTelemetry {
     pub peers_heard: u32,
     /// Quadros descartados por estouro do orçamento de 60 Hz.
     pub dropped_frames: u64,
-    /// Energia livre (surpresa) atual.
+    /// Energia livre (erro absoluto + metabolismo) atual.
     pub free_energy: f32,
+    /// Surpresa relativa ao baseline (dispara o sonho quando > limiar).
+    pub surprise: f32,
     /// Energia da memória de fase.
     pub memory_energy: f32,
     /// Incerteza epistêmica do conjunto amostrado.
@@ -397,9 +399,9 @@ impl AetherDaemon {
             }
         }
         let nmse = se / (su + 1e-6);
+        let abs_error = nmse.clamp(0.0, 4.0);
         let entropy_surprise = ((entropy_raw - entropy_wave).abs() / 8.0).clamp(0.0, 0.5);
-        let prediction_error =
-            ((nmse - self.baseline_nmse).max(0.0) + entropy_surprise).clamp(0.0, 4.0);
+        let surprise = ((nmse - self.baseline_nmse).max(0.0) + entropy_surprise).clamp(0.0, 4.0);
         self.baseline_nmse = 0.95 * self.baseline_nmse + 0.05 * nmse;
 
         // spins contínuos derivados da fase local (entrada da morfogênese),
@@ -407,10 +409,12 @@ impl AetherDaemon {
         let spins: Vec<f32> = (0..self.cfg.cognition_dim)
             .map(|i| (frame.phase[i % 4].cos() * 0.9) as f32)
             .collect();
-        let free_energy = self.field.evolve_topology(prediction_error, &spins, 0.05);
+        // A morfogênese vê o erro absoluto de reconstrução (mantém topologia
+        // viva); o sonho é disparado pela SURPRESA relativa ao baseline.
+        let free_energy = self.field.evolve_topology(abs_error, &spins, 0.05);
 
         // 3) decisão: sonhar (surpresa alta) ou colapsar (ação)
-        let dreaming = free_energy > self.cfg.alert_free_energy;
+        let dreaming = surprise > self.cfg.alert_free_energy;
         let temperature = if dreaming {
             self.cfg.dream_temperature
         } else {
@@ -454,6 +458,7 @@ impl AetherDaemon {
             peers_heard: frame.peers_heard,
             dropped_frames: self.dropped_frames,
             free_energy,
+            surprise,
             memory_energy,
             epistemic_uncertainty: ensemble.epistemic_uncertainty,
             topological_density: self.field.density(),
@@ -663,11 +668,12 @@ fn main() -> Result<()> {
     let mut daemon = AetherDaemon::new(cfg)?;
     daemon.run(|t| {
         println!(
-            "ciclo {:>6} | R(LAN)={:.3} peers={} | F={:.3} | E_mem={:+.3} | U={:.3} | topologia={:.1}% | {} | {}µs | drops={}",
+            "ciclo {:>6} | R(LAN)={:.3} peers={} | F={:.3} S={:.3} | E_mem={:+.3} | U={:.3} | topologia={:.1}% | {} | {}µs | drops={}",
             t.cycles,
             t.lan_coherence,
             t.peers_heard,
             t.free_energy,
+            t.surprise,
             t.memory_energy,
             t.epistemic_uncertainty,
             t.topological_density * 100.0,

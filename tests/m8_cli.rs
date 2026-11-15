@@ -13,7 +13,16 @@ fn daemon() -> &'static str {
 fn small_run(extra: &[&str]) -> std::process::Output {
     let mut cmd = Command::new(daemon());
     cmd.args([
-        "--hz", "20", "--dim", "8", "--samples", "2", "--steps", "10", "--window", "32",
+        "--hz",
+        "20",
+        "--dim",
+        "8",
+        "--samples",
+        "2",
+        "--steps",
+        "10",
+        "--window",
+        "32",
     ]);
     cmd.args(extra);
     cmd.output().expect("executar daemon")
