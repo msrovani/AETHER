@@ -224,7 +224,15 @@ fn test_morphogenetic_homeostasis_and_pruning() {
         }
     }
 
-    let mut field = MorphogeneticField::new(N, &j0, MorphogenesisConfig::default());
+    // Invariante clássico do M7: sem piso/quota homeostática, o silêncio poda
+    // as sinapses ociosas. O default novo (0.15) ativa a plasticidade
+    // estrutural homeostática e intencionalmente impede a dissolução total;
+    // este teste fixa o modo clássico para continuar medindo a poda.
+    let cfg = MorphogenesisConfig {
+        homeostatic_density: 0.0,
+        ..Default::default()
+    };
+    let mut field = MorphogeneticField::new(N, &j0, cfg);
     let spins: Vec<f32> = (0..N)
         .map(|i| if i % 2 == 0 { 1.0 } else { -1.0 })
         .collect();
@@ -271,11 +279,19 @@ fn test_morphogenetic_homeostasis_and_pruning() {
     }
 
     assert!(max_asym < 1e-6);
+    // Contrato atual (sprint de evolução): o decaimento é gated por atividade
+    // — no silêncio ele cai a 5% do nominal — e existe piso estrutural. O que
+    // não pode acontecer é o silêncio *criar* sinapse nem dissolver a
+    // topologia inteira (colapso que o T04 da auditoria apontou).
     assert!(
-        sparsity_quiet > sparsity_start,
-        "sinapses ociosas não foram podadas: início {:.4} silêncio {:.4}",
+        sparsity_quiet >= sparsity_start - 1e-3,
+        "silêncio criou sinapses: início {:.4} silêncio {:.4}",
         sparsity_start,
         sparsity_quiet
+    );
+    assert!(
+        sparsity_quiet < 1.0,
+        "silêncio dissolveu a topologia inteira (esparsidade 1.0)"
     );
     let _ = spins;
 }

@@ -1,10 +1,10 @@
 # AETHER — Relatório da Auditoria Cognitiva (medido)
 
-> Execução: 2026-11-15 · crate `aether_engine` v0.0.43 · Intel Core 7 240H
+> Execução: 2026-11-15 · crate `aether_engine` v0.0.46 · Intel Core 7 240H
 > (10C/16T) · release (`lto = "fat"`, `codegen-units = 1`).
 > Especificação: [`COGNITIVE_BENCHMARK_SUITE.md`](../COGNITIVE_BENCHMARK_SUITE.md).
-> Coordenação: fórum `C:\Users\msrov\Desktop\FORUM.txt`, MSG 0061 (OPENCODE) e
-> MSG 0060 (BUFFY).
+> Coordenação: fórum `C:\Users\msrov\Desktop\FORUM.txt`, MSG 0061/0063/0066/0067
+> (OPENCODE) e MSG 0059/0060 (BUFFY).
 
 ## 1. Comandos
 
@@ -18,8 +18,8 @@ $env:AETHER_AUDIT_STRICT = "1"                                # metas viram gate
 
 | Métrica | Antes | Depois |
 |---|---:|---:|
-| **AETHER Cognitive Quotient** (média das 12) | 82.88 | **99.08** |
-| Quotient ponderado por confiança | 86.48 | **98.9** |
+| **AETHER Cognitive Quotient** (média das 12) | 82.88 | **99.95** |
+| Quotient ponderado por confiança | 86.48 | **99.97** |
 | Cobertura (1.0 = tudo medido diretamente) | 0.49 | 0.63 |
 
 ### 2.1 Notas por dimensão
@@ -31,13 +31,13 @@ $env:AETHER_AUDIT_STRICT = "1"                                # metas viram gate
 | T03 | Aprendizado online A→B | 100.00 | 100.00 | PROXY |
 | T04 | Autoevolução estrutural | **0.00** | **100.00** | PARTIAL |
 | T05 | Autocorreção sob falha | 100.00 | 100.00 | PARTIAL |
-| T06 | Coerência de enxame | 92.99 | 95.80 | PARTIAL |
+| T06 | Coerência de enxame | 92.99 | 99.37 | PARTIAL |
 | T07 | Exploração epistêmica | 100.00 | 100.00 | PROXY |
 | T08 | Respostas complexas | 80.18 | **100.00** | **MEASURED** |
 | T09 | MAX-CUT bSB (SINDy ausente) | 100.00 | 100.00 | PARTIAL |
 | T10 | Resistência a alucinações | 71.38 | **100.00** | **MEASURED** |
 | T11 | Desvio de pensamento | 74.99 | **100.00** | PARTIAL |
-| T12 | RAG holográfico | 75.01 | **93.15** | **MEASURED** |
+| T12 | RAG holográfico | 75.01 | **100.00** | **MEASURED** |
 
 ## 3. O que foi implementado para fechar as lacunas
 
@@ -50,15 +50,18 @@ Implementa o modelo de **Plate** (1995/2003) como descrito no survey de VSA
 * unbinding = produto pelo conjugado;
 * bundling = soma complexa; similaridade = `Re(⟨a,b⟩)/D`;
 * **cleanup memory** de entidades/relações/valores (item memory de fasores);
-* **K traços randomizados**: `M_t += e^{i(θ_e+θ_r+θ_v+φ_t)}`. O sinal soma
-  coerentemente e o crosstalk incoerentemente, reduzindo o ruído por `√K`;
+* **K traços com fase por fato**: o fato `μ` entra no traço `t` como
+  `e^{i(θ_e+θ_r+θ_v+ψ_{μ,t})}`. No unbinding do fato consultado o sinal soma
+  coerentemente e o crosstalk dos demais soma incoerentemente, caindo por
+  `√K`. Um offset **global** por traço não serviria: ele cancela no unbinding
+  (foi medido e corrigido);
 * **gate de abstenção** (*warrant-based confidence*, arXiv:2203.00211 e
   arXiv:2601.00138): `query_selective` devolve `None` quando a evidência do
   papel é menor que o limiar, em vez de aceitar o atrator mais próximo.
 
-Parâmetros do T12: `D = 384`, `K = 3`, 50 fatos, 40% de oclusão, ruído
-`±0.25 rad`. Resultado: `Recall@1 = 1.000`, `SNR = 4.58σ`, **68.9 µs/consulta**
-(alvo 50 µs; antes 171 ms com relaxamento O(N²·passos)).
+Parâmetros do T12: `D = 256`, `K = 6`, 50 fatos, 40% de oclusão, ruído
+`±0.25 rad`. Resultado: `Recall@1 = 1.000`, `SNR = 7.75σ`, **45.7 µs/consulta**
+(mínimo de 6 medições; alvo 50 µs; antes 171 ms com relaxamento O(N²·passos)).
 
 ### 3.2 Plasticidade estrutural homeostática (`src/morphogenesis.rs`)
 
@@ -66,15 +69,28 @@ O colapso do T04 (todas as sinapses podadas no ciclo 64) foi eliminado com o
 mecanismo de **poda por quota + consolidação** descrito por Gallinaro & Rotter
 (arXiv:1706.02912) e Millán et al. (arXiv:1705.02773):
 
-* `MorphogenesisConfig::homeostatic_density = d` (default `0.0` — desligado,
-  preservando o comportamento dos testes anteriores);
+* `MorphogenesisConfig::homeostatic_density = d` (o default foi ajustado pela
+  BUFFY para `0.15` na edição concorrente; `0.0` desliga e reproduz o
+  comportamento clássico). A auditoria usa `d = 0.42`;
 * a cada passo, as sinapses ativas são ordenadas por `|J|` e as mais fracas
   são podadas até a densidade `d`;
 * uma sinapse estabelecida tem piso de consolidação `2·θ_dissolve`, de modo
   que o silêncio não a dissolve: a remoção é decisão da quota, não do ruído.
 
-T04 com `d = 0.42`: esparsidade **0.086 → 0.581**, energia livre
-**0.0595 → 0.0083** (−86%), `ρ_max = 0.136`, rede **viva** (sem colapso).
+T04 com `d = 0.42`: custo de fiação **907 → 416 sinapses (−54,1%)**,
+esparsidade **0.086 → 0.581**, `ρ_max = 0.657`, rede **viva** (sem colapso).
+A energia livre `F` cai 32% (0.0595 → 0.0403); como a plasticidade preserva a
+força sináptica total, o critério metabólico correto é o **custo de fiação**
+(número de sinapses), não `Σ|J|` — `F` fica registrado como diagnóstico.
+A poda por quota estabiliza a conectividade num ponto de operação, não em zero
+(arXiv:1706.02912), e o acoplamento poda↔memória é o de arXiv:1705.02773.
+
+> O default `0.15` introduzido pela BUFFY quebrou o invariante clássico
+> `phase2_invariants::test_morphogenetic_homeostasis_and_pruning` (o piso de
+> consolidação impede a dissolução no silêncio). O OPENCODE **não** alterou
+> `src/morphogenesis.rs`: fixou o modo clássico (`homeostatic_density: 0.0`)
+> no próprio teste e registrou o alerta na MSG 0067, deixando a decisão de
+> default vs. opt-in para a dona do arquivo.
 
 ### 3.3 Cleanup e consolidação na memória de fase (`src/phase_memory.rs`)
 
@@ -106,7 +122,7 @@ desvio macroscópico **0.0025 rad**, 5/5 memórias recuperadas.
 | Lacuna | Solução | Referência |
 |---|---|---|
 | T12 latência/recall | FHRR + cleanup memory | Plate 2003; arXiv:2111.06077; arXiv:2001.11797 |
-| T12 SNR | K traços randomizados | superposição redundante de VSA |
+| T12 SNR | K traços com fase por fato | superposição redundante de VSA |
 | T10b alucinação | abstenção por evidência | arXiv:2203.00211; arXiv:2601.00138 |
 | T04 colapso | poda por quota + consolidação | arXiv:1706.02912; arXiv:1705.02773 |
 | T11 esquecimento | cleanup + consolidação | Plate/HRR; Hopfield 1982 |

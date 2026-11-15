@@ -477,10 +477,7 @@ impl FhrrStore {
     pub fn memory_bytes(&self) -> usize {
         (self.trace_re.len() + self.trace_im.len()) * std::mem::size_of::<f32>()
             + self.fact_phase.len() * std::mem::size_of::<f32>()
-            + (self.entities.len()
-                + self.relations.len()
-                + self.values.len()
-                + self.roles.len())
+            + (self.entities.len() + self.relations.len() + self.values.len() + self.roles.len())
                 * self.dim
                 * 2
                 * std::mem::size_of::<f32>()
