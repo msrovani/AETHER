@@ -52,12 +52,14 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use aether_engine::core::active_inference::{
-    classify_swarm, ActiveInferenceEngine, EcologicalRole, EmaActuator, LyapunovCbf, RoleMetrics,
-    Zone,
+    ActiveInferenceEngine, LyapunovCbf, Zone,
 };
 use aether_engine::core::fhrr::FhrrStore;
 use aether_engine::core::koopman_sindy::{
-    DelayEmbedding, OnlineKoopmanOperator, SindyEquationDiscoverer,
+    DelayEmbedding, OnlineKoopmanOperator, SindyEquationDiscoverer, SINDY_WINDOW,
+};
+use aether_engine::core::swarm_speciation::{
+    HolographicFrame, NicheRole, NodeState, SwarmSpeciationEngine, FRAME_BYTES, GENOME_DIM,
 };
 use aether_engine::core::kuramoto_field::{KuramotoConfig, KuramotoPhaseNode, NodeHandle};
 use aether_engine::core::renormalization::RenormalizationHierarchy;
@@ -684,6 +686,39 @@ fn test_01_inference() {
     let r2 = 1.0 - ss_res / ss_tot.max(1e-12);
     let nrmse = ((ss_res / n_test) / (ss_tot / n_test).max(1e-12)).sqrt();
 
+    // Operador *lifted* (d=6 -> p=20, lambda=0.99): coordenadas de atraso.
+    let mut lk = OnlineKoopmanOperator::lifted().expect("lifted");
+    let state_at = |t: usize| -> [f32; 6] {
+        let mut s = [0.0f32; 6];
+        for (d, v) in s.iter_mut().enumerate() {
+            *v = nx[t - d];
+        }
+        s
+    };
+    for t in 7..split {
+        lk.observe_state(&state_at(t - 1), &state_at(t))
+            .expect("observe_state");
+    }
+    const LH: usize = 5;
+    let mut out6 = [0.0f32; 6 * LH];
+    let (mut l_res, mut l_tot, mut l_n) = (0.0f64, 0.0f64, 0usize);
+    let ((), lifted_allocs) = count_allocs(|| {
+        for t in split..(nx.len() - LH) {
+            lk.predict_steps(&state_at(t), LH, &mut out6).expect("predict_steps");
+            let e = (out6[(LH - 1) * 6] - nx[t + LH]) as f64;
+            l_res += e * e;
+            l_tot += (nx[t + LH] as f64) * (nx[t + LH] as f64);
+            l_n += 1;
+            lk.observe_state(&state_at(t), &state_at(t + 1)).expect("online");
+        }
+    });
+    let lifted_nrmse = ((l_res / l_n.max(1) as f64) / (l_tot / l_n.max(1) as f64).max(1e-12)).sqrt();
+    println!(
+        "[T01] Koopman lifted d=6 p=20: NRMSE(H={LH})={lifted_nrmse:.4} allocs={lifted_allocs}"
+    );
+    assert!(lifted_nrmse.is_finite());
+    assert_eq!(lifted_allocs, 0, "Koopman lifted alocou no passo");
+
     assert!(r2.is_finite() && nrmse.is_finite());
     assert!(preds.iter().all(|v| v.is_finite()));
 
@@ -700,6 +735,8 @@ fn test_01_inference() {
         .m("nrmse", nrmse)
         .m("horizon_steps", H as f64)
         .m("embedding_dim", EMB as f64)
+        .m("lifted_nrmse_h5", lifted_nrmse)
+        .m("lifted_allocs", lifted_allocs as f64)
         .m("updates", op.updates() as f64),
     );
     println!(
@@ -1041,18 +1078,42 @@ fn test_04_self_evolution() {
         }
     }
 
-    let mut role_metrics: Vec<RoleMetrics> = Vec::with_capacity(NODES);
-    for field in fields.iter_mut() {
+    // Especiação do enxame: genoma = assinatura estrutural do nó (8 floats).
+    let mut speciation = SwarmSpeciationEngine::new(NODES, 0.5).expect("speciation");
+    for (idx, field) in fields.iter_mut().enumerate() {
         f_end += field.last_free_energy() as f64;
         sp_end += field.sparsity_ratio() as f64;
         cost_end += field.active_synapses() as f64;
         let rho = field.spectral_radius();
         rho_max = rho_max.max(rho);
-        role_metrics.push(RoleMetrics {
-            spectral_radius: rho,
-            plasticity: field.active_synapses() as f32 / (N * (N - 1)) as f32,
-            sparsity: field.sparsity_ratio(),
-        });
+        let plasticity = field.active_synapses() as f32 / (N * (N - 1)) as f32;
+        let (mut mean_abs, mut max_abs) = (0.0f32, 0.0f32);
+        for v in field.coupling() {
+            mean_abs += v.abs();
+            max_abs = max_abs.max(v.abs());
+        }
+        mean_abs /= field.coupling().len().max(1) as f32;
+        let mut genome = [0.0f32; GENOME_DIM];
+        genome[0] = rho.clamp(0.0, 1.0);
+        genome[1] = plasticity.clamp(0.0, 1.0);
+        genome[2] = field.sparsity_ratio().clamp(0.0, 1.0);
+        genome[3] = mean_abs.clamp(0.0, 1.0);
+        genome[4] = max_abs.clamp(0.0, 1.0);
+        genome[5] = (field.last_free_energy()).clamp(0.0, 1.0);
+        genome[6] = 0.1 * idx as f32;
+        genome[7] = 0.05 * ((idx * 3) % NODES) as f32;
+        speciation
+            .set_node(
+                idx,
+                NodeState {
+                    genome,
+                    phi_auto: (1.0 - field.last_free_energy()).clamp(0.0, 1.0),
+                    spectral_radius: rho,
+                    plasticity,
+                    coherence: 1.0 - field.sparsity_ratio().clamp(0.0, 1.0),
+                },
+            )
+            .expect("set_node");
         for i in 0..N {
             for k in (i + 1)..N {
                 let d = (field.coupling()[i * N + k] - field.coupling()[k * N + i]).abs();
@@ -1067,19 +1128,32 @@ fn test_04_self_evolution() {
     sp_end /= NODES as f64;
     cost_end /= NODES as f64;
 
-    let roles = classify_swarm(&role_metrics);
-    let sentinels = roles
-        .iter()
-        .filter(|r| **r == EcologicalRole::Sentinel)
-        .count();
-    let architects = roles
-        .iter()
-        .filter(|r| **r == EcologicalRole::Architect)
-        .count();
-    let regulators = roles
-        .iter()
-        .filter(|r| **r == EcologicalRole::Regulator)
-        .count();
+    // Passos de especiação + frames holográficos: zero alocação (medida).
+    let mut frame_buf = [0u8; FRAME_BYTES];
+    let (frames_ok, spec_allocs) = count_allocs(|| {
+        for _ in 0..16 {
+            speciation.step();
+        }
+        let mut ok = 0usize;
+        for i in 0..NODES {
+            speciation
+                .encode_into(i, 1000 + i as u64, &mut frame_buf)
+                .expect("encode");
+            if HolographicFrame::decode(&frame_buf).is_ok() {
+                ok += 1;
+            }
+        }
+        ok
+    });
+    let roles = speciation.roles();
+    let sentinels = roles.iter().filter(|r| **r == NicheRole::Sentinel).count();
+    let architects = roles.iter().filter(|r| **r == NicheRole::Architect).count();
+    let regulators = roles.iter().filter(|r| **r == NicheRole::Regulator).count();
+    let phi_niche_mean =
+        speciation.phi_niche().iter().map(|v| *v as f64).sum::<f64>() / NODES as f64;
+    let genome_min_dist = speciation.swarm_min_distance() as f64;
+    assert_eq!(frames_ok, NODES, "frames holograficos com CRC invalido");
+    assert_eq!(spec_allocs, 0, "especiacao/encode alocaram no passo");
     let roles_emergent = [sentinels > 0, architects > 0, regulators > 0]
         .iter()
         .filter(|b| **b)
@@ -1117,7 +1191,7 @@ fn test_04_self_evolution() {
             "Autoevolucao estrutural (6 nos x 800 ciclos)",
             score,
             "MEASURED",
-            "poda por quota + papeis ecologicos reais (Sentinel/Architect/Regulator)",
+            "poda por quota + SwarmSpeciationEngine real (Phi_niche, NicheRole, frames 72B CRC-32)",
         )
         .m("free_energy_start", f_start)
         .m("free_energy_end", f_end)
@@ -1134,7 +1208,12 @@ fn test_04_self_evolution() {
             "collapse_cycle",
             collapse_cycle.map(|c| c as f64).unwrap_or(-1.0),
         )
-        .m("roles_emergent", roles_emergent),
+        .m("roles_emergent", roles_emergent)
+        .m("phi_niche_mean", phi_niche_mean)
+        .m("genome_min_dist", genome_min_dist)
+        .m("frames_crc_ok", frames_ok as f64)
+        .m("frame_bytes", FRAME_BYTES as f64)
+        .m("speciation_allocs", spec_allocs as f64),
     );
     println!(
         "[T04] custo {cost_start:.0}->{cost_end:.0} sinapses (-{:.1}%), F {f_start:.4}->{f_end:.4}, esparsidade {sp_start:.3}->{sp_end:.3}, rho_max={rho_max:.4}, vivo={alive}, colapso={:?}",
@@ -1329,29 +1408,27 @@ fn test_06_coherence() {
     let mut chatter_sum = 0.0f64;
     let mut frames = 0usize;
     let mut r_org = 0.0f64;
-    let mut ema = EmaActuator::new(n, 0.25).expect("ema T06");
-    let mut u_raw = vec![0.0f32; n];
-    let mut u_filt = vec![0.0f32; n];
-    let mut prev_filt = vec![0.0f32; n];
-    let mut chatter_ema_sum = 0.0f64;
+    // Atuador contínuo `continuous_action` (EMA τ≈100 ms sobre o campo médio).
+    let mut prev_act = frame.continuous_action.clone();
+    let mut chatter_act_sum = 0.0f64;
     for _ in 0..20 {
         organism.step_into(&mut frame).expect("step T06");
         let mut d2 = 0.0f64;
+        let mut da2 = 0.0f64;
         for i in 0..n {
             let d = (frame.states[i] - prev[i]) as f64;
             d2 += d * d;
-            u_raw[i] = frame.states[i] as f32;
+            let da = (frame.continuous_action[i] - prev_act[i]) as f64;
+            da2 += da * da;
+            assert!(
+                frame.continuous_action[i].is_finite() && frame.continuous_action[i].abs() <= 1.0,
+                "continuous_action fora de [-1,1]"
+            );
         }
         chatter_sum += (d2.sqrt()) / (n as f64).sqrt();
-        ema.filter_into(&u_raw, &mut u_filt).expect("ema");
-        let mut de2 = 0.0f64;
-        for i in 0..n {
-            let d = (u_filt[i] - prev_filt[i]) as f64;
-            de2 += d * d;
-        }
-        chatter_ema_sum += (de2.sqrt()) / (n as f64).sqrt();
-        prev_filt.copy_from_slice(&u_filt);
+        chatter_act_sum += (da2.sqrt()) / (n as f64).sqrt();
         prev.copy_from_slice(&frame.states);
+        prev_act.copy_from_slice(&frame.continuous_action);
         r_org += frame.order_parameter;
         frames += 1;
         for s in &frame.states {
@@ -1361,9 +1438,8 @@ fn test_06_coherence() {
     }
     organism.shutdown();
     let chatter = chatter_sum / frames as f64;
-    let chatter_ema = chatter_ema_sum / frames as f64;
+    let chatter_ema = chatter_act_sum / frames as f64;
     r_org /= frames as f64;
-
     // Grupo de Renormalizacao: 3 niveis Micro/Meso/Macro (64 -> 16 -> 4).
     let mut rg = RenormalizationHierarchy::new(64).expect("rg T06");
     let mut field = [0.0f32; 64];
@@ -1375,12 +1451,39 @@ fn test_06_coherence() {
     let rg_order = rg.macro_order();
     let rg_layers = 3.0;
 
+    // Torque top-down em omega_eff da Camada 0: fases dispersas convergem
+    // ao objetivo macro (zero alocação em forward/torque_into).
+    let mut rg_t = RenormalizationHierarchy::new(64).expect("rg torque");
+    rg_t.set_gain(0.0);
+    rg_t.set_goal(0.5);
+    let mut phi = [0.0f32; 64];
+    for (i, p) in phi.iter_mut().enumerate() {
+        *p = 0.5 + 0.9 * ((i * 37 % 64) as f32 / 64.0 - 0.5);
+    }
+    rg_t.forward(&phi).expect("rg torque fwd");
+    let align_before = rg_t.alignment();
+    let mut omega_eff = [0.0f32; 64];
+    let ((), torque_allocs) = count_allocs(|| {
+        for _ in 0..200 {
+            rg_t.forward(&phi).expect("fwd");
+            omega_eff.fill(0.0);
+            rg_t.torque_into(&mut omega_eff, 3.0).expect("torque");
+            for i in 0..64 {
+                phi[i] += 0.02 * omega_eff[i];
+            }
+        }
+    });
+    rg_t.forward(&phi).expect("rg torque fwd");
+    let align_after = rg_t.alignment();
+    assert_eq!(torque_allocs, 0, "RG torque alocou no passo");
+    assert!(align_after > align_before, "torque nao alinhou a camada 0");
+
     assert!(r_align.is_finite() && r_org.is_finite());
     assert!(converged, "4 nos nao convergiram para R>0.90");
     assert!(rg_alignment.is_finite() && rg_order.is_finite());
 
     let score = 0.55 * score_hi(r_align, 0.85)
-        + 0.20 * score_lo(chatter_ema, 0.50)
+        + 0.20 * score_lo(chatter_ema, 0.25)
         + 0.15 * score_hi(rg_alignment as f64, 0.85)
         + 0.10 * score_hi(rg_order as f64, 0.90);
 
@@ -1390,21 +1493,21 @@ fn test_06_coherence() {
             "Coerencia multi-escala (RG 3 niveis) e de enxame",
             score,
             "MEASURED",
-            "RG Micro/Meso/Macro real (64->16->4) + EMA do atuador + 4 nos UDP",
+            "RG 64->16->4 com torque top-down + continuous_action (EMA tau=100ms) + 4 nos UDP",
         )
         .m("r_align", r_align)
         .m("r_organism", r_org)
         .m("chattering", chatter)
-        .m("chattering_ema", chatter_ema)
+        .m("chattering_continuous", chatter_ema)`n        .m("rg_torque_align_before", align_before as f64)`n        .m("rg_torque_align_after", align_after as f64)
         .m("rg_alignment", rg_alignment as f64)
         .m("rg_macro_order", rg_order as f64)
         .m("rg_layers", rg_layers),
     );
     println!(
-        "[T06] R_align={r_align:.4} chattering={chatter:.4} EMA={chatter_ema:.4} RG_align={rg_alignment:.4} RG_order={rg_order:.4}"
+        "[T06] R_align={r_align:.4} chattering_discreto={chatter:.4} continuous_action={chatter_ema:.4} RG_align={rg_alignment:.4} RG_order={rg_order:.4}"
     );
 
-    target_gate(r_align > 0.85 && rg_alignment > 0.85, "T06 R_align/RG");
+    target_gate(`n        r_align > 0.85 && rg_alignment > 0.85 && chatter_ema < 0.25,`n        "T06 R_align/RG/chattering",`n    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1684,6 +1787,37 @@ fn test_09_mathematics() {
     assert_eq!(coef[0][3], 0.0, "termo nulo x1^2 nao zerado");
     assert_eq!(coef[1][0], 0.0, "termo nulo constante nao zerado");
 
+    // Parte A2 — SINDy *streaming*: buffer circular W=128, derivadas de 4a
+    // ordem centradas, STLSQ em workspace pre-alocado (fit sem alocacao).
+    let dt_w = 0.02f64;
+    let mut stream = SindyEquationDiscoverer::streaming(dt_w as f32, 0.02).expect("stream");
+    let (mut wx1, mut wx2) = (1.0f64, 0.5f64);
+    for _ in 0..(SINDY_WINDOW + 17) {
+        stream.push([wx1 as f32, wx2 as f32]);
+        for _ in 0..20 {
+            let h = dt_w / 20.0;
+            let d1 = -0.5 * wx1 + 1.2 * wx2 * wx2;
+            let d2 = 0.8 * wx1 - 0.3 * wx2 * wx2 * wx2;
+            wx1 += d1 * h;
+            wx2 += d2 * h;
+        }
+    }
+    let (fit, stream_allocs) = count_allocs(|| stream.fit_window());
+    let stream_dxdt_err = fit.expect("fit_window");
+    let xi = stream.coefficients();
+    let mut stream_coef_err = 0.0f64;
+    for e in 0..2 {
+        for t in 0..10 {
+            stream_coef_err = stream_coef_err.max((xi[e][t] - truth[e][t]).abs());
+        }
+    }
+    println!(
+        "[T09] SINDy streaming: dx/dt err={stream_dxdt_err:.5} coef err={stream_coef_err:.4} allocs={stream_allocs}"
+    );
+    assert_eq!(stream_allocs, 0, "fit_window alocou");
+    assert!(stream_dxdt_err < 0.04, "SINDy dx/dt err={stream_dxdt_err}");
+    let sindy_err = sindy_err.max(stream_dxdt_err);
+
     let mut solver = ThermodynamicIsingSolver::new(1, N, STEPS, 0.05);
     let mut out = RelaxOutcome::with_capacity(1, N, STEPS);
     let h = Array2::<f64>::zeros((1, N));
@@ -1744,6 +1878,10 @@ fn test_09_mathematics() {
         .m("maxcut_ratio_mean", mean_ratio)
         .m("maxcut_ratio_min", min_ratio)
         .m("instances", INSTANCES as f64)
+        .m("sindy_stream_dxdt_err", stream_dxdt_err)
+        .m("sindy_stream_coef_err", stream_coef_err)
+        .m("sindy_stream_allocs", stream_allocs as f64)
+        .m("sindy_window", SINDY_WINDOW as f64)
         .m("sindy_available", 1.0),
     );
     println!(

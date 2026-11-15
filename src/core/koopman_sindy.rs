@@ -163,10 +163,18 @@ impl OnlineKoopmanOperator {
         }
         let dim = self.dim;
         // Esquecimento exponencial: P cresce 1/f por passo.
+        // Anti-windup: só infla `P` enquanto `tr(P)` estiver abaixo do valor
+        // inicial (`dim/λ`); direções sem excitação não divergem.
         if self.forgetting < 1.0 {
-            let inv = 1.0 / self.forgetting as f64;
-            for v in self.p.iter_mut() {
-                *v *= inv;
+            let mut tr = 0.0f64;
+            for i in 0..dim {
+                tr += self.p[i * dim + i];
+            }
+            if tr < dim as f64 / self.lambda as f64 {
+                let inv = 1.0 / self.forgetting as f64;
+                for v in self.p.iter_mut() {
+                    *v *= inv;
+                }
             }
         }
         for i in 0..dim {
@@ -293,9 +301,9 @@ impl OnlineKoopmanOperator {
         self.observe(&z, &zn)
     }
 
-    /// Prevê `horizon` passos: `ψ_{k+1} = K ψ_k`, decodificando `x` dos
-    /// observáveis lineares de `ψ`. Escreve `horizon × 6` valores em `out`
-    /// (linha `k` = `x̂_{t+k+1}`), sem alocar.
+    /// Prevê `horizon` passos: `x_{k+1} = [K ψ(x_k)]_{1..6}` (os observáveis
+    /// lineares de `ψ` decodificam `x`). Escreve `horizon × 6` valores em
+    /// `out` (linha `k` = `x̂_{t+k+1}`), sem alocar.
     pub fn predict_steps(&self, x0: &[f32], horizon: usize, out: &mut [f32]) -> Result<()> {
         self.require_lifted()?;
         if x0.len() != KOOPMAN_D {
@@ -304,24 +312,22 @@ impl OnlineKoopmanOperator {
         if out.len() < horizon * KOOPMAN_D {
             return Err(AetherError::shape([horizon * KOOPMAN_D], [out.len()]));
         }
-        let mut z32 = [0.0f32; KOOPMAN_P];
-        lift_state(x0, &mut z32);
-        let mut z = [0.0f64; KOOPMAN_P];
-        for i in 0..KOOPMAN_P {
-            z[i] = z32[i] as f64;
-        }
+        // Re-eleva `x` a cada passo (só as linhas lineares 1..=6 de `K` são
+        // necessárias): evita compor o erro do subespaço de observáveis
+        // não lineares.
+        let mut x = [0.0f32; KOOPMAN_D];
+        x.copy_from_slice(x0);
+        let mut z = [0.0f32; KOOPMAN_P];
         for k in 0..horizon {
-            let mut nz = [0.0f64; KOOPMAN_P];
-            for o in 0..KOOPMAN_P {
+            lift_state(&x, &mut z);
+            for d in 0..KOOPMAN_D {
+                let row = (1 + d) * KOOPMAN_P;
                 let mut acc = 0.0f64;
                 for i in 0..KOOPMAN_P {
-                    acc += self.w[o * KOOPMAN_P + i] * z[i];
+                    acc += self.w[row + i] * z[i] as f64;
                 }
-                nz[o] = acc;
-            }
-            z = nz;
-            for d in 0..KOOPMAN_D {
-                out[k * KOOPMAN_D + d] = z[1 + d] as f32;
+                x[d] = acc as f32;
+                out[k * KOOPMAN_D + d] = x[d];
             }
         }
         Ok(())
