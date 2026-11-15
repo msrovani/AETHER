@@ -28,7 +28,7 @@ Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto
 - `examples/e3b_certificate.rs`
 - `src/core/certificate.rs`
 
-## [0.0.87] - 2026-11-15
+## [0.0.88] - 2026-11-15
 
 ### Added
 

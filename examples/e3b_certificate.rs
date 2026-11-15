@@ -199,7 +199,11 @@ fn evaluate_at(test: &[(f64, bool)], threshold: f64) -> AtCoverage {
     }
 }
 
-fn split_signal(rows: &[Row], pick: impl Fn(&Row) -> f64) -> (Vec<(f64, bool)>, Vec<(f64, bool)>) {
+type SignalFn = fn(&Row) -> f64;
+type SignalResult = (&'static str, f64, AtCoverage, AtCoverage);
+type TrainTest = (Vec<(f64, bool)>, Vec<(f64, bool)>);
+
+fn split_signal(rows: &[Row], pick: impl Fn(&Row) -> f64) -> TrainTest {
     let mut tr = Vec::new();
     let mut te = Vec::new();
     for (idx, r) in rows.iter().enumerate() {
@@ -222,9 +226,6 @@ struct Row {
     e_star: f64,
     correct: bool,
 }
-
-type SignalFn = fn(&Row) -> f64;
-type SignalResult = (&'static str, f64, AtCoverage, AtCoverage);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = parse_args();
