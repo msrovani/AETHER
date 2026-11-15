@@ -40,19 +40,26 @@
 //! zera o crosstalk exatamente. Sejam os fasores `ψ_i^μ = e^{iφ_i^μ}` e
 //!
 //! ```text
-//! G_μν = Σ_i conj(ψ_i^μ) ψ_i^ν            (Gram P×P, hermiteana)
-//! C_ij = Σ_{μν} conj(ψ_i^μ) (G⁻¹)_μν ψ_j^ν
+//! G_μν = Σ_i conj(ψ_i^μ) ψ_i^ν              (Gram P×P, hermiteana)
+//! C_ij = Σ_{μν} conj(ψ_i^μ) (G⁻¹)_{νμ} ψ_j^ν
 //! ```
 //!
-//! (com `G` regularizada por *ridge* `1e-6·N` e inversa por Gauss-Jordan).
-//! Então, para **todo** padrão `ν`,
+//! (com `G` regularizada por *ridge* `1e-6·N` e inversa por Gauss-Jordan; a
+//! **transposição** `(G⁻¹)_{νμ} = conj(G⁻¹)_{μν}` é essencial — com `G⁻¹`
+//! direta a diagonal `C_ii` fica complexa e o resíduo `Im(C_ii) ≈ 0.19`
+//! reaparece). Então, para **todo** padrão `ν`,
 //!
 //! ```text
 //! Σ_j conj(C_ij) e^{i(ψ_j^ν−ψ_i^ν)} = 1   ∀i
 //! ```
 //!
-//! ou seja o campo residual em `ψ^ν` é **exatamente zero** e o padrão é ponto
-//! fixo da dinâmica — o crosstalk responsável por `p0 = 0.169` desaparece.
+//! ou seja o campo residual em `ψ^ν` é **exatamente zero** (o termo diagonal
+//! também é real, então pular `i = j` na dinâmica não deixa resíduo) e o padrão
+//! é ponto fixo da dinâmica. Medido em `tests/phase2_m5_hardening.rs`:
+//! `|drive| ≈ 1e-5` nos padrões (era `0.073` em p0 com a superposição
+//! hebbiana) e erro de recall `p0 = 0.0000`, `p1 = 0.0000`, `p2 = 0.0001` rad
+//! (pior 0.0006) em 30 seeds com **12 ocultos** — contra 0.169/0.039/0.121.
+//!
 //! Para `P = 1` a regra reduz à hebbiana (mesma direção `δ = ψ_j−ψ_i`).
 //! Padrões relacionados por rotação rígida são o **mesmo** atrator (a dinâmica
 //! é invariante por rotação global) e por isso são deduplicados no `imprint`.
@@ -62,23 +69,27 @@
 //! * `η_δ` (`eta_delta`): taxa da regra `δ ← δ + η_δ·W·sin(arg C − δ)`. A cada
 //!   `imprint` a projeção reconstrói `C` e `δ` relaxa `16·cycles` vezes para o
 //!   alvo `arg C`. `η_δ = 0` **desliga o aprendizado de fase** e o recall
-//!   colapsa (medido: 1.41 rad contra 0.11 rad com `η_δ = 0.08`).
+//!   colapsa (medido: 1.41 rad contra 0.0001 rad com `η_δ = 0.08`).
 //! * `cycles`: número de passadas de consolidação; como a projeção é exata,
 //!   `cycles` controla apenas as passadas de relaxação de `δ` (`16·cycles`).
-//! * `γ_W` (`gamma_w`): esquecimento metabólico por episódio. Cada padrão
-//!   guardado entra na projeção com peso `λ_μ = (1−γ_W)^{idade_μ}`; como a
-//!   propriedade de crosstalk nulo vale para qualquer `λ`, γ_W só modula a
-//!   profundidade relativa dos poços (memória recente domina).
+//! * `γ_W` (`gamma_w`): esquecimento metabólico por episódio. Na regra de
+//!   projeção ele **não pode** modular a profundidade do poço (pesos
+//!   não-uniformes tornam `C_ii` complexo e reintroduzem crosstalk), então
+//!   atua na **retenção**: padrões com `(1−γ_W)^{idade} < 10⁻³` são
+//!   descartados no próximo `imprint`.
 //! * `η_W` (`eta_w`): escala global do fasor. O campo é normalizado por um
 //!   gauge (`W = |C|/⟨|C|⟩`), então `η_W` não altera a paisagem de atratores;
 //!   é mantido por compatibilidade e validado (`≥ 0`, finito).
 //!
 //! # Capacidade
 //!
-//! A projeção é exata enquanto os `P` fasores forem linearmente independentes,
-//! isto é `P ≤ N−1`. A memória mantém uma **janela deslizante** de
-//! `min(N−1, 64)` padrões (FIFO: o mais antigo sai), o que mantém `G`
-//! invertível e o custo do `imprint` em `O(P³ + P²N + PN²)`.
+//! A projeção anula o crosstalk enquanto os `P` fasores forem linearmente
+//! independentes (`P ≤ N−1`), mas os padrões só são **atratores** enquanto a
+//! bacia não colapsa. Medido em `N = 32` (fases aleatórias, 12 ocultos): erro
+//! médio `0.0002` com `P = 4`, `0.003` (P=6), `0.02` (P=8) e `0.17` (P=10).
+//! A memória mantém então uma **janela deslizante** de `min(N/4, 64)` padrões
+//! (FIFO: o mais antigo sai), o que mantém a recuperação estável e o custo do
+//! `imprint` em `O(P³ + P²N + PN²)`.
 //!
 //! # Robustez
 //!
@@ -242,9 +253,14 @@ fn wrap_signed(x: f32) -> f32 {
     v
 }
 
-/// Capacidade da janela de padrões: `min(N−1, 64)` (a projeção exige `P < N`).
+/// Capacidade da janela de padrões: `min(N/4, 64)`.
+///
+/// Armazenar/zerar o crosstalk vale para `P ≤ N−1` (os `P` fasores precisam
+/// ser independentes), mas a **bacia de atração** encolhe com `P`: medido em
+/// `N = 32` com fases aleatórias, erro médio `0.0002` (P=4), `0.003` (P=6),
+/// `0.02` (P=8) e `0.17` (P=10). Por isso a janela usa `N/4`.
 fn pattern_capacity(n: usize) -> usize {
-    n.saturating_sub(1).clamp(1, PATTERN_CAP_MAX)
+    (n / 4).clamp(2, PATTERN_CAP_MAX)
 }
 
 impl ComplexPhaseMemory {

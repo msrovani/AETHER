@@ -54,6 +54,16 @@ pub struct OrganismConfig {
     /// Frequências naturais dos osciladores (rad/s).
     pub omega: [f64; 4],
     /// Ruído do sensor (desvio padrão em rad).
+    ///
+    /// É a **largura de banda** do sensor: o ruído branco de medição é o piso
+    /// espectral que ocupa todos os bins. Com um fasor de fase quase-estático
+    /// (`ω ≈ 6 rad/s`, 60 Hz, janela de 128 amostras) o campo é *narrowband* e
+    /// um piso ínfimo (0.03) deixa a interferência **espalhar** energia dentro
+    /// dos 32 modos retidos, elevando `H_wave` acima de `H_raw`. Com o piso
+    /// físico de 0.35 (RMS ≈ 0.20 no fasor unitário, ≈ 0.2 rad ≈ 11° de erro
+    /// de fase, SNR ≈ 11 dB — a fase segue como sinal principal) a energia em
+    /// `k ≥ modes` passa a existir, o truncamento modal remove essa banda e a
+    /// interferência **reduz** a entropia, como a ARCHITECTURE §8 exige.
     pub sensor_noise: f64,
     /// Frequência da assinatura acústica (Hz).
     pub acoustic_hz: f64,
@@ -74,7 +84,7 @@ impl Default for OrganismConfig {
             k_coupling: 8.0,
             field_gain: 0.25,
             omega: [6.0, 6.02, 5.98, 6.01],
-            sensor_noise: 0.03,
+            sensor_noise: 0.35,
             acoustic_hz: 10.0,
             acoustic_amplitude: 20.0,
         }

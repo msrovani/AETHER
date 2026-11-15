@@ -3,6 +3,20 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.31] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 6 arquivo(s) (.:1, src:3, tests:2).
+- Gate: ok (4s).
+
+- `Cargo.lock`
+- `src/bin/organism.rs`
+- `src/phase_memory.rs`
+- `src/simulation/closed_loop_organism.rs`
+- `tests/phase2_m5_hardening.rs`
+- `tests/zz_buffy_probe.rs`
+
 ## [0.0.30] - 2026-11-15
 
 ### Changed

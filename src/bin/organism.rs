@@ -13,7 +13,7 @@
 //! * `--window <n>`    amostras do buffer circular (padrão: 128)
 //! * `--perturb-at <s>` momento da perturbação física (padrão: 3s)
 //! * `--hz <f>`        taxa do loop (padrão: 60)
-//! * `--sensor-noise <f>` ruído do sensor em rad (padrão: 0.03)
+//! * `--sensor-noise <f>` ruído do sensor em rad (padrão: 0.35)
 //! * `--no-perturb`    desliga a perturbação (controle)
 
 use std::time::Duration;
@@ -101,8 +101,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("AETHER — organismo pós-token");
     println!(
-        "nós=3 canais={} janela={} passos={} hz={} perturb_em={:?}",
-        cfg.sensor_channels, cfg.window, cfg.steps, cfg.hz, cfg.perturb_after
+        "nós=3 canais={} janela={} passos={} hz={} ruído_sensor={} perturb_em={:?}",
+        cfg.sensor_channels, cfg.window, cfg.steps, cfg.hz, cfg.sensor_noise, cfg.perturb_after
     );
 
     let mut organism = ClosedLoopOrganism::new(cfg)?;
