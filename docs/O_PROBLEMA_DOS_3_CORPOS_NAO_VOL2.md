@@ -2,15 +2,31 @@
 ## Hardware moderno e os seis riscos, enfrentados com números
 
 > **Dossiê de pesquisa · Volume II** · AETHER · 2026-11-15
-> Complementa `docs/O_PROBLEMA_DOS_3_CORPOS_NAO.md` (Volume I).
-> Escopo: os seis riscos honestos do Volume I, confrontados com CPU/GPU/FPGA/neuromórfico
-> modernos e com evidência medida.
+> Confronta os seis riscos honestos do Volume I com CPU/GPU/FPGA/neuromórfico
+> modernos, usando evidência medida.
 >
 > **Método:** cada risco recebe (a) o que a evidência mais recente mostra, (b) a mitigação
 > com números, (c) a decisão de arquitetura, (d) o gate. Nenhum benchmark citado foi
 > re-executado por nós — são números publicados, com a fonte e o nível de confiança.
 >
 > **Nada aqui altera `docs/API_CONTRACT.md`.** É dossiê, não contrato.
+
+---
+
+## Série
+
+| Volume | Arquivo | Papel |
+|---|---|---|
+| **I** | [`O_PROBLEMA_DOS_3_CORPOS_NAO.md`](O_PROBLEMA_DOS_3_CORPOS_NAO.md) | Problema e tese — os três "NÃO" |
+| **II** | este arquivo | Hardware e riscos — o preço de cada objeção |
+| **III** | [`O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md`](O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md) | Conhecimento e integração — registro mestre, SGDB, prioridades |
+
+> **Pré-requisito de leitura:** §1 deste volume (mapa de hardware) define as restrições
+> físicas que o Vol. III assume. Os seis riscos numerados aqui são `R1–R6` no registro
+> mestre (Vol. III §11.3); o Vol. III acrescenta `R7–R10`.
+>
+> **Estado:** das seis objeções, **nenhuma foi fechada** — todas foram *precificadas*.
+> Nenhum gate foi executado. Ver Vol. III §12.
 
 ---
 
@@ -26,7 +42,7 @@
 - [7. Risco 6 — Preprints de baixa revisão](#7-risco-6--preprints-de-baixa-revisão)
 - [8. Registo de risco atualizado](#8-registo-de-risco-atualizado)
 - [9. Matriz de decisão de hardware](#9-matriz-de-decisão-de-hardware)
-- [10. Experimentos novos E6–E9](#10-experimentos-novos-e6e9)
+- [10. Experimentos novos](#10-experimentos-novos-e6-e2b-e1b-e3b-e7-e8)
 - [11. O que mudou desde o Volume I](#11-o-que-mudou-desde-o-volume-i)
 - [12. Referências novas](#12-referências-novas)
 
@@ -495,12 +511,16 @@ independente, (iii) plausibilidade física.
 
 | # | Risco | Status após Vol. II | Risco residual | Mitigação principal |
 |---|---|---|---|---|
-| 1 | Ising não é oráculo | **mitigável com engenharia conhecida** | médio | roof dual (10³–10⁴× menor) + presolve structure-aware + Lagrange |
-| 2 | Interferência VSA | **mitigável; capacidade ∝ D²** | médio | ACF/IMF (ruído na init) + fatoração + abstenção por passo |
-| 3 | Geometria ≠ verdade | **irredutível em parte** | **alto** | certificado de *coerência* (não verdade) + proveniência + verificador 14 ms |
-| 4 | Open-endedness sem corpo | **mitigável com S0** | médio | laço fechado com atuador real + teste anti-passeio H1–H3 |
-| 5 | Custo de treino | **evitável** (reservoir) | baixo | congelar física; RLS como readout |
-| 6 | Preprints | **gerenciável** | baixo | triangulação + selos + regra "nenhuma decisão só em [C]" |
+| **R1** | Ising não é oráculo | **mitigável com engenharia conhecida** | médio | roof dual (10³–10⁴× menor) + presolve structure-aware + Lagrange |
+| **R2** | Interferência VSA | **mitigável; capacidade ∝ D²** | médio | ACF/IMF (ruído na init) + fatoração + abstenção por passo |
+| **R3** | Geometria ≠ verdade | **irredutível em parte** | **alto** | certificado de *coerência* (não verdade) + proveniência + verificador 14 ms |
+| **R4** | Open-endedness sem corpo | **mitigável com S0** | médio | laço fechado com atuador real + teste anti-passeio H1–H3 |
+| **R5** | Custo de treino | **evitável** (reservoir) | baixo | congelar física; RLS como readout |
+| **R6** | Preprints | **gerenciável** | baixo | triangulação + selos + regra "nenhuma decisão só em [C]" |
+
+> Os riscos `R7–R10` nascem no Vol. III (drift para RAG, vazamento de escopo,
+> proveniência-teatro, certificado sem dentes) e não são consequência do hardware —
+> são consequência da **integração**.
 
 ### 8.1 Gaps novos
 
@@ -533,7 +553,9 @@ a métrica — nunca por moda.*
 
 ---
 
-## 10. Experimentos novos E6–E9
+## 10. Experimentos novos (E6, E2b, E1b, E3b, E7, E8)
+
+> Registro mestre com todos os IDs (`E1–E8`, `F1–F3`) em **Vol. III §11.1**.
 
 | # | Entrega | Mede | Gate |
 |---|---|---|---|

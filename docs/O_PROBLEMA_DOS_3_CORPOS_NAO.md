@@ -1,6 +1,7 @@
-# O PROBLEMA DOS 3 CORPOS — NÃO
+# O PROBLEMA DOS 3 CORPOS — NÃO · Volume I
+## Os três "NÃO" e a tese
 
-> **Dossiê de pesquisa** · AETHER · 2026-11-15
+> **Dossiê de pesquisa · Volume I** · AETHER · 2026-11-15
 > Escopo: os três "NÃO" do motor pós-token (linguagem natural, raciocínio lógico +
 > conhecimento geral, aprendizado/evolução/autoconhecimento) e o caminho para AGI
 > dentro das restrições físicas do projeto.
@@ -11,6 +12,24 @@
 >
 > **Baseline citado:** crate em v0.0.67+ · auditoria de 2026-11-15 ·
 > `ACQ 100 · 12/12 MEASURED · 0 B hot-path` · Intel Core 7 240H.
+
+---
+
+## Série
+
+| Volume | Arquivo | Papel | Pergunta |
+|---|---|---|---|
+| **I** | este arquivo | **Problema e tese** | Quais são os três "NÃO" e como fechá-los? |
+| **II** | [`O_PROBLEMA_DOS_3_CORPOS_NAO_VOL2.md`](O_PROBLEMA_DOS_3_CORPOS_NAO_VOL2.md) | **Hardware e riscos** | Cada risco tem preço? Em que substrato? |
+| **III** | [`O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md`](O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md) | **Conhecimento e integração** | Como se guarda, revisa e audita o que foi aprendido? |
+
+Convenções da série:
+
+- Selos de evidência **[A]/[B]/[C]/[M]** definidos em **Vol. II §0**, valem também para este volume.
+- IDs de experimento (`E*`), gaps (`NO_*`) e riscos (`R*`) são **consolidados no
+  registro mestre do Vol. III §11** — em caso de divergência, o mestre vence.
+- Este volume responde *"o quê e por quê"*; o Vol. II responde *"a que preço"*;
+  o Vol. III responde *"como não mentir sobre isso"*.
 
 ---
 
