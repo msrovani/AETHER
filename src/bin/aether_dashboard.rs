@@ -27,7 +27,7 @@ mod aether_dashboard_win {
 
     use aether_engine::dashboard::{
         dimension_ficha, dimension_tooltip, global_tooltip, glossary_entries, load_scorecard,
-        probe_and_save, throughput_tooltip, DemoTrace, DimFicha, HostReport, JobKind, JobRunner,
+        probe_and_save, throughput_tooltip, DimFicha, HostReport, JobKind, JobRunner,
         ScorecardView,
     };
 
