@@ -66,19 +66,6 @@ impl Phasor {
             acc / count as f32
         }
     }
-
-    fn similarity(&self, other: &Self) -> f32 {
-        let n = self.re.len().min(other.re.len());
-        let mut acc = 0.0f32;
-        for j in 0..n {
-            acc += self.re[j] * other.re[j] + self.im[j] * other.im[j];
-        }
-        if n == 0 {
-            0.0
-        } else {
-            acc / n as f32
-        }
-    }
 }
 
 /// Resultado de uma consulta holográfica.
@@ -86,6 +73,8 @@ impl Phasor {
 pub struct FhrrRecall {
     /// Fases recuperadas do valor (`arg` do vetor desvinculado), `D` amostras.
     pub value: Vec<f32>,
+    /// Índice do fato cujo papel `e ⊙ r` venceu a cleanup memory.
+    pub fact_index: usize,
     /// Índice da entidade escolhida pela cleanup memory.
     pub entity_index: usize,
     /// Índice da relação escolhida pela cleanup memory.
@@ -111,6 +100,35 @@ impl FhrrRecall {
     }
 }
 
+/// Resultado compacto de uma consulta (sem as fases recuperadas).
+#[derive(Clone, Debug)]
+pub struct FhrrMatch {    /// Índice do fato cujo papel `e ⊙ r` teve maior similaridade.
+    pub fact_index: usize,
+    /// Entidade do fato eleito.
+    pub entity_index: usize,
+    /// Relação do fato eleito.
+    pub relation_index: usize,
+    /// Valor com maior similaridade.
+    pub value_index: usize,
+    /// Similaridade do valor vencedor.
+    pub similarity: f32,
+    /// Margem para o segundo valor (confiança de seleção).
+    pub margin: f32,
+    /// Similaridade da entidade eleita com a pista parcial.
+    pub entity_similarity: f32,
+    /// Similaridade da relação eleita com a pista parcial.
+    pub relation_similarity: f32,
+    /// Similaridade com todos os valores (SNR/calibração).
+    pub value_similarities: Vec<f32>,
+}
+
+impl FhrrMatch {
+    /// Confiança de seleção: margem entre o melhor e o segundo valor.
+    pub fn confidence(&self) -> f32 {
+        self.margin.max(0.0)
+    }
+}
+
 /// Memória holográfica de fatos `(entidade, relação, valor)`.
 #[derive(Debug)]
 pub struct FhrrStore {
@@ -120,6 +138,8 @@ pub struct FhrrStore {
     entities: Vec<Phasor>,
     relations: Vec<Phasor>,
     values: Vec<Phasor>,
+    /// `e_k ⊙ r_k` por fato (papel combinado), para cleanup em uma varredura.
+    roles: Vec<Phasor>,
     fact_entity: Vec<usize>,
     fact_relation: Vec<usize>,
     fact_value: Vec<usize>,
@@ -140,6 +160,7 @@ impl FhrrStore {
             entities: Vec::new(),
             relations: Vec::new(),
             values: Vec::new(),
+            roles: Vec::new(),
             fact_entity: Vec::new(),
             fact_relation: Vec::new(),
             fact_value: Vec::new(),
@@ -196,6 +217,14 @@ impl FhrrStore {
         let r = Phasor::from_phases(relation);
         let v = Phasor::from_phases(value);
 
+        // Papel combinado e ⊙ r: permite cleanup em UMA varredura.
+        let mut role_re = Vec::with_capacity(self.dim);
+        let mut role_im = Vec::with_capacity(self.dim);
+        for j in 0..self.dim {
+            role_re.push(e.re[j] * r.re[j] - e.im[j] * r.im[j]);
+            role_im.push(e.re[j] * r.im[j] + e.im[j] * r.re[j]);
+        }
+
         let ei = self.entities.len();
         let ri = self.relations.len();
         let vi = self.values.len();
@@ -210,6 +239,10 @@ impl FhrrStore {
         self.entities.push(e);
         self.relations.push(r);
         self.values.push(v);
+        self.roles.push(Phasor {
+            re: role_re,
+            im: role_im,
+        });
         self.fact_entity.push(ei);
         self.fact_relation.push(ri);
         self.fact_value.push(vi);
@@ -238,40 +271,86 @@ impl FhrrStore {
             return Err(AetherError::shape([self.dim], [mask.len()]));
         }
 
+        let m = self.query_match(entity_cue, relation_cue, mask)?;
+
+        // Fases recuperadas: segunda passada O(D), apenas quando pedidas.
+        let role = &self.roles[m.fact_index];
+        let mut value = Vec::with_capacity(self.dim);
+        for j in 0..self.dim {
+            let zr = self.trace_re[j] * role.re[j] + self.trace_im[j] * role.im[j];
+            let zi = self.trace_im[j] * role.re[j] - self.trace_re[j] * role.im[j];
+            value.push(zi.atan2(zr));
+        }
+
+        Ok(FhrrRecall {
+            value,
+            fact_index: m.fact_index,
+            entity_index: m.entity_index,
+            relation_index: m.relation_index,
+            value_index: m.value_index,
+            similarity: m.similarity,
+            margin: m.margin,
+            entity_similarity: m.entity_similarity,
+            relation_similarity: m.relation_similarity,
+            value_similarities: m.value_similarities,
+        })
+    }
+
+    /// Consulta compacta (sem fases): cleanup do papel combinado, unbinding e
+    /// similaridade com todos os valores.
+    ///
+    /// Custo: `O(F·D)` para a cleanup do papel + `O(F·D)` para os valores,
+    /// contra `O(F·D)` de entidade + relação separadas na versão completa.
+    pub fn query_match(
+        &self,
+        entity_cue: &[f32],
+        relation_cue: &[f32],
+        mask: &[bool],
+    ) -> Result<FhrrMatch> {
+        if self.is_empty() {
+            return Err(AetherError::Config(
+                "FHRR: consulta em memoria vazia".into(),
+            ));
+        }
+        self.check("entity_cue", entity_cue)?;
+        self.check("relation_cue", relation_cue)?;
+        if mask.len() != self.dim {
+            return Err(AetherError::shape([self.dim], [mask.len()]));
+        }
+
         let e_cue = Phasor::from_phases(entity_cue);
         let r_cue = Phasor::from_phases(relation_cue);
 
-        // Cleanup memory: entidade e relação mais próximas da pista parcial.
-        let mut best_e = 0usize;
-        let mut best_es = f32::NEG_INFINITY;
-        for (k, e) in self.entities.iter().enumerate() {
-            let s = e_cue.similarity_masked(e, mask);
-            if s > best_es {
-                best_es = s;
-                best_e = k;
-            }
+        // Papel da pista: e_cue ⊙ r_cue.
+        let mut rq_re = Vec::with_capacity(self.dim);
+        let mut rq_im = Vec::with_capacity(self.dim);
+        for j in 0..self.dim {
+            rq_re.push(e_cue.re[j] * r_cue.re[j] - e_cue.im[j] * r_cue.im[j]);
+            rq_im.push(e_cue.re[j] * r_cue.im[j] + e_cue.im[j] * r_cue.re[j]);
         }
-        let mut best_r = 0usize;
-        let mut best_rs = f32::NEG_INFINITY;
-        for (k, r) in self.relations.iter().enumerate() {
-            let s = r_cue.similarity_masked(r, mask);
-            if s > best_rs {
-                best_rs = s;
-                best_r = k;
+        let role_cue = Phasor {
+            re: rq_re,
+            im: rq_im,
+        };
+
+        // Cleanup memory: fato cujo papel combinado mais se aproxima.
+        let mut best_k = 0usize;
+        let mut best_s = f32::NEG_INFINITY;
+        for (k, role) in self.roles.iter().enumerate() {
+            let s = role_cue.similarity_masked(role, mask);
+            if s > best_s {
+                best_s = s;
+                best_k = k;
             }
         }
 
-        // z = M ⊙ conj(entidade_best ⊙ relação_best)  (unbinding FHRR).
-        let e = &self.entities[best_e];
-        let r = &self.relations[best_r];
+        // z = M ⊙ conj(papel_best)  (unbinding FHRR).
+        let role = &self.roles[best_k];
         let mut value_re = vec![0.0f32; self.dim];
         let mut value_im = vec![0.0f32; self.dim];
         for j in 0..self.dim {
-            let role_re = e.re[j] * r.re[j] - e.im[j] * r.im[j];
-            let role_im = e.re[j] * r.im[j] + e.im[j] * r.re[j];
-            // z = trace * conj(role)
-            value_re[j] = self.trace_re[j] * role_re + self.trace_im[j] * role_im;
-            value_im[j] = self.trace_im[j] * role_re - self.trace_re[j] * role_im;
+            value_re[j] = self.trace_re[j] * role.re[j] + self.trace_im[j] * role.im[j];
+            value_im[j] = self.trace_im[j] * role.re[j] - self.trace_re[j] * role.im[j];
         }
 
         // Similaridade com todos os valores (cleanup) + margem.
@@ -299,19 +378,20 @@ impl FhrrStore {
             sims[best_v]
         };
 
-        let value: Vec<f32> = (0..self.dim)
-            .map(|j| value_im[j].atan2(value_re[j]))
-            .collect();
+        let fe = self.fact_entity[best_k];
+        let fr = self.fact_relation[best_k];
+        let es = e_cue.similarity_masked(&self.entities[fe], mask);
+        let rs = r_cue.similarity_masked(&self.relations[fr], mask);
 
-        Ok(FhrrRecall {
-            value,
-            entity_index: best_e,
-            relation_index: best_r,
+        Ok(FhrrMatch {
+            fact_index: best_k,
+            entity_index: fe,
+            relation_index: fr,
             value_index: best_v,
             similarity: sims[best_v],
             margin,
-            entity_similarity: best_es,
-            relation_similarity: best_rs,
+            entity_similarity: es,
+            relation_similarity: rs,
             value_similarities: sims,
         })
     }
@@ -319,7 +399,7 @@ impl FhrrStore {
     /// Bytes ocupados pelos buffers (diagnóstico de pegada).
     pub fn memory_bytes(&self) -> usize {
         (self.trace_re.len() + self.trace_im.len()) * std::mem::size_of::<f32>()
-            + (self.entities.len() + self.relations.len() + self.values.len())
+            + (self.entities.len() + self.relations.len() + self.values.len() + self.roles.len())
                 * self.dim
                 * 2
                 * std::mem::size_of::<f32>()
