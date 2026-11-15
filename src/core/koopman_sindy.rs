@@ -418,7 +418,24 @@ pub struct SindyEquationDiscoverer {
     ws_theta: Vec<f64>,
     ws_dx: Vec<f64>,
     xi: [[f64; SINDY_TERMS]; 2],
+    /// Termos ativos por equação (para o avaliador especializado).
+    active_terms: [[u8; SINDY_TERMS]; 2],
+    active_len: [usize; 2],
 }
+
+/// Expoentes `(x1^a · x2^b)` de cada termo da biblioteca.
+const TERM_EXP: [(u8, u8); SINDY_TERMS] = [
+    (0, 0),
+    (1, 0),
+    (0, 1),
+    (2, 0),
+    (1, 1),
+    (0, 2),
+    (3, 0),
+    (2, 1),
+    (1, 2),
+    (0, 3),
+];
 
 /// Janela circular do SINDy streaming.
 pub const SINDY_WINDOW: usize = 128;
@@ -455,6 +472,8 @@ impl SindyEquationDiscoverer {
             ws_theta: vec![0.0; (SINDY_WINDOW - 4) * SINDY_TERMS],
             ws_dx: vec![0.0; SINDY_WINDOW - 4],
             xi: [[0.0; SINDY_TERMS]; 2],
+            active_terms: [[0u8; SINDY_TERMS]; 2],
+            active_len: [0usize; 2],
         }
     }
 
@@ -506,6 +525,45 @@ impl SindyEquationDiscoverer {
         d
     }
 
+    /// Recalcula a lista de termos ativos por equação.
+    fn rebuild_active(&mut self) {
+        for c in 0..2 {
+            let mut n = 0usize;
+            for t in 0..SINDY_TERMS {
+                if self.xi[c][t] != 0.0 {
+                    self.active_terms[c][n] = t as u8;
+                    n += 1;
+                }
+            }
+            self.active_len[c] = n;
+        }
+    }
+
+    /// Avaliador **especializado**: percorre apenas os termos ativos de cada
+    /// equação, com potências pré-computadas (sem a biblioteca completa).
+    ///
+    /// É o caminho recomendado antes de qualquer JIT: para 3–4 termos ativos
+    /// ele elimina 6–7 produtos e a soma dos zeros por avaliação.
+    pub fn rhs_active(&self, x: [f64; 2]) -> [f64; 2] {
+        let (x1, x2) = (x[0], x[1]);
+        let p1 = [1.0, x1, x1 * x1, x1 * x1 * x1];
+        let p2 = [1.0, x2, x2 * x2, x2 * x2 * x2];
+        let mut d = [0.0f64; 2];
+        for c in 0..2 {
+            let n = self.active_len[c];
+            if n == 0 {
+                d[c] = self.rhs(x)[c];
+                continue;
+            }
+            for k in 0..n {
+                let t = self.active_terms[c][k] as usize;
+                let (a, b) = TERM_EXP[t];
+                d[c] += self.xi[c][t] * p1[a as usize] * p2[b as usize];
+            }
+        }
+        d
+    }
+
     #[inline]
     fn sample(&self, t: usize, c: usize) -> f64 {
         let start = (self.head + SINDY_WINDOW - self.filled) % SINDY_WINDOW;
@@ -552,6 +610,7 @@ impl SindyEquationDiscoverer {
             }
             self.xi[c] = xi;
         }
+        self.rebuild_active();
         Ok((num / den.max(1e-30)).sqrt())
     }
 
@@ -600,6 +659,11 @@ impl SindyEquationDiscoverer {
 
         let c0 = self.stlsq(rows, &y0, threshold);
         let c1 = self.stlsq(rows, &y1, threshold);
+        for t in 0..SINDY_TERMS {
+            self.xi[0][t] = c0[t];
+            self.xi[1][t] = c1[t];
+        }
+        self.rebuild_active();
         Ok(vec![c0, c1])
     }
 

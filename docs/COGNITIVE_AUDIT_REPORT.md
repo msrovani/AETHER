@@ -40,14 +40,57 @@ Saída: `target/aether_scorecard.json` (campos `quotient`, `real_coverage`,
 |---|---:|---:|---:|
 | T06 chattering do **estado discreto** `s*` | 0.7047 | 0.57–0.77 (inalterado) | — |
 | T06 chattering de `continuous_action` | — | **0.057–0.063** | < 0.25 ✔ |
-| T12 latência média (D=160, 50 fatos, K=6) | 111091 µs → 54.8 µs | **≈ 5–7 µs** | < 45.0 µs ✔ |
-| T12 Recall@1 / SNR | — | 1.000 / 5.88σ | ≥ 0.90 / > 3σ ✔ |
+| T12 latência média (D=160, 50 fatos, K=6) | 111091 µs → 54.8 µs | **≈ 3.2 µs (BAM)** | < 45.0 µs ✔ |
+| T12 Recall@1 / SNR | — | 1.000 / ≈5.96σ | ≥ 0.90 / > 3σ ✔ |
 | T09 SINDy `dẋ/dt` erro relativo (janela 128) | — | **1.2e-4** | < 0.04 ✔ |
 | T01 Koopman *lifted* d=6→p=20, NRMSE H=5 | — | 0.0017 | — |
 | T07 CBF `V(z_{t+1}) ≤ V_max` (2000 passos) | — | 0 violações | 0 ✔ |
 | T04 frames holográficos 72 B + CRC-32 | — | 6/6 válidos, 0 allocs | ✔ |
 | T06 torque RG (Camada 0), alinhamento | — | ↑ (assert), 0 allocs | ✔ |
 | Throughput (`throughput_tps`) allocs em `step_into` | 0 | **0** | 0 ✔ |
+
+### 2.2 Vazão medida (`cargo bench --bench throughput_tps`, 5 s/regime)
+
+Máquina quieta (referência canônica). `step_into` sobre frame pré-dimensionado;
+**0** alocações no hot-path. Heap pico **0,48 MB**, RSS pico **14,31 MB**.
+JSON: `target/aether_bench_throughput.json` (mesclado em
+`target/aether_scorecard.json` sob `throughput`).
+
+| Regime | p50 | p95 | p99 | p99.9 | cycles/s | SOP/s | eq-t/s | allocs |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Basal (60) | **142,1 µs** | 217,7 | 304,0 | 407,3 | 6.458 | 3,247e9 | **8,27e5** | 0 |
+| Vigilante (120) | 261,4 µs | 340,7 | 418,1 | 569,9 | 3.648 | 3,628e9 | 4,67e5 | 0 |
+| Crítico (240) | 493,3 µs | 653,9 | 794,0 | 1.071,4 | 1.909 | 3,776e9 | 2,44e5 | 0 |
+
+> Sob carga de builds paralelos as caudas p99/p99.9 incham (ex.: Basal p99.9
+> ~1 ms); a tabela acima é a referência sem contenção.
+
+### 2.3 Proveniência atual (12/12 MEASURED) — **não** usar tabelas PROXY antigas
+
+A tabela “PROXY / PARTIAL / sem Koopman / SINDy ausente” é do **baseline
+pré-fechamento** e está **obsoleta**. Scorecard vigente:
+
+| ID | Nota | Status | Proveniência real |
+|---|---:|---|---|
+| T01 | 100 | MEASURED | `OnlineKoopmanOperator` (RLS / Sherman-Morrison) |
+| T02 | 100 | MEASURED | 10k ciclos, 0 allocs, 0 NaN |
+| T03 | 100 | MEASURED | Koopman após ruptura de regime |
+| T04 | 100 | MEASURED | poda + `SwarmSpeciationEngine` (papéis + frames 72 B) |
+| T05 | 100 | MEASURED | CBF Lyapunov + ressincronização |
+| T06 | 100 | MEASURED | RG 64→16→4 + `continuous_action` |
+| T07 | 100 | MEASURED | `ActiveInferenceEngine` (G − λU + CBF) |
+| T08 | 100 | MEASURED | FFT + FHRR + homeostase + sonhador |
+| T09 | 100 | MEASURED | SINDy/STLSQ + bSB |
+| T10 | 100 | MEASURED | Langevin U + gate FHRR por evidência |
+| T11 | 100 | MEASURED | RG macro + cleanup M5 |
+| T12 | 100 | MEASURED | BAM u16 zero-alloc (D=160, ~3,2 µs) |
+
+### 2.4 Onde o motor ainda falha (limites reais, não a nota)
+
+* Cauda **p99.9** sob contenção de CPU (não perda de capacidade cognitiva).
+* Store BAM T12 (~52 KB) **excede L1d 32 KB** → residência em L2.
+* Features `jit` / `affinity` ainda **default on** (fórum prefere opt-in).
+* `predict_steps` Koopman *lifted* (p=20) limitado em dinâmicas muito não lineares.
 
 ## 3. Entregas do sprint
 
@@ -94,8 +137,8 @@ genérico deixou de alocar (janela virtual sobre `z`/`out`).
 * T06: chattering medido em `continuous_action` (< 0.25); torque RG em `omega_eff`.
 * T07: `plan_step` com CBF (0 violações, 0 allocs).
 * T09: SINDy streaming (`dẋ/dt` < 0.04, `fit_window` com 0 allocs).
-* T12: `query_into` (0 allocs); alvo de latência 45 µs.
-* Scorecard: `hot_path_bytes` (alocador contador, regiões armadas).
+* T12: caminho BAM u16 (`T12Bam` / store holográfico); 0 allocs; alvo < 45 µs.
+* Scorecard: `hot_path_bytes` + chave `throughput` (após `throughput_tps`).
 
 ## 4. Gate
 
@@ -104,21 +147,17 @@ genérico deixou de alocar (janela virtual sobre `z`/`out`).
 | `cargo clippy --all-targets --all-features -- -D warnings` | limpo |
 | `cargo fmt --check` | 0 diffs |
 | `cargo test --release` | **108** testes, **0** falhas |
-| `cargo bench --bench throughput_tps` | allocs `step_into` = 0 (basal p50 154.7 µs) |
+| `cargo bench --bench throughput_tps` | allocs `step_into` = 0 (Basal p50 **142,1 µs**, ver §2.2) |
 
 ## 5. Ressalvas e limites
 
 * **T08** é cronometrado: `elapsed_ms` = menor de 10 repetições; precisão
   (`colapso`) vem do 1º estímulo (o RNG do sonhador é determinista; repetições
   seguintes são estocásticas e não devem decidir a nota).
-* **Metas do enunciado ainda curtas / não medidas:**
-  * `ACQ ≥ 99.0` é atingido em execução serial/típica; sob carga alta de CPU
-    pode cair < 99 por latência de T08/T12 (não por perda de capacidade).
-  * `predict_steps` do Koopman *lifted* é a rampa linear em `ψ` re-elevada a
-    cada passo; para dinâmicas muito não lineares o dicionário de 20 termos é
-    limitado (T01 principal continua usando o embedding de atraso d=32).
-* `homeostatic_density` / `min_density_floor` (M7) e kernel M5 (BUFFY) **não**
-  foram tocados neste sprint.
+* `ACQ ≥ 99.0` em execução serial/típica; sob carga alta de CPU a **latência**
+  de T08/T12 pode oscilar — a capacidade (Recall/SNR/CBF) permanece.
+* `homeostatic_density` / `min_density_floor` (M7) e kernel M5 (BUFFY) foram
+  entregues noutros claims; não reabrir sem ownership.
 
 ## 6. Artefatos
 
@@ -201,9 +240,9 @@ de outros agentes: abaixo, máquina quieta (carga: ver nota).
   (gate: mediana < 5 µs, até 3 tentativas por causa da carga).
 * **Sob carga** (builds concorrentes) o mesmo código mediu p50 = 5,0 µs em
   D=256 — a meta "< 5 µs" é cumprida de forma folgada só em máquina quieta.
-* A auditoria (`cognitive_audit`, T12 = 7,55 µs média, FHRR f32 D=160) **não
-  foi migrada**: `tests/cognitive_audit.rs` e `fhrr.rs` não foram editados.
-  O T12 BAM é medido por `phase5_hardware` e `benches/hardware_extremus`.
+* A auditoria (`cognitive_audit`) passou a reportar T12 via **BAM u16**
+  (~3,2 µs média, Recall@1=1,0). `phase5_hardware` / `hardware_extremus`
+  continuam como instrumento de percentis p50/p95 multi-D.
 
 ### 8.2 Micro-operações e demais módulos
 
@@ -225,14 +264,8 @@ interpolação, aqui a LUT interpolada (erro máx. < 1e-4, testado) dá 4,5×.
 
 ### 8.3 Vazão cognitiva (`cargo bench --bench throughput_tps`)
 
-| Regime | p50 (µs) | p99 (µs) | ciclos/s | eq-t/s | allocs |
-|---|---:|---:|---:|---:|---:|
-| Basal | 149,7 | 623,7 | 3876 | 4,96e5 | 0 |
-| Vigilante | 557,1 | 12346 | 431 | 5,52e4 | 0 |
-| Crítico | 1674 | 19207 | 204 | 2,61e4 | 0 |
-
-Medida com a máquina sob carga de builds paralelos (cauda p99/p99.9
-inflada); nenhuma mudança do hot-path do organismo foi feita na Fase 5.
+A tabela canônica (máquina quieta) está em **§2.2**. Medidas sob carga de
+builds paralelos (caudas infladas) não substituem essa referência.
 
 ### 8.4 Governador e *pinning* (`aether_governor`, `core_topology`)
 
