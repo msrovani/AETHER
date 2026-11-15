@@ -3,6 +3,17 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.76] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 3 arquivo(s) (.:1, src:2).
+- Gate: ok (4s).
+
+- `Cargo.lock`
+- `src/bin/aether_dashboard.rs`
+- `src/platform/`
+
 ## [0.0.75] - 2026-11-15
 
 ### Changed

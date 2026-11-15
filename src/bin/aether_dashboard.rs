@@ -537,7 +537,7 @@ mod aether_dashboard_win {
                             if meter_card(
                                 ui,
                                 "cycles/s",
-                                format!("{:.0}", r.cycles_per_s),
+                                fmt_compact(r.cycles_per_s),
                                 Color32::from_rgb(60, 120, 150),
                             ) {
                                 self.note_hover("cycles/s", throughput_tooltip("cycles"));
@@ -545,7 +545,7 @@ mod aether_dashboard_win {
                             if meter_card(
                                 ui,
                                 "eq-t/s",
-                                format!("{:.2e}", r.eq_t_per_s),
+                                fmt_compact(r.eq_t_per_s),
                                 Color32::from_rgb(70, 110, 160),
                             ) {
                                 self.note_hover("eq-t/s", throughput_tooltip("eq-t"));
@@ -553,7 +553,7 @@ mod aether_dashboard_win {
                             if meter_card(
                                 ui,
                                 "SOP/s",
-                                format!("{:.2e}", r.sop_per_s),
+                                fmt_compact(r.sop_per_s),
                                 Color32::from_rgb(70, 100, 140),
                             ) {
                                 self.note_hover("SOP/s", throughput_tooltip("sop"));
@@ -561,7 +561,7 @@ mod aether_dashboard_win {
                             if meter_card(
                                 ui,
                                 "TOP/s",
-                                format!("{:.3e}", r.tops()),
+                                fmt_compact(r.tops()),
                                 Color32::from_rgb(90, 90, 140),
                             ) {
                                 self.note_hover("TOP/s", throughput_tooltip("tops"));
@@ -681,6 +681,49 @@ mod aether_dashboard_win {
             "on"
         } else {
             "off"
+        }
+    }
+
+    /// Formata grandezas sem notação científica: `0.xxx`, `1.2k`, `3.18kk`, `1.05kkk`.
+    fn fmt_compact(n: f64) -> String {
+        if !n.is_finite() {
+            return "—".into();
+        }
+        let sign = if n.is_sign_negative() && n != 0.0 {
+            "-"
+        } else {
+            ""
+        };
+        let x = n.abs();
+        if x == 0.0 {
+            return format!("{sign}0");
+        }
+        let (scaled, suffix) = if x < 1.0 {
+            return format!("{sign}{}", trim_decimals(x, 3));
+        } else if x < 1_000.0 {
+            return format!("{sign}{}", trim_decimals(x, 1));
+        } else if x < 1_000_000.0 {
+            (x / 1_000.0, "k")
+        } else if x < 1_000_000_000.0 {
+            (x / 1_000_000.0, "kk")
+        } else if x < 1_000_000_000_000.0 {
+            (x / 1_000_000_000.0, "kkk")
+        } else {
+            (x / 1_000_000_000_000.0, "kkkk")
+        };
+        format!("{sign}{}{suffix}", trim_decimals(scaled, 2))
+    }
+
+    fn trim_decimals(n: f64, max_frac: usize) -> String {
+        let s = format!("{n:.max_frac$}");
+        if !s.contains('.') {
+            return s;
+        }
+        let trimmed = s.trim_end_matches('0').trim_end_matches('.');
+        if trimmed.is_empty() || trimmed == "-" {
+            "0".into()
+        } else {
+            trimmed.to_string()
         }
     }
 
