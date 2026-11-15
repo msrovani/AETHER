@@ -227,48 +227,23 @@ pub fn local_gap_with(j: &[f64], h: &[f64], n: usize, s: &[i8], g: &mut [f64]) -
 /// satisfaz `‖s‖² = N`, segue
 /// `H(s) = −½ sᵀJs − hᵀs ≥ −½·λ_max·N − ‖h‖₁`.
 ///
-/// `λ_max` é aproximado por iteração de potência (determinística, `iters`
-/// passos). O limite é **válido mesmo truncado** (a estimativa nunca ultrapassa
-/// o autovalor real se partirmos de um vetor não ortogonal — ver nota abaixo),
-/// então `E − LB ≥ 0` é um *optimality gap* verificável, não uma heurística.
-///
-/// Nota: a iteração de potência **subestima** `λ_max`; usamos o quociente de
-/// Rayleigh do vetor corrente, que também é ≤ `λ_max`. Logo `LB` é sempre
-/// ≤ `H*` e `gap = E − LB` nunca é negativo por erro do bound.
-pub fn spectral_lower_bound(j: &[f64], h: &[f64], n: usize, iters: usize) -> f64 {
+/// `λ_max` é limitado **por cima** com Gershgorin sobre `|J|`:
+/// `λ_max(J) ≤ ρ(|J|) ≤ max_i Σ_j |J_ij|`. É um limite válido (nunca abaixo do
+/// real), portanto `E − LB ≥ 0` é um *optimality gap* verificável — ainda que
+/// frouxo para vidros de spin, e é justamente por isso que ele **não** prediz
+/// acerto (ver `examples/e3b_certificate.rs`).
+pub fn spectral_lower_bound(j: &[f64], h: &[f64], n: usize) -> f64 {
     if n == 0 {
         return 0.0;
     }
-    let inv = 1.0 / (n as f64).sqrt();
-    let mut v = vec![inv; n];
-    let mut w = vec![0.0f64; n];
-    for _ in 0..iters.max(1) {
-        for i in 0..n {
-            let row = &j[i * n..(i + 1) * n];
-            let mut acc = 0.0;
-            for (jv, xv) in row.iter().zip(v.iter()) {
-                acc += *jv * *xv;
-            }
-            w[i] = acc;
-        }
-        let norm = w.iter().map(|x| x * x).sum::<f64>().sqrt();
-        if norm < 1e-12 {
-            break;
-        }
-        for i in 0..n {
-            v[i] = w[i] / norm;
-        }
-    }
-    // Quociente de Rayleigh (≤ λ_max).
-    let mut num = 0.0;
+    let mut row_max = 0.0f64;
     for i in 0..n {
         let row = &j[i * n..(i + 1) * n];
-        let mut acc = 0.0;
-        for (jv, xv) in row.iter().zip(v.iter()) {
-            acc += *jv * *xv;
+        let s: f64 = row.iter().map(|x| x.abs()).sum();
+        if s > row_max {
+            row_max = s;
         }
-        num += v[i] * acc;
     }
     let h1: f64 = h.iter().map(|x| x.abs()).sum();
-    -0.5 * num * n as f64 - h1
+    -0.5 * row_max * n as f64 - h1
 }

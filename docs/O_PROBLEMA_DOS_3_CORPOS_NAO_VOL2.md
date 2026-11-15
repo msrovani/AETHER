@@ -439,6 +439,48 @@ resposta ao usuário   → só sai depois do gate                    [latência 
 | Falsos "confiáveis" (responde com ΔE alto e erra) | < 5% |
 | Verificação | ≤ 20 ms, CPU, 0 alloc |
 
+### 4.6 E3b — o veredito: `ΔE` **não** prediz acerto (e o que prediz)
+
+**Executado em 2026-11-15.** `examples/e3b_certificate.rs`, ground truth exato por
+força bruta (`n=14`, 400 instâncias de vidro de spin, 4 restarts, steps=8).
+
+| Sinal | AUC | precisão@50% | confiante-e-errado@50% |
+|---|---:|---:|---:|
+| gap local `min ΔH_i` | 0,547 | 90,0% | 10,0% |
+| consenso entre restarts | 0,526 | 89,9% | 10,1% |
+| gap entre restarts | 0,501 | 90,0% | 10,0% |
+| **gap até o bound espectral** | **0,058** | 81,3% | **18,7%** |
+| confiança combinada | 0,462 | 88,1% | 11,9% |
+
+Base do solver: **90,0%**. **Nenhum sinal adiciona 1 ponto percentual.** O gap até
+o bound é **anti-preditivo** (AUC 0,058): o limite de Gershgorin é rigoroso mas
+frouxo, e instâncias onde ele aperta são justamente as fáceis.
+
+**Por que falha:** em otimização **não restrita**, *todo* mínimo local é coerente —
+`gap > 0` e `violations = 0` — e um vidro de spin tem exponencialmente muitos.
+**Coerência não é otimalidade.**
+
+**O contraste que salva o conceito** (mesma sessão, `--max2sat`): quando a
+verificação é **exata** (restrições contáveis), o certificado é exato:
+
+| Métrica | Valor |
+|---|---:|
+| satisfatíveis (força bruta) | 397/400 |
+| decisivas (0 violações) | 383 (95,8%) |
+| **precisão das decisivas** | **100,0%** |
+| satisfatíveis resolvidas | 96,5% |
+| não-satisfatíveis | sempre abstém |
+
+> **Conclusão do P0 (R3):** o certificado de coerência **não** é um detector de
+> acerto — é um **verificador de factibilidade**. Ele tem dentes onde existe
+> restrição contável (lógica, E2b) e é inútil onde só existe paisagem de energia
+> (otimização pura). A tese do Vol. I sobrevive **com esta correção**: o "certificado
+> de energia" deve ser lido como *prova de consistência*, nunca como *prova de
+> verdade ou de ótimo*.
+
+Isso reordena E2b: **roof dual e restrições não são um acelerador de Ising — são a
+condição de existência do certificado.**
+
 ---
 
 ## 5. Risco 4 — Open-endedness precisa de corpo

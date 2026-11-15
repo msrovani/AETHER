@@ -43,8 +43,8 @@ impl Default for Args {
         Self {
             instances: 400,
             n: 14,
-            restarts: 8,
-            steps: 20,
+            restarts: 4, // ≥2 para o consenso ter variância; ≥4 para estabilizar
+            steps: 8,    // curto o suficiente para induzir ~10% de falhas
             seed: 0xE3B_0001,
             max2sat: false,
         }
@@ -223,6 +223,9 @@ struct Row {
     correct: bool,
 }
 
+type SignalFn = fn(&Row) -> f64;
+type SignalResult = (&'static str, f64, AtCoverage, AtCoverage);
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = parse_args();
     if args.max2sat {
@@ -243,7 +246,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for inst in 0..args.instances {
         let j = make_instance(n, args.seed.wrapping_add(inst as u64));
         let e_star = brute_force(&j, &h, n);
-        let lb = spectral_lower_bound(&j, &h, n, 64);
+        let lb = spectral_lower_bound(&j, &h, n);
 
         for (i, chunk) in j.chunks(n).enumerate() {
             for (k, &v) in chunk.iter().enumerate() {
@@ -272,7 +275,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        let hits = energies.iter().filter(|e| (*e - e_best).abs() < 1e-9).count() as f64;
+        let hits = energies
+            .iter()
+            .filter(|e| (*e - e_best).abs() < 1e-9)
+            .count() as f64;
         let consensus = hits / args.restarts as f64;
         energies.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let restart_gap = if energies.len() > 1 {
@@ -310,7 +316,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let n_correct = rows.iter().filter(|r| r.correct).count();
     let base = n_correct as f64 / rows.len() as f64;
 
-    let signals: [(&str, fn(&Row) -> f64); 5] = [
+    let signals: [(&str, SignalFn); 5] = [
         ("gap local", |r| r.local_gap),
         ("consenso", |r| r.consensus),
         ("gap restarts", |r| r.restart_gap),
@@ -338,7 +344,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!("{}", "-".repeat(72));
 
-    let mut results: Vec<(&str, f64, AtCoverage, AtCoverage)> = Vec::new();
+    let mut results: Vec<SignalResult> = Vec::new();
     for (name, pick) in signals {
         let (tr, te) = split_signal(&rows, pick);
         let a = auc(&te);
@@ -356,14 +362,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         results.push((name, a, m25, m50));
     }
     println!("{}", "-".repeat(72));
-    println!("(precisão de base = {:.1}%; ganho = precisão@50% − base)", 100.0 * base);
+    println!(
+        "(precisão de base = {:.1}%; ganho = precisão@50% − base)",
+        100.0 * base
+    );
     println!();
 
     let best = results
         .iter()
         .filter(|(_, a, _, _)| a.is_finite())
         .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-    let (bname, bauc, _, b50) = best.copied().unwrap_or(("n/a", f64::NAN, results[0].2, results[0].3));
+    let (bname, bauc, _, b50) =
+        best.copied()
+            .unwrap_or(("n/a", f64::NAN, results[0].2, results[0].3));
     let gain = b50.precision - base;
 
     println!("melhor sinal: {bname} (AUC {bauc:.3})");
@@ -385,11 +396,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // --- demonstração da matriz 2D (Vol. III §6) ---
-    let sample = Certificate::new(rows[0].energy, rows[0].bound_gap, 0, rows[0].consensus, Provenance::Inferred);
-    let gap_min = threshold_at_coverage(
-        &split_signal(&rows, |r| r.bound_gap).0,
-        0.50,
+    let sample = Certificate::new(
+        rows[0].energy,
+        rows[0].bound_gap,
+        0,
+        rows[0].consensus,
+        Provenance::Inferred,
     );
+    let gap_min = threshold_at_coverage(&split_signal(&rows, |r| r.bound_gap).0, 0.50);
     println!("matriz 2D (1ª instância; gap=bound_gap, proveniência=inferred)");
     println!(
         "  gap={:.3} consenso={:.2} confiança={:.2} e*={:.3}",
@@ -593,12 +607,27 @@ fn run_max2sat(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
         "instâncias={} n={} m={} restarts={} steps={}",
         args.instances, n, m, args.restarts, args.steps
     );
-    println!("satisfatíveis (força bruta)      : {satisfiable}/{}", args.instances);
-    println!("decisivas (0 violações)          : {decisive}/{:.1}% do total", 100.0 * coverage);
-    println!("precisão das decisivas           : {:.1}%", 100.0 * precision);
-    println!("satisfatíveis resolvidas         : {:.1}%", 100.0 * solved_sat);
+    println!(
+        "satisfatíveis (força bruta)      : {satisfiable}/{}",
+        args.instances
+    );
+    println!(
+        "decisivas (0 violações)          : {decisive}/{:.1}% do total",
+        100.0 * coverage
+    );
+    println!(
+        "precisão das decisivas           : {:.1}%",
+        100.0 * precision
+    );
+    println!(
+        "satisfatíveis resolvidas         : {:.1}%",
+        100.0 * solved_sat
+    );
     println!();
-    println!("  G1 precisão = 100% (verificação exata) : {}", pass(precision >= 0.999));
+    println!(
+        "  G1 precisão = 100% (verificação exata) : {}",
+        pass(precision >= 0.999)
+    );
     println!("  G2 abstenção em não-satisfatível       : {}", pass(true));
     println!();
 

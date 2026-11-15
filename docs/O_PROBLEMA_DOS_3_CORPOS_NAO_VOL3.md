@@ -384,7 +384,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | **E2** | I | lógica como Ising + certificado | 3-SAT n≤20 = força bruta | R1 |
 | **E2b** | II | roof dual + presolve antes do BSB | ≥40% redução; ≥90% dos casos que o BSB erra | R1 |
 | **E3** | I | transplantação de embeddings | analogia medida, sem alvo de marketing | R3 |
-| **E3b** | II/III | proveniência + verificador de coerência | ≥95% precisão; <5% falsos | R3, R10 |
+| **E3b** ✅ | II/III | verificador de coerência + proveniência | **spins: nulo (AUC 0,46–0,55)** · **2-SAT: precisão 100%** | R3, R10 |
 | **E4** | I | self-field + ablação | ECE melhora; T01 não regride | K5 |
 | **E5** | I | currículo por progresso | readaptação < 150 ciclos (T03) | R5 |
 | **E7** | II | laço S0 com 4 atuadores | H3: entropia cai ≥30% sem atuador | R4 |
@@ -449,7 +449,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 |---|---|---|---|---|---|
 | R1 | Ising não é oráculo | mitigável: roof dual 5.800×, presolve 6–18×, sparse O(N²)→O(N) | **implementar o pipeline de 4 estágios** e medir em 3-SAT real | E2b | **P1** |
 | R2 | Interferência VSA | capacidade ∝ D²; inimigo é ciclo-limite; ruído na init +50× | **medir capacidade real em D=160** e a taxa de ciclo-limite | E1b | **P1** |
-| R3 | Geometria ≠ verdade | JL é sólido; 78% de analogia é [C]; verificação de **coerência** custa 14 ms | **decidir o que é certificável** e calibrar o selo | E3b | **P0** |
+| R3 | Geometria ≠ verdade | JL é sólido; 78% de analogia é [C]; **E3b: ΔE não prediz em otimização livre; 100% de precisão com restrições exatas** | **usar o certificado só como verificação de factibilidade** (E2b) | E2b | **P0** |
 | R4 | Corpo | laço fechado basta; AIF real 75% vs 8,33% | **construir S0 com atuador de consequência** e rodar H1–H3 | E7 | P2 |
 | R5 | Custo de treino | evitável: congelar física (reservoir); DEER rende 25% em n=64 | **confirmar que congelar não custa acurácia** | E8 | P3 |
 | R6 | Preprints | triangulação com selos [A]/[B]/[C] | **disciplina contínua**, não experimento | protocolo | P3 |
@@ -490,9 +490,9 @@ Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 ```
 1º ✅ E6   perfil                     ← FEITO: solver = 84,8% do ciclo
 2º ✅ E6b  kernel do solver            ← FEITO: 7,44 → 17,10 GFLOP/s (2,30×)
-3º  E3b  certificado + proveniência  ← único risco que pode matar a tese (P0)
-4º  E1b  capacidade/ciclo-limite     ← decide se VSA é viável em D=160
-5º  E2b  roof dual + presolve        ← decide se lógica é viável em CPU
+3º ✅ E3b  certificado + proveniência  ← FEITO: verifica factibilidade, não acerto
+4º  E2b  roof dual + presolve        ← agora é a **condição de existência** do certificado
+5º  E1b  capacidade/ciclo-limite     ← decide se VSA é viável em D=160
 6º  F1   ponte read-only             ← fecha K6 sem risco de drift
 7º  E1/E2/E3  os três "NÃO"          ← o programa científico
 8º  E4/E5/E7/E8  self, currículo, corpo, treino
@@ -502,7 +502,7 @@ Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 ### 12.5 O que ainda **não** sabemos (e deveria estar num post-it)
 
 1. ~~**Onde vão os 146 µs.** (E6)~~ → **respondido: 84,8% no solver.** ∎
-2. **Se ΔE prevê acerto.** Se não prever, o certificado de coerência não vale nada. (E3b)
+2. ~~**Se ΔE prevê acerto.**~~ → **respondido: não em otimização livre (AUC 0,46–0,55); sim com restrições exatas (precisão 100%).** ∎
 3. **Quantos padrões cabem em D=160** antes de interferir. (E1b)
 4. **Se roof dual reduz o suficiente** em CNF de circuito (não em 3-SAT aleatório). (E2b)
 5. **Se o self-field melhora calibração** ou só replica a surpresa. (E4)

@@ -3,6 +3,20 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.88] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 6 arquivo(s) (.:1, docs:2, examples:1, src:1, tests:1).
+- Gate: ok (3s).
+
+- `CHANGELOG.md`
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL2.md`
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md`
+- `examples/e3b_certificate.rs`
+- `src/core/certificate.rs`
+- `tests/e3b_certificate.rs`
+
 ## [0.0.87] - 2026-11-15
 
 ### Changed
@@ -13,6 +27,45 @@ Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto
 - `src/core/mod.rs`
 - `examples/e3b_certificate.rs`
 - `src/core/certificate.rs`
+
+## [0.0.87] - 2026-11-15
+
+### Added
+
+- `core::certificate` — **certificado de coerência** (energia, gap local,
+  violações, consenso, proveniência) e a matriz 2D de decisão
+  (`Act`/`Cite`/`Propose`/`Abstain`, autoridade × gap). Inclui
+  `spectral_lower_bound` (Gershgorin rigoroso) e `local_gap[_with]`.
+- `examples/e3b_certificate.rs` — calibração do certificado com ground truth
+  exato por força bruta, em dois braços: vidro de spin (MAX-CUT) e MAX-2-SAT.
+- `tests/e3b_certificate.rs` — gates matemáticos (energia, gap, bound, matriz 2D)
+  e empírico (precisão 100% com verificação exata).
+
+### Measured
+
+**Braço 1 — otimização livre (n=14, 400 instâncias, 4 restarts, steps=8):**
+
+| Sinal | AUC | precisão@50% |
+|---|---:|---:|
+| gap local | 0,547 | 90,0% |
+| consenso entre restarts | 0,526 | 89,9% |
+| gap entre restarts | 0,501 | 90,0% |
+| gap até o bound espectral | 0,058 | 81,3% |
+| confiança combinada | 0,462 | 88,1% |
+
+Base do solver = 90,0%. **Nenhum sinal adiciona 1 pp.** O gap até o bound é
+anti-preditivo.
+
+**Braço 2 — MAX-2-SAT (verificação exata):** 397/400 satisfatíveis, 383 decisivas
+(95,8%), **precisão 100,0%**, 96,5% dos satisfatíveis resolvidos, abstenção
+correta nos insatisfatíveis.
+
+### Changed
+
+- **Resultado do P0/R3:** o certificado não mede acerto — mede **factibilidade**.
+  Em otimização não restrita todo mínimo local é "coerente"; em lógica, zero
+  violações é prova. Reordena E2b como *condição de existência* do certificado.
+- Vol. II §4.6 e Vol. III (§11, §12) atualizados com o veredito.
 
 ## [0.0.86] - 2026-11-15
 

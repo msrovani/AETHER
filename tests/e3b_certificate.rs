@@ -31,16 +31,19 @@ fn ferromagnet_energy_and_gap_are_exact() {
     let gap = local_gap_with(&j, &h, 2, &s, &mut g);
     assert!((gap - 2.0).abs() < 1e-12);
 
-    // O estado antiferrromagnético (-1,+1) também é mínimo local (gap 2).
+    // (-1,+1) NÃO é mínimo local: virar s_0 leva a (1,1) com H = -1 < 1.
+    // O gap é negativo (-2) e o atestado deve ser rejeitado.
     let s2 = [-1i8, 1];
     assert!((energy(&j, &h, 2, &s2) - 1.0).abs() < 1e-12);
-    assert!((local_gap(&j, &h, 2, &s2) - 2.0).abs() < 1e-12);
+    assert!((local_gap(&j, &h, 2, &s2) - (-2.0)).abs() < 1e-12);
+    let bad = Certificate::new(1.0, local_gap(&j, &h, 2, &s2), 0, 1.0, Provenance::Inferred);
+    assert!(!bad.is_coherent(), "gap negativo não pode ser coerente");
 }
 
 #[test]
 fn spectral_bound_never_exceeds_ground_state() {
     let n = 6usize;
-    let mut rng = ChaCha8Rng::seed_from_u64(0xE3B_B0UND);
+    let mut rng = ChaCha8Rng::seed_from_u64(0xE3B_B00D);
     let mut j = vec![0.0f64; n * n];
     for i in 0..n {
         for k in (i + 1)..n {
@@ -61,7 +64,7 @@ fn spectral_bound_never_exceeds_ground_state() {
         best = best.min(energy(&j, &h, n, &s));
     }
 
-    let lb = spectral_lower_bound(&j, &h, n, 64);
+    let lb = spectral_lower_bound(&j, &h, n);
     assert!(
         lb <= best + 1e-9,
         "limite espectral {lb} > ground state {best}"
@@ -190,7 +193,8 @@ fn exact_verification_gives_100_percent_precision() {
         let mut best_s = vec![0i8; n];
         for r in 0..restarts {
             solver.reset(0xE3B_0001 ^ (inst as u64).wrapping_mul(31).wrapping_add(r as u64));
-            solver.relax_into(IsingLandscape::new(jview.view(), h2.view()), &mut out)
+            solver
+                .relax_into(IsingLandscape::new(jview.view(), h2.view()), &mut out)
                 .expect("relax");
             let mut cur = vec![0i8; n];
             for (i, ci) in cur.iter_mut().enumerate() {
