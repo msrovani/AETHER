@@ -10,6 +10,7 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 * **docs/HW_TARGET.md** — hardware alvo (PC/note/servidor, CPU multithread + GPU AMD/Intel/NVIDIA).
 * **docs/HARDENING_REPORT.md** - auditoria, correcoes e medicoes finais (2026-11-15).
 * **docs/USER_DELIVERY_PLAN.md** — mapa do entregável ao usuário + plano de ondas (demo → Produto C → A/B).
+* **docs/O_PROBLEMA_DOS_3_CORPOS_NAO.md** (+ `_VOL2`, `_VOL3`) — dossiê dos três "NÃO" (linguagem, lógica, self): tese, preço em hardware e gestão do conhecimento. Registro mestre no Vol. III §11.
 
 ## Pilares
 
