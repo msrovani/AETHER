@@ -1,4 +1,4 @@
-﻿# CYCLE_LOG - historico do ciclo automatico
+# CYCLE_LOG - historico do ciclo automatico
 
 | UTC | versao | arquivos | areas | gate | PRs | push |
 |---|---|---|---|---|---|---|
@@ -51,3 +51,4 @@
 | 2026-11-15T03:21:06Z | 0.0.33 | 2 | .:1, tests:1 | ok (3s) | - | sim |
 | 2026-11-15T03:26:15Z | 0.0.34 | 2 | .:1, src:1 | ok (8s) | - | sim |
 | 2026-11-15T03:39:33Z | wip | 3 | .:2, docs:1 | ok (129s) | - | sim |
+| 2026-11-15T03:45:00Z | 0.0.35 | 3 | .:1, docs:2 | manual release | - | sim |

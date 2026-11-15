@@ -1,7 +1,14 @@
-﻿# Changelog
+# Changelog
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
+
+## [0.0.35] - 2026-11-15
+
+### Changed
+
+- Release de hardening: M5 com projecao complexa (p0/p1/p2 < 1e-3 rad), M2 L2048 = 35,7 us, organismo com sensor_noise=0.35 (entropia -0,05), M8 22 -> 0 alocacoes/ciclo e 0 drops idle, M3 com dedup de peers e rx_bytes overflow-safe.
+- Relatorio detalhado: docs/HARDENING_REPORT.md; medicoes em ARCHITECTURE_PHASE2.md secao 6.
 
 ## [0.0.34] - 2026-11-15
 
