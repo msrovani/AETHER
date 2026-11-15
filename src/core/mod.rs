@@ -41,6 +41,7 @@ pub mod sindy_jit;
 #[cfg(feature = "m1")]
 pub mod aether_governor;
 
+#[cfg(feature = "m1")]
 pub mod affinity;
 #[cfg(feature = "m5")]
 pub mod fhrr_bam;

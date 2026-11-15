@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use aether_engine::core::affinity::{core_ids, pin_reflex_core, pin_to_core, report_only};
+use aether_engine::core::affinity::{core_ids, core_plan, pin_reflex_core, pin_to_core};
 use aether_engine::core::fhrr::FhrrStore;
 use aether_engine::core::fhrr_bam::{T12Bam, T12_D, T12_FACTS, T12_TRACES};
 use aether_engine::simulation::closed_loop_organism::{
@@ -46,9 +46,15 @@ struct Query {
 fn make_facts(n: usize, rng: &mut ChaCha8Rng) -> Vec<Fact> {
     (0..n)
         .map(|_| Fact {
-            e: (0..T12_D).map(|_| rng.gen::<f32>() * std::f32::consts::TAU).collect(),
-            r: (0..T12_D).map(|_| rng.gen::<f32>() * std::f32::consts::TAU).collect(),
-            v: (0..T12_D).map(|_| rng.gen::<f32>() * std::f32::consts::TAU).collect(),
+            e: (0..T12_D)
+                .map(|_| rng.gen::<f32>() * std::f32::consts::TAU)
+                .collect(),
+            r: (0..T12_D)
+                .map(|_| rng.gen::<f32>() * std::f32::consts::TAU)
+                .collect(),
+            v: (0..T12_D)
+                .map(|_| rng.gen::<f32>() * std::f32::consts::TAU)
+                .collect(),
         })
         .collect()
 }
@@ -136,7 +142,11 @@ fn f32_eval(store: &FhrrStore, queries: &[Query]) -> (f64, f64, f64) {
             3,
         );
     }
-    (hits as f64 / queries.len() as f64, snr / queries.len() as f64, lat / queries.len() as f64)
+    (
+        hits as f64 / queries.len() as f64,
+        snr / queries.len() as f64,
+        lat / queries.len() as f64,
+    )
 }
 
 fn bam_eval(bam: &mut T12Bam, queries: &[Query]) -> (f64, f64, f64) {
@@ -156,7 +166,11 @@ fn bam_eval(bam: &mut T12Bam, queries: &[Query]) -> (f64, f64, f64) {
             3,
         );
     }
-    (hits as f64 / queries.len() as f64, snr / queries.len() as f64, lat / queries.len() as f64)
+    (
+        hits as f64 / queries.len() as f64,
+        snr / queries.len() as f64,
+        lat / queries.len() as f64,
+    )
 }
 
 fn t12_comparison() {
@@ -208,6 +222,7 @@ fn t12_comparison() {
     println!("speedup BAM/f32 na consulta completa = {speedup:.2}x");
 
     breakdown(&facts, &queries);
+    (f32_store.memory_bytes(), bam.memory_bytes())
 }
 
 fn breakdown(facts: &[Fact], queries: &[Query]) {
@@ -313,7 +328,10 @@ fn breakdown(facts: &[Fact], queries: &[Query]) {
     println!("cleanup do papel (P x visiveis): {role:8.3} us");
     println!("unbind (K x D):                 {unbind:8.3} us");
     println!("cleanup de valores (P x D):     {val:8.3} us");
-    println!("soma dos estagios:              {:8.3} us", cue + role + unbind + val);
+    println!(
+        "soma dos estagios:              {:8.3} us",
+        cue + role + unbind + val
+    );
 }
 
 fn pct(sorted: &[u64], q: f64) -> f64 {
@@ -349,33 +367,63 @@ fn measure_organism(seconds: f64, pin: Option<usize>) -> Vec<u64> {
     lat
 }
 
-fn affinity_section() {
-    let ids = core_ids();
-    if ids.is_empty() {
-        println!("\n=== Afinidade indisponivel (feature affinity desligada) ===");
-        return;
-    }
-    let core = report_only(0).core.unwrap_or(ids[0]);
-    let load_ids: Vec<usize> = ids.iter().copied().filter(|id| *id != core).take(4).collect();
-    let stop = Arc::new(AtomicBool::new(false));
-    let mut load = Vec::new();
-    for id in &load_ids {
+fn start_load(
+    ids: &[usize],
+    exclude: &[usize],
+    stop: &Arc<AtomicBool>,
+) -> (Vec<thread::JoinHandle<()>>, Vec<usize>) {
+    let mut handles = Vec::new();
+    let mut used = Vec::new();
+    for id in ids {
+        if exclude.contains(id) {
+            continue;
+        }
         let stop = stop.clone();
         let id = *id;
-        load.push(thread::spawn(move || {
+        used.push(id);
+        handles.push(thread::spawn(move || {
             let _ = pin_to_core(id);
             while !stop.load(Ordering::Relaxed) {
                 black_box((0u64..4096).sum::<u64>());
             }
         }));
     }
+    (handles, used)
+}
 
-    let baseline = thread::spawn(move || measure_organism(3.0, None));
-    let base = baseline.join().expect("baseline");
-    let pinned_thread = thread::spawn(move || measure_organism(3.0, Some(core)));
-    let pinned = pinned_thread.join().expect("pinned");
+fn affinity_section(active_bytes: usize) {
+    let ids = core_ids();
+    if ids.is_empty() {
+        println!("\n=== Afinidade indisponivel (feature affinity desligada) ===");
+        return;
+    }
+    let plan = core_plan();
+    // Núcleo físico dedicado: prefere o último id físico (evita o core 0,
+    // que no Windows concentra DPC/interrupções).
+    let reflex = ids
+        .get(plan.physical.saturating_sub(1))
+        .copied()
+        .unwrap_or(ids[0]);
+
+    // Baseline: carga em TODOS os núcleos (inclusive o reflexivo), thread solta.
+    let stop = Arc::new(AtomicBool::new(false));
+    let (load_all, used_all) = start_load(&ids, &[], &stop);
+    let base = thread::spawn(move || measure_organism(2.5, None))
+        .join()
+        .expect("baseline");
     stop.store(true, Ordering::Relaxed);
-    for h in load {
+    for h in load_all {
+        let _ = h.join();
+    }
+
+    // Fixado: o núcleo reflexivo fica dedicado; a carga vai para os demais.
+    let stop = Arc::new(AtomicBool::new(false));
+    let (load_ded, used_ded) = start_load(&ids, &[reflex], &stop);
+    let pinned = thread::spawn(move || measure_organism(2.5, Some(reflex)))
+        .join()
+        .expect("pinned");
+    stop.store(true, Ordering::Relaxed);
+    for h in load_ded {
         let _ = h.join();
     }
 
@@ -383,7 +431,11 @@ fn affinity_section() {
     let mut p = pinned;
     b.sort_unstable();
     p.sort_unstable();
-    println!("\n=== Basal: afinidade (core {core}, carga em {load_ids:?}) ===");
+    println!(
+        "\n=== Basal: afinidade (reflex core {reflex}, carga solta {} nos {} nucleos) ===",
+        used_all.len(),
+        ids.len()
+    );
     println!(
         "{:<10} {:>10} {:>10} {:>10} {:>8}",
         "MODO", "p50 us", "p99 us", "p99.9 us", "n"
@@ -405,13 +457,19 @@ fn affinity_section() {
         p.len()
     );
     let imp = 100.0 * (1.0 - pct(&p, 0.999) / pct(&b, 0.999).max(1e-9));
-    println!("reducao p99.9 = {imp:.1}%");
-
-    let rep = pin_reflex_core(0);
     println!(
-        "L1d: {} bytes, cabe={}, logical={}, physical={}, siblings={:?}",
+        "reducao p99.9 = {imp:.1}% (carga dedicada em {} nucleos, reflex isolado)",
+        used_ded.len()
+    );
+
+    let rep = pin_reflex_core(active_bytes);
+    println!(
+        "L1d: {} bytes de estado ativo, cabe={} (32 KB), logical={}, physical={}, siblings={:?}",
         rep.l1d_bytes, rep.l1d_fits, rep.logical, rep.physical, rep.reserved_siblings
     );
+    if !rep.l1d_fits {
+        println!("(o store T12 D=160/K=6 excede L1d; fica em L2 — tradeoff reportado)");
+    }
 }
 
 fn roofline() {
@@ -437,7 +495,7 @@ fn roofline() {
 
 fn main() {
     println!("AETHER — Fase 0/1 hardware probe");
-    t12_comparison();
-    affinity_section();
+    let (_f32_mem, bam_mem) = t12_comparison();
+    affinity_section(bam_mem);
     roofline();
 }

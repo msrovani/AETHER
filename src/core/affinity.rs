@@ -8,7 +8,7 @@
 //! `aether_governor` e nenhum `unsafe` aparece neste arquivo. Sem a feature
 //! `affinity`, as funções viram no-op e o relatório diz `pinned=false`.
 
-use crate::core::aether_governor::{pin_current_thread, CorePlan};
+use crate::core::core_topology::{pin_current_thread, CorePlan};
 
 /// Capacidade nominal de L1d por núcleo físico (Intel Core 7 240H).
 pub const L1D_BYTES: usize = 32 * 1024;

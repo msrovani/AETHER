@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "aether_engine"
 version = "0.0.61"
 edition = "2021"
@@ -126,6 +126,11 @@ name = "t12_probe"
 harness = false
 required-features = ["m5"]
 
+[[bench]]
+name = "bam_phase_review"
+harness = false
+required-features = ["m1"]
+
 [profile.release]
 opt-level = 3
 lto = "fat"
@@ -137,3 +142,9 @@ debug = 1
 [profile.bench]
 inherits = "release"
 debug = 1
+
+[[bench]]
+name = "hardware_extremus"
+harness = false
+required-features = ["m1", "m5"]
+

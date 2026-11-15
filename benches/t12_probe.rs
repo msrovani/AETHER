@@ -86,7 +86,8 @@ fn run(d: usize, k: usize, label: &str) {
     let hidden = d * 40 / 100;
 
     // Corpos de prova preparados antes da medicao.
-    let mut cues: Vec<(usize, Vec<f32>, Vec<f32>, Vec<bool>)> = Vec::with_capacity(QUERIES);
+    type Cue = (usize, Vec<f32>, Vec<f32>, Vec<bool>);
+    let mut cues: Vec<Cue> = Vec::with_capacity(QUERIES);
     for _ in 0..QUERIES {
         let truth = (rng.next_u64() as usize) % FACTS;
         let mask = rng.mask(d, hidden);

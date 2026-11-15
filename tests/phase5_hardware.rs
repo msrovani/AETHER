@@ -239,17 +239,20 @@ fn run_fhrr_f32<const D: usize>() -> (f64, f64) {
 fn t12_bam_d256_abaixo_de_5us_sem_alocar() {
     let r = run_bam::<256>(false);
     println!(
-        "[T12-BAM D=256] Recall@1={:.3} SNR={:.2}sigma latencia={:.3} us allocs={}",
-        r.recall, r.snr, r.latency_us, r.allocs
+        "[T12-BAM D=256 K=6 50 fatos 40% visivel +-0.25rad n={}] Recall@1={:.3} SNR={:.2}sigma melhor-de-{REPS}={:.3} us p50={:.3} us p95={:.3} us allocs={}",
+        QUERIES * REPS,
+        r.recall,
+        r.snr,
+        r.latency_us,
+        r.p50_us,
+        r.p95_us,
+        r.allocs
     );
     assert!(r.recall >= 0.90, "recall {}", r.recall);
     assert!(r.snr > 3.0, "snr {}", r.snr);
     assert_eq!(r.allocs, 0, "hot-path deve ter 0 alocacoes");
-    assert!(
-        r.latency_us < 5.0,
-        "latencia {:.3} us >= 5 us",
-        r.latency_us
-    );
+    // Gate honesto: a MEDIANA de todas as amostras (sem descarte) < 5 us.
+    assert!(r.p50_us < 5.0, "p50 {:.3} us >= 5 us", r.p50_us);
 }
 
 #[test]
