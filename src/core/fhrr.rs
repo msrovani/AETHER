@@ -132,8 +132,11 @@ pub struct FhrrStore {
     /// `traces × dim`, ordem C.
     trace_re: Vec<f32>,
     trace_im: Vec<f32>,
-    /// Offset de fase de cada traço (`t=0` é a identidade).
-    offsets: Vec<Phasor>,
+    /// Fase aleatória por `(fato, traço)`: decorrelaciona o crosstalk entre
+    /// traços; o offset global cancelaria no unbinding e não reduziria ruído.
+    fact_phase: Vec<f32>,
+    /// RNG determinístico das fases por fato/traço.
+    phase_rng: u32,
     entities: Vec<Phasor>,
     relations: Vec<Phasor>,
     values: Vec<Phasor>,
@@ -162,9 +165,11 @@ impl FhrrStore {
 
     /// Cria um store com `K` traços randomizados (`K ≥ 1`).
     ///
-    /// `K` traços reduzem o ruído de superposição por `√K` ao custo de `K×`
-    /// memória de traço e `K×` no unbinding (as varreduras de cleanup
-    /// continuam dominando).
+    /// Cada fato recebe uma fase aleatória independente por traço. No
+    /// unbinding, o crosstalk dos demais fatos soma incoerentemente entre os
+    /// `K` traços e o sinal do fato consultado soma coerentemente: o ruído de
+    /// superposição cai por `√K`. O offset global por traço **não** serviria —
+    /// ele cancela no unbinding.
     pub fn with_traces(dim: usize, traces: usize) -> Result<Self> {
         if dim == 0 {
             return Err(AetherError::Config("FHRR: dimensao deve ser > 0".into()));
@@ -172,31 +177,13 @@ impl FhrrStore {
         if traces == 0 {
             return Err(AetherError::Config("FHRR: traces deve ser > 0".into()));
         }
-        let mut offsets = Vec::with_capacity(traces);
-        // Traço 0 = identidade (offset zero); demais = fases aleatórias.
-        offsets.push(Phasor {
-            re: vec![1.0; dim],
-            im: vec![0.0; dim],
-        });
-        let mut state = 0xA37E_0001u32 ^ (dim as u32) ^ ((traces as u32) << 16);
-        for _ in 1..traces {
-            let mut re = Vec::with_capacity(dim);
-            let mut im = Vec::with_capacity(dim);
-            for _ in 0..dim {
-                let u = xorshift_u32(&mut state);
-                let phase = (u as f32 / u32::MAX as f32) * std::f32::consts::TAU;
-                let (s, c) = phase.sin_cos();
-                re.push(c);
-                im.push(s);
-            }
-            offsets.push(Phasor { re, im });
-        }
         Ok(Self {
             dim,
             traces,
             trace_re: vec![0.0f32; dim * traces],
             trace_im: vec![0.0f32; dim * traces],
-            offsets,
+            fact_phase: Vec::new(),
+            phase_rng: 0xA37E_0001u32 ^ (dim as u32) ^ ((traces as u32) << 16),
             entities: Vec::new(),
             relations: Vec::new(),
             values: Vec::new(),
@@ -262,17 +249,26 @@ impl FhrrStore {
             role_im.push(e.re[j] * r.im[j] + e.im[j] * r.re[j]);
         }
 
+        let mut psis = Vec::with_capacity(self.traces);
         for t in 0..self.traces {
-            let off = &self.offsets[t];
+            // Traço 0 é a referência (fase zero); demais decorrelacionam.
+            let psi = if t == 0 {
+                0.0
+            } else {
+                let u = xorshift_u32(&mut self.phase_rng);
+                (u as f32 / u32::MAX as f32) * std::f32::consts::TAU
+            };
+            psis.push(psi);
+            let (sp, cp) = psi.sin_cos();
             let base = t * self.dim;
             for j in 0..self.dim {
                 let th = entity[j] + relation[j] + value[j];
                 let (s, c) = th.sin_cos();
-                // Rotação pelo offset do traço: (c+is)(off.re+i·off.im).
-                self.trace_re[base + j] += c * off.re[j] - s * off.im[j];
-                self.trace_im[base + j] += s * off.re[j] + c * off.im[j];
+                self.trace_re[base + j] += c * cp - s * sp;
+                self.trace_im[base + j] += s * cp + c * sp;
             }
         }
+        self.fact_phase.extend_from_slice(&psis);
 
         let ei = self.entities.len();
         let ri = self.relations.len();
@@ -290,18 +286,20 @@ impl FhrrStore {
         Ok(self.fact_value.len() - 1)
     }
 
-    /// Desvincula `role` de todos os traços e soma coerentemente.
-    fn unbind(&self, role: &Phasor) -> (Vec<f32>, Vec<f32>) {
+    /// Desvincula `role` do fato `k` em todos os traços e soma coerentemente.
+    fn unbind(&self, role: &Phasor, fact: usize) -> (Vec<f32>, Vec<f32>) {
         let dim = self.dim;
         let mut acc_re = vec![0.0f32; dim];
         let mut acc_im = vec![0.0f32; dim];
+        let phase_base = fact * self.traces;
         for t in 0..self.traces {
-            let off = &self.offsets[t];
+            let psi = self.fact_phase[phase_base + t];
+            let (sp, cp) = psi.sin_cos();
             let base = t * dim;
             for j in 0..dim {
-                // papel efetivo = role ⊙ offset_t
-                let rr = role.re[j] * off.re[j] - role.im[j] * off.im[j];
-                let ri = role.re[j] * off.im[j] + role.im[j] * off.re[j];
+                // papel efetivo = role ⊙ e^{iψ_{k,t}}
+                let rr = role.re[j] * cp - role.im[j] * sp;
+                let ri = role.re[j] * sp + role.im[j] * cp;
                 let tr = self.trace_re[base + j];
                 let ti = self.trace_im[base + j];
                 // z = trace_t ⊙ conj(papel efetivo)
@@ -336,7 +334,7 @@ impl FhrrStore {
         mask: &[bool],
     ) -> Result<FhrrRecall> {
         let m = self.query_match(entity_cue, relation_cue, mask)?;
-        let (zr, zi) = self.unbind(&self.roles[m.fact_index]);
+        let (zr, zi) = self.unbind(&self.roles[m.fact_index], m.fact_index);
         let value: Vec<f32> = (0..self.dim).map(|j| zi[j].atan2(zr[j])).collect();
         Ok(FhrrRecall {
             value,
@@ -400,7 +398,7 @@ impl FhrrStore {
             }
         }
 
-        let (value_re, value_im) = self.unbind(&self.roles[best_k]);
+        let (value_re, value_im) = self.unbind(&self.roles[best_k], best_k);
 
         // Similaridade com todos os valores (zip vetorizável).
         let mut sims = vec![0.0f32; self.values.len()];
@@ -478,8 +476,8 @@ impl FhrrStore {
     /// Bytes ocupados pelos buffers (diagnóstico de pegada).
     pub fn memory_bytes(&self) -> usize {
         (self.trace_re.len() + self.trace_im.len()) * std::mem::size_of::<f32>()
-            + (self.offsets.len()
-                + self.entities.len()
+            + self.fact_phase.len() * std::mem::size_of::<f32>()
+            + (self.entities.len()
                 + self.relations.len()
                 + self.values.len()
                 + self.roles.len())

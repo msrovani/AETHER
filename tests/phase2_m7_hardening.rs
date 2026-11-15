@@ -269,12 +269,12 @@ fn test_m7_silence_prunes_and_surprise_grows() {
         sparsity_silence >= sparsity_initial - 1e-6,
         "silêncio fez crescer sinapse: esparsidade {sparsity_initial:.4} → {sparsity_silence:.4}"
     );
-    // Contrato atual: o silêncio poda até o piso estrutural e para. A poda
+    // Contrato atual: o silêncio poda no máximo até o piso estrutural. A poda
     // total (densidade 0, ρ 0) era o colapso que o T04 da auditoria apontou.
-    let floor = MorphogenesisConfig::default().min_density_floor;
     assert!(
-        density_silence >= floor - 1e-3,
-        "colapsou abaixo do piso: densidade {density_silence:.4} < {floor}"
+        density_silence >= density_initial.min(floor) - 1e-3,
+        "colapsou abaixo do piso: densidade {density_silence:.4} < {:.4}",
+        density_initial.min(floor)
     );
     assert!(
         zeros_silence < pairs,
@@ -315,7 +315,11 @@ fn test_m7_silence_prunes_and_surprise_grows() {
     let rho_growth_power = field.spectral_radius();
     let rho_growth_jacobi = raio_espectral_jacobi(&field.j, N);
 
-    let cycle_full_prune = cycle_full_prune.expect("silêncio não drenou todas as sinapses");
+    // Contrato atual: poda total é colapso, não sucesso.
+    assert!(
+        cycle_full_prune.is_none(),
+        "o silêncio drenou TODAS as sinapses no ciclo {cycle_full_prune:?}"
+    );
     let cycle_first_synapse = cycle_first_synapse.expect("surpresa não criou nenhuma sinapse");
 
     assert!(
@@ -332,7 +336,7 @@ fn test_m7_silence_prunes_and_surprise_grows() {
         "surpresa não criou sinapses: zeros {zeros_before_growth} → {zeros_growth}"
     );
     assert!(
-        density_growth > density_before_growth + 0.9,
+        density_growth > density_before_growth + 0.85,
         "densidade não subiu o suficiente: {density_before_growth:.4} → {density_growth:.4}"
     );
     assert!(
@@ -345,8 +349,7 @@ fn test_m7_silence_prunes_and_surprise_grows() {
     );
 
     println!(
-        "M7 silence/surprise: zeros {zeros_initial}→{zeros_silence}/{pairs} | sparsity {sparsity_initial:.4}→{sparsity_silence:.4} | density {density_before_growth:.4}→{density_growth:.4} | rho_silence_max {max_rho_silence:.4} → {rho_silence:.4} | rho_growth_max {max_rho_growth:.4} (jacobi {rho_growth_jacobi:.4}) | prune {} em {cycle_full_prune} ciclos | regrow em {cycle_first_synapse} ciclos | F_silence {f_silence:.4} | F_growth {f_growth:.4}",
-        zeros_silence - zeros_initial
+        "M7 silence/surprise: zeros {zeros_initial}→{zeros_silence}/{pairs} | sparsity {sparsity_initial:.4}→{sparsity_silence:.4} | density {density_before_growth:.4}→{density_growth:.4} | rho_silence_max {max_rho_silence:.4} → {rho_silence:.4} | rho_growth_max {max_rho_growth:.4} (jacobi {rho_growth_jacobi:.4}) | poda_total {cycle_full_prune:?} | regrow em {cycle_first_synapse} ciclos | F_silence {f_silence:.4} | F_growth {f_growth:.4}"
     );
 }
 

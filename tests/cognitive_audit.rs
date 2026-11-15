@@ -1779,7 +1779,7 @@ fn test_11_thought_drift() {
 
 #[test]
 fn test_12_holographic_rag() {
-    const D: usize = 288;
+    const D: usize = 256;
     const FACTS: usize = 50;
     const QUERIES: usize = 20;
 
