@@ -56,14 +56,16 @@ fn mean_order_parameter(handles: &[NodeHandle]) -> (f64, usize) {
     (if count > 0 { sum / count as f64 } else { 0.0 }, count)
 }
 
-/// Dois nós, cada um com o peer do outro repetido 3x.
+/// Três nós, com os peers repetidos 3–5x em `set_peers` e em
+/// `KuramotoConfig::new`.
 ///
-/// `b` recebe as duplicatas via `KuramotoConfig::new`; `a` via `set_peers`.
-/// Sem dedup, `peers_heard` nunca alcança `peers.len()` e `R` fica em 0.0 —
-/// o teste falharia por timeout, provando a correção pelo comportamento.
+/// Sem dedup, `peers_heard` (nº de peers distintos) nunca alcança
+/// `peers.len()` (nº de entradas com repetição) e `R` fica em 0.0 — o teste
+/// falharia por timeout, provando a correção pelo comportamento.
 #[test]
 fn peer_duplicado_em_new_e_set_peers_ainda_converge() {
     const LIMIAR: f64 = 0.95;
+    const PEERS_DISTINTOS: u32 = 2;
 
     let mut a = KuramotoPhaseNode::new(cfg(0)).expect("no a");
     let a_addr = a.local_addr();
@@ -74,10 +76,16 @@ fn peer_duplicado_em_new_e_set_peers_ainda_converge() {
     let mut b = KuramotoPhaseNode::new(b_cfg).expect("no b");
     let b_addr = b.local_addr();
 
-    // Duplicatas em `set_peers`.
-    a.set_peers(vec![b_addr, b_addr, b_addr]);
+    let mut c_cfg = cfg(2);
+    c_cfg.peers = vec![a_addr, b_addr, a_addr];
+    let c = KuramotoPhaseNode::new(c_cfg).expect("no c");
+    let c_addr = c.local_addr();
 
-    let handles = vec![a.spawn(), b.spawn()];
+    // Malha completa com duplicatas em `set_peers` (os três enviam a todos).
+    a.set_peers(vec![b_addr, b_addr, c_addr, c_addr]);
+    b.set_peers(vec![a_addr, a_addr, c_addr, c_addr, c_addr]);
+
+    let handles = vec![a.spawn(), b.spawn(), c.spawn()];
 
     let started = Instant::now();
     let mut best_r = 0.0f64;
@@ -91,9 +99,9 @@ fn peer_duplicado_em_new_e_set_peers_ainda_converge() {
                 if frame.peers_heard > 0 {
                     saw_peer = true;
                 }
-                // Dois peers duplicados viram UM slot: nunca mais de 1.
+                // Peers duplicados viram UM slot cada: nunca mais de 2.
                 assert!(
-                    frame.peers_heard <= 1,
+                    frame.peers_heard <= PEERS_DISTINTOS,
                     "peer duplicado criou slot extra: peers_heard = {}",
                     frame.peers_heard
                 );
@@ -118,9 +126,7 @@ fn peer_duplicado_em_new_e_set_peers_ainda_converge() {
         handle.stop().expect("stop do no");
     }
 
-    eprintln!(
-        "dedup: melhor R = {best_r:.6} apos {elapsed:?} (limiar em {converged_at:?})"
-    );
+    eprintln!("dedup: melhor R = {best_r:.6} apos {elapsed:?} (limiar em {converged_at:?})");
 
     assert!(saw_peer, "nenhum peer foi ouvido");
     assert!(

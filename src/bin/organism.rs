@@ -69,7 +69,9 @@ fn parse_args() -> Result<(OrganismConfig, Duration), String> {
                     .parse()
                     .map_err(|e| format!("--sensor-noise inválido: {e}"))?;
                 if !noise.is_finite() || noise < 0.0 {
-                    return Err(format!("--sensor-noise deve ser finito e >= 0, veio {noise}"));
+                    return Err(format!(
+                        "--sensor-noise deve ser finito e >= 0, veio {noise}"
+                    ));
                 }
                 cfg.sensor_noise = noise;
             }

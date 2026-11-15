@@ -1,4 +1,4 @@
-//! Módulo 5 — Memória associativa oscilatória com acoplamento complexo (ONN).
+﻿//! Módulo 5 — Memória associativa oscilatória com acoplamento complexo (ONN).
 //!
 //! Rede de osciladores com pesos complexos `C_ij = W_ij·e^{i·δ_ij}`: a
 //! magnitude `W_ij` guarda a **coerência/peso** da associação entre `i` e `j` e
@@ -277,6 +277,7 @@ impl ComplexPhaseMemory {
             c_im: vec![0.0f64; n * n],
             a_re: vec![0.0f64; n * cap],
             a_im: vec![0.0f64; n * cap],
+            lambda: vec![0.0f64; cap],
             buf_re: vec![0.0f32; n],
             buf_im: vec![0.0f32; n],
             cfg,
@@ -405,8 +406,13 @@ impl ComplexPhaseMemory {
             self.buf_im[i] = pattern[i].sin();
         }
 
-        // Duplicata a menos de rotação global: |⟨ψ^new, ψ^μ⟩|/N ≈ 1.
+        // Envelhece todos os padrões já guardados (episódios decorridos).
         let p = self.pat_count;
+        for a in self.pat_age[..p].iter_mut() {
+            *a = a.saturating_add(1);
+        }
+
+        // Duplicata a menos de rotação global: |⟨ψ^new, ψ^μ⟩|/N ≈ 1.
         for mu in 0..p {
             let base = mu * n;
             let mut cr = 0.0f32;
@@ -423,18 +429,10 @@ impl ComplexPhaseMemory {
                     self.pat_im[base + i] = self.buf_im[i];
                 }
                 self.pat_age[mu] = 0;
-                for a in self.pat_age[..p].iter_mut() {
-                    if *a != 0 {
-                        *a += 1;
-                    }
-                }
                 return;
             }
         }
 
-        for a in self.pat_age[..p].iter_mut() {
-            *a += 1;
-        }
         let slot = if p == self.pat_cap {
             // FIFO: descarta o mais antigo (índice 0).
             let len = p * n;
@@ -467,7 +465,6 @@ impl ComplexPhaseMemory {
     fn rebuild_coupling(&mut self, rate: f32, relax_steps: usize) {
         let n = self.n;
         let p = self.pat_count;
-        let cap = self.pat_cap;
         if p == 0 {
             self.weights.fill(0.0);
             self.phase_shifts.fill(0.0);
@@ -482,10 +479,7 @@ impl ComplexPhaseMemory {
             } else {
                 1.0
             };
-            // guarda λ na diagonal de um buffer auxiliar? Não: aplique direto
-            // no cálculo de C usando uma coluna extra? Simples: reusa a_re como
-            // vetor de λ (n ≥ 1 garante espaço).
-            self.a_re[mu] = lambda;
+            self.lambda[mu] = lambda;
         }
 
         // --- Gram G_μν = Σ_i conj(ψ^μ_i) ψ^ν_i -------------------------------
@@ -587,7 +581,7 @@ impl ComplexPhaseMemory {
 
         // G⁻¹ (lado direito) já ponderada por λ_μ.
         for mu in 0..p {
-            let lambda = self.a_re[mu];
+            let lambda = self.lambda[mu];
             for nu in 0..p {
                 self.gin_re[mu * p + nu] = self.gj_re[mu * w + p + nu] * lambda;
                 self.gin_im[mu * p + nu] = self.gj_im[mu * w + p + nu] * lambda;
@@ -682,7 +676,6 @@ impl ComplexPhaseMemory {
                 }
             }
         }
-        let _ = cap; // capacidade usada nos buffers; documentada por API
     }
 
     /// Recuperação associativa: reconstrói o padrão completo a partir de uma

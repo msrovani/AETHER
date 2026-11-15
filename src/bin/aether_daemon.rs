@@ -34,7 +34,7 @@ use aether_engine::core::wave_interference::WaveInterferenceBlock;
 use aether_engine::error::Result;
 use aether_engine::morphogenesis::{MorphogenesisConfig, MorphogeneticField};
 use aether_engine::phase_memory::{ComplexPhaseMemory, PhaseMemoryConfig};
-use aether_engine::thermodynamic_dreamer::{DreamerConfig, ThermodynamicDreamer};
+use aether_engine::thermodynamic_dreamer::{DreamEnsemble, DreamerConfig, ThermodynamicDreamer};
 
 /// Grupo multicast do enxame (mesma LAN).
 pub const MULTICAST_GROUP: Ipv4Addr = Ipv4Addr::new(239, 255, 42, 99);
@@ -204,9 +204,10 @@ impl HardwareTransducer {
         self.next
     }
 
-    /// Campo contínuo atual `[C_in, L]`.
-    pub fn field(&self, channels: usize) -> Array2<f32> {
-        let mut out = Array2::<f32>::zeros((channels, self.window));
+    /// Preenche `out` (pré-alocado, `channels × window`) com o campo contínuo
+    /// atual — sem alocar no caminho quente.
+    pub fn field_into(&self, channels: usize, out: &mut Array2<f32>) {
+        debug_assert!(out.nrows() >= channels && out.ncols() == self.window);
         for c in 0..channels {
             let shift = c as f32 * 0.7;
             for k in 0..self.window {
@@ -214,7 +215,6 @@ impl HardwareTransducer {
                 out[[c, k]] = self.ring[idx] * (1.0 + shift * 0.1) + shift * 0.01;
             }
         }
-        out
     }
 }
 
@@ -259,6 +259,16 @@ pub struct AetherDaemon {
     j_field: Vec<f32>,
     u: Array2<f32>,
     v: Array2<f32>,
+    /// Spins contínuos do ciclo (buffer pré-alocado, sem `collect()`).
+    spins_buf: Vec<f32>,
+    /// Campo externo do sonhador (buffer pré-alocado).
+    bias_buf: Vec<f32>,
+    /// Padrão a gravar na memória de fase (buffer pré-alocado).
+    pattern_buf: Vec<f32>,
+    /// Conjunto de sonhos reutilizado por `imagine_futures_into` — evita as
+    /// ~18 alocações por ciclo de `imagine_futures` (outer + 16 amostras +
+    /// energias).
+    ensemble: DreamEnsemble,
     cycles: u64,
     /// Média móvel do erro relativo de reconstrução (baseline de surpresa).
     baseline_nmse: f32,
@@ -282,6 +292,7 @@ impl AetherDaemon {
         let window = cfg.window;
         let seed = cfg.seed;
         let hz = cfg.hz;
+        let dream_samples = cfg.dream_samples;
         let c_in = 2;
         let c_out = 4;
         let modes = 32;
@@ -355,6 +366,10 @@ impl AetherDaemon {
             j_field,
             u: Array2::<f32>::zeros((c_in, window)),
             v: Array2::<f32>::zeros((c_out, window)),
+            spins_buf: vec![0.0; cognition_dim],
+            bias_buf: vec![0.0; cognition_dim],
+            pattern_buf: vec![0.0; cognition_dim],
+            ensemble: DreamEnsemble::with_capacity(cognition_dim, dream_samples),
             cycles: 0,
             baseline_nmse: 0.0,
             dropped_frames: 0,
@@ -373,8 +388,7 @@ impl AetherDaemon {
             .and_then(|n| n.latest())
             .unwrap_or_else(zero_frame);
         let _ = self.transducer.sample(frame.rx_bytes as u64);
-        let fresh = self.transducer.field(self.c_in);
-        self.u.assign(&fresh);
+        self.transducer.field_into(self.c_in, &mut self.u);
 
         // 2) predição espectral + surpresa
         self.wave.forward_into(self.u.view(), &mut self.v)?;
@@ -406,12 +420,12 @@ impl AetherDaemon {
 
         // spins contínuos derivados da fase local (entrada da morfogênese),
         // mapeados dos 4 canais de fase para a dimensão cognitiva completa
-        let spins: Vec<f32> = (0..self.cfg.cognition_dim)
-            .map(|i| (frame.phase[i % 4].cos() * 0.9) as f32)
-            .collect();
+        for (i, spin) in self.spins_buf.iter_mut().enumerate() {
+            *spin = (frame.phase[i % 4].cos() * 0.9) as f32;
+        }
         // A morfogênese vê o erro absoluto de reconstrução (mantém topologia
         // viva); o sonho é disparado pela SURPRESA relativa ao baseline.
-        let free_energy = self.field.evolve_topology(abs_error, &spins, 0.05);
+        let free_energy = self.field.evolve_topology(abs_error, &self.spins_buf, 0.05);
 
         // O sonhador consome a topologia VIVA do M7 (não o J estático inicial).
         // `coupling()` e `j_field` têm o mesmo layout N×N e ambos vivem no self.
@@ -424,34 +438,33 @@ impl AetherDaemon {
         } else {
             self.cfg.action_temperature
         };
-        let bias: Vec<f32> = (0..self.cfg.cognition_dim)
-            .map(|i| (frame.phase[i % 4].sin() * 0.15) as f32)
-            .collect();
-        let ensemble = self.dreamer.imagine_futures(
+        for (i, b) in self.bias_buf.iter_mut().enumerate() {
+            *b = (frame.phase[i % 4].sin() * 0.15) as f32;
+        }
+        self.dreamer.imagine_futures_into(
             &self.j_field,
-            &bias,
+            &self.bias_buf,
             temperature,
             self.cfg.dream_samples,
             self.cfg.dream_steps,
             0.05,
-        );
+            &mut self.ensemble,
+        )?;
 
         // 4) grava o padrão estável na memória de fase
-        let first_sample = ensemble.samples.first();
-        let pattern: Vec<f32> = (0..self.cfg.cognition_dim)
-            .map(|i| {
-                let bit = first_sample
-                    .and_then(|sample| sample.get(i))
-                    .copied()
-                    .unwrap_or(-1);
-                if bit > 0 {
-                    std::f32::consts::FRAC_PI_4
-                } else {
-                    std::f32::consts::FRAC_PI_4 + std::f32::consts::PI
-                }
-            })
-            .collect();
-        self.memory.imprint(&pattern, 2);
+        let first_sample = self.ensemble.samples.first();
+        for (i, p) in self.pattern_buf.iter_mut().enumerate() {
+            let bit = first_sample
+                .and_then(|sample| sample.get(i))
+                .copied()
+                .unwrap_or(-1);
+            *p = if bit > 0 {
+                std::f32::consts::FRAC_PI_4
+            } else {
+                std::f32::consts::FRAC_PI_4 + std::f32::consts::PI
+            };
+        }
+        self.memory.imprint(&self.pattern_buf, 2);
         let memory_energy = self.memory.phase_energy();
 
         // 5) telemetria
@@ -464,7 +477,7 @@ impl AetherDaemon {
             free_energy,
             surprise,
             memory_energy,
-            epistemic_uncertainty: ensemble.epistemic_uncertainty,
+            epistemic_uncertainty: self.ensemble.epistemic_uncertainty,
             topological_density: self.field.density(),
             dreaming,
             cycles: self.cycles,

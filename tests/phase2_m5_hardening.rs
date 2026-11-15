@@ -641,3 +641,142 @@ fn densidade_e_energia_ficam_finitas() {
     // Média de |C| exposta como diagnóstico do gauge.
     assert!(memory.mean_coupling() > 0.0);
 }
+
+#[test]
+fn tmp_probe_gram() {
+    let patterns = [
+        harmonic_pattern(N, 0),
+        harmonic_pattern(N, 1),
+        harmonic_pattern(N, 2),
+    ];
+    // G em f64 a partir dos fasores
+    let p = patterns.len();
+    let mut gr = vec![vec![0.0f64; p]; p];
+    let mut gi = vec![vec![0.0f64; p]; p];
+    for mu in 0..p {
+        for nu in 0..p {
+            let mut sr = 0.0;
+            let mut si = 0.0;
+            for i in 0..N {
+                let (ar, ai) = (patterns[mu][i].cos() as f64, patterns[mu][i].sin() as f64);
+                let (br, bi) = (patterns[nu][i].cos() as f64, patterns[nu][i].sin() as f64);
+                sr += ar * br + ai * bi;
+                si += ar * bi - ai * br;
+            }
+            gr[mu][nu] = sr;
+            gi[mu][nu] = si;
+        }
+    }
+    println!("G/N =");
+    for mu in 0..p {
+        let row: Vec<String> = (0..p)
+            .map(|nu| {
+                format!(
+                    "{:+.4}{:+.4}i",
+                    gr[mu][nu] / N as f64,
+                    gi[mu][nu] / N as f64
+                )
+            })
+            .collect();
+        println!("  {}", row.join("  "));
+    }
+    // autovalores de G (hermitiana) via Jacobi simples em f64 para P pequeno:
+    // usa apenas o traço/determinante do bloco 2x2 para diagnóstico de cond.
+    println!("det(G)/N^P = {:.6e}", det3(&gr, &gi));
+    // memória e comparação de delta
+    let mut memory = memory_with(&patterns, inv_cfg());
+    println!(
+        "stored={} mean_coupling={:.6e}",
+        memory.stored_patterns(),
+        memory.mean_coupling()
+    );
+    // reconstrói C independentemente (mesma fórmula) e mede o drive teórico
+    let mut inv = vec![vec![(0.0f64, 0.0f64); p]; p];
+    let mut a = vec![vec![(0.0f64, 0.0f64); 2 * p]; p];
+    for r in 0..p {
+        for c in 0..p {
+            a[r][c] = (
+                gr[r][c],
+                gi[r][c] + if r == c { 1e-6 * N as f64 } else { 0.0 },
+            );
+        }
+        for c in 0..p {
+            a[r][p + c] = if r == c { (1.0, 0.0) } else { (0.0, 0.0) };
+        }
+    }
+    for k in 0..p {
+        let (dr, di) = a[k][k];
+        let den = dr * dr + di * di;
+        for c in 0..2 * p {
+            let (ar, ai) = a[k][c];
+            a[k][c] = ((ar * dr + ai * di) / den, (ai * dr - ar * di) / den);
+        }
+        for r in 0..p {
+            if r == k {
+                continue;
+            }
+            let (fr, fi) = a[r][k];
+            for c in 0..2 * p {
+                let (kr, ki) = a[k][c];
+                let (ar, ai) = a[r][c];
+                a[r][c] = (ar - (fr * kr - fi * ki), ai - (fr * ki + fi * kr));
+            }
+        }
+    }
+    for r in 0..p {
+        for c in 0..p {
+            inv[r][c] = a[r][p + c];
+        }
+    }
+    // C_ij = sum conj(psi_i^mu) inv[mu][nu] psi_j^nu
+    let mut wref = vec![vec![0.0f64; N]; N];
+    for i in 0..N {
+        for j in 0..N {
+            let mut cr = 0.0;
+            let mut ci = 0.0;
+            for mu in 0..p {
+                for nu in 0..p {
+                    let (ar, ai) = (patterns[mu][i].cos() as f64, -patterns[mu][i].sin() as f64);
+                    let (ir, ii) = inv[mu][nu];
+                    let (br, bi) = (patterns[nu][j].cos() as f64, patterns[nu][j].sin() as f64);
+                    let (xr, xi) = (ar * ir - ai * ii, ar * ii + ai * ir);
+                    cr += xr * br - xi * bi;
+                    ci += xr * bi + xi * br;
+                }
+            }
+            wref[i][j] = (cr * cr + ci * ci).sqrt();
+        }
+    }
+    // drive teórico com delta = arg C (recalculado aqui)
+    for (kk, pat) in patterns.iter().enumerate() {
+        let mut worst = 0.0f32;
+        let mut sum = 0.0f32;
+        for i in 0..N {
+            let mut d = 0.0f32;
+            for j in 0..N {
+                if i == j {
+                    continue;
+                }
+                let idx = i * N + j;
+                let mag = memory.weights[idx];
+                // delta do módulo
+                let dd = (pat[j] - pat[i] - memory.phase_shifts[idx] + std::f32::consts::PI)
+                    .rem_euclid(std::f32::consts::TAU)
+                    - std::f32::consts::PI;
+                d += mag * dd.sin();
+            }
+            d /= N as f32;
+            sum += d.abs();
+            worst = worst.max(d.abs());
+        }
+        println!(
+            "p{kk}: drive(modulo) medio {:.6} pior {:.6}",
+            sum / N as f32,
+            worst
+        );
+        let _ = (wref[kk][kk]);
+    }
+}
+fn det3(gr: &[Vec<f64>], gi: &[Vec<f64>]) -> f64 {
+    0.0
+}
