@@ -26,7 +26,16 @@
 //!   `Vec` recriado e sem `String` (nomes de thread são criados uma única vez,
 //!   no `new`/`spawn`).
 //! * Contabilização: `rx_bytes` só soma datagramas de **40 bytes válidos**, de
-//!   modo que `rx_bytes % 40 == 0` é sempre verdadeiro por construção.
+//!   modo que `rx_bytes % 40 == 0` é sempre verdadeiro por construção. Ao
+//!   estourar `u32` (~4 GiB acumulados) o contador **zera** em vez de dar a
+//!   volta: `wrapping_add(40)` viraria `16` e quebraria o invariante do wire.
+//!   `rx_packets` satura (não é usado em módulo).
+//! * **Peers deduplicados** na construção e em [`KuramotoPhaseNode::set_peers`]
+//!   (ordem de primeira ocorrência preservada). Um peer repetido criaria dois
+//!   `PeerSlot`s e o segundo nunca seria "ouvido" — o datagrama tem uma única
+//!   origem — deixando `order_parameter` preso em `0.0` para sempre. Em
+//!   multicast, enviar uma única vez para o endereço de grupo já alcança todos
+//!   os membros, então a dedup não altera a topologia.
 
 use std::io::ErrorKind;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket};
@@ -260,8 +269,10 @@ impl KuramotoPhaseNode {
     /// As fases iniciais vêm de um `ChaCha8` semeado por `node_id`, o que dá
     /// desalinhamento máximo **e** reprodutibilidade sem adicionar `seed` ao
     /// contrato de configuração.
-    pub fn new(cfg: KuramotoConfig) -> Result<Self> {
+    pub fn new(mut cfg: KuramotoConfig) -> Result<Self> {
         validate_config(&cfg)?;
+        // Peer repetido = slot que nunca será ouvido (R preso em 0.0).
+        cfg.peers = dedup_peers(std::mem::take(&mut cfg.peers));
 
         let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
         socket.set_reuse_address(true)?;
@@ -340,10 +351,14 @@ impl KuramotoPhaseNode {
 
     /// Substitui a lista de peers (antes do `spawn` ou via comando, em execução).
     ///
+    /// Peers repetidos são deduplicados preservando a ordem de primeira
+    /// ocorrência (ver [`dedup_peers`]): um duplicado deixaria um slot
+    /// eternamente "não ouvido" e prenderia `R` em `0.0`.
+    ///
     /// Slots novos nascem "não ouvidos": até receber de cada peer configurado,
     /// [`Frame::order_parameter`] reporta `0.0` — nunca um `1.0` falso.
     pub fn set_peers(&mut self, peers: Vec<SocketAddrV4>) {
-        self.cfg.peers = peers;
+        self.cfg.peers = dedup_peers(peers);
         self.rebuild_peer_slots();
     }
 
@@ -443,8 +458,8 @@ impl KuramotoPhaseNode {
                     }
                     let received_at = now_ns();
                     self.last_latency_ns = received_at.saturating_sub(packet.timestamp_ns);
-                    self.rx_packets = self.rx_packets.wrapping_add(1);
-                    self.rx_bytes = self.rx_bytes.wrapping_add(PACKET_SIZE as u32);
+                    self.rx_packets = self.rx_packets.saturating_add(1);
+                    bump_rx_bytes(&mut self.rx_bytes);
                     let addr = match from {
                         SocketAddr::V4(addr) => addr,
                         SocketAddr::V6(_) => continue,
@@ -606,6 +621,34 @@ impl KuramotoPhaseNode {
         }
         (r_sum / CHANNELS as f64).clamp(0.0, 1.0)
     }
+}
+
+/// Remove peers repetidos preservando a **ordem de primeira ocorrência**.
+///
+/// Sem dedup, `peers = [b, b]` cria dois slots com o mesmo endereço; o
+/// datagrama de `b` tem uma única origem e só o primeiro slot vira
+/// `heard = true`, então `order_parameter` compara `peers_heard (1) <
+/// peers.len() (2)` e reporta `0.0` para sempre. Em multicast a dedup também
+/// é segura: um envio ao endereço de grupo já alcança todos os membros.
+fn dedup_peers(peers: Vec<SocketAddrV4>) -> Vec<SocketAddrV4> {
+    let mut unique: Vec<SocketAddrV4> = Vec::with_capacity(peers.len());
+    for addr in peers {
+        if !unique.contains(&addr) {
+            unique.push(addr);
+        }
+    }
+    unique
+}
+
+/// Soma [`PACKET_SIZE`] a `rx_bytes` preservando `rx_bytes % PACKET_SIZE == 0`.
+///
+/// `u32` acumula ~4 GiB de datagramas; `wrapping_add(40)` no estouro viraria
+/// `16` (não múltiplo de 40) e `tests/physical_invariants.rs` falharia. Ao
+/// estourar, o contador é **zerado** — continua múltiplo de 40, e a telemetria
+/// nunca mente sobre o tamanho do datagrama (só perde a contagem histórica).
+fn bump_rx_bytes(rx_bytes: &mut u32) {
+    const STEP: u32 = PACKET_SIZE as u32;
+    *rx_bytes = rx_bytes.checked_add(STEP).unwrap_or(0);
 }
 
 fn validate_xi(xi: [f32; 3]) -> Result<()> {
@@ -777,5 +820,93 @@ impl Drop for NodeHandle {
         if let Some(join) = self.join.take() {
             let _ = join.join();
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Testes unitários (detalhes internos: dedup e overflow do contador)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cfg_de_teste(id: u32) -> KuramotoConfig {
+        KuramotoConfig {
+            node_id: id,
+            bind: SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0),
+            peers: Vec::new(),
+            omega: [6.0, 6.01, 5.99, 6.0],
+            k_coupling: 8.0,
+            hz: 60.0,
+            adjacency: None,
+            perturb_duration: Duration::from_millis(250),
+            multicast: None,
+        }
+    }
+
+    #[test]
+    fn dedup_preserva_ordem_e_remove_repetidos() {
+        let a = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 41000);
+        let b = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 41001);
+        let c = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 41002);
+
+        // Ordem de primeira ocorrência preservada, sem repetições.
+        let uniq = dedup_peers(vec![b, a, b, c, a, b]);
+        assert_eq!(uniq, vec![b, a, c]);
+
+        // Casos degenerados.
+        assert!(dedup_peers(Vec::new()).is_empty());
+        assert_eq!(dedup_peers(vec![a]), vec![a]);
+        assert_eq!(dedup_peers(vec![a, a, a]), vec![a]);
+    }
+
+    #[test]
+    fn new_e_set_peers_deduplicam_slots() {
+        let mut no = KuramotoPhaseNode::new(cfg_de_teste(0)).expect("no");
+        let proprio = no.local_addr();
+
+        // `set_peers` com repetidos: um único slot e um único peer configurado.
+        no.set_peers(vec![proprio, proprio, proprio]);
+        assert_eq!(no.cfg.peers, vec![proprio]);
+        assert_eq!(no.peer_slots.len(), 1);
+
+        // `new` com repetidos: idem (cfg.peers deduplicado na construção).
+        let mut cfg = cfg_de_teste(1);
+        cfg.peers = vec![proprio, proprio];
+        let outro = KuramotoPhaseNode::new(cfg).expect("no");
+        assert_eq!(outro.cfg.peers.len(), 1);
+        assert_eq!(outro.peer_slots.len(), 1);
+    }
+
+    #[test]
+    fn rx_bytes_estouro_preserva_multiplo_de_40() {
+        // Contador normal: incrementa de 40 em 40.
+        let mut acc = 0u32;
+        for _ in 0..3 {
+            bump_rx_bytes(&mut acc);
+        }
+        assert_eq!(acc, 120);
+        assert_eq!(acc % PACKET_SIZE as u32, 0);
+
+        // Caso pedido: perto do teto (u32::MAX - 20) → zera, múltiplo de 40.
+        let mut near = u32::MAX - 20;
+        bump_rx_bytes(&mut near);
+        assert_eq!(near, 0);
+        assert_eq!(near % PACKET_SIZE as u32, 0);
+
+        // Maior múltiplo de 40 representável em u32 → zera (nunca vira 16).
+        let mut top = u32::MAX - (u32::MAX % 40);
+        assert_eq!(top % PACKET_SIZE as u32, 0);
+        bump_rx_bytes(&mut top);
+        assert_eq!(top, 0);
+        assert_eq!(top % PACKET_SIZE as u32, 0);
+
+        // E o nó real usa o mesmo helper: contador forçado ao teto → 0.
+        let mut no = KuramotoPhaseNode::new(cfg_de_teste(2)).expect("no");
+        no.rx_bytes = u32::MAX - 20;
+        bump_rx_bytes(&mut no.rx_bytes);
+        assert_eq!(no.rx_bytes, 0);
+        assert_eq!(no.rx_bytes % PACKET_SIZE as u32, 0);
     }
 }

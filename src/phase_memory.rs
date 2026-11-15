@@ -1,8 +1,8 @@
 //! Módulo 5 — Memória associativa oscilatória com acoplamento complexo (ONN).
 //!
 //! Rede de osciladores com pesos complexos `C_ij = W_ij·e^{i·δ_ij}`: a
-//! magnitude `W_ij` guarda a **coerência** da associação entre `i` e `j` e o
-//! deslocamento `δ_ij` guarda a relação de fase — é isso que permite gravar
+//! magnitude `W_ij` guarda a **coerência/peso** da associação entre `i` e `j` e
+//! o deslocamento `δ_ij` guarda a relação de fase — é isso que permite gravar
 //! padrões contínuos, e não apenas binários `0/π`.
 //!
 //! Dinâmica de recuperação (exatamente a da especificação):
@@ -20,79 +20,82 @@
 //! E_phase(φ) = −(1/2N) Σ_ij W_ij · cos(φ_j − φ_i − δ_ij)
 //! ```
 //!
-//! # Regra de aprendizado (honesta)
+//! # Regra de aprendizado: projeção complexa (pseudo-inversa)
 //!
-//! A regra hebbiana polar da especificação é
+//! A regra hebbiana polar da especificação
 //!
 //! ```text
 //! ΔW_ij = η_W (cos(ψ_j − ψ_i − δ_ij) − γ_W W_ij)
 //! Δδ_ij = η_δ · W_ij · sin(ψ_j − ψ_i − δ_ij)
 //! ```
 //!
-//! Ela grava **um** atrator por matriz: com uma única variável `δ_ij` não há
-//! como representar várias relações de fase simultâneas. A generalização
-//! correta para memória associativa é acumular o **fasor** complexo
-//! `C_ij = Σ_μ e^{i(ψ_j^μ − ψ_i^μ)}` e usar a representação polar
-//! `(W_ij, δ_ij) = (|C_ij|/⟨|C|⟩, arg C_ij)`: a superposição é a média
-//! circular das relações de fase e `arg C` é exatamente o alvo que a regra
-//! `Δδ` persegue (o máximo de `Σ_μ cos(ψ_j^μ − ψ_i^μ − δ)`).
+//! grava **um** atrator por matriz (uma única `δ_ij` não representa várias
+//! relações de fase) e, quando generalizada por superposição de fasores
+//! (`C_ij = Σ_μ e^{i(ψ_j^μ−ψ_i^μ)}`), sofre **crosstalk sistemático**: no
+//! padrão `ν` o campo residual é `(1/N)Σ_j Σ_{μ≠ν} sin(a_j − a_i)` com
+//! `a = ψ^μ − ψ^ν`, que não decai com `N` e desloca o mínimo da energia.
+//! Medido: `p0 = 0.169` rad (pior 0.222) em `N = 32`, `P = 3`.
 //!
-//! O que este módulo faz de fato:
+//! Este módulo usa a **regra de projeção** (pseudo-inversa complexa), que
+//! zera o crosstalk exatamente. Sejam os fasores `ψ_i^μ = e^{iφ_i^μ}` e
 //!
-//! * **`ΔW`**: o acumulador complexo `C += η_W·e^{iΔψ}` com esquecimento
-//!   metabólico `C ← (1−γ_W)^cycles·C` por **episódio** de imprint é a forma
-//!   complexa da regra acima (a parte real é `ΔW ∝ η_W cos(Δψ−δ)`); o
-//!   decaimento é por episódio — e não por ciclo — porque senão o primeiro
-//!   padrão é decaído pelos ciclos de todos os seguintes: com 3 padrões × 40
-//!   ciclos e `γ_W = 0.002` p0 ficava 15% mais fraco que p2, e com 200 ciclos
-//!   por padrão o recall de p0 degradava de 0.13 para 0.90 rad.
-//! * **`Δδ`**: implementado de verdade como relaxação da fase para o alvo
-//!   `arg C_ij`, `δ ← δ + η_δ·W_ij·sin(arg C_ij − δ)`, com `4·cycles`
-//!   relaxações por imprint. `η_δ` é a **taxa de aprendizado de fase**: com
-//!   `η_δ = 0` a memória não aprende relações de fase e o recall colapsa
-//!   (erro medido 1.41 rad contra 0.11 rad com `η_δ = 0.08` — há teste).
-//! * **Sem `clamp` de magnitude.** A versão anterior truncava
-//!   `W_ij = min(|C_ij|, 1.0)`. Como `|C|` satura em `η_W/γ_W ≫ 1`, *todos*
-//!   os pesos viravam 1.0 e a informação de coerência (a magnitude relativa,
-//!   que diz em quais pares os padrões concordam) era destruída — pares com
-//!   `|C| ≈ 0` recebiam acoplamento unitário baseado só no ruído de `arg C`.
-//!   Agora `W_ij = |C_ij| / ⟨|C|⟩` (gauge: acoplamento médio = 1), uma
-//!   **constante global multiplicativa, não truncamento**: as razões entre
-//!   pesos são exatamente preservadas. O gauge também desacopla a escala do
-//!   campo de `η_W`, `γ_W` e do número de imprints, o que mantém a dinâmica
-//!   estável para qualquer histórico de gravação (incluindo o daemon, que
-//!   reimprime a cada ciclo e nunca chama `recall`).
+//! ```text
+//! G_μν = Σ_i conj(ψ_i^μ) ψ_i^ν            (Gram P×P, hermiteana)
+//! C_ij = Σ_{μν} conj(ψ_i^μ) (G⁻¹)_μν ψ_j^ν
+//! ```
 //!
-//! # Limite físico (medido, não postulado)
+//! (com `G` regularizada por *ridge* `1e-6·N` e inversa por Gauss-Jordan).
+//! Então, para **todo** padrão `ν`,
 //!
-//! A superposição de fasores **não** é linear em `(W, δ)`: para o padrão `ν` o
-//! campo residual em `ψ^ν` é `(1/N)Σ_j Im[conj(C_ij)·e^{iΔ_ij^ν}] =
-//! (1/N)Σ_j Σ_{μ≠ν} sin(a_j − a_i)`, com `a = ψ^μ − ψ^ν`. Se `a` varia de
-//! forma não uniforme sobre os nós, esse campo tem uma componente **sistemática**
-//! (não é ruído que decai com `N`): o mínimo da energia de superposição fica
-//! deslocado de `ψ^ν` e o `recall` erra por esse deslocamento.
+//! ```text
+//! Σ_j conj(C_ij) e^{i(ψ_j^ν−ψ_i^ν)} = 1   ∀i
+//! ```
 //!
-//! Medido em `tests/phase2_m5_hardening.rs` (`N = 32`, 12 ocultos, 30 seeds,
-//! configuração do invariante): `p1 = 0.039`, `p2 = 0.121`, `p0 = 0.169` rad.
-//! Os controles mostram que não é bug nem convergência: `P = 1` dá `0.000`,
-//! padrões que diferem por rotação rígida (crosstalk nulo) dão `0.00001`,
-//! `dt` (0.05→0.005) e `steps` (600→6000) não mudam nada, e o mínimo
-//! encontrado tem energia *menor* que o padrão verdadeiro. O erro de p0
-//! **não decai com `N`** (0.156 em `N = 96`), ao contrário de padrões
-//! aleatórios (0.19–0.21 em `N = 32`, limite clássico `α = P/N ≈ 0.1`).
+//! ou seja o campo residual em `ψ^ν` é **exatamente zero** e o padrão é ponto
+//! fixo da dinâmica — o crosstalk responsável por `p0 = 0.169` desaparece.
+//! Para `P = 1` a regra reduz à hebbiana (mesma direção `δ = ψ_j−ψ_i`).
+//! Padrões relacionados por rotação rígida são o **mesmo** atrator (a dinâmica
+//! é invariante por rotação global) e por isso são deduplicados no `imprint`.
 //!
-//! Conclusão honesta: em `N = 32` com `P = 3` harmônicos a meta de `< 0.15`
-//! rad fica exatamente na borda do que a arquitetura entrega (o melhor
-//! balanceamento de pesos dá `p0 ≈ 0.135` e `p2 ≈ 0.150`). Para `P ≲ 2` o
-//! invariante é cumprido com folga.
+//! # O que cada parâmetro faz (honesto)
+//!
+//! * `η_δ` (`eta_delta`): taxa da regra `δ ← δ + η_δ·W·sin(arg C − δ)`. A cada
+//!   `imprint` a projeção reconstrói `C` e `δ` relaxa `16·cycles` vezes para o
+//!   alvo `arg C`. `η_δ = 0` **desliga o aprendizado de fase** e o recall
+//!   colapsa (medido: 1.41 rad contra 0.11 rad com `η_δ = 0.08`).
+//! * `cycles`: número de passadas de consolidação; como a projeção é exata,
+//!   `cycles` controla apenas as passadas de relaxação de `δ` (`16·cycles`).
+//! * `γ_W` (`gamma_w`): esquecimento metabólico por episódio. Cada padrão
+//!   guardado entra na projeção com peso `λ_μ = (1−γ_W)^{idade_μ}`; como a
+//!   propriedade de crosstalk nulo vale para qualquer `λ`, γ_W só modula a
+//!   profundidade relativa dos poços (memória recente domina).
+//! * `η_W` (`eta_w`): escala global do fasor. O campo é normalizado por um
+//!   gauge (`W = |C|/⟨|C|⟩`), então `η_W` não altera a paisagem de atratores;
+//!   é mantido por compatibilidade e validado (`≥ 0`, finito).
+//!
+//! # Capacidade
+//!
+//! A projeção é exata enquanto os `P` fasores forem linearmente independentes,
+//! isto é `P ≤ N−1`. A memória mantém uma **janela deslizante** de
+//! `min(N−1, 64)` padrões (FIFO: o mais antigo sai), o que mantém `G`
+//! invertível e o custo do `imprint` em `O(P³ + P²N + PN²)`.
 //!
 //! # Robustez
 //!
 //! `imprint`/`recall` nunca panicam (tamanho errado, `NaN`, `dt ≤ 0`,
 //! `steps = 0` e `n = 0` são no-op documentados); `try_imprint`/`try_recall`
-//! devolvem `Err` explícito para o chamador que quiser tratar o caso.
+//! devolvem `Err` explícito. `recall_into` não aloca após o warmup.
 
 use std::f32::consts::{PI, TAU};
+
+/// Máximo de padrões guardados, independente de `N` (janela deslizante).
+const PATTERN_CAP_MAX: usize = 64;
+
+/// *Ridge* relativo aplicado à diagonal de `G` antes da inversão.
+const RIDGE: f64 = 1e-6;
+
+/// Relaxações de fase por ciclo de `imprint` (regra `Δδ`).
+const DELTA_SUBSTEPS: usize = 16;
 
 /// Erros de validação da memória de fase.
 ///
@@ -138,20 +141,14 @@ pub struct PhaseMemoryConfig {
     pub omega0: f32,
     /// Força do grampo sensorial (`α_clamp`).
     pub clamp_strength: f32,
-    /// Taxa de aprendizado da magnitude `W`: incremento do fasor por ciclo
-    /// (`C += η_W·e^{iΔψ}`; o esquecimento é `(1−γ_W)^cycles` por episódio).
-    /// Como o campo é normalizado por um gauge
-    /// global, `η_W` controla a velocidade de consolidação, não a paisagem de
-    /// atratores (que depende só de `γ_W` e das relações entre os padrões).
+    /// Escala do fasor (`C += η_W·e^{iΔψ}`). Como o campo é normalizado por um
+    /// gauge global, `η_W` não altera a paisagem de atratores; mantenha `> 0`.
     pub eta_w: f32,
     /// Taxa de aprendizado da fase `δ` (regra `Δδ = η_δ·W·sin(arg C − δ)`).
     /// `0.0` desliga o aprendizado de fase.
     pub eta_delta: f32,
-    /// Decaimento metabólico dos pesos (Wenger espectral), **por episódio** de
-    /// `imprint`: `(1−γ_W)^cycles` é o esquecimento aplicado ao conteúdo
-    /// anterior. Deve estar em `[0, 1)`. Vírgula: padrões gravados com o mesmo
-    /// `cycles` decaem apenas por quantos episódios vieram depois, e não pelos
-    /// ciclos de consolidação dos outros (que quebraria a coexistência).
+    /// Esquecimento metabólico **por episódio**: cada padrão guardado pesa
+    /// `(1−γ_W)^{idade}` na projeção. Deve estar em `[0, 1)`.
     pub gamma_w: f32,
 }
 
@@ -169,19 +166,10 @@ impl Default for PhaseMemoryConfig {
 
 /// Memória associativa oscilatória de acoplamento complexo.
 ///
-/// Toda a memória vive em buffers planos pré-alocados: `weights` (módulo de
-/// `C_ij`), `phase_shifts` (argumento) e `phases` (estado corrente). Nada de
-/// vetores estáticos, arquivos ou embeddings: a memória **é** o campo de
-/// acoplamento.
-///
-/// # Gravação de múltiplos atratores
-///
-/// `imprint` acumula o fasor complexo `C_ij += η_W·e^{i(ψ_j−ψ_i)}` (com
-/// esquecimento metabólico `(1−γ_W)^cycles` por episódio) e publica
-/// `(W_ij, δ_ij) = (|C_ij|/⟨|C|⟩, arg C_ij)`, com `δ` relaxado pela regra
-/// polar `Δδ` da especificação. A dinâmica de recuperação e a energia de fase
-/// são exatamente as da especificação; o acoplamento é a superposição dos
-/// padrões gravados.
+/// A memória guarda os `P` padrões como **fasores unitários** (`pat_re/pat_im`)
+/// e reconstrói o acoplamento `C` por projeção complexa a cada `imprint`.
+/// A dinâmica vive nos buffers planos `weights` (módulo de `C_ij`),
+/// `phase_shifts` (argumento) e `phases` (estado corrente).
 pub struct ComplexPhaseMemory {
     /// Número de osciladores.
     pub n: usize,
@@ -193,12 +181,31 @@ pub struct ComplexPhaseMemory {
     pub phases: Vec<f32>,
     /// Rotação acumulada do referencial (`∫ ω0 dt`) durante `recall`/`free_run`.
     pub rotation: f32,
-    /// Acumulador complexo (parte real) — superposição dos imprints.
-    c_re: Vec<f32>,
-    /// Acumulador complexo (parte imaginária).
-    c_im: Vec<f32>,
-    /// Módulo médio do acoplamento complexo (diagnóstico do gauge).
-    mean_coupling: f32,
+    /// Módulo médio `⟨|C_ij|⟩` do último `imprint` (referência do gauge).
+    pub mean_coupling: f32,
+    /// Fasores gravados `e^{iψ_i^μ}`, layout plano `μ*n + i`.
+    pat_re: Vec<f32>,
+    pat_im: Vec<f32>,
+    /// Idade (em episódios) de cada padrão armazenado.
+    pat_age: Vec<u32>,
+    pat_count: usize,
+    pat_cap: usize,
+    /// Máscara de poda **permanente** por aresta (a projeção não ressuscita).
+    pruned: Vec<bool>,
+    /// Buffers de trabalho (`f64`) para Gram, inversão e reconstrução.
+    gin_re: Vec<f64>,
+    gin_im: Vec<f64>,
+    gj_re: Vec<f64>,
+    gj_im: Vec<f64>,
+    c_re: Vec<f64>,
+    c_im: Vec<f64>,
+    a_re: Vec<f64>,
+    a_im: Vec<f64>,
+    /// Peso metabólico `λ_μ = (1−γ)^{idade_μ}` de cada padrão.
+    lambda: Vec<f64>,
+    /// Rascunho do padrão sendo gravado (fasor), para a checagem de duplicata.
+    buf_re: Vec<f32>,
+    buf_im: Vec<f32>,
     cfg: PhaseMemoryConfig,
 }
 
@@ -206,6 +213,7 @@ impl std::fmt::Debug for ComplexPhaseMemory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ComplexPhaseMemory")
             .field("n", &self.n)
+            .field("patterns", &self.pat_count)
             .field("cfg", &self.cfg)
             .field("mean_coupling", &self.mean_coupling)
             .finish()
@@ -232,13 +240,10 @@ fn wrap_signed(x: f32) -> f32 {
     v
 }
 
-/// Relaxações de fase por ciclo de `imprint` para a regra `Δδ`.
-///
-/// A regra `δ ← δ + η_δ·W·sin(arg C − δ)` tem taxa proporcional a `η_δ·W`, que
-/// pode ser pequena nos pares de baixa coerência; `4·cycles` sub-relaxações por
-/// imprint fazem `δ` acompanhar a média circular sem remover o papel de `η_δ`
-/// (com `η_δ = 0` nada é aprendido). O alvo `arg C` é o ponto fixo da regra.
-const DELTA_SUBSTEPS: usize = 4;
+/// Capacidade da janela de padrões: `min(N−1, 64)` (a projeção exige `P < N`).
+fn pattern_capacity(n: usize) -> usize {
+    n.saturating_sub(1).clamp(1, PATTERN_CAP_MAX)
+}
 
 impl ComplexPhaseMemory {
     /// Cria a memória com acoplamento nulo (superfície plana, pronta para o
@@ -250,15 +255,30 @@ impl ComplexPhaseMemory {
 
     /// Cria a memória com configuração explícita.
     pub fn with_config(n: usize, cfg: PhaseMemoryConfig) -> Self {
+        let cap = pattern_capacity(n);
         Self {
             n,
             weights: vec![0.0f32; n * n],
             phase_shifts: vec![0.0f32; n * n],
             phases: vec![0.0f32; n],
             rotation: 0.0,
-            c_re: vec![0.0f32; n * n],
-            c_im: vec![0.0f32; n * n],
             mean_coupling: 0.0,
+            pat_re: vec![0.0f32; cap * n],
+            pat_im: vec![0.0f32; cap * n],
+            pat_age: vec![0u32; cap],
+            pat_count: 0,
+            pat_cap: cap,
+            pruned: vec![false; n * n],
+            gin_re: vec![0.0f64; cap * cap],
+            gin_im: vec![0.0f64; cap * cap],
+            gj_re: vec![0.0f64; 2 * cap * cap],
+            gj_im: vec![0.0f64; 2 * cap * cap],
+            c_re: vec![0.0f64; n * n],
+            c_im: vec![0.0f64; n * n],
+            a_re: vec![0.0f64; n * cap],
+            a_im: vec![0.0f64; n * cap],
+            buf_re: vec![0.0f32; n],
+            buf_im: vec![0.0f32; n],
             cfg,
         }
     }
@@ -268,10 +288,20 @@ impl ComplexPhaseMemory {
         &self.cfg
     }
 
-    /// Magnitude média `⟨|C_ij|⟩` do último imprint (referência do gauge:
+    /// Módulo médio `⟨|C_ij|⟩` do último imprint (referência do gauge:
     /// `weights = |C| / mean_coupling`). `0.0` antes do primeiro imprint.
     pub fn mean_coupling(&self) -> f32 {
         self.mean_coupling
+    }
+
+    /// Número de padrões atualmente na janela de memória.
+    pub fn stored_patterns(&self) -> usize {
+        self.pat_count
+    }
+
+    /// Capacidade da janela de padrões (`min(N−1, 64)`).
+    pub fn pattern_capacity(&self) -> usize {
+        self.pat_cap
     }
 
     /// Reinicia o estado dinâmico: todas as fases em `phase` e rotação em zero.
@@ -315,7 +345,7 @@ impl ComplexPhaseMemory {
         active as f32 / self.weights.len() as f32
     }
 
-    /// Grava um atrator contínuo na memória (regra hebbiana local).
+    /// Grava um atrator contínuo na memória (regra de projeção complexa).
     ///
     /// Versão infalível: entradas inválidas (tamanho errado, `NaN`, `n = 0`,
     /// `cycles = 0`, configuração inválida) são **no-op** e não envenenam o
@@ -326,8 +356,10 @@ impl ComplexPhaseMemory {
 
     /// Grava um atrator contínuo, devolvendo erro de validação explícito.
     ///
-    /// `cycles` é o número de passadas hebbianas; `cycles = 0` é no-op (`Ok`,
-    /// nada é gravado — não é promovido silenciosamente a 1).
+    /// O padrão entra na janela de `P` fasores e o acoplamento `C` é
+    /// **reconstruído por projeção** (pseudo-inversa complexa). `cycles`
+    /// controla as passadas de relaxação de `δ` (`16·cycles`); `cycles = 0` é
+    /// no-op (`Ok`, nada é gravado — não é promovido silenciosamente a 1).
     pub fn try_imprint(&mut self, pattern: &[f32], cycles: usize) -> Result<(), PhaseMemoryError> {
         let n = self.n;
         if n == 0 {
@@ -339,79 +371,273 @@ impl ComplexPhaseMemory {
         if pattern.iter().any(|p| !p.is_finite()) {
             return Err(PhaseMemoryError::NonFiniteInput);
         }
-        let eta = self.cfg.eta_w;
         let gamma = self.cfg.gamma_w;
-        if !eta.is_finite() || eta < 0.0 || !gamma.is_finite() || !(0.0..1.0).contains(&gamma) {
+        if !self.cfg.eta_w.is_finite()
+            || self.cfg.eta_w < 0.0
+            || !gamma.is_finite()
+            || !(0.0..1.0).contains(&gamma)
+        {
             return Err(PhaseMemoryError::InvalidConfig);
         }
         if cycles == 0 {
             return Ok(());
         }
 
+        // Janela de padrões: envelhece, deduplica (rotação rígida = mesmo
+        // atrator) e insere com FIFO quando cheia.
+        self.store_pattern(pattern);
+
         let rate = if self.cfg.eta_delta.is_finite() {
             self.cfg.eta_delta.clamp(0.0, 1.0)
         } else {
             0.0
         };
+        let relax_steps = cycles.saturating_mul(DELTA_SUBSTEPS).min(8192);
+        self.rebuild_coupling(rate, relax_steps);
+        Ok(())
+    }
 
-        // Esquecimento metabólico **por episódio**, não por ciclo: a regra
-        // ΔW = η_W(cos(Δψ−δ) − γ_W W) é aplicada `cycles` vezes para consolidar
-        // o fasor do padrão, mas o decaimento é aplicado uma vez por imprint.
-        //
-        // Motivo (medido, não estético): com o decaimento dentro dos ciclos, o
-        // primeiro padrão é decaído pelos ciclos de todos os seguintes. Com 3
-        // padrões × 40 ciclos e γ_W = 0.002, p0 fica 15% mais fraco que p2 e o
-        // erro de recall de p0 sobe de 0.134 para 0.169 rad; com 200 ciclos por
-        // padrão, p0 decai para 45% e o recall de p0 explode para 0.90 rad.
-        // Padrões gravados com o mesmo `cycles` devem coexistir com peso igual
-        // (é o invariante de memória associativa), então o decaimento é por
-        // episódio: `(1−γ_W)^cycles` é o tempo decorrido entre apresentações.
-        let forget = if gamma > 0.0 {
-            ((1.0 - gamma as f64).powf(cycles as f64)) as f32
-        } else {
-            1.0
-        };
-        if forget < 1.0 {
-            for idx in 0..(n * n) {
-                self.c_re[idx] *= forget;
-                self.c_im[idx] *= forget;
+    /// Insere o padrão na janela (ou atualiza o duplicado). Idades em episódios.
+    fn store_pattern(&mut self, pattern: &[f32]) {
+        let n = self.n;
+        for i in 0..n {
+            self.buf_re[i] = pattern[i].cos();
+            self.buf_im[i] = pattern[i].sin();
+        }
+
+        // Duplicata a menos de rotação global: |⟨ψ^new, ψ^μ⟩|/N ≈ 1.
+        let p = self.pat_count;
+        for mu in 0..p {
+            let base = mu * n;
+            let mut cr = 0.0f32;
+            let mut ci = 0.0f32;
+            for i in 0..n {
+                let (ar, ai) = (self.buf_re[i], self.buf_im[i]);
+                let (br, bi) = (self.pat_re[base + i], self.pat_im[base + i]);
+                cr += ar * br + ai * bi;
+                ci += ai * br - ar * bi;
+            }
+            if (cr * cr + ci * ci).sqrt() / n as f32 > 1.0 - 1e-5 {
+                for i in 0..n {
+                    self.pat_re[base + i] = self.buf_re[i];
+                    self.pat_im[base + i] = self.buf_im[i];
+                }
+                self.pat_age[mu] = 0;
+                for a in self.pat_age[..p].iter_mut() {
+                    if *a != 0 {
+                        *a += 1;
+                    }
+                }
+                return;
             }
         }
 
-        for _ in 0..cycles {
-            for i in 0..n {
-                let base = i * n;
-                let psi_i = wrap(pattern[i]);
-                for (j, psi_j) in pattern.iter().enumerate().take(n) {
-                    if i == j {
-                        continue;
-                    }
-                    let idx = base + j;
-                    let dpsi = wrap_signed(wrap(*psi_j) - psi_i);
-                    // ΔC = η_W · e^{i(ψ_j−ψ_i)} + acumulação (regra hebbiana
-                    // local); a parte real é ΔW = η_W cos(Δψ−δ).
-                    self.c_re[idx] += eta * dpsi.cos();
-                    self.c_im[idx] += eta * dpsi.sin();
+        for a in self.pat_age[..p].iter_mut() {
+            *a += 1;
+        }
+        let slot = if p == self.pat_cap {
+            // FIFO: descarta o mais antigo (índice 0).
+            let len = p * n;
+            self.pat_re.copy_within(n..len, 0);
+            self.pat_im.copy_within(n..len, 0);
+            self.pat_age.copy_within(1..p, 0);
+            p - 1
+        } else {
+            self.pat_count = p + 1;
+            p
+        };
+        let base = slot * n;
+        for i in 0..n {
+            self.pat_re[base + i] = self.buf_re[i];
+            self.pat_im[base + i] = self.buf_im[i];
+        }
+        self.pat_age[slot] = 0;
+    }
+
+    /// Reconstrói `C_ij` por projeção complexa e publica `(W, δ)`.
+    ///
+    /// ```text
+    /// G_μν = Σ_i conj(ψ_i^μ) ψ_i^ν · √(λ_μ λ_ν)  (+ ridge na diagonal)
+    /// C_ij = Σ_{μν} conj(ψ_i^μ) λ_μ (G⁻¹)_μν ψ_j^ν
+    /// ```
+    ///
+    /// O peso metabólico `λ_μ = (1−γ)^{idade_μ}` apenas modula a profundidade
+    /// do poço: a propriedade `Σ_j conj(C_ij)e^{i(ψ_j^ν−ψ_i^ν)} = λ_ν` (campo
+    /// residual nulo em todo padrão) vale para qualquer `λ`.
+    fn rebuild_coupling(&mut self, rate: f32, relax_steps: usize) {
+        let n = self.n;
+        let p = self.pat_count;
+        let cap = self.pat_cap;
+        if p == 0 {
+            self.weights.fill(0.0);
+            self.phase_shifts.fill(0.0);
+            self.mean_coupling = 0.0;
+            return;
+        }
+        let gamma = self.cfg.gamma_w;
+        // λ_μ = (1−γ)^idade_μ, em f64.
+        for mu in 0..p {
+            let lambda = if gamma > 0.0 {
+                (1.0 - gamma as f64).powi(self.pat_age[mu] as i32)
+            } else {
+                1.0
+            };
+            // guarda λ na diagonal de um buffer auxiliar? Não: aplique direto
+            // no cálculo de C usando uma coluna extra? Simples: reusa a_re como
+            // vetor de λ (n ≥ 1 garante espaço).
+            self.a_re[mu] = lambda;
+        }
+
+        // --- Gram G_μν = Σ_i conj(ψ^μ_i) ψ^ν_i -------------------------------
+        for mu in 0..p {
+            let bm = mu * n;
+            for nu in mu..p {
+                let bnu = nu * n;
+                let mut sr = 0.0f64;
+                let mut si = 0.0f64;
+                for i in 0..n {
+                    let ar = self.pat_re[bm + i] as f64;
+                    let ai = self.pat_im[bm + i] as f64;
+                    let br = self.pat_re[bnu + i] as f64;
+                    let bi = self.pat_im[bnu + i] as f64;
+                    sr += ar * br + ai * bi;
+                    si += ar * bi - ai * br;
+                }
+                self.gin_re[mu * p + nu] = sr;
+                self.gin_im[mu * p + nu] = si;
+                self.gin_re[nu * p + mu] = sr;
+                self.gin_im[nu * p + mu] = -si;
+            }
+        }
+        let ridge = RIDGE * n as f64;
+        for mu in 0..p {
+            self.gin_re[mu * p + mu] += ridge;
+        }
+
+        // --- Inversão (Gauss-Jordan com pivô parcial) em [G | I] --------------
+        let w = 2 * p;
+        for r in 0..p {
+            for c in 0..p {
+                self.gj_re[r * w + c] = self.gin_re[r * p + c];
+                self.gj_im[r * w + c] = self.gin_im[r * p + c];
+            }
+            for c in 0..p {
+                self.gj_re[r * w + p + c] = if r == c { 1.0 } else { 0.0 };
+                self.gj_im[r * w + p + c] = 0.0;
+            }
+        }
+        let mut singular = false;
+        for k in 0..p {
+            // pivô
+            let mut piv = k;
+            let mut best = 0.0f64;
+            for r in k..p {
+                let m2 = self.gj_re[r * w + k] * self.gj_re[r * w + k]
+                    + self.gj_im[r * w + k] * self.gj_im[r * w + k];
+                if m2 > best {
+                    best = m2;
+                    piv = r;
+                }
+            }
+            if best < 1e-24 {
+                singular = true;
+                break;
+            }
+            if piv != k {
+                for c in 0..w {
+                    self.gj_re.swap(k * w + c, piv * w + c);
+                    self.gj_im.swap(k * w + c, piv * w + c);
+                }
+            }
+            // normaliza a linha k por 1/M[k][k]
+            let (dr, di) = (self.gj_re[k * w + k], self.gj_im[k * w + k]);
+            let den = dr * dr + di * di;
+            for c in k..w {
+                let (ar, ai) = (self.gj_re[k * w + c], self.gj_im[k * w + c]);
+                self.gj_re[k * w + c] = (ar * dr + ai * di) / den;
+                self.gj_im[k * w + c] = (ai * dr - ar * di) / den;
+            }
+            // elimina as demais linhas
+            for r in 0..p {
+                if r == k {
+                    continue;
+                }
+                let (fr, fi) = (self.gj_re[r * w + k], self.gj_im[r * w + k]);
+                if fr == 0.0 && fi == 0.0 {
+                    continue;
+                }
+                for c in k..w {
+                    let (ar, ai) = (self.gj_re[r * w + c], self.gj_im[r * w + c]);
+                    let pr = fr * self.gj_re[k * w + c] - fi * self.gj_im[k * w + c];
+                    let pi = fr * self.gj_im[k * w + c] + fi * self.gj_re[k * w + c];
+                    self.gj_re[r * w + c] = ar - pr;
+                    self.gj_im[r * w + c] = ai - pi;
                 }
             }
         }
 
-        // Gauge do acoplamento: a matriz só é definida a menos de um ganho
-        // global (reescalar W e dt não muda as trajetórias de fase). Fixamos a
-        // unidade no acoplamento **médio** = 1, de modo que a escala do campo
-        // não dependa de η_W, γ_W nem do número de imprints e `weights` fique
-        // na unidade da coerência (1 = par médio). Não é um clamp: todos os
-        // pesos recebem exatamente o mesmo fator.
+        if singular {
+            // Não deveria acontecer (P < N, ridge, dedupe); degrada para o
+            // acoplamento nulo em vez de publicar lixo.
+            self.weights.fill(0.0);
+            self.phase_shifts.fill(0.0);
+            self.mean_coupling = 0.0;
+            return;
+        }
+
+        // G⁻¹ (lado direito) já ponderada por λ_μ.
+        for mu in 0..p {
+            let lambda = self.a_re[mu];
+            for nu in 0..p {
+                self.gin_re[mu * p + nu] = self.gj_re[mu * w + p + nu] * lambda;
+                self.gin_im[mu * p + nu] = self.gj_im[mu * w + p + nu] * lambda;
+            }
+        }
+
+        // --- A_iν = Σ_μ conj(ψ_i^μ) (G⁻¹)_μν  (N×P) --------------------------
+        for i in 0..n {
+            for nu in 0..p {
+                let mut ar = 0.0f64;
+                let mut ai = 0.0f64;
+                for mu in 0..p {
+                    let pr = self.pat_re[mu * n + i] as f64;
+                    let pi = -(self.pat_im[mu * n + i] as f64);
+                    let gr = self.gin_re[mu * p + nu];
+                    let gi = self.gin_im[mu * p + nu];
+                    ar += pr * gr - pi * gi;
+                    ai += pr * gi + pi * gr;
+                }
+                self.a_re[i * p + nu] = ar;
+                self.a_im[i * p + nu] = ai;
+            }
+        }
+
+        // --- C_ij = Σ_ν A_iν ψ_j^ν -------------------------------------------
+        for i in 0..n {
+            for j in 0..n {
+                let mut cr = 0.0f64;
+                let mut ci = 0.0f64;
+                for nu in 0..p {
+                    let pr = self.pat_re[nu * n + j] as f64;
+                    let pi = self.pat_im[nu * n + j] as f64;
+                    cr += self.a_re[i * p + nu] * pr - self.a_im[i * p + nu] * pi;
+                    ci += self.a_re[i * p + nu] * pi + self.a_im[i * p + nu] * pr;
+                }
+                self.c_re[i * n + j] = cr;
+                self.c_im[i * n + j] = ci;
+            }
+        }
+
+        // --- Gauge: acoplamento médio = 1 -------------------------------------
         let mut sum_mag = 0.0f64;
         let mut count = 0usize;
         for i in 0..n {
             for j in 0..n {
-                if i == j {
+                let idx = i * n + j;
+                if i == j || self.pruned[idx] {
                     continue;
                 }
-                let idx = i * n + j;
-                let re = self.c_re[idx] as f64;
-                let im = self.c_im[idx] as f64;
+                let (re, im) = (self.c_re[idx], self.c_im[idx]);
                 sum_mag += (re * re + im * im).sqrt();
                 count += 1;
             }
@@ -428,26 +654,22 @@ impl ComplexPhaseMemory {
             0.0
         };
 
-        // Publica (W, δ) e executa a regra Δδ da especificação:
-        //   δ ← δ + η_δ · W · sin(arg C − δ)
-        // O número de relaxações é proporcional a `cycles`: η_δ é a taxa de
-        // aprendizado de fase por ciclo (com η_δ = 0 nada é aprendido).
-        let relax_steps = cycles.saturating_mul(DELTA_SUBSTEPS).min(4096);
+        // --- Publica (W, δ) e roda a regra Δδ da especificação ----------------
         for i in 0..n {
             for j in 0..n {
-                if i == j {
+                let idx = i * n + j;
+                if i == j || self.pruned[idx] {
+                    self.weights[idx] = 0.0;
+                    self.phase_shifts[idx] = 0.0;
                     continue;
                 }
-                let idx = i * n + j;
                 let re = self.c_re[idx];
                 let im = self.c_im[idx];
-                let mag = (re * re + im * im).sqrt();
-                let w = if mag.is_finite() { mag * gain } else { 0.0 };
-                self.weights[idx] = if w.is_finite() { w } else { 0.0 };
-                // |C| = 0 ⇒ arg indefinido: mantém o δ corrente (peso nulo, o
-                // par não participa da dinâmica) em vez de inventar um ângulo.
-                if mag > 0.0 && w > 0.0 && rate > 0.0 {
-                    let target = im.atan2(re);
+                let mag = (re * re + im * im).sqrt() as f32 * gain;
+                let w = if mag.is_finite() { mag } else { 0.0 };
+                self.weights[idx] = w;
+                if w > 0.0 && rate > 0.0 {
+                    let target = (im.atan2(re) as f32).rem_euclid(TAU);
                     let mut d = self.phase_shifts[idx];
                     let step = rate * w;
                     for _ in 0..relax_steps {
@@ -455,10 +677,12 @@ impl ComplexPhaseMemory {
                         d = wrap(d + step * err.sin());
                     }
                     self.phase_shifts[idx] = d;
+                } else if w == 0.0 {
+                    self.phase_shifts[idx] = 0.0;
                 }
             }
         }
-        Ok(())
+        let _ = cap; // capacidade usada nos buffers; documentada por API
     }
 
     /// Recuperação associativa: reconstrói o padrão completo a partir de uma
@@ -489,9 +713,9 @@ impl ComplexPhaseMemory {
     /// `out` (que deve ter `n` elementos) e devolve a energia final.
     ///
     /// Contrato: nenhuma alocação de heap, nenhum panic. Se `out.len() != n`,
-    /// nada é escrito e a energia corrente é devolvida (`try_recall` reporta
-    /// `InvalidSize`). As fases grampeadas seguem a pista no referencial
-    /// girante (`cue_i + ω0·t`); a rotação acumulada fica em
+    /// nada é escrito/integrado e a energia corrente é devolvida
+    /// (`try_recall` reporta `InvalidSize`). As fases grampeadas seguem a pista
+    /// no referencial girante (`cue_i + ω0·t`); a rotação acumulada fica em
     /// [`Self::rotation`].
     pub fn recall_into(
         &mut self,
@@ -631,13 +855,14 @@ impl ComplexPhaseMemory {
         self.phase_energy()
     }
 
-    /// Poda metabólica: pesos abaixo do limiar são zerados **fisicamente**
-    /// (peso, `δ` e acumulador, para não ressuscitarem no próximo imprint).
+    /// Poda metabólica **permanente**: arestas abaixo do limiar são zeradas
+    /// (peso e `δ`) e ficam marcadas, de modo que a projeção **não as
+    /// ressuscita** nos imprints seguintes. Use [`Self::clear_pruning`] para
+    /// reabrir a plasticidade.
     ///
     /// Devolve o número real de arestas apagadas (arestas que eram diferentes
-    /// de zero — ou não finitas — e passaram a zero). `prune(f32::INFINITY)`
-    /// apaga todas as arestas e devolve o número de arestas existentes.
-    /// `threshold = NaN` é no-op (devolve `0`).
+    /// de zero — ou não finitas — e passaram a zero). `prune(∞)` apaga todas e
+    /// devolve o número de arestas existentes. `threshold = NaN` é no-op.
     pub fn prune(&mut self, threshold: f32) -> usize {
         if threshold.is_nan() {
             return 0;
@@ -655,9 +880,15 @@ impl ComplexPhaseMemory {
             }
             self.weights[idx] = 0.0;
             self.phase_shifts[idx] = 0.0;
-            self.c_re[idx] = 0.0;
-            self.c_im[idx] = 0.0;
+            self.pruned[idx] = true;
         }
         cut
+    }
+
+    /// Reabre a plasticidade das arestas podadas (limpa a máscara de poda).
+    ///
+    /// O acoplamento só é recalculado no próximo `imprint`.
+    pub fn clear_pruning(&mut self) {
+        self.pruned.fill(false);
     }
 }

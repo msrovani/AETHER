@@ -13,6 +13,7 @@
 //! * `--window <n>`    amostras do buffer circular (padrão: 128)
 //! * `--perturb-at <s>` momento da perturbação física (padrão: 3s)
 //! * `--hz <f>`        taxa do loop (padrão: 60)
+//! * `--sensor-noise <f>` ruído do sensor em rad (padrão: 0.03)
 //! * `--no-perturb`    desliga a perturbação (controle)
 
 use std::time::Duration;
@@ -61,6 +62,16 @@ fn parse_args() -> Result<(OrganismConfig, Duration), String> {
             "--hz" => {
                 let v = value(&mut i)?;
                 cfg.hz = v.parse().map_err(|e| format!("--hz inválido: {e}"))?;
+            }
+            "--sensor-noise" => {
+                let v = value(&mut i)?;
+                let noise: f64 = v
+                    .parse()
+                    .map_err(|e| format!("--sensor-noise inválido: {e}"))?;
+                if !noise.is_finite() || noise < 0.0 {
+                    return Err(format!("--sensor-noise deve ser finito e >= 0, veio {noise}"));
+                }
+                cfg.sensor_noise = noise;
             }
             "--no-perturb" => {
                 cfg.perturb_after = Duration::from_secs(3600);
