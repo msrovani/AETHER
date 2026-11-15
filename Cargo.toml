@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "aether_engine"
 version = "0.0.59"
 edition = "2021"
@@ -24,7 +24,7 @@ required-features = ["m8"]
 # Features de modulo: permitem build isolado de cada pilar (paralelismo de agentes
 # sem colisao de codigo) e compilacao enxuta quando so um pilar e necessario.
 [features]
-default = ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8"]
+default = ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "jit", "affinity"]
 m1 = []
 m2 = []
 m3 = []
@@ -34,6 +34,17 @@ m5 = []
 m6 = ["m1"]
 m7 = ["m1"]
 m8 = ["m1", "m2", "m3", "m4", "m5", "m6", "m7"]
+# FASE 5 (hardware extremus): JIT Cranelift para termos SINDy ativos e pinning
+# de threads por nucleo. Ambos opcionais; sem eles o crate cai em fallbacks
+# interpretados / no-op (ver src/core/sindy_jit.rs e aether_governor.rs).
+jit = [
+    "dep:cranelift-jit",
+    "dep:cranelift-module",
+    "dep:cranelift-codegen",
+    "dep:cranelift-frontend",
+    "dep:cranelift-native",
+]
+affinity = ["dep:core_affinity"]
 
 [dependencies]
 ndarray = { version = "0.16", features = ["rayon"] }
@@ -49,6 +60,12 @@ crossbeam-channel = "0.5"
 thiserror = "2"
 ratatui = { version = "0.29", optional = true }
 crossterm = { version = "0.28", optional = true }
+cranelift-jit = { version = "0.113.1", optional = true }
+cranelift-module = { version = "0.113.1", optional = true }
+cranelift-codegen = { version = "0.113.1", optional = true }
+cranelift-frontend = { version = "0.113.1", optional = true }
+cranelift-native = { version = "0.113.1", optional = true }
+core_affinity = { version = "0.8.3", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", default-features = false }
@@ -91,6 +108,10 @@ required-features = ["m4"]
 name = "phase_recall"
 harness = false
 required-features = ["m5"]
+
+[[bench]]
+name = "bam_probe"
+harness = false
 
 [profile.release]
 opt-level = 3
