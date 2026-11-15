@@ -378,7 +378,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | ID | Vol. | Objetivo | Gate | Fecha |
 |---|---|---|---|---|
 | **E6** ✅ | II | perfil por estágio — **executado** | cobertura **99,98%**; solver **84,8%** · 7,5 GFLOP/s | bloqueio transversal **removido** |
-| **E6b** | II | kernel do solver (SIMD f64 / f32 / fusão) | ≥ 2× GFLOP/s (de 7,5 para ≥15) | R1, R5 |
+| **E6b** ✅ | II | kernel do solver (16 acumuladores, Rust safe) | **17,10 GFLOP/s (2,30×)** · ACQ 100 · 24 suítes verdes | R1, R5 |
 | **E1** | I | linguagem em fase (papel–filler) | SNR > 5σ, 0 alloc | R2 |
 | **E1b** | II | ACF/IMF no `FhrrStore` | ≥10× capacidade, ciclo-limite <1% | R2 |
 | **E2** | I | lógica como Ising + certificado | 3-SAT n≤20 = força bruta | R1 |
@@ -407,7 +407,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | `TRANSPLANT_UNVALIDATED` | I | alto | E3 |
 | `PREPRINT_RISK` | I/II | info | protocolo §7 Vol. II |
 | `NO_PROFILE_BREAKDOWN` | II | ✅ **resolvido (E6)** | medido 2026-11-15: solver 84,8% | — |
-| `SOLVER_KERNEL_SCALAR` | II | **crítico** | laços escalares em f64; ~19% do pico AVX2 | E6b |
+| `SOLVER_KERNEL_SCALAR` | II | ✅ **resolvido (E6b)** | 16 acumuladores safe: 7,44 → 17,10 GFLOP/s | — |
 | `NO_ROOF_DUAL` | II | alto | E2b |
 | `NO_LIMIT_CYCLE_GUARD` | II | alto | E1b |
 | `NO_PROVENANCE` | II | alto | F1 → E3b |
@@ -489,7 +489,7 @@ Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 
 ```
 1º ✅ E6   perfil                     ← FEITO: solver = 84,8% do ciclo
-2º  E6b  kernel do solver (SIMD/f32) ← 5× de headroom, maior ganho disponível
+2º ✅ E6b  kernel do solver            ← FEITO: 7,44 → 17,10 GFLOP/s (2,30×)
 3º  E3b  certificado + proveniência  ← único risco que pode matar a tese (P0)
 4º  E1b  capacidade/ciclo-limite     ← decide se VSA é viável em D=160
 5º  E2b  roof dual + presolve        ← decide se lógica é viável em CPU

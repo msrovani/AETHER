@@ -182,3 +182,66 @@ instrumentá-los isoladamente (experimento **E6-mod**), que mede *custo de
 integração*, não *anatomia do ciclo*. O orçamento de integração de cada um está na
 tabela §8.3.
 
+---
+
+## 8.5 E6b — kernel do solver vetorizado (antes × depois)
+
+**O que mudou** (`src/core/thermodynamic_solver.rs`): o GEMV `hx = Jx + h` e a
+energia `H(s)` passaram a usar `dot_f64`/`dot_i8` com **16 acumuladores
+independentes** (Rust 100% safe, sem intrinsics). `s ∈ {-1,+1}` é convertido uma
+vez por passo num buffer já existente (`self.g`) — **zero alocação nova** — para
+que o segundo produto seja um dot `f64` puro.
+
+**O que NÃO foi feito, e por quê:** a fusão algébrica proposta
+`H = −½·Σ x_i(hx_i + h_i)` só é exata para o estado **contínuo** `x`. O algoritmo
+precisa de `H(s)` com `s = sign(x) ≠ x`; fundir mudaria a semântica do
+`energy_trace`, do elitismo e do critério de parada. Os dois GEMVs são
+**necessários** — o ganho veio de ILP, não de álgebra.
+
+### Curva de acumuladores (N=64, steps=60)
+
+| Acumuladores | Cadeias YMM | GFLOP/s | Observação |
+|---:|---:|---:|---|
+| **16** | 4 | **17,1** | ótimo; divide 64/128/256/512/1024 exatamente |
+| 24 | 6 | 10,4 | cauda de 16 elementos em N=64 cai no laço escalar |
+| 32 | 8 | 12,3 | spill de registradores (8 YMM de acc + cargas) |
+
+### Antes × depois
+
+| Métrica | E6 | E6b | Ganho |
+|---|---:|---:|---:|
+| solver (N=64) | 132,1 µs | **57,5 µs** | **2,30×** |
+| GFLOP/s | 7,44 | **17,10** | **2,30×** |
+| total do quadro | 156,3 µs | **81,3 µs** | 1,92× |
+| p99 do quadro | 320,6 µs | **170,2 µs** | 1,88× |
+| `eq-t/s` | 818.844 | **1.574.229** | 1,92× |
+| N=1024 | 52,07 ms | **16,60 ms** | **3,14×** |
+
+### Orçamento de 60 Hz depois do E6b
+
+| N | total µs | % de 16.667 µs | status |
+|---:|---:|---:|---|
+| 64 | 81 | **0,49%** | folga de 205× |
+| 128 | 221 | 1,3% | folga |
+| 256 | 914 | 5,5% | folga |
+| 512 | 3.734 | **22,4%** | seguro |
+| 1024 | 16.598 | **99,6%** | cabe no papel, **sem margem para jitter** |
+
+**O teto de tempo real subiu de N=512 para N=1024**, mas de forma justa: sem
+margem para a cauda (p99 de N=1024 = 18,5 ms > 16,7 ms). O teto **seguro**
+continua **N=512**.
+
+### Validação (E6b)
+
+* `ACQ = 100.00` · **12/12 MEASURED** · `hot_path_bytes = 0` (auditoria cognitiva).
+* `cargo test --release`: **24 alvos, 0 falhas**.
+* `clippy --all-targets -D warnings` e `fmt --check`: verdes.
+* Alocações na janela de 10.000 quadros: **0**.
+* A associação de ponto flutuante mudou (~1 ULP): nenhum atrator mudou de Bacia.
+
+> **Nota de engenharia:** a primeira tentativa desta rodada corrompeu o encoding
+> do arquivo (`Set-Content -Encoding UTF8` releu UTF-8 como cp1252). O `clippy`
+> acusou 9 caracteres invisíveis; o arquivo foi restaurado do git e a reversão
+> cp1252→UTF-8 aplicada. **Nunca editar `.rs` com `Set-Content` no PowerShell 5.1.**
+
+

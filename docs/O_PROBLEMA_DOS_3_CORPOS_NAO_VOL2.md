@@ -112,11 +112,36 @@ o mesmo fenômeno que o benchmark oficial — e a variação entre execuções �
 > para a borda sensorial. Medir o organismo é medir **distribuição**, nunca execução
 > única — daí `frames=2000` e percentis.
 
-> **Achado #1 (corrigido):** o motor **é matvec-bound**. O solver consome
-> **84,0% → 90,9% → 95,3%** do quadro em `steps = 60 → 120 → 240`, e entrega
-> **~7,5 GFLOP/s** em f64 contra ~40 GFLOP/s de pico AVX2 a 2,5 GHz — **~19% do
+> **Achado #1 (corrigido):** o motor **é** matvec-bound. O solver consumia
+> **84,0% → 90,9% → 95,3%** do quadro em `steps = 60 → 120 → 240`, e entregava
+> **~7,44 GFLOP/s** em f64 contra ~40 GFLOP/s de pico AVX2 a 2,5 GHz — **~19% do
 > pico**. Todos os outros oito estágios somam 15% e, juntos, não pagam uma
 > otimização: o único gargalo que importa é o kernel do solver.
+
+### 1.1.2 E6b — o que aconteceu quando atacamos o kernel
+
+Vetorização em Rust safe (16 acumuladores independentes em `dot_f64`/`dot_i8`)
+mais a conversão de `s` para `f64` uma vez por passo:
+
+| Métrica | E6 | **E6b** | Ganho |
+|---|---:|---:|---:|
+| solver | 132,1 µs (84,4%) | **57,5 µs (70,7%)** | **2,30×** |
+| GFLOP/s | 7,44 | **17,10** | **2,30×** |
+| total | 156,3 µs | **81,3 µs** | 1,92× |
+| p99 | 320,6 µs | **170,2 µs** | 1,88× |
+| `eq-t/s` | 818.844 | **1.574.229** | 1,92× |
+| N=1024 | 52,07 ms | **16,60 ms** | 3,14× |
+
+**Curva de acumuladores medida:** 16 → 17,1 · 24 → 10,4 · 32 → 12,3 GFLOP/s.
+O ótimo é 16 porque (a) cabe nos 16 YMM com as cargas e (b) **divide todas as
+potências de dois** de N — 24 deixa cauda em N=64, 32 derrama registradores.
+
+**A fusão algébrica de 2 GEMVs em 1 não é válida:** `H(s)` usa `s = sign(x) ≠ x`;
+reutilizar `hx = Jx + h` daria a energia do estado **contínuo**, mudando o
+`energy_trace`, o elitismo e o critério de parada. O ganho veio de ILP, não de
+álgebra — e é reproduzível em qualquer AVX2.
+
+Detalhe completo e validação em `docs/HW_TARGET.md` §8.5.
 
 #### 1.1.1 Lei de escala medida (a cache importa menos do que se supunha)
 

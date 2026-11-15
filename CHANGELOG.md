@@ -3,6 +3,63 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.86] - 2026-11-15
+
+### Added
+
+- `simulation::profile` — `StageProfile` com 10 estágios nomeados, `coverage()`,
+  `top()` e `fraction()`; instrumentação por fronteira de macro-estágio.
+- `ClosedLoopOrganism::step_profiled_into` via `step_impl<const PROF: bool>` —
+  custo **zero** no `step_into` de produção (o compilador elimina o bloco).
+- `examples/e6_profile.rs` — anatomia do ciclo: 10k quadros, p50/p95/p99/p99.9,
+  alocador contador armado, working set por estágio e varreduras
+  `--sweep` (steps 60/120/240), `--nsweep` (N 64..1024) e `--all`.
+- `tests/e6_profile_gate.rs` — gate de cobertura ≥ 95% + sanidade do caminho
+  instrumentado.
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md` — Volume III da série: gestão do
+  conhecimento, encaixe do `neural-sgdb`, matriz 2D de garantia (autoridade × gap)
+  e **registro mestre** (experimentos, gaps `NO_*`, riscos `R1–R10`).
+- `docs/HW_TARGET.md` §8 — anatomia medida, mapa de capacidade, os dois orçamentos
+  (tempo real × throughput) e §8.5 (E6b antes × depois).
+
+### Changed
+
+- `thermodynamic_solver`: GEMV `hx = Jx + h` e energia `H(s)` agora usam
+  `dot_f64`/`dot_i8` com **16 acumuladores independentes** (Rust 100% safe, sem
+  intrinsics). `s ∈ {-1,+1}` é convertido uma vez por passo num buffer já
+  existente (`self.g`) — zero alocação nova.
+- Volumes I e II do dossiê: bloco "Série", selos `[A]/[B]/[C]/[M]`, riscos
+  renumerados `R1–R6` e correção da premissa "matvec = 0,07%".
+
+### Measured
+
+| Métrica | Antes (E6) | Depois (E6b) |
+|---|---:|---:|
+| solver (N=64, steps=60) | 132,1 µs (84,4%) | **57,5 µs (70,7%)** |
+| GFLOP/s | 7,44 | **17,10** — **2,30×** |
+| total do quadro | 156,3 µs | **81,3 µs** |
+| p99 | 320,6 µs | **170,2 µs** |
+| `eq-t/s` | 818.844 | **1.574.229** |
+| N=1024 | 52,07 ms | **16,60 ms** (3,14×) |
+
+Curva de acumuladores (N=64): **16 → 17,1** · 24 → 10,4 (cauda de 16 elementos) ·
+32 → 12,3 (spill de registradores). O ótimo é 16 porque divide todas as potências
+de dois de N.
+
+### Fixed
+
+- Premissa de diagnóstico: o solver faz **dois** GEMVs por passo (gradiente +
+  energia), não um — 983.040 flops por quadro em `steps=60`, não 4.096.
+- Nota de metodologia: o quadro do organismo **não é bit-reprodutível entre
+  instâncias** (amostragem lê threads UDP reais); medir distribuição, nunca
+  execução única.
+
+### Gates
+
+`ACQ = 100.00` · `12/12 MEASURED` · `hot_path_bytes = 0` · 0 alocações em 10.000
+quadros · `cargo test --release` (24 alvos) verde · `clippy -D warnings` e
+`fmt --check` verdes.
+
 ## [0.0.85] - 2026-11-15
 
 ### Changed
