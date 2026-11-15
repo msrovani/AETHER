@@ -292,6 +292,11 @@ fn inercia_do_atuador_reduz_chattering_sem_tocar_no_estado() {
         fractionario,
         "a atuação ficou idêntica ao estado discreto (filtro não agiu)"
     );
+    println!(
+        "INERCIA: chattering atuacao={act_chatter:.3} estado={state_chatter:.3} razao={:.3} (alpha={:.4})",
+        act_chatter / state_chatter,
+        (1.0 / 60.0) / (0.1 + 1.0 / 60.0)
+    );
     assert!(
         act_chatter < 0.5 * state_chatter,
         "inércia insuficiente: atuação {act_chatter:.3} vs estado {state_chatter:.3}"

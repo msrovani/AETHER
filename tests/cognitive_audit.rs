@@ -1411,77 +1411,81 @@ fn test_06_coherence() {
 
 #[test]
 fn test_07_epistemic_search() {
-    const N: usize = 32;
-    const SAMPLES: usize = 32;
-    const STEPS: usize = 200;
-
-    let mut dreamer = ThermodynamicDreamer::new(
-        N,
-        DreamerConfig {
-            a0: 1.0,
-            gamma_damp: 0.6,
-            beta_chaos: 0.55,
-            seed: 0xA37E_0002,
+    // Zona A: conhecida (baixa incerteza, custo zero). Zona B: inexplorada
+    // (alta entropia informacional, custo pequeno). O motor minimiza
+    // G = custo − λ·U, então explora B até dominar a região.
+    let zones = vec![
+        Zone {
+            mean: 0.0,
+            var: 0.01,
+            cost: 0.0,
         },
-    );
-
-    // Zona A: paisagem ordenada (conhecida -> baixa incerteza).
-    let mut j_known = vec![0.0f32; N * N];
-    for i in 0..N {
-        for k in (i + 1)..N {
-            j_known[i * N + k] = 0.05;
-            j_known[k * N + i] = 0.05;
+        Zone {
+            mean: 1.0,
+            var: 1.0,
+            cost: 0.05,
+        },
+    ];
+    let mut engine = ActiveInferenceEngine::new(zones, 1.0, 0.05).expect("active inference");
+    let mut rng = ChaCha8Rng::seed_from_u64(0x7E57);
+    let mut first_b = 0u32;
+    let mut last_b = 0u32;
+    let mut steps_to_mastery = 0usize;
+    for step in 0..300 {
+        let i = engine.select();
+        if i == 1 {
+            if step < 150 {
+                first_b += 1;
+            } else {
+                last_b += 1;
+            }
+        }
+        let noise = rng.gen::<f32>() * 0.4 - 0.2;
+        let sample = if i == 1 { 1.0 + noise } else { noise };
+        engine.observe(i, sample);
+        if steps_to_mastery == 0 && engine.uncertainty(1) < 0.20 {
+            steps_to_mastery = step + 1;
         }
     }
-    let h_known: Vec<f32> = (0..N)
-        .map(|i| if i % 2 == 0 { 0.6 } else { -0.6 })
-        .collect();
-    let known = dreamer.imagine_futures(&j_known, &h_known, 1.0, SAMPLES, STEPS, 0.05);
+    let u_b = engine.uncertainty(1);
+    let u_a = engine.uncertainty(0);
+    let mastered = u_b < 0.20;
+    let effort_reduction = if first_b > 0 {
+        (first_b as f64 - last_b as f64) / first_b as f64
+    } else {
+        0.0
+    };
+    let explored = engine.visits(1);
 
-    // Zona B: paisagem frustrada (inexplorada -> alta incerteza).
-    let (j_frus, h_frus) = frustrated_j(N, 0xD12E);
-    let unknown = dreamer.imagine_futures(&j_frus, &h_frus, 1.0, SAMPLES, STEPS, 0.05);
-    // Ordem frio->quente (mesma sequência do invariante M6 documentado).
-    let cold = dreamer.imagine_futures(&j_frus, &h_frus, 0.001, SAMPLES, STEPS, 0.05);
-    let hot = dreamer.imagine_futures(&j_frus, &h_frus, 1.5, SAMPLES, STEPS, 0.05);
+    assert!(u_b.is_finite() && u_a.is_finite());
+    assert!(mastered, "U_B={u_b}");
+    assert!(steps_to_mastery > 0);
 
-    let u_known = known.epistemic_uncertainty;
-    let u_unknown = unknown.epistemic_uncertainty;
-    let ratio = u_unknown / u_known.max(1e-6);
-    assert!(u_unknown.is_finite() && u_known.is_finite());
-    assert!((0.0..=1.0).contains(&u_unknown) && (0.0..=1.0).contains(&u_known));
-    assert!(
-        hot.epistemic_uncertainty > cold.epistemic_uncertainty,
-        "U(T) nao monotona"
-    );
-
-    // "Explorar ate U < 0.20 e entao reduzir esforco": proxy = U conhecida baixa.
-    let mastered = u_known < 0.20;
-    let score = 0.5 * score_hi(ratio, 2.0)
-        + 0.3 * score_hi(1.0 - u_known, 0.80)
-        + 0.2 * if mastered { 100.0 } else { 0.0 };
+    let score = 0.45 * score_hi(1.0 - u_b as f64, 0.80)
+        + 0.30 * if mastered { 100.0 } else { 0.0 }
+        + 0.25 * score_hi(effort_reduction, 0.50);
 
     record(
         Dimension::new(
             "T07",
-            "Exploracao epistemica (U do sonhador)",
+            "Exploracao epistemica (ActiveInference)",
             score,
-            "PROXY",
-            "sem ActiveInferenceEngine; mede separacao de U entre paisagem conhecida e frustrada",
+            "MEASURED",
+            "ActiveInferenceEngine: G = custo - lambda*U, atualizacao bayesiana das crencas",
         )
-        .m("u_known", u_known)
-        .m("u_unknown", u_unknown)
-        .m("ratio", ratio)
-        .m("u_hot", hot.epistemic_uncertainty)
-        .m("u_cold", cold.epistemic_uncertainty)
-        .m("mastered_u_below_0_20", if mastered { 1.0 } else { 0.0 }),
+        .m("u_unknown_zone", u_b as f64)
+        .m("u_known_zone", u_a as f64)
+        .m("visits_unknown", explored as f64)
+        .m("steps_to_mastery", steps_to_mastery as f64)
+        .m("effort_reduction", effort_reduction)
+        .m("lambda_epistemic", 1.0),
     );
     println!(
-        "[T07] U(conhecida)={u_known:.4} U(frustrada)={u_unknown:.4} razao={ratio:.3} U(hot)={:.4} U(cold)={:.4}",
-        hot.epistemic_uncertainty, cold.epistemic_uncertainty
+        "[T07] U_B={u_b:.4} em {steps_to_mastery} passos; visitas_B={explored}; esforco {first_b}->{last_b} (reducao {:.1}%)",
+        effort_reduction * 100.0
     );
 
-    target_gate(ratio >= 2.0, "T07 separacao de incerteza");
+    target_gate(mastered && effort_reduction > 0.25, "T07 exploracao");
 }
 
 // ---------------------------------------------------------------------------
@@ -1650,6 +1654,34 @@ fn test_09_mathematics() {
     const INSTANCES: usize = 20;
     const STEPS: usize = 300;
 
+    // Parte A — SINDy/STLSQ: descobre as equacoes do enunciado a partir da
+    // serie (derivadas por diferenca central e biblioteca polinomial).
+    let mut series: Vec<[f32; 2]> = Vec::with_capacity(4000);
+    let (mut sx1, mut sx2) = (1.0f64, 0.5f64);
+    let dt_s = 0.0005f32;
+    for _ in 0..4000 {
+        series.push([sx1 as f32, sx2 as f32]);
+        let d1 = -0.5 * sx1 + 1.2 * sx2 * sx2;
+        let d2 = 0.8 * sx1 - 0.3 * sx2 * sx2 * sx2;
+        sx1 += d1 * dt_s as f64;
+        sx2 += d2 * dt_s as f64;
+    }
+    let mut sindy = SindyEquationDiscoverer::new();
+    let coef = sindy.discover(&series, dt_s, 0.02).expect("sindy");
+    let truth: [[f64; 10]; 2] = [
+        [0.0, -0.5, 0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0],
+        [0.0, 0.8, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.3],
+    ];
+    let mut sindy_err = 0.0f64;
+    for e in 0..2 {
+        for t in 0..10 {
+            sindy_err = sindy_err.max((coef[e][t] - truth[e][t]).abs());
+        }
+    }
+    assert!(sindy_err < 0.04, "SINDy erro={sindy_err}");
+    assert_eq!(coef[0][3], 0.0, "termo nulo x1^2 nao zerado");
+    assert_eq!(coef[1][0], 0.0, "termo nulo constante nao zerado");
+
     let mut solver = ThermodynamicIsingSolver::new(1, N, STEPS, 0.05);
     let mut out = RelaxOutcome::with_capacity(1, N, STEPS);
     let h = Array2::<f64>::zeros((1, N));
@@ -1696,26 +1728,30 @@ fn test_09_mathematics() {
     let min_ratio = ratios.iter().copied().fold(f64::INFINITY, f64::min);
     assert!(mean_ratio.is_finite());
 
-    // SINDy nao existe no crate; a nota cobre apenas a otimizacao combinatoria.
-    let score = score_hi(mean_ratio, 0.96);
+    // SINDy (parte A) + otimizacao combinatoria bSB (parte B).
+    let score = 0.5 * score_lo(sindy_err, 0.04) + 0.5 * score_hi(mean_ratio, 0.96);
     record(
         Dimension::new(
             "T09",
-            "Matematica: MAX-CUT bSB (SINDy ausente)",
+            "Matematica: SINDy + MAX-CUT bSB",
             score,
-            "PARTIAL",
-            "bSB real em 20 grafos N=64; descoberta simbolica SINDy nao implementada",
+            "MEASURED",
+            "SINDy/STLSQ real sobre biblioteca polinomial + bSB em 20 grafos N=64",
         )
+        .m("sindy_max_coef_error", sindy_err)
         .m("maxcut_ratio_mean", mean_ratio)
         .m("maxcut_ratio_min", min_ratio)
         .m("instances", INSTANCES as f64)
-        .m("sindy_available", 0.0),
+        .m("sindy_available", 1.0),
     );
     println!(
-        "[T09] MAX-CUT razao media={mean_ratio:.4} (min {min_ratio:.4}) em {INSTANCES} grafos N={N}; SINDy=ausente"
+        "[T09] SINDy erro={sindy_err:.5}; MAX-CUT razao media={mean_ratio:.4} (min {min_ratio:.4}) em {INSTANCES} grafos N={N}"
     );
 
-    target_gate(mean_ratio >= 0.96, "T09 MAX-CUT >= 0.96");
+    target_gate(
+        sindy_err < 0.04 && mean_ratio >= 0.96,
+        "T09 SINDy/MAX-CUT",
+    );
 }
 
 fn cut_value(w: &[f64], s: &[i8], n: usize) -> f64 {
@@ -1843,6 +1879,25 @@ fn test_11_thought_drift() {
         memory.free_run(1, 0.05);
     }
 
+    // Camada Macro do RG: objetivo persistente + modulacao top-down real.
+    let mut rg = RenormalizationHierarchy::new(64).expect("rg T11");
+    let mut rg_field = patterns[0].clone();
+    rg.forward(&rg_field).expect("rg init");
+    let rg_goal = rg.macro_phase();
+    rg.set_goal(rg_goal);
+    let mut rg_drift = 0.0f32;
+    for t in 0..CYCLES {
+        for i in 0..N {
+            let kick = 0.08 * (0.7 * t as f32 + i as f32).sin();
+            rg_field[i] = wrap(patterns[0][i] + kick);
+        }
+        rg.forward(&rg_field).expect("rg forward");
+        if let Some(d) = rg.goal_drift() {
+            rg_drift = rg_drift.max(d);
+        }
+    }
+    assert!(rg_drift.is_finite());
+
     let mut max_err = 0.0f32;
     let mut macro_drift = 0.0f32;
     let mut cleanup_hits = 0usize;
@@ -1871,24 +1926,25 @@ fn test_11_thought_drift() {
     }
     assert!(macro_drift.is_finite());
 
-    let score = 0.6 * score_lo(max_err as f64, 0.15) + 0.4 * score_lo(macro_drift as f64, 0.20);
+    let score = 0.6 * score_lo(max_err as f64, 0.15) + 0.4 * score_lo(rg_drift as f64, 0.20);
     record(
         Dimension::new(
             "T11",
-            "Imunidade a desvio de pensamento (2000 ciclos)",
+            "Imunidade a desvio de pensamento (RG macro + 2000 ciclos)",
             score,
-            "PARTIAL",
-            "sem camada macro RG; retencao com cleanup memory + consolidacao (Plate/Hopfield)",
+            "MEASURED",
+            "objetivo persistente na camada Macro do RG + cleanup memory do M5",
         )
         .m("max_recall_error_rad", max_err as f64)
-        .m("macro_drift_rad", macro_drift as f64)
+        .m("rg_macro_drift_rad", rg_drift as f64)
+        .m("recall_macro_drift_rad", macro_drift as f64)
         .m("cleanup_hits", cleanup_hits as f64)
         .m("cycles", CYCLES as f64),
     );
     println!(
-        "[T11] erro max recall={max_err:.4} rad, desvio macro={macro_drift:.4} rad, cleanup={cleanup_hits}/5 apos {CYCLES} ciclos"
+        "[T11] erro recall={max_err:.4} rad; drift RG={rg_drift:.4} rad; cleanup={cleanup_hits}/5 apos {CYCLES} ciclos"
     );
-    target_gate(max_err < 0.15 && macro_drift < 0.20, "T11 retencao");
+    target_gate(max_err < 0.15 && rg_drift < 0.20, "T11 retencao");
 }
 
 // ---------------------------------------------------------------------------

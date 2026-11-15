@@ -340,7 +340,7 @@ pub fn classify_swarm(metrics: &[RoleMetrics]) -> Vec<EcologicalRole> {
     if n == 0 {
         return roles;
     }
-    let quota = (n + 2) / 3;
+    let quota = n.div_ceil(3);
     let mut idx: Vec<usize> = (0..n).collect();
     idx.sort_by(|&a, &b| {
         metrics[b]
