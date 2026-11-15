@@ -1759,12 +1759,13 @@ fn test_11_thought_drift() {
 
 #[test]
 fn test_12_holographic_rag() {
-    const D: usize = 512;
+    const D: usize = 384;
     const FACTS: usize = 50;
     const QUERIES: usize = 20;
 
-    // FHRR: M = Σ_μ e^{i(θ_e + θ_r + θ_v)}; consulta = M ⊙ conj(e_best ⊙ r_best).
-    let mut store = FhrrStore::new(D).expect("fhrr");
+    // FHRR: M_t = Σ_μ e^{i(θ_e + θ_r + θ_v + φ_t)}; consulta = média dos K
+    // unbindings (reduz crosstalk por √K).
+    let mut store = FhrrStore::with_traces(D, 3).expect("fhrr");
     let mut rng = ChaCha8Rng::seed_from_u64(0xFAC7);
     let mut atoms: Vec<(Vec<f32>, Vec<f32>, Vec<f32>)> = Vec::with_capacity(FACTS);
     for _ in 0..FACTS {
@@ -1852,6 +1853,7 @@ fn test_12_holographic_rag() {
         .m("latency_us_mean", mean_latency)
         .m("facts", FACTS as f64)
         .m("dim", D as f64)
+        .m("traces", store.traces() as f64)
         .m("occlusion_pct", 40.0),
     );
     println!(
