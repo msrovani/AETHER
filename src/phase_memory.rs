@@ -94,6 +94,10 @@ const PATTERN_CAP_MAX: usize = 64;
 /// *Ridge* relativo aplicado à diagonal de `G` antes da inversão.
 const RIDGE: f64 = 1e-6;
 
+/// Piso de retenção: padrões com peso metabólico `(1−γ_W)^{idade}` abaixo
+/// disto são descartados no próximo `imprint`.
+const RETENTION_FLOOR: f64 = 1e-3;
+
 /// Relaxações de fase por ciclo de `imprint` (regra `Δδ`).
 const DELTA_SUBSTEPS: usize = 16;
 
@@ -201,8 +205,6 @@ pub struct ComplexPhaseMemory {
     c_im: Vec<f64>,
     a_re: Vec<f64>,
     a_im: Vec<f64>,
-    /// Peso metabólico `λ_μ = (1−γ)^{idade_μ}` de cada padrão.
-    lambda: Vec<f64>,
     /// Rascunho do padrão sendo gravado (fasor), para a checagem de duplicata.
     buf_re: Vec<f32>,
     buf_im: Vec<f32>,
@@ -277,7 +279,6 @@ impl ComplexPhaseMemory {
             c_im: vec![0.0f64; n * n],
             a_re: vec![0.0f64; n * cap],
             a_im: vec![0.0f64; n * cap],
-            lambda: vec![0.0f64; cap],
             buf_re: vec![0.0f32; n],
             buf_im: vec![0.0f32; n],
             cfg,
@@ -411,6 +412,13 @@ impl ComplexPhaseMemory {
         for a in self.pat_age[..p].iter_mut() {
             *a = a.saturating_add(1);
         }
+        // Esquecimento metabólico (γ_W): descarta padrões cujo peso
+        // `(1−γ)^idade` caiu abaixo do piso de retenção. Na regra de projeção
+        // γ_W **não** pode modular a profundidade do poço (pesos não-uniformes
+        // tornam `C_ii` complexo e reintroduzem crosstalk); ele atua na
+        // retenção, como manda o significado de "esquecimento".
+        self.evict_stale();
+        let p = self.pat_count;
 
         // Duplicata a menos de rotação global: |⟨ψ^new, ψ^μ⟩|/N ≈ 1.
         for mu in 0..p {
@@ -452,16 +460,45 @@ impl ComplexPhaseMemory {
         self.pat_age[slot] = 0;
     }
 
+    /// Remove padrões cujo peso metabólico `(1−γ_W)^{idade}` caiu abaixo de
+    /// [`RETENTION_FLOOR`]. Preserva a ordem relativa (a janela continua FIFO).
+    fn evict_stale(&mut self) {
+        let gamma = self.cfg.gamma_w;
+        if gamma <= 0.0 {
+            return;
+        }
+        let n = self.n;
+        let p = self.pat_count;
+        let mut keep = 0usize;
+        for src in 0..p {
+            let lambda = (1.0 - gamma as f64).powi(self.pat_age[src] as i32);
+            if lambda < RETENTION_FLOOR {
+                continue;
+            }
+            if src != keep {
+                let (s, d) = (src * n, keep * n);
+                self.pat_re.copy_within(s..s + n, d);
+                self.pat_im.copy_within(s..s + n, d);
+                self.pat_age[keep] = self.pat_age[src];
+            }
+            keep += 1;
+        }
+        self.pat_count = keep;
+    }
+
     /// Reconstrói `C_ij` por projeção complexa e publica `(W, δ)`.
     ///
     /// ```text
-    /// G_μν = Σ_i conj(ψ_i^μ) ψ_i^ν · √(λ_μ λ_ν)  (+ ridge na diagonal)
-    /// C_ij = Σ_{μν} conj(ψ_i^μ) λ_μ (G⁻¹)_μν ψ_j^ν
+    /// G_μν = Σ_i conj(ψ_i^μ) ψ_i^ν            (+ ridge na diagonal)
+    /// C_ij = Σ_{μν} conj(ψ_i^μ) (G⁻¹)_μν ψ_j^ν
     /// ```
     ///
-    /// O peso metabólico `λ_μ = (1−γ)^{idade_μ}` apenas modula a profundidade
-    /// do poço: a propriedade `Σ_j conj(C_ij)e^{i(ψ_j^ν−ψ_i^ν)} = λ_ν` (campo
-    /// residual nulo em todo padrão) vale para qualquer `λ`.
+    /// Com pesos **uniformes** em `G`, `Σ_j conj(C_ij)e^{i(ψ_j^ν−ψ_i^ν)} = 1`
+    /// (real) para todo `i,ν`, logo o campo residual em cada padrão é zero
+    /// (inclusive o termo diagonal `C_ii`, que é real e por isso a dinâmica,
+    /// que pula `i = j`, não deixa resíduo). Peso metabólico não-uniforme
+    /// `λ_μ` tornaria `C_ii` complexo e **reintroduziria** crosstalk — por isso
+    /// o esquecimento é por retenção (janela), não por escala do poço.
     fn rebuild_coupling(&mut self, rate: f32, relax_steps: usize) {
         let n = self.n;
         let p = self.pat_count;
@@ -470,16 +507,6 @@ impl ComplexPhaseMemory {
             self.phase_shifts.fill(0.0);
             self.mean_coupling = 0.0;
             return;
-        }
-        let gamma = self.cfg.gamma_w;
-        // λ_μ = (1−γ)^idade_μ, em f64.
-        for mu in 0..p {
-            let lambda = if gamma > 0.0 {
-                (1.0 - gamma as f64).powi(self.pat_age[mu] as i32)
-            } else {
-                1.0
-            };
-            self.lambda[mu] = lambda;
         }
 
         // --- Gram G_μν = Σ_i conj(ψ^μ_i) ψ^ν_i -------------------------------
@@ -579,12 +606,13 @@ impl ComplexPhaseMemory {
             return;
         }
 
-        // G⁻¹ (lado direito) já ponderada por λ_μ.
+        // G⁻¹ **transposta** (= conj(G⁻¹), pois G⁻¹ é hermiteana). É esta
+        // transposição que faz `Σ_j conj(C_ij)e^{i(ψ_j^ν−ψ_i^ν)} = 1` real:
+        // com G⁻¹ direta o resíduo fica em `Im(C_ii) ≠ 0` (~0.19 medido).
         for mu in 0..p {
-            let lambda = self.lambda[mu];
             for nu in 0..p {
-                self.gin_re[mu * p + nu] = self.gj_re[mu * w + p + nu] * lambda;
-                self.gin_im[mu * p + nu] = self.gj_im[mu * w + p + nu] * lambda;
+                self.gin_re[mu * p + nu] = self.gj_re[nu * w + p + mu];
+                self.gin_im[mu * p + nu] = self.gj_im[nu * w + p + mu];
             }
         }
 
