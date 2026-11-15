@@ -201,71 +201,69 @@ mod aether_dashboard_win {
         fn draw_detail_pane(&mut self, ui: &mut egui::Ui) {
             ui.heading(RichText::new("Detalhe").strong().size(18.0));
             ui.separator();
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                match &self.detail {
-                    DetailPane::Idle => {
-                        ui.label(
-                            RichText::new(
-                                "Passe o mouse sobre ACQ, T0x, vazão ou um botão \
+            egui::ScrollArea::vertical().show(ui, |ui| match &self.detail {
+                DetailPane::Idle => {
+                    ui.label(
+                        RichText::new(
+                            "Passe o mouse sobre ACQ, T0x, vazão ou um botão \
                                  para ler a explicação aqui — sem caixa flutuante.",
-                            )
+                        )
+                        .small()
+                        .color(Color32::from_rgb(160, 170, 180)),
+                    );
+                    ui.add_space(10.0);
+                    ui.label(RichText::new("Glossário").strong());
+                    ui.add_space(4.0);
+                    for (k, v) in glossary_entries() {
+                        ui.label(RichText::new(*k).strong().small());
+                        ui.label(RichText::new(*v).small());
+                        ui.add_space(6.0);
+                    }
+                    ui.separator();
+                    ui.label(
+                        RichText::new("docs/USER_GUIDE.md · docs/DASHBOARD_METRICS.md")
                             .small()
-                            .color(Color32::from_rgb(160, 170, 180)),
-                        );
-                        ui.add_space(10.0);
-                        ui.label(RichText::new("Glossário").strong());
-                        ui.add_space(4.0);
-                        for (k, v) in glossary_entries() {
-                            ui.label(RichText::new(*k).strong().small());
-                            ui.label(RichText::new(*v).small());
-                            ui.add_space(6.0);
-                        }
-                        ui.separator();
-                        ui.label(
-                            RichText::new("docs/USER_GUIDE.md · docs/DASHBOARD_METRICS.md")
-                                .small()
-                                .color(Color32::GRAY),
-                        );
-                    }
-                    DetailPane::Hover { title, body } => {
-                        ui.label(RichText::new(title).strong().size(15.0));
-                        ui.add_space(6.0);
-                        for para in body.split('\n') {
-                            if para.is_empty() {
-                                ui.add_space(4.0);
-                            } else {
-                                ui.label(RichText::new(para).size(13.0));
-                            }
+                            .color(Color32::GRAY),
+                    );
+                }
+                DetailPane::Hover { title, body } => {
+                    ui.label(RichText::new(title).strong().size(15.0));
+                    ui.add_space(6.0);
+                    for para in body.split('\n') {
+                        if para.is_empty() {
+                            ui.add_space(4.0);
+                        } else {
+                            ui.label(RichText::new(para).size(13.0));
                         }
                     }
-                    DetailPane::Ficha(ficha) => {
-                        let ficha = *ficha;
-                        ui.label(
-                            RichText::new(format!("{} — {}", ficha.id, ficha.title))
-                                .strong()
-                                .size(15.0),
-                        );
-                        ui.add_space(6.0);
-                        for para in ficha.tooltip.split('\n') {
-                            if para.is_empty() {
-                                ui.add_space(4.0);
-                            } else {
-                                ui.label(RichText::new(para).small());
-                            }
+                }
+                DetailPane::Ficha(ficha) => {
+                    let ficha = *ficha;
+                    ui.label(
+                        RichText::new(format!("{} — {}", ficha.id, ficha.title))
+                            .strong()
+                            .size(15.0),
+                    );
+                    ui.add_space(6.0);
+                    for para in ficha.tooltip.split('\n') {
+                        if para.is_empty() {
+                            ui.add_space(4.0);
+                        } else {
+                            ui.label(RichText::new(para).small());
                         }
-                        ui.separator();
-                        ui.label(RichText::new("Como interpretar").strong());
-                        ui.label(ficha.interpret);
-                        ui.add_space(4.0);
-                        ui.label(RichText::new("Se baixo, o que falha").strong());
-                        ui.label(ficha.if_low);
-                        ui.add_space(4.0);
-                        ui.label(RichText::new("Proveniência").strong());
-                        ui.label(RichText::new(ficha.provenance).italics().small());
-                        ui.add_space(8.0);
-                        if ui.button("Limpar ficha").clicked() {
-                            self.detail = DetailPane::Idle;
-                        }
+                    }
+                    ui.separator();
+                    ui.label(RichText::new("Como interpretar").strong());
+                    ui.label(ficha.interpret);
+                    ui.add_space(4.0);
+                    ui.label(RichText::new("Se baixo, o que falha").strong());
+                    ui.label(ficha.if_low);
+                    ui.add_space(4.0);
+                    ui.label(RichText::new("Proveniência").strong());
+                    ui.label(RichText::new(ficha.provenance).italics().small());
+                    ui.add_space(8.0);
+                    if ui.button("Limpar ficha").clicked() {
+                        self.detail = DetailPane::Idle;
                     }
                 }
             });
@@ -427,8 +425,7 @@ mod aether_dashboard_win {
                         if let Some((k, v)) = d.metrics.first() {
                             body.push_str(&format!("\n{k}={v:.3}"));
                         }
-                        let (hov, clk) =
-                            dim_card(ui, &d.id, &d.name, &body, score_color(d.score));
+                        let (hov, clk) = dim_card(ui, &d.id, &d.name, &body, score_color(d.score));
                         if hov {
                             hovered = Some((d.id.clone(), tip.to_string()));
                         }
@@ -587,10 +584,7 @@ mod aether_dashboard_win {
                     format!("{}", h.logical_cpus),
                     Color32::from_rgb(70, 120, 140),
                 ) {
-                    self.note_hover(
-                        "CPU lógico",
-                        "Núcleos lógicos detectados (SMT incluso).",
-                    );
+                    self.note_hover("CPU lógico", "Núcleos lógicos detectados (SMT incluso).");
                 }
                 if meter_card(
                     ui,
@@ -684,7 +678,8 @@ mod aether_dashboard_win {
         }
     }
 
-    /// Formata grandezas sem notação científica: `0.xxx`, `1.2k`, `3.18kk`, `1.05kkk`.
+    /// Formata com **4 dígitos** + sufixo `k`/`kk`/`kkk` (sem `eN`).
+    /// Exemplos: `1,586` · `15,86` · `158,6` · `87k` · `235kk` · `3,180kkk` · `0,003182`.
     fn fmt_compact(n: f64) -> String {
         if !n.is_finite() {
             return "—".into();
@@ -694,36 +689,58 @@ mod aether_dashboard_win {
         } else {
             ""
         };
-        let x = n.abs();
+        let mut x = n.abs();
         if x == 0.0 {
             return format!("{sign}0");
         }
-        let (scaled, suffix) = if x < 1.0 {
-            return format!("{sign}{}", trim_decimals(x, 3));
-        } else if x < 1_000.0 {
-            return format!("{sign}{}", trim_decimals(x, 1));
-        } else if x < 1_000_000.0 {
-            (x / 1_000.0, "k")
-        } else if x < 1_000_000_000.0 {
-            (x / 1_000_000.0, "kk")
-        } else if x < 1_000_000_000_000.0 {
-            (x / 1_000_000_000.0, "kkk")
-        } else {
-            (x / 1_000_000_000_000.0, "kkkk")
-        };
-        format!("{sign}{}{suffix}", trim_decimals(scaled, 2))
+
+        // Escala milhar → mantissa em [1, 1000) + sufixo k/kk/kkk/kkkk.
+        const SUFFIXES: [&str; 5] = ["", "k", "kk", "kkk", "kkkk"];
+        let mut scale = 0usize;
+        while x >= 1000.0 && scale + 1 < SUFFIXES.len() {
+            x /= 1000.0;
+            scale += 1;
+        }
+        let suffix = SUFFIXES[scale];
+
+        if x < 1.0 {
+            // Frações: até 4 dígitos significativos (ex.: 0,003182).
+            return format!("{sign}{}", four_digits_lt1(x));
+        }
+
+        format!("{sign}{}{suffix}", four_digits_ge1(x))
     }
 
-    fn trim_decimals(n: f64, max_frac: usize) -> String {
-        let s = format!("{n:.max_frac$}");
-        if !s.contains('.') {
-            return s;
+    /// Mantissa ∈ [1, 1000): sempre 4 dígitos, vírgula decimal, zeros finais removidos.
+    fn four_digits_ge1(x: f64) -> String {
+        let raw = if x < 10.0 {
+            format!("{x:.3}") // 1,586
+        } else if x < 100.0 {
+            format!("{x:.2}") // 15,86
+        } else {
+            format!("{x:.1}") // 158,6
+        };
+        trim_comma_zeros(&raw.replace('.', ","))
+    }
+
+    /// Mantissa ∈ (0, 1): 4 dígitos significativos com vírgula.
+    fn four_digits_lt1(x: f64) -> String {
+        // Casas = 3 + ordem (ex.: 0,003182 → 6 casas, 4 sig).
+        let exp = x.log10().floor() as i32; // -3 for 0.003…
+        let frac_digits = ((-exp) + 3).clamp(3, 9) as usize;
+        let raw = format!("{x:.frac_digits$}");
+        trim_comma_zeros(&raw.replace('.', ","))
+    }
+
+    fn trim_comma_zeros(s: &str) -> String {
+        if !s.contains(',') {
+            return s.to_string();
         }
-        let trimmed = s.trim_end_matches('0').trim_end_matches('.');
-        if trimmed.is_empty() || trimmed == "-" {
+        let t = s.trim_end_matches('0').trim_end_matches(',');
+        if t.is_empty() {
             "0".into()
         } else {
-            trimmed.to_string()
+            t.to_string()
         }
     }
 

@@ -23,6 +23,11 @@
 pub mod core;
 pub mod error;
 
+/// Camada de plataforma (Fase 6): sensores reais, estado binário e LAN.
+///
+/// O núcleo auditado permanece congelado; I/O, tempo real e rede vivem aqui.
+pub mod platform;
+
 #[cfg(feature = "m4")]
 pub mod simulation;
 

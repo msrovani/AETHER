@@ -3,6 +3,23 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.77] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 9 arquivo(s) (.:3, src:5, tests:1).
+- Gate: ok (2s).
+
+- `Cargo.lock`
+- `Cargo.toml`
+- `README.md`
+- `src/bin/aether_dashboard.rs`
+- `src/dashboard/host_probe.rs`
+- `src/lib.rs`
+- `src/platform/host_transducer.rs`
+- `src/bin/aether_governor.rs`
+- `tests/governor_e2e.rs`
+
 ## [0.0.76] - 2026-11-15
 
 ### Changed

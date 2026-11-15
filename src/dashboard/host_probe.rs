@@ -55,9 +55,7 @@ impl From<&Gap> for GapDto {
 
 /// Lê uma propriedade CIM via PowerShell (WMIC removido em Windows recentes).
 fn cim_number(class: &str, prop: &str) -> Option<f64> {
-    let script = format!(
-        "(Get-CimInstance -ClassName {class}).{prop} | Select-Object -First 1"
-    );
+    let script = format!("(Get-CimInstance -ClassName {class}).{prop} | Select-Object -First 1");
     let out = std::process::Command::new("powershell")
         .args(["-NoProfile", "-Command", &script])
         .output()
@@ -74,10 +72,9 @@ fn cim_number(class: &str, prop: &str) -> Option<f64> {
 
 fn ram_windows() -> (Option<f64>, Option<f64>) {
     // Sem FFI novo: CIM via PowerShell (sem unsafe no dashboard).
-    let total = cim_number("Win32_ComputerSystem", "TotalPhysicalMemory")
-        .map(|n| n / (1024.0 * 1024.0));
-    let avail = cim_number("Win32_OperatingSystem", "FreePhysicalMemory")
-        .map(|n| n / 1024.0); // KB → MB
+    let total =
+        cim_number("Win32_ComputerSystem", "TotalPhysicalMemory").map(|n| n / (1024.0 * 1024.0));
+    let avail = cim_number("Win32_OperatingSystem", "FreePhysicalMemory").map(|n| n / 1024.0); // KB → MB
     (total, avail)
 }
 
@@ -259,8 +256,7 @@ mod tests {
         let report = probe_and_save(None).expect("probe");
         assert!(report.logical_cpus >= 1);
         assert!(
-            !report.gaps.is_empty()
-                || report.cargo_on_path && report.affinity_feature,
+            !report.gaps.is_empty() || report.cargo_on_path && report.affinity_feature,
             "esperado >=1 gap heurístico ou ambiente limpo"
         );
         assert!(host_report_path().is_file());

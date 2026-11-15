@@ -56,6 +56,66 @@ As instâncias acoplam fase automaticamente via multicast — observe `R(LAN)`
 subir a ~1.0 e a Surpresa `F(t)` reagir a carga de CPU na outra máquina, sem um
 único pacote JSON/HTTP.
 
+## Governador de hardware real (`aether-governor`, Fase 6)
+
+Encarna o laço completo — `HostTransducer` → `EventDrivenCore` →
+`WaveInterferenceBlock` → `BamFhrrStore` → `OnlineKoopmanOperator` →
+`ActiveInferenceEngine` (CBF de Lyapunov) → `RenormalizationHierarchy` →
+`KuramotoPhaseNode` — e publica telemetria em `%TEMP%\aether_state.bin`
+(32 bytes, CRC-32 IEEE, `rename` atômico a cada 250 ms).
+
+### Uma máquina
+
+```bash
+# headless por 30 s (telemetria no stdout + frame binário)
+cargo run --release --bin aether-governor -- --headless --duration-secs 30
+
+# interativo: 1 = pulso térmico · 2 = rajada de ruído · 3 = gravar assinatura · q = sair
+cargo run --release --bin aether-governor
+
+# com pinning do núcleo reflexivo (feature opt-in)
+cargo run --release --features affinity --bin aether-governor -- \
+    --headless --duration-secs 30 --pin-core
+```
+
+No modo interativo só os **intervalos** `Δt` entre teclas são medidos; nenhum
+caractere é gravado ou exibido.
+
+### Duas ou mais máquinas na mesma LAN
+
+```bash
+# máquina A
+target/release/aether-governor --headless --duration-secs 60 --node-id 1
+# máquina B (mesma rede)
+target/release/aether-governor --headless --duration-secs 60 --node-id 2
+```
+
+As duas entram no grupo multicast `239.255.42.99:7777` (UDP, pacotes binários
+de 40 bytes). `lan_peers` no frame conta os nós ativos e `coherence_r` mistura
+a coerência local (RG L2) com o parâmetro de ordem da LAN.
+
+- Windows: libere `aether-governor.exe` no Defender Firewall (rede **privada**)
+  na primeira execução, senão o multicast é bloqueado.
+- Para rodar sem rede (CI, bancada isolada): `--no-lan`.
+- `--node-id` deve ser único por máquina (o default já deriva do PID).
+
+### Ler o estado de fora (PowerShell)
+
+```powershell
+$b = [IO.File]::ReadAllBytes("$env:TEMP\aether_state.bin")
+[BitConverter]::ToSingle($b, 0)    # coherence_r
+[BitConverter]::ToSingle($b, 4)    # identity_confidence
+[BitConverter]::ToSingle($b, 8)    # free_energy
+$b[12]                             # flow_regime  0=Basal 1=DeepFocus 2=Vigilante 3=Critico
+$b[13]                             # niche_role   0=Sentinel 1=Architect 2=Regulator
+[BitConverter]::ToUInt16($b, 14)   # lan_peers
+[BitConverter]::ToUInt32($b, 16)   # cycle_us
+```
+
+Os 4 últimos bytes são o CRC-32 IEEE dos 28 primeiros: um leitor pode recusar
+frames rasgados sem lock. O mesmo frame é validado pelo teste
+`tests/governor_e2e.rs`.
+
 ## Invariantes validados (`cargo test --release`)
 
 1. **Termodinâmico** — `H(s_final) < H(s_0)` estritamente, 50/50 matrizes `J`

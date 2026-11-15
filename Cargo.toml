@@ -1,6 +1,6 @@
 ﻿[package]
 name = "aether_engine"
-version = "0.0.76"
+version = "0.0.77"
 edition = "2021"
 rust-version = "1.78"
 description = "AETHER ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
@@ -25,6 +25,12 @@ required-features = ["m8"]
 name = "aether-dashboard"
 path = "src/bin/aether_dashboard.rs"
 required-features = ["dashboard"]
+
+# Fase 6: governador de hardware real (telemetria viva + frame binario 32 B).
+[[bin]]
+name = "aether-governor"
+path = "src/bin/aether_governor.rs"
+required-features = ["m1", "m2", "m3", "m5"]
 
 # Features de modulo: permitem build isolado de cada pilar (paralelismo de agentes
 # sem colisao de codigo) e compilacao enxuta quando so um pilar e necessario.

@@ -83,7 +83,11 @@ impl CadenceShared {
     pub fn on_key(&self, action: u32) {
         let now = self.epoch.elapsed().as_nanos().min(u64::MAX as u128) as u64;
         let prev = self.last_ns.swap(now, Ordering::Relaxed);
-        let dt = if prev == 0 { 0 } else { now.saturating_sub(prev) };
+        let dt = if prev == 0 {
+            0
+        } else {
+            now.saturating_sub(prev)
+        };
         self.last_dt_ns.store(dt, Ordering::Relaxed);
         self.keys.fetch_add(1, Ordering::Relaxed);
         if action != 0 {
@@ -136,7 +140,6 @@ pub struct HostTransducer {
     wave: WaveInterferenceBlock,
     input: Array2<f32>,
     output: Array2<f32>,
-    epoch: Instant,
     logical: usize,
     jitter_ns: f32,
     load: f32,
@@ -205,7 +208,6 @@ impl HostTransducer {
             wave,
             input: Array2::<f32>::zeros((WAVE_CHANNELS, WAVE_CHANNELS)),
             output: Array2::<f32>::zeros((WAVE_CHANNELS, WAVE_CHANNELS)),
-            epoch: Instant::now(),
             logical,
             jitter_ns: 0.0,
             load: 0.0,
@@ -288,9 +290,7 @@ impl HostTransducer {
 
     /// `true` se o encerramento foi pedido no terminal.
     pub fn quit_requested(&self) -> bool {
-        self.shared
-            .as_ref()
-            .is_some_and(|s| s.quit_requested())
+        self.shared.as_ref().is_some_and(|s| s.quit_requested())
     }
 
     /// Amostra contínua: preenche `out` com a onda sintetizada.
@@ -316,7 +316,8 @@ impl HostTransducer {
                 self.input[[c, l]] = self.feature((c + l) % WAVE_CHANNELS);
             }
         }
-        self.wave.forward_into(self.input.view(), &mut self.output)?;
+        self.wave
+            .forward_into(self.input.view(), &mut self.output)?;
 
         // 4. Síntese: média espacial de cada canal de saída.
         for (i, slot) in out.iter_mut().take(WAVE_CHANNELS).enumerate() {
@@ -331,7 +332,10 @@ impl HostTransducer {
         let (identity, margin) = if self.identities > 0 {
             let padded = self.signature_padded();
             let cue = BamHolographicVector::<BAM_DIM>::from_radians(&padded)?;
-            match self.store.query_into(&cue, &self.self_role, &self.mask, &mut self.scratch) {
+            match self
+                .store
+                .query_into(&cue, &self.self_role, &self.mask, &mut self.scratch)
+            {
                 Ok(hit) => (sanitize(hit.similarity).clamp(0.0, 1.0), hit.margin),
                 Err(_) => (0.0, 0.0),
             }
@@ -345,7 +349,9 @@ impl HostTransducer {
         }
 
         self.last = Sample {
-            wave: [out[0], out[1], out[2], out[3], out[4], out[5], out[6], out[7]],
+            wave: [
+                out[0], out[1], out[2], out[3], out[4], out[5], out[6], out[7],
+            ],
             jitter_ns: self.jitter_ns,
             load: self.load,
             dt_us: self.dt_us,
@@ -375,10 +381,9 @@ impl HostTransducer {
             }
             self.last_key_seq = keys;
         }
-        let flags =
-            shared
-                .flags
-                .fetch_and(!(FLAG_PULSE | FLAG_NOISE | FLAG_SAVE), Ordering::Relaxed);
+        let flags = shared
+            .flags
+            .fetch_and(!(FLAG_PULSE | FLAG_NOISE | FLAG_SAVE), Ordering::Relaxed);
         if flags & FLAG_PULSE != 0 {
             self.thermal = (self.thermal + 0.8).min(1.0);
         }
@@ -464,8 +469,8 @@ impl HostTransducer {
         sig[5] = (vmax / scale).tanh();
         let half = self.ring_len / 2;
         let first: f32 = self.ring[..half].iter().sum::<f32>() / half.max(1) as f32;
-        let second: f32 =
-            self.ring[half..self.ring_len].iter().sum::<f32>() / (self.ring_len - half).max(1) as f32;
+        let second: f32 = self.ring[half..self.ring_len].iter().sum::<f32>()
+            / (self.ring_len - half).max(1) as f32;
         sig[6] = ((second - first) / scale).tanh();
         sig[7] = (n / CADENCE_RING as f32).tanh();
         sig
