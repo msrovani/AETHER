@@ -51,12 +51,8 @@ pub const LUT_LEN: usize = 1024;
 const LUT_SHIFT: u32 = 6;
 /// Quarto de volta (`π/2`) em BAM.
 pub(crate) const QUARTER: u16 = 0x4000;
-/// Máximo de traços suportados (acumulador `i16` do *unbinding*).
-pub const MAX_TRACES: usize = 15;
 /// Escala Q do seno polinomial (`1.0 = 16384`).
 pub const Q14_ONE: i32 = 16_384;
-/// Escala Q das tabelas `cos/sin` dos valores (`1.0 = 4096`).
-const Q12_ONE: f32 = 4096.0;
 
 /// Fase em BAM: `[0, 2π) ↔ [0, 65536)`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -440,9 +436,7 @@ fn cos_sum_q14(a: &[u16], b: &[u16], mask: Option<&[u16]>) -> i32 {
     acc.iter().sum()
 }
 
-pub use crate::core::bam_store::{
-    BamHit, BamHolographicStore, BamScratch,
-};
+pub use crate::core::bam_store::{BamHit, BamHolographicStore, BamScratch, MAX_TRACES};
 
 /// `Σ tri(a − b)` em Q14 — onda triangular `1 − 2|θ|/π` (≈ cos, só `sub`/`abs`).
 ///

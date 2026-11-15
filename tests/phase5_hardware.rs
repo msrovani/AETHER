@@ -78,7 +78,7 @@ fn count_allocs<T>(f: impl FnOnce() -> T) -> (T, usize) {
 // ---------------------------------------------------------------------------
 
 const FACTS: usize = 50;
-const QUERIES: usize = 20;
+const QUERIES: usize = 40;
 const REPS: usize = 64;
 
 /// Máscara exata de `visible` posições (embaralhamento determinístico).
@@ -99,12 +99,22 @@ fn exact_mask(seed: u64, d: usize, visible: usize) -> Vec<bool> {
 struct T12Result {
     recall: f64,
     snr: f64,
+    /// Melhor-de-REPS médio por consulta (estimador do T12 da auditoria).
     latency_us: f64,
+    /// Percentis sobre TODAS as amostras (sem descarte).
+    p50_us: f64,
+    p95_us: f64,
     allocs: usize,
 }
 
+fn percentile(sorted: &[f64], q: f64) -> f64 {
+    sorted[((sorted.len() - 1) as f64 * q).round() as usize]
+}
+
 fn rand_rad(rng: &mut SiliconEntropy, d: usize) -> Vec<f32> {
-    (0..d).map(|_| rng.next_f32() * std::f32::consts::TAU).collect()
+    (0..d)
+        .map(|_| rng.next_f32() * std::f32::consts::TAU)
+        .collect()
 }
 
 fn snr_of(sims: &[f32], truth: usize) -> f64 {
@@ -140,6 +150,7 @@ fn run_bam<const D: usize>(noise_on_entity_only: bool) -> T12Result {
     let mut sc = store.scratch(FACTS);
     let (mut hits, mut allocs) = (0usize, 0usize);
     let (mut lat, mut snr) = (0.0f64, 0.0f64);
+    let mut samples: Vec<f64> = Vec::with_capacity(QUERIES * REPS);
     for q in 0..QUERIES {
         let truth = (rng.next_u64() % FACTS as u64) as usize;
         let mask_b = exact_mask(0x7000 + q as u64, D, D * 40 / 100);
@@ -161,7 +172,9 @@ fn run_bam<const D: usize>(noise_on_entity_only: bool) -> T12Result {
         for _ in 0..REPS {
             let t = Instant::now();
             hit = store.query_into(&e, &r, &mask, &mut sc).expect("q");
-            best = best.min(t.elapsed().as_nanos());
+            let ns = t.elapsed().as_nanos();
+            samples.push(ns as f64 / 1000.0);
+            best = best.min(ns);
         }
         lat += best as f64 / 1000.0;
         let (_, a) = count_allocs(|| {
@@ -171,10 +184,13 @@ fn run_bam<const D: usize>(noise_on_entity_only: bool) -> T12Result {
         hits += usize::from(hit.value_index == truth);
         snr += snr_of(sc.sims(), truth);
     }
+    samples.sort_by(|a, b| a.total_cmp(b));
     T12Result {
         recall: hits as f64 / QUERIES as f64,
         snr: snr / QUERIES as f64,
         latency_us: lat / QUERIES as f64,
+        p50_us: percentile(&samples, 0.50),
+        p95_us: percentile(&samples, 0.95),
         allocs,
     }
 }
@@ -229,7 +245,11 @@ fn t12_bam_d256_abaixo_de_5us_sem_alocar() {
     assert!(r.recall >= 0.90, "recall {}", r.recall);
     assert!(r.snr > 3.0, "snr {}", r.snr);
     assert_eq!(r.allocs, 0, "hot-path deve ter 0 alocacoes");
-    assert!(r.latency_us < 5.0, "latencia {:.3} us >= 5 us", r.latency_us);
+    assert!(
+        r.latency_us < 5.0,
+        "latencia {:.3} us >= 5 us",
+        r.latency_us
+    );
 }
 
 #[test]
@@ -274,7 +294,10 @@ fn bam_bind_unbind_similaridade_sem_alocar() {
     });
     assert_eq!(allocs, 0);
     assert!(s_aa > 0.99 && s_ab.abs() < 0.2);
-    assert_eq!(BamPhase::from_radians(std::f32::consts::PI), BamPhase::HALF_TURN);
+    assert_eq!(
+        BamPhase::from_radians(std::f32::consts::PI),
+        BamPhase::HALF_TURN
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -476,12 +499,9 @@ fn latent_sample(k: usize, x: [f64; 2]) -> [f32; LATENT_DIM] {
 #[test]
 fn event_driven_core_nao_aloca_e_respeita_o_cbf() {
     let (_jit, integ) = SindyJit::new();
-    let mut core = EventDrivenCore::new(
-        ReflexConfig::default(),
-        integ,
-        SiliconEntropy::from_seed(3),
-    )
-    .expect("core");
+    let mut core =
+        EventDrivenCore::new(ReflexConfig::default(), integ, SiliconEntropy::from_seed(3))
+            .expect("core");
     let ev = ReflexEvent {
         t_ns: 0,
         z: latent_sample(10, [1.0, 0.2]),

@@ -30,6 +30,8 @@ pub mod fhrr;
 
 // FASE 5 — hardware extremus.
 pub mod bam_phase;
+pub mod bam_store;
+pub mod core_topology;
 pub mod silicon_entropy;
 pub mod spsc_ring;
 
@@ -38,5 +40,10 @@ pub mod sindy_jit;
 
 #[cfg(feature = "m1")]
 pub mod aether_governor;
+
+pub mod affinity;
+#[cfg(feature = "m5")]
+pub mod fhrr_bam;
+pub mod noise;
 
 pub use crate::error::{AetherError, Result};

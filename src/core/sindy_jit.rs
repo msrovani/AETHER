@@ -296,7 +296,12 @@ mod backend {
     }
 
     /// `x^n` com cache (`n ∈ 1..=3`).
-    fn power(b: &mut FunctionBuilder<'_>, base: Value, cache: &mut [Option<Value>; 4], n: u8) -> Value {
+    fn power(
+        b: &mut FunctionBuilder<'_>,
+        base: Value,
+        cache: &mut [Option<Value>; 4],
+        n: u8,
+    ) -> Value {
         cache[1] = Some(base);
         for k in 2..=n as usize {
             if cache[k].is_none() {
@@ -476,10 +481,7 @@ impl SindyJit {
     }
 
     /// Publica `Ξ` explícita (`[ẋ1; ẋ2] × 10 termos`).
-    pub fn publish_coefficients(
-        &mut self,
-        xi: &[[f64; SINDY_TERMS]; 2],
-    ) -> Result<PublishOutcome> {
+    pub fn publish_coefficients(&mut self, xi: &[[f64; SINDY_TERMS]; 2]) -> Result<PublishOutcome> {
         let mut flat = [0.0f32; NCOEF];
         for (c, row) in xi.iter().enumerate() {
             for (t, &v) in row.iter().enumerate() {
@@ -534,7 +536,9 @@ impl SindyJit {
                     let at = self.shared.calls.load(Ordering::Acquire);
                     self.retired.push((old, at));
                 }
-                Ok(PublishOutcome::Interpreted { generation: new_gen })
+                Ok(PublishOutcome::Interpreted {
+                    generation: new_gen,
+                })
             }
         }
     }

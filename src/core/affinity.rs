@@ -1,105 +1,133 @@
-//! Afinidade de núcleo e orçamento de residência L1d (opt-in, sem `unsafe`).
+//! Afinidade de núcleo e orçamento de residência em L1d.
 //!
-//! A pinagem usa o crate `core_affinity` atrás da feature `affinity`. Sem a
-//! feature, as funções viram no-op documentado (retornam `false`) — o gate do
-//! CI não depende de pinning.
+//! A thread reflexiva é fixada no primeiro núcleo físico detectado
+//! (`CorePlan::detect`). O módulo também expõe um contador de orçamento para
+//! provar que o estado rápido cabe (ou não) nos 32 KB de L1d.
 //!
-//! Orçamento reflexivo: [`L1D_REFLEX_BUDGET_BYTES`] = 32 KiB. O estado quente
-//! da thread reflexiva deve caber nesse envelope para maximizar hit-rate L1d.
+//! Tudo é API segura: o pinning usa `core_affinity` por baixo do
+//! `aether_governor` e nenhum `unsafe` aparece neste arquivo. Sem a feature
+//! `affinity`, as funções viram no-op e o relatório diz `pinned=false`.
 
-/// Orçamento de estado reflexivo rápido (Cache L1d típico de 32–48 KiB).
-pub const L1D_REFLEX_BUDGET_BYTES: usize = 32 * 1024;
+use crate::core::aether_governor::{pin_current_thread, CorePlan};
 
-/// Resultado de uma tentativa de pinagem.
+/// Capacidade nominal de L1d por núcleo físico (Intel Core 7 240H).
+pub const L1D_BYTES: usize = 32 * 1024;
+
+/// Contador de orçamento do estado reflexivo.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PinResult {
-    /// Thread fixada no núcleo pedido.
-    Pinned { core_index: usize },
-    /// Feature `affinity` desligada ou núcleo indisponível.
-    Unavailable,
-    /// Índice fora do intervalo.
-    OutOfRange { requested: usize, available: usize },
+pub struct L1Budget {
+    used: usize,
 }
 
-/// Quantos núcleos lógicos o OS reporta (1 se a feature estiver off).
-pub fn logical_core_count() -> usize {
+impl L1Budget {
+    /// Começa vazio.
+    pub const fn new() -> Self {
+        Self { used: 0 }
+    }
+
+    /// Contabiliza `bytes` (satura no `usize::MAX`).
+    pub fn account(&mut self, bytes: usize) {
+        self.used = self.used.saturating_add(bytes);
+    }
+
+    /// Bytes já contabilizados.
+    pub const fn used(&self) -> usize {
+        self.used
+    }
+
+    /// Bytes restantes (0 se estourou).
+    pub const fn remaining(&self) -> usize {
+        L1D_BYTES.saturating_sub(self.used)
+    }
+
+    /// Cabe inteiro em L1d?
+    pub const fn fits(&self) -> bool {
+        self.used <= L1D_BYTES
+    }
+}
+
+impl Default for L1Budget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Relatório de afinidade e residência.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AffinityReport {
+    /// Núcleo físico escolhido para o reflexo.
+    pub core: Option<usize>,
+    /// `true` se o pinning foi aplicado nesta thread.
+    pub pinned: bool,
+    /// Bytes do estado reflexivo contabilizados.
+    pub l1d_bytes: usize,
+    /// `true` se `l1d_bytes <= 32 KB`.
+    pub l1d_fits: bool,
+    /// Núcleos lógicos detectados.
+    pub logical: usize,
+    /// Núcleos físicos detectados.
+    pub physical: usize,
+    /// Irmãos SMT reservados (devem ficar ociosos).
+    pub reserved_siblings: Vec<usize>,
+}
+
+/// Plano de núcleos detectado.
+pub fn core_plan() -> CorePlan {
+    CorePlan::detect()
+}
+
+/// Ids lógicos disponíveis para pinning (vazio se indisponível).
+pub fn core_ids() -> Vec<usize> {
     #[cfg(feature = "affinity")]
     {
-        num_cpus::get().max(1)
+        core_affinity::get_core_ids()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|c| c.id)
+            .collect()
     }
     #[cfg(not(feature = "affinity"))]
     {
-        1
+        Vec::new()
     }
 }
 
-/// Verifica se `bytes` cabe no orçamento L1d reflexivo.
-#[inline]
-pub fn fits_l1d_budget(bytes: usize) -> bool {
-    bytes <= L1D_REFLEX_BUDGET_BYTES
+/// Fixa a **thread corrente** em `core`; `false` se indisponível.
+pub fn pin_to_core(core: usize) -> bool {
+    pin_current_thread(Some(core))
 }
 
-/// Fixa a thread corrente no núcleo lógico `core_index` (0 = primeiro).
-///
-/// Em Windows isso acaba em `SetThreadAffinityMask` **dentro** do crate
-/// `core_affinity` — nosso código permanece sem blocos `unsafe`.
-pub fn pin_current_thread(core_index: usize) -> PinResult {
-    #[cfg(feature = "affinity")]
-    {
-        let cores = core_affinity::get_core_ids().unwrap_or_default();
-        if cores.is_empty() {
-            return PinResult::Unavailable;
-        }
-        if core_index >= cores.len() {
-            return PinResult::OutOfRange {
-                requested: core_index,
-                available: cores.len(),
-            };
-        }
-        if core_affinity::set_for_current(cores[core_index]) {
-            PinResult::Pinned { core_index }
-        } else {
-            PinResult::Unavailable
-        }
-    }
-    #[cfg(not(feature = "affinity"))]
-    {
-        let _ = core_index;
-        PinResult::Unavailable
+/// Fixa a thread corrente no núcleo reflexivo e mede o orçamento L1d.
+pub fn pin_reflex_core(active_bytes: usize) -> AffinityReport {
+    let plan = core_plan();
+    let pinned = pin_current_thread(plan.reflex);
+    let mut budget = L1Budget::new();
+    budget.account(active_bytes);
+    AffinityReport {
+        core: plan.reflex,
+        pinned,
+        l1d_bytes: budget.used(),
+        l1d_fits: budget.fits(),
+        logical: plan.logical,
+        physical: plan.physical,
+        reserved_siblings: plan.reserved_siblings.clone(),
     }
 }
 
-/// Percentil linear em fatia já ordenada (ou ordena cópia em stack pequena).
-///
-/// Para amostras grandes o caller deve passar slice ordenado; para ≤ 4096
-/// ordenamos in-place no buffer mutável fornecido.
-pub fn percentile_us(sorted_asc: &[f64], p: f64) -> f64 {
-    if sorted_asc.is_empty() {
-        return f64::NAN;
+/// Relatório sem pinning (baseline).
+pub fn report_only(active_bytes: usize) -> AffinityReport {
+    let plan = core_plan();
+    let mut budget = L1Budget::new();
+    budget.account(active_bytes);
+    AffinityReport {
+        core: plan.reflex,
+        pinned: false,
+        l1d_bytes: budget.used(),
+        l1d_fits: budget.fits(),
+        logical: plan.logical,
+        physical: plan.physical,
+        reserved_siblings: plan.reserved_siblings.clone(),
     }
-    let p = p.clamp(0.0, 100.0);
-    if sorted_asc.len() == 1 {
-        return sorted_asc[0];
-    }
-    let rank = (p / 100.0) * (sorted_asc.len() as f64 - 1.0);
-    let lo = rank.floor() as usize;
-    let hi = rank.ceil() as usize;
-    if lo == hi {
-        sorted_asc[lo]
-    } else {
-        let w = rank - lo as f64;
-        sorted_asc[lo] * (1.0 - w) + sorted_asc[hi] * w
-    }
-}
-
-/// Ordena `samples` in-place e devolve (p50, p99, p99.9) em µs.
-pub fn latency_tail_us(samples: &mut [f64]) -> (f64, f64, f64) {
-    samples.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    (
-        percentile_us(samples, 50.0),
-        percentile_us(samples, 99.0),
-        percentile_us(samples, 99.9),
-    )
 }
 
 #[cfg(test)]
@@ -107,15 +135,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn budget_32kib() {
-        assert!(fits_l1d_budget(32 * 1024));
-        assert!(!fits_l1d_budget(32 * 1024 + 1));
+    fn orcamento_l1d_e_relatorio() {
+        let mut b = L1Budget::new();
+        b.account(16 * 1024);
+        assert!(b.fits());
+        assert_eq!(b.remaining(), 16 * 1024);
+        b.account(16 * 1024);
+        assert!(b.fits());
+        b.account(1);
+        assert!(!b.fits());
+        assert_eq!(b.remaining(), 0);
+
+        let r = report_only(24 * 1024);
+        assert!(r.l1d_fits);
+        assert_eq!(r.l1d_bytes, 24 * 1024);
+        assert!(!r.pinned);
     }
 
     #[test]
-    fn percentile_extremes() {
-        let s = [1.0, 2.0, 3.0, 4.0];
-        assert!((percentile_us(&s, 0.0) - 1.0).abs() < 1e-9);
-        assert!((percentile_us(&s, 100.0) - 4.0).abs() < 1e-9);
+    fn pinning_e_noop_quando_indisponivel() {
+        // Não exige sucesso: em CI sem afinidade o contrato é false, sem panic.
+        let r = pin_reflex_core(8 * 1024);
+        assert!(r.l1d_fits);
+        let _ = r.pinned;
     }
 }

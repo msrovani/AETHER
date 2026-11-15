@@ -45,6 +45,8 @@ jit = [
     "dep:cranelift-native",
 ]
 affinity = ["dep:core_affinity", "dep:num_cpus"]
+# Fase 1 (OPENCODE): fonte de entropia de hardware opt-in.
+hw-entropy = []
 
 [dependencies]
 ndarray = { version = "0.16", features = ["rayon"] }
@@ -94,6 +96,11 @@ required-features = ["m2"]
 [[example]]
 name = "transducer_probe"
 required-features = ["m8"]
+
+[[example]]
+name = "bam_probe"
+path = "examples/bam_probe.rs"
+required-features = ["m4", "m5", "affinity"]
 
 [[bench]]
 name = "organism"

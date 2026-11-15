@@ -52,6 +52,8 @@ use crate::core::spsc_ring::{SpscConsumer, SpscProducer, SpscRingBuffer};
 use crate::core::swarm_speciation::{NodeState, SwarmSpeciationEngine, GENOME_DIM};
 use crate::error::{AetherError, Result};
 
+pub use crate::core::core_topology::{pin_current_thread, CorePlan};
+
 /// Dimensão do estado latente (= dimensão do Koopman *lifted*).
 pub const LATENT_DIM: usize = KOOPMAN_D;
 /// Políticas do planejador: manter / seguir o fluxo SINDy / ir à meta.
@@ -247,82 +249,6 @@ impl EventDrivenCore {
     }
 }
 
-/// Plano de núcleos lógicos para as três threads.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct CorePlan {
-    /// Núcleo da thread reflexiva (1º físico).
-    pub reflex: Option<usize>,
-    /// Núcleo do Koopman-SINDy.
-    pub koopman: Option<usize>,
-    /// Núcleo do SwarmSpeciation.
-    pub swarm: Option<usize>,
-    /// Irmãos SMT do núcleo reflexivo, reservados (ociosos).
-    pub reserved_siblings: Vec<usize>,
-    /// Núcleos lógicos / físicos usados no cálculo.
-    pub logical: usize,
-    /// Núcleos físicos usados no cálculo.
-    pub physical: usize,
-}
-
-impl CorePlan {
-    /// Plano **puro** a partir dos ids lógicos e do nº de núcleos físicos.
-    ///
-    /// Supõe irmãos SMT em ids adjacentes (`stride = logical / physical`).
-    pub fn from_topology(ids: &[usize], physical: usize) -> Self {
-        if ids.is_empty() {
-            return Self::default();
-        }
-        let n = ids.len();
-        let physical = physical.clamp(1, n);
-        let stride = (n / physical).max(1);
-        let mut plan = Self {
-            reflex: Some(ids[0]),
-            reserved_siblings: ids[1..stride].to_vec(),
-            logical: n,
-            physical,
-            ..Self::default()
-        };
-        // Secundários: próximos núcleos físicos (primeiro id de cada grupo).
-        let secondaries: Vec<usize> = (1..physical).map(|k| ids[k * stride]).collect();
-        plan.koopman = secondaries.first().copied();
-        plan.swarm = secondaries.get(1).or(secondaries.first()).copied();
-        plan
-    }
-
-    /// Detecta a topologia da máquina (vazio se pinning indisponível).
-    pub fn detect() -> Self {
-        #[cfg(feature = "affinity")]
-        {
-            let ids: Vec<usize> = core_affinity::get_core_ids()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|c| c.id)
-                .collect();
-            Self::from_topology(&ids, num_cpus::get_physical())
-        }
-        #[cfg(not(feature = "affinity"))]
-        {
-            Self::default()
-        }
-    }
-}
-
-/// Fixa a thread corrente em `core`; `false` se indisponível (no-op).
-pub fn pin_current_thread(core: Option<usize>) -> bool {
-    #[cfg(feature = "affinity")]
-    {
-        match core {
-            Some(id) => core_affinity::set_for_current(core_affinity::CoreId { id }),
-            None => false,
-        }
-    }
-    #[cfg(not(feature = "affinity"))]
-    {
-        let _ = core;
-        false
-    }
-}
-
 /// Configuração do governador.
 #[derive(Clone, Debug)]
 pub struct GovernorConfig {
@@ -496,7 +422,14 @@ impl Governor {
                     let refit = cfg.refit_every;
                     move || {
                         koopman_loop(
-                            koopman, sindy, jit, rx_k, stop, stats, (pin, core_id, spins), refit,
+                            koopman,
+                            sindy,
+                            jit,
+                            rx_k,
+                            stop,
+                            stats,
+                            (pin, core_id, spins),
+                            refit,
                         )
                     }
                 })
@@ -511,7 +444,14 @@ impl Governor {
                     let nodes = cfg.swarm_nodes as u32;
                     move || {
                         reflex_loop(
-                            core, rx_in, tx_k, tx_s, stop, stats, (pin, core_id, spins), nodes,
+                            core,
+                            rx_in,
+                            tx_k,
+                            tx_s,
+                            stop,
+                            stats,
+                            (pin, core_id, spins),
+                            nodes,
                         )
                     }
                 })
@@ -729,9 +669,11 @@ fn koopman_loop(
                         O::Unchanged => stats.jit_generations.load(Ordering::Relaxed),
                     };
                     stats.jit_generations.store(generation, Ordering::Release);
-                    stats
-                        .jit_active
-                        .store(matches!(outcome, O::Jitted { .. }), Ordering::Release);
+                    if outcome != O::Unchanged {
+                        stats
+                            .jit_active
+                            .store(matches!(outcome, O::Jitted { .. }), Ordering::Release);
+                    }
                 }
             }
         }
@@ -772,29 +714,5 @@ fn swarm_loop(
                 stats.swarm_steps.fetch_add(1, Ordering::Relaxed);
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn plano_reserva_irmaos_smt_e_usa_proximos_fisicos() {
-        let ids: Vec<usize> = (0..16).collect();
-        let p = CorePlan::from_topology(&ids, 8);
-        assert_eq!(p.reflex, Some(0));
-        assert_eq!(p.reserved_siblings, vec![1]);
-        assert_eq!(p.koopman, Some(2));
-        assert_eq!(p.swarm, Some(4));
-    }
-
-    #[test]
-    fn plano_sem_smt_e_com_poucos_nucleos() {
-        let p = CorePlan::from_topology(&[0, 1], 2);
-        assert_eq!((p.reflex, p.koopman, p.swarm), (Some(0), Some(1), Some(1)));
-        let p = CorePlan::from_topology(&[0], 1);
-        assert_eq!((p.reflex, p.koopman, p.swarm), (Some(0), None, None));
-        assert_eq!(CorePlan::from_topology(&[], 4), CorePlan::default());
     }
 }
