@@ -110,9 +110,13 @@ pub fn parse_daemon_line(line: &str) -> Option<DemoSample> {
         chatter: 0.0,
         cost_us: find_f32(line, "µs")
             .or_else(|| {
-                line.rsplit('|')
-                    .nth(1)
-                    .and_then(|p| p.trim().trim_end_matches('µ').trim_end_matches('s').parse().ok())
+                line.rsplit('|').nth(1).and_then(|p| {
+                    p.trim()
+                        .trim_end_matches('µ')
+                        .trim_end_matches('s')
+                        .parse()
+                        .ok()
+                })
             })
             .unwrap_or(0.0),
     })

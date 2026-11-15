@@ -5,3 +5,6 @@ pub mod closed_loop_organism;
 
 #[cfg(feature = "m4")]
 pub mod panel;
+
+#[cfg(feature = "m4")]
+pub mod profile;

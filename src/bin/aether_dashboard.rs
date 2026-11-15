@@ -136,12 +136,7 @@ mod aether_dashboard_win {
         fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
             self.poll_jobs();
             self.hover_scratch = None;
-            let demo_live = self
-                .jobs
-                .trace
-                .lock()
-                .map(|t| t.running)
-                .unwrap_or(false);
+            let demo_live = self.jobs.trace.lock().map(|t| t.running).unwrap_or(false);
             if self.jobs.snapshot().phase == aether_engine::dashboard::JobPhase::Running
                 || demo_live
             {
@@ -287,20 +282,27 @@ mod aether_dashboard_win {
             ui.label(RichText::new("Gráficos do demo").strong().size(15.0));
             if trace.title.is_empty() && trace.samples.is_empty() {
                 ui.label(
-                    RichText::new(
-                        "Ainda sem série. Clique em “Demo organismo” ou “Demo daemon”.",
-                    )
-                    .small()
-                    .color(Color32::GRAY),
+                    RichText::new("Ainda sem série. Clique em “Demo organismo” ou “Demo daemon”.")
+                        .small()
+                        .color(Color32::GRAY),
                 );
                 return;
             }
 
-            let status = if trace.running { "ao vivo" } else { "última corrida" };
+            let status = if trace.running {
+                "ao vivo"
+            } else {
+                "última corrida"
+            };
             ui.label(
-                RichText::new(format!("{} · {} · {} pts", trace.title, status, trace.samples.len()))
-                    .small()
-                    .color(Color32::from_rgb(120, 160, 180)),
+                RichText::new(format!(
+                    "{} · {} · {} pts",
+                    trace.title,
+                    status,
+                    trace.samples.len()
+                ))
+                .small()
+                .color(Color32::from_rgb(120, 160, 180)),
             );
             ui.add_space(4.0);
 
@@ -313,13 +315,23 @@ mod aether_dashboard_win {
 
                 // Legenda: organismo = R/H/S/chatter; daemon = R(LAN)/F/S
                 sparkline(ui, "R / R(LAN)", &r, Color32::from_rgb(60, 180, 140));
-                sparkline(ui, "H / F (energia ou surpresa)", &e, Color32::from_rgb(200, 140, 70));
+                sparkline(
+                    ui,
+                    "H / F (energia ou surpresa)",
+                    &e,
+                    Color32::from_rgb(200, 140, 70),
+                );
                 sparkline(ui, "S (entropia)", &s, Color32::from_rgb(90, 140, 200));
                 if c.iter().any(|v| *v > 0.0) {
                     sparkline(ui, "chatter ‖Δu‖", &c, Color32::from_rgb(180, 90, 120));
                 }
                 if cost.iter().any(|v| *v > 0.0) {
-                    sparkline(ui, "custo quadro (µs)", &cost, Color32::from_rgb(140, 140, 160));
+                    sparkline(
+                        ui,
+                        "custo quadro (µs)",
+                        &cost,
+                        Color32::from_rgb(140, 140, 160),
+                    );
                 }
             }
 
@@ -783,16 +795,15 @@ mod aether_dashboard_win {
 
         let mut points: Vec<egui::Pos2> = Vec::with_capacity(n);
         for (i, y) in ys.iter().enumerate() {
-            let x = rect.left() + pad + (i as f32 / (n.saturating_sub(1).max(1) as f32)) * (w - 2.0 * pad);
+            let x = rect.left()
+                + pad
+                + (i as f32 / (n.saturating_sub(1).max(1) as f32)) * (w - 2.0 * pad);
             let yn = (*y - min) / span;
             let py = rect.bottom() - pad - yn * (h - 2.0 * pad);
             points.push(egui::Pos2::new(x, py));
         }
         if points.len() >= 2 {
-            painter.add(egui::Shape::line(
-                points,
-                Stroke::new(1.6_f32, color),
-            ));
+            painter.add(egui::Shape::line(points, Stroke::new(1.6_f32, color)));
         }
         ui.add_space(4.0);
     }

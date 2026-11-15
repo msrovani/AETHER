@@ -26,6 +26,7 @@ use crate::core::kuramoto_field::{KuramotoConfig, KuramotoPhaseNode, NodeHandle}
 use crate::core::thermodynamic_solver::{IsingLandscape, RelaxOutcome, ThermodynamicIsingSolver};
 use crate::core::wave_interference::WaveInterferenceBlock;
 use crate::error::{AetherError, Result};
+use crate::simulation::profile::{stage, StageProfile};
 
 /// Nomes lógicos dos nós sensoriais (apenas rótulo de exibição; não trafega).
 pub const NODE_NAMES: [&str; 3] = ["AMBIENTE", "MOVEL", "BANCADA"];
@@ -352,7 +353,41 @@ impl ClosedLoopOrganism {
     /// são reutilizados; os dois `Vec` do quadro são preenchidos por
     /// `copy_from_slice`.
     pub fn step_into(&mut self, out: &mut OrganismFrame) -> Result<()> {
+        self.step_impl::<false>(out, &mut StageProfile::default())
+    }
+
+    /// Igual a [`Self::step_into`], mas preenche `prof` com o tempo de cada estágio.
+    ///
+    /// Instrumentação para o experimento **E6** (`docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL2.md` §10).
+    /// Custa ~10 leituras de [`Instant`] por quadro; [`Self::step_into`] compila sem
+    /// nenhuma delas (`PROF = false`), então o caminho de produção não muda.
+    ///
+    /// O chamador controla o acumulador: chame [`StageProfile::reset`] antes de cada
+    /// quadro para medir por quadro, ou deixe acumular para medir um lote.
+    pub fn step_profiled_into(
+        &mut self,
+        out: &mut OrganismFrame,
+        prof: &mut StageProfile,
+    ) -> Result<()> {
+        self.step_impl::<true>(out, prof)
+    }
+
+    fn step_impl<const PROF: bool>(
+        &mut self,
+        out: &mut OrganismFrame,
+        prof: &mut StageProfile,
+    ) -> Result<()> {
         let t0 = Instant::now();
+        let mut last = t0;
+        macro_rules! lap {
+            ($i:expr) => {
+                if PROF {
+                    let now = Instant::now();
+                    prof.ns[$i] = prof.ns[$i].wrapping_add((now - last).as_nanos() as u64);
+                    last = now;
+                }
+            };
+        }
         let steps = self.cfg.steps;
         let n = self.cfg.decision_dim;
 
@@ -399,6 +434,7 @@ impl ClosedLoopOrganism {
             ];
             let _ = self.handles[0].perturb_oscillatory(xi, self.cfg.acoustic_hz as f32);
         }
+        lap!(stage::SAMPLE);
 
         // --- campo sensorial: projeção fasorial do Nó_Bancada ---
         if have_bancada {
@@ -413,6 +449,7 @@ impl ClosedLoopOrganism {
             self.ring_pos = (pos + 1) % window;
             self.ring_filled = (self.ring_filled + 1).min(window);
         }
+        lap!(stage::SENSOR);
 
         // copia o buffer circular na ordem temporal (mais antigo -> mais novo)
         let start = (self.ring_pos + window - self.ring_filled) % window;
@@ -424,11 +461,14 @@ impl ClosedLoopOrganism {
                 self.u[[c, k]] = 0.0;
             }
         }
+        lap!(stage::RING_COPY);
 
         // --- interferência espectral ---
         self.wave.forward_into(self.u.view(), &mut self.v)?;
+        lap!(stage::WAVE);
         let entropy_raw = self.wave.compute_spectral_entropy(self.u.view())?;
         let entropy_wave = self.wave.compute_wave_entropy();
+        lap!(stage::ENTROPY);
 
         // --- leitura espectral -> vetor de viés h(t) ---
         {
@@ -460,12 +500,14 @@ impl ClosedLoopOrganism {
                 self.h[i] = (self.raw[i] - mean) / sd * self.cfg.field_gain;
             }
         }
+        lap!(stage::READOUT);
 
         // --- colapso termodinâmico ---
         let h2 = self.h.view().into_shape_with_order((1, n)).unwrap();
         let j3 = self.j.view().into_shape_with_order((1, n, n)).unwrap();
         self.solver
             .relax_into(IsingLandscape::new(j3, h2), &mut self.out)?;
+        lap!(stage::SOLVER);
 
         // --- preenche o quadro (sem realocar os Vec de `out`) ---
         let trace = self.out.energy_trace.row(0);
@@ -479,6 +521,7 @@ impl ClosedLoopOrganism {
             .as_slice()
             .ok_or_else(|| AetherError::Config("out.states deve ser C-contiguo".into()))?;
         out.states.copy_from_slice(st_slice);
+        lap!(stage::FRAME);
 
         // Inércia do atuador: EMA de primeira ordem sobre o estado emergente.
         // `states` continua exatamente o que a física decidiu; só o comando
@@ -515,6 +558,7 @@ impl ClosedLoopOrganism {
             delta2 += d * d;
         }
         out.continuous_action_delta = delta2.sqrt();
+        lap!(stage::ACTUATOR);
 
         out.elapsed = self.started.elapsed();
         out.order_parameter = order_parameter;
@@ -527,6 +571,11 @@ impl ClosedLoopOrganism {
         out.perturbed = self.perturbed;
         out.dropped_frames = self.dropped_frames;
         out.frame_cost_us = t0.elapsed().as_micros() as u64;
+        lap!(stage::TAIL);
+        if PROF {
+            prof.total_ns = t0.elapsed().as_nanos() as u64;
+        }
+        let _ = last;
         Ok(())
     }
 

@@ -377,7 +377,8 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 
 | ID | Vol. | Objetivo | Gate | Fecha |
 |---|---|---|---|---|
-| **E6** | II | perfil por estágio (onde vão os 146 µs) | estágios somam ≥95% | bloqueio transversal |
+| **E6** ✅ | II | perfil por estágio — **executado** | cobertura **99,98%**; solver **84,8%** · 7,5 GFLOP/s | bloqueio transversal **removido** |
+| **E6b** | II | kernel do solver (SIMD f64 / f32 / fusão) | ≥ 2× GFLOP/s (de 7,5 para ≥15) | R1, R5 |
 | **E1** | I | linguagem em fase (papel–filler) | SNR > 5σ, 0 alloc | R2 |
 | **E1b** | II | ACF/IMF no `FhrrStore` | ≥10× capacidade, ciclo-limite <1% | R2 |
 | **E2** | I | lógica como Ising + certificado | 3-SAT n≤20 = força bruta | R1 |
@@ -405,7 +406,8 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | `CAPACITY_CLIFF_UNDOC` | I | médio | `docs/HW_TARGET.md` |
 | `TRANSPLANT_UNVALIDATED` | I | alto | E3 |
 | `PREPRINT_RISK` | I/II | info | protocolo §7 Vol. II |
-| `NO_PROFILE_BREAKDOWN` | II | **crítico** | E6 |
+| `NO_PROFILE_BREAKDOWN` | II | ✅ **resolvido (E6)** | medido 2026-11-15: solver 84,8% | — |
+| `SOLVER_KERNEL_SCALAR` | II | **crítico** | laços escalares em f64; ~19% do pico AVX2 | E6b |
 | `NO_ROOF_DUAL` | II | alto | E2b |
 | `NO_LIMIT_CYCLE_GUARD` | II | alto | E1b |
 | `NO_PROVENANCE` | II | alto | F1 → E3b |
@@ -452,10 +454,28 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | R5 | Custo de treino | evitável: congelar física (reservoir); DEER rende 25% em n=64 | **confirmar que congelar não custa acurácia** | E8 | P3 |
 | R6 | Preprints | triangulação com selos [A]/[B]/[C] | **disciplina contínua**, não experimento | protocolo | P3 |
 
-### 12.2 O que não é um dos seis, mas bloqueia todos
+### 12.2 O que não era um dos seis — e agora está resolvido
 
-**`NO_PROFILE_BREAKDOWN` (E6).** Não sabemos onde vão os 146 µs; o matvec que justifica
-a arquitetura custa 0,07%. Qualquer otimização antes disso é fé. **Prioridade P0.**
+**`NO_PROFILE_BREAKDOWN` (E6) — ✅ RESOLVIDO em 2026-11-15.**
+
+| Medida | Valor |
+|---|---|
+| Cobertura da instrumentação | **99,98%** |
+| Estágio dominante | **solver** |
+| Fração do quadro (steps 60/120/240) | **84,0% / 90,9% / 95,3%** |
+| Throughput do solver | **~7,5 GFLOP/s** f64 (~19% do pico AVX2 a 2,5 GHz) |
+| Total medido vs. bench oficial | 154–158 µs vs 146,5 µs (**+5 a +8%**) |
+| p99/p50 | 2,09× (auditoria: 2,13×) |
+
+Artefatos: `examples/e6_profile.rs`, `tests/e6_profile_gate.rs`,
+`target/aether_profile.json`.
+
+**O que isso muda:** a estimativa do Vol. I/II de que "o matvec custa 0,07% do ciclo"
+estava **errada** (o solver faz dois gemv por passo, não um). O motor é matvec-bound.
+O maior ganho disponível no projeto não é física nova nem hardware — é **vetorizar o
+kernel do solver**: há ~5× de headroom até o pico f64.
+
+Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 
 ### 12.3 O que nasceu no Vol. III
 
@@ -468,19 +488,20 @@ a arquitetura custa 0,07%. Qualquer otimização antes disso é fé. **Prioridad
 ### 12.4 Ordem de ataque recomendada
 
 ```
-1º  E6   perfil                     ← sem isso, todo o resto é cego
-2º  E3b  certificado + proveniência ← único risco que pode matar a tese (P0)
-3º  E1b  capacidade/ciclo-limite    ← decide se VSA é viável em D=160
-4º  E2b  roof dual + presolve       ← decide se lógica é viável em CPU
-5º  F1   ponte read-only            ← fecha K6 sem risco de drift
-6º  E1/E2/E3  os três "NÃO"         ← o programa científico
-7º  E4/E5/E7/E8  self, currículo, corpo, treino
-8º  F2/F3  consolidação e fusão 2D
+1º ✅ E6   perfil                     ← FEITO: solver = 84,8% do ciclo
+2º  E6b  kernel do solver (SIMD/f32) ← 5× de headroom, maior ganho disponível
+3º  E3b  certificado + proveniência  ← único risco que pode matar a tese (P0)
+4º  E1b  capacidade/ciclo-limite     ← decide se VSA é viável em D=160
+5º  E2b  roof dual + presolve        ← decide se lógica é viável em CPU
+6º  F1   ponte read-only             ← fecha K6 sem risco de drift
+7º  E1/E2/E3  os três "NÃO"          ← o programa científico
+8º  E4/E5/E7/E8  self, currículo, corpo, treino
+9º  F2/F3  consolidação e fusão 2D
 ```
 
 ### 12.5 O que ainda **não** sabemos (e deveria estar num post-it)
 
-1. **Onde vão os 146 µs.** (E6)
+1. ~~**Onde vão os 146 µs.** (E6)~~ → **respondido: 84,8% no solver.** ∎
 2. **Se ΔE prevê acerto.** Se não prever, o certificado de coerência não vale nada. (E3b)
 3. **Quantos padrões cabem em D=160** antes de interferir. (E1b)
 4. **Se roof dual reduz o suficiente** em CNF de circuito (não em 3-SAT aleatório). (E2b)

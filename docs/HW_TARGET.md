@@ -105,3 +105,80 @@ Princípios:
 | desktop + GPU NVIDIA (Vulkan) `--features gpu` | manual | idem |
 | desktop + GPU Intel (Vulkan) `--features gpu` | manual | idem |
 | servidor 16+ núcleos (Linux, `isolcpus`) | manual | p99 e enxame |
+
+## 8. Medições E6 — anatomia do ciclo e mapa de capacidade (2026-11-15)
+
+Fonte: `examples/e6_profile.rs` · `target/aether_profile_e6.json` · máquina de
+referência **Intel Core 7 240H** (6P+4E, AVX2 **sem** AVX-512, L1d 48 KB/P,
+L2 1,25 MB/P, L3 24 MB, LPDDR5-6400).
+
+Método: 1.000 quadros de warm-up + **10.000 medidos**; alocador contador armado na
+janela; percentis por quadro. O quadro **não é bit-reprodutível entre instâncias**
+(amostragem lê threads UDP reais) — mede-se distribuição, nunca execução única.
+
+### 8.1 Orçamento real de um quadro (N=64, steps=60, hz=60)
+
+| Estágio | média µs | p50 | p95 | p99 | p99.9 | % | ws KB |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **solver** | **132,1** | 120,3 | 209,1 | 289,9 | 512,9 | **84,5%** | 34 |
+| readout | 10,9 | 10,2 | 12,4 | 18,3 | 76,6 | 6,9% | 129 |
+| entropy | 4,6 | 4,4 | 4,9 | 6,6 | 47,5 | 3,0% | 10 |
+| wave | 3,9 | 3,5 | 4,7 | 7,4 | 59,2 | 2,5% | 18 |
+| actuator | 2,6 | 2,5 | 2,9 | 3,5 | 24,6 | 1,7% | 33 |
+| ring_copy | 1,8 | 1,7 | 1,8 | 2,1 | 12,4 | 1,2% | 8 |
+| sensor | 0,2 | 0,1 | 0,2 | 0,3 | 0,5 | 0,1% | 4 |
+| sample | 0,1 | 0,1 | 0,1 | 0,2 | 0,6 | 0,1% | 0,1 |
+| frame + tail | 0,1 | 0,1 | 0,1 | 0,2 | 0,3 | 0,1% | 1,5 |
+| **TOTAL** | **156,3** | 142,9 | 246,7 | **320,6** | 536,1 | **99,98%** | **184,5** |
+
+* Cobertura da instrumentação: **99,98%** (gate ≥ 95%).
+* Alocações na janela de 10.000 quadros: **0**.
+* `eq-t/s` medido: **818.844** (auditoria: 804.700 — Δ 1,8%).
+* Solver: **7,44 GFLOP/s** em f64 (≈19% do pico AVX2 a 2,5 GHz).
+
+### 8.2 Mapa de capacidade e penhasco (footprint único, f64)
+
+| N | total µs | solver µs | GFLOP/s | footprint | nível | 60 Hz? |
+|---:|---:|---:|---:|---:|---|---|
+| 64 | 156 | 132,5 | 7,42 | 0,18 MB | L2 | ✅ 0,9% |
+| 128 | 612 | 570,0 | 6,90 | 0,40 MB | L2 | ✅ 3,7% |
+| 256 | 2.632 | 2.534,8 | 6,21 | **1,03 MB** | L2 (limite) | ✅ 15,8% |
+| 512 | 12.125 | 11.868,9 | 5,30 | **3,04 MB** | L3 | ⚠️ 72,7% |
+| 1024 | 52.068 | 51.318,3 | 4,90 | 10,05 MB | L3 | ❌ **3,1×** |
+
+**Dois números, não um:**
+
+* **Penhasco de cache em N≈256**, não 512. O footprint não é só `J` (n²·8 B):
+  a matriz de leitura pesa `n·2048 B`. Em N=256, `J` (512 KB) + readout (512 KB)
+  = **1,03 MB**, já no limite do L2 (1,25 MB). Em N=512 são 3,04 MB → L3.
+  O GFLOP/s cai 6,21 → 5,30 nessa travessia (−15%).
+* **Penhasco de tempo real em N≈512.** O orçamento de 60 Hz é **16.667 µs**;
+  N=512 consome 72,7% dele e N=1024 estoura por 3,1×. Sem acelerar o kernel,
+  **N=512 é o teto do organismo a 60 Hz**.
+
+### 8.3 Orçamentos para os próximos experimentos
+
+| Experimento | Precisa caber em | Orçamento | Situação |
+|---|---|---:|---|
+| **E1** PLH (papel–filler + readout) | +2% do ciclo | **~3 µs** | folga de tempo real: 16,5 ms |
+| **E2b** roof dual + presolve | ≤ 5% do ciclo | **~7,8 µs** | folga: 16,6 ms |
+| **E4** self-field 16ch | +1% do ciclo | **~1,6 µs** | folga: 16,6 ms |
+| **F1** bridge SGDB (drain async) | 0 no T0 | **0 µs** | fora do caminho quente |
+
+> **Distinção que o E6 torna obrigatória:** há **dois orçamentos diferentes**.
+> (a) *Tempo real*: 16.667 µs por quadro a 60 Hz — o motor usa **0,94%** disso em
+> N=64, então qualquer subsistema novo cabe com folga de 100×.
+> (b) *Throughput* (`eq-t/s`): cada µs marginal custa métrica. É esse — não o
+> 60 Hz — que exige que E1/E2b/E4 caibam em poucos µs.
+> Confundir os dois leva a otimizar o que não é gargalo (hardware) e a ignorar o
+> que é (o kernel do solver, 84,5%).
+
+### 8.4 O que ainda não está medido
+
+Os estágios `RG 64→16→4`, `ComplexPhaseMemory`, `Koopman/SINDy`,
+`ThermodynamicDreamer`, `ActiveInference/CBF` e `MorphogeneticField` **não estão no
+laço do organismo** — contribuem com **0 µs** ao ciclo atual. Medi-los exige
+instrumentá-los isoladamente (experimento **E6-mod**), que mede *custo de
+integração*, não *anatomia do ciclo*. O orçamento de integração de cada um está na
+tabela §8.3.
+

@@ -71,20 +71,76 @@ Regra de ouro adotada: **nenhuma decisão de arquitetura pode depender só de [C
 L3 24 MB, LPDDR5-6400 (102,4 GB/s), TDP 45 W.
 **SIMD: AVX2 — sem AVX-512.** [A, datasheet]
 
-Consequência aritmética imediata, para o matvec do Ising (`N=64`):
+Consequência aritmética para **um** matvec do Ising (`N=64`, f64):
 
 ```
 MACs        = 64 × 64 = 4.096
-AVX2 FMA    = 8 f32 / instrução, 2 FMA/ciclo ⇒ 16 MAC/ciclo
-matvec      = 4.096 / 16 = 256 ciclos ≈ 0,10 µs @2,5 GHz
+AVX2 f64    = 4 doubles / instrução, 2 FMA/ciclo ⇒ 8 MAC/ciclo
+matvec      = 4.096 / 8 = 512 ciclos ≈ 0,20 µs @2,5 GHz
 ```
 
-Contra um ciclo cognitivo de **146,5 µs [M]**, isso é **0,07% do orçamento**.
+> **CORREÇÃO PÓS-E6 (2026-11-15).** A versão original desta seção estimava
+> "matvec = 0,07% do ciclo" e concluía que o motor **não** era matvec-bound.
+> **A medição falsificou essa conclusão.** O erro: o solver não faz *um* matvec
+> por quadro — faz **dois por passo** (`hx = Jx + h` e `H(s) = −½sᵀJs − hᵀs`)
+> durante `steps` passos. Com `steps = 60`, são **983.040 flops**, não 8.192.
 
-> **Achado #1 (desconfortável):** o motor **não é matvec-bound**. 99,9% dos 146 µs
-> estão em outro lugar — sonhador, FFTs, sincronização, cópias, branch mispredict.
-> Não existe hoje um *breakdown* por estágio. Isso vira o gap `NO_PROFILE_BREAKDOWN`
-> (§8) e o experimento E6.
+**Medido** (`examples/e6_profile.rs` · `target/aether_profile.json`, 2.000 quadros,
+`N=64`, `window=128`, `steps=60`, `hz=60`):
+
+| estágio | média µs | % do quadro |
+|---|---:|---:|
+| **solver** | **133,1** | **84,4%** |
+| readout | 11,0 | 7,0% |
+| entropy | 4,7 | 3,0% |
+| wave | 4,0 | 2,5% |
+| actuator | 2,7 | 1,7% |
+| ring_copy | 1,8 | 1,1% |
+| sensor | 0,2 | 0,1% |
+| sample | 0,1 | 0,1% |
+| frame + tail | 0,1 | 0,1% |
+| **TOTAL** | **157,7** | **99,98% coberto** |
+
+O total reproduz o bench de auditoria (**146,5 / 311,7 µs · 804,7k eq-t/s**) dentro
+de **1–8%** (p99: 311,2 vs 311,7 µs; eq-t/s: 811,8k vs 804,7k). O instrumento mede
+o mesmo fenômeno que o benchmark oficial — e a variação entre execuções é ~±2%.
+
+> **Nota de metodologia (achada pelo E6):** o quadro do organismo **não é
+> bit-reprodutível entre instâncias**. A amostragem lê `NodeHandle::latest()`, que
+> publica de threads Kuramoto reais (UDP + escalonador do SO); dois organismos com a
+> mesma seed divergem. O determinismo bit-a-bit do crate vale para codec/solver, não
+> para a borda sensorial. Medir o organismo é medir **distribuição**, nunca execução
+> única — daí `frames=2000` e percentis.
+
+> **Achado #1 (corrigido):** o motor **é matvec-bound**. O solver consome
+> **84,0% → 90,9% → 95,3%** do quadro em `steps = 60 → 120 → 240`, e entrega
+> **~7,5 GFLOP/s** em f64 contra ~40 GFLOP/s de pico AVX2 a 2,5 GHz — **~19% do
+> pico**. Todos os outros oito estágios somam 15% e, juntos, não pagam uma
+> otimização: o único gargalo que importa é o kernel do solver.
+
+#### 1.1.1 Lei de escala medida (a cache importa menos do que se supunha)
+
+| N | solver µs | GFLOP/s | footprint | nível | total µs | 60 Hz |
+|---:|---:|---:|---:|---|---:|---|
+| 64 | 132,5 | **7,42** | 0,18 MB | L2 | 156 | 0,9% |
+| 128 | 570,0 | 6,90 | 0,40 MB | L2 | 612 | 3,7% |
+| 256 | 2.534,8 | 6,21 | **1,03 MB** | L2 (limite) | 2.632 | 15,8% |
+| 512 | 11.868,9 | 5,30 | **3,04 MB** | L3 | 12.125 | 72,7% |
+| 1024 | 51.318,3 | 4,90 | 10,05 MB | L3 | 52.068 | **3,1×** |
+
+Duas conclusões que corrigem o texto anterior:
+
+1. **O penhasco de cache é N≈256, não 512.** O footprint não é só `J` (n²·8 B):
+   a matriz de leitura pesa `n·2048 B`. Em N=256, `J` + readout = **1,03 MB**, já no
+   limite do L2 (1,25 MB). A queda de GFLOP/s nessa travessia é −15% (6,21→5,30).
+2. **O custo cresce ~O(N²)** e o regime é compute-bound: o GFLOP/s cai só 34% de
+   N=64 a N=1024, mesmo saindo do L2 inteiro. O que dói é o kernel escalar.
+
+> **Achado #2 (novo):** há **dois orçamentos** e confundi-los é o erro clássico.
+> *Tempo real*: 60 Hz = **16.667 µs** por quadro — o motor usa **0,94%** disso em
+> N=64. *Throughput*: cada µs marginal custa `eq-t/s`. Otimizar hardware para
+> "caber em 60 Hz" é resolver um problema que não existe; o que existe é o kernel
+> a 19% do pico e o teto **N=512** para 60 Hz sem acelerá-lo.
 
 Sem AVX-512, a rota SIMD de 512 bits (que rende 95,81× em inferência ternária,
 arXiv:2605.06485 [B]) **não está disponível** nesta máquina. O teto aqui é AVX2:
@@ -526,7 +582,8 @@ independente, (iii) plausibilidade física.
 
 | Código | Severidade | Descrição | Remediação |
 |---|---|---|---|
-| `NO_PROFILE_BREAKDOWN` | **crítico** | não se sabe onde os 146 µs são gastos; matvec é 0,07% | E6 |
+| `NO_PROFILE_BREAKDOWN` | ✅ **resolvido (E6)** | medido: solver 84,8% · 7,5 GFLOP/s (~19% do pico AVX2) | — |
+| `SOLVER_KERNEL_SCALAR` | **crítico** | gemv + energia por passo são laços escalares; 5× de headroom até o pico f64 | E6b (SIMD/f32) |
 | `NO_ROOF_DUAL` | alto | sem passe simbólico; Ising recebe instância crua | E2b |
 | `NO_LIMIT_CYCLE_GUARD` | alto | cleanup determinístico pode ciclar | E1b |
 | `NO_PROVENANCE` | alto | resposta não diz de onde veio (transplantado/observado/inferido) | E3b |
@@ -559,7 +616,8 @@ a métrica — nunca por moda.*
 
 | # | Entrega | Mede | Gate |
 |---|---|---|---|
-| **E6** | `examples/profile_breakdown.rs` | onde vão os 146 µs, por estágio, com `rdtsc`/contadores | soma dos estágios ≥ 95% do total; matvec < 1% |
+| **E6** ✅ | `examples/e6_profile.rs` + `tests/e6_profile_gate.rs` | perfil por estágio — **executado 2026-11-15** | cobertura **99,98%**; solver **84,8%** |
+| **E6b** | otimizar o kernel do solver (SIMD f64 ou f32 + fusão) | GFLOP/s do solver | ≥ 2× o baseline (de ~7,5 para ≥ 15 GFLOP/s) |
 | **E2b** | roof dual + presolve antes do BSB | redução de variáveis, tempo, acerto | ≥40% redução; ≥90% das instâncias que o BSB puro erra |
 | **E1b** | ACF/IMF no cleanup do `FhrrStore` | capacidade e taxa de ciclo-limite com/sem ruído | ≥10× capacidade; ciclo-limite < 1% |
 | **E3b** | proveniência + verificador de coerência | precisão do selo; falsos "confiáveis" | ≥95% precisão; < 5% falsos |
@@ -580,7 +638,7 @@ E1–E5 do Volume I permanecem válidos; E6 vem **primeiro** (é diagnóstico e 
 | Corpo | "Produto C é fraco mas real" | **laço fechado basta**; 3 estágios S0–S2; teste anti-passeio H1–H3 |
 | Treino | "40× mais lento é o gargalo" | **gargalo evitável**: congelar física (reservoir); DEER só rende 25% em n=64 |
 | Preprints | "trate como hipótese" | **protocolo de triangulação** com selos [A]/[B]/[C] e regra de decisão |
-| Hardware | "cabe no L2; penhasco em N≈512" | **+ sem AVX-512**; matvec = 0,07% do ciclo; **não se sabe onde vão os 146 µs** |
+| Hardware | "cabe no L2; penhasco em N≈512" | **+ sem AVX-512**; **medido: solver = 84,8% do ciclo, ~7,5 GFLOP/s (~19% do pico)** |
 | Energia | não calculado | **0,88% de um core/dia; ~1–3 Wh/dia** |
 
 ---
@@ -683,10 +741,15 @@ O Volume II mostra que **as seis objeções eram corretas — e todas têm preç
 - Treino caro → **congele a física**; o readout é regressão linear.
 - Preprint não é resultado → **triangulação com selos** e regra de decisão.
 
-E um achado que não estava em nenhuma das seis objeções, e talvez seja o mais
-importante: **não sabemos onde vão os 146 µs.** O matvec que justifica a arquitetura
-inteira custa 0,07% do ciclo. Antes de qualquer nova física, o próximo experimento
-honesto é **E6 — o perfil**. Otimizar o que não se mediu é o único risco que não
-está no registo.
+E um achado que não estava em nenhuma das seis objeções — e que o **E6 resolveu
+depois deste volume ter sido escrito**: **o motor é matvec-bound.** O solver consome
+**84,8%** do quadro e entrega **7,5 GFLOP/s** (~19% do pico AVX2 f64). A estimativa
+"0,07%" que aparecia no §1.1 estava errada e está corrigida lá.
 
-> *"Seis corpos, seis preços. O sétimo é não saber onde o tempo vai."*
+Isso reordena a fila: antes de qualquer física nova, **otimizar o kernel do solver**
+(E6b) é o maior ganho disponível — 5× de headroom, sem tocar na arquitetura. E,
+depois dele, o próximo experimento honesto continua sendo medir o que ainda não se
+mediu: `ΔE` prevê acerto? (E3b).
+
+> *"Seis corpos, seis preços. O sétimo era não saber onde o tempo ia — agora sabemos:
+> 84,8% vai para o solver."*

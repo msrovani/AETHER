@@ -267,8 +267,7 @@ fn run_organism_traced(shared: &Shared, trace: &Arc<Mutex<DemoTrace>>) -> Result
     cfg.hz = 30.0; // um pouco mais leve para a UI acompanhar
     let steps = cfg.steps;
     let dim = cfg.decision_dim;
-    let mut organism =
-        ClosedLoopOrganism::new(cfg).map_err(|e| format!("organismo new: {e}"))?;
+    let mut organism = ClosedLoopOrganism::new(cfg).map_err(|e| format!("organismo new: {e}"))?;
     let mut sink = TraceSink {
         trace: Arc::clone(trace),
     };
@@ -377,9 +376,7 @@ fn run_daemon_traced(shared: &Shared, trace: &Arc<Mutex<DemoTrace>>) -> Result<S
             Ok(Some(status)) => {
                 let samples = reader.join().unwrap_or(0);
                 if status.success() {
-                    return Ok(format!(
-                        "daemon ok — {samples} amostras no gráfico"
-                    ));
+                    return Ok(format!("daemon ok — {samples} amostras no gráfico"));
                 }
                 return Err(format!(
                     "daemon exit {} — {samples} amostras",
