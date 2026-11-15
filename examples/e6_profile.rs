@@ -119,7 +119,7 @@ fn parse_args() -> Args {
     let mut i = 0;
     while i < argv.len() {
         let key = argv[i].as_str();
-        let mut val = || -> Option<&str> {
+        let val = || -> Option<&str> {
             if i + 1 < argv.len() {
                 Some(argv[i + 1].as_str())
             } else {

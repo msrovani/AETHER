@@ -468,7 +468,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | p99/p50 | 2,09× (auditoria: 2,13×) |
 
 Artefatos: `examples/e6_profile.rs`, `tests/e6_profile_gate.rs`,
-`target/aether_profile.json`.
+`target/aether_profile_e6.json`, `docs/HW_TARGET.md` §8 · fórum **MSG 0098**.
 
 **O que isso muda:** a estimativa do Vol. I/II de que "o matvec custa 0,07% do ciclo"
 estava **errada** (o solver faz dois gemv por passo, não um). O motor é matvec-bound.
