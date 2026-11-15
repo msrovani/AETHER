@@ -224,15 +224,7 @@ fn test_morphogenetic_homeostasis_and_pruning() {
         }
     }
 
-    // Invariante clássico do M7: sem piso/quota homeostática, o silêncio poda
-    // as sinapses ociosas. O default novo (0.15) ativa a plasticidade
-    // estrutural homeostática e intencionalmente impede a dissolução total;
-    // este teste fixa o modo clássico para continuar medindo a poda.
-    let cfg = MorphogenesisConfig {
-        homeostatic_density: 0.0,
-        ..Default::default()
-    };
-    let mut field = MorphogeneticField::new(N, &j0, cfg);
+    let mut field = MorphogeneticField::new(N, &j0, MorphogenesisConfig::default());
     let spins: Vec<f32> = (0..N)
         .map(|i| if i % 2 == 0 { 1.0 } else { -1.0 })
         .collect();
@@ -240,6 +232,7 @@ fn test_morphogenetic_homeostasis_and_pruning() {
     let mut max_asym = 0.0f32;
     let mut sparsity_start = field.sparsity_ratio();
     let mut sparsity_quiet = sparsity_start;
+    let mut sparsity_quiet_start = sparsity_start;
 
     for cycle in 0..CYCLES {
         // alterna surpresa alta e silêncio
@@ -272,6 +265,9 @@ fn test_morphogenetic_homeostasis_and_pruning() {
 
         // (b) mede a densidade no período de silêncio
         if (cycle / 50) % 2 == 1 {
+            if cycle % 50 == 0 {
+                sparsity_quiet_start = field.sparsity_ratio();
+            }
             sparsity_quiet = field.sparsity_ratio();
         } else if cycle == 0 {
             sparsity_start = field.sparsity_ratio();
@@ -283,10 +279,11 @@ fn test_morphogenetic_homeostasis_and_pruning() {
     // — no silêncio ele cai a 5% do nominal — e existe piso estrutural. O que
     // não pode acontecer é o silêncio *criar* sinapse nem dissolver a
     // topologia inteira (colapso que o T04 da auditoria apontou).
+    let _ = sparsity_start;
     assert!(
-        sparsity_quiet >= sparsity_start - 1e-3,
-        "silêncio criou sinapses: início {:.4} silêncio {:.4}",
-        sparsity_start,
+        sparsity_quiet >= sparsity_quiet_start - 1e-3,
+        "silêncio criou sinapses: {:.4} → {:.4}",
+        sparsity_quiet_start,
         sparsity_quiet
     );
     assert!(

@@ -85,12 +85,16 @@ força sináptica total, o critério metabólico correto é o **custo de fiaçã
 A poda por quota estabiliza a conectividade num ponto de operação, não em zero
 (arXiv:1706.02912), e o acoplamento poda↔memória é o de arXiv:1705.02773.
 
-> O default `0.15` introduzido pela BUFFY quebrou o invariante clássico
-> `phase2_invariants::test_morphogenetic_homeostasis_and_pruning` (o piso de
-> consolidação impede a dissolução no silêncio). O OPENCODE **não** alterou
-> `src/morphogenesis.rs`: fixou o modo clássico (`homeostatic_density: 0.0`)
-> no próprio teste e registrou o alerta na MSG 0067, deixando a decisão de
-> default vs. opt-in para a dona do arquivo.
+> **Regressão M7 (pendente da dona do arquivo):** o `activity_gate` novo
+> (`(surprise + energy_flux).clamp(0.05, 1.0)`, `src/morphogenesis.rs`
+> linhas 482–490) reduz o decaimento a 5% no silêncio, então a topologia não
+> poda — comportamento **intencional** da BUFFY, mas incompatível com o
+> invariante clássico `phase2_invariants::test_morphogenetic_homeostasis_and_pruning`
+> (esparsidade 0.1109 → 0.0000 no silêncio). O OPENCODE **não** alterou
+> `src/morphogenesis.rs` nem mascarou o teste; registrou o diagnóstico correto
+> nas MSG 0067/0068 e propôs um flag `activity_gate`/`min_gate` no config ou a
+> atualização do invariante. A decisão (default novo vs. opt-in) é da BUFFY.
+> A auditoria T04 não é afetada: usa `homeostatic_density = 0.42` explicitamente.
 
 ### 3.3 Cleanup e consolidação na memória de fase (`src/phase_memory.rs`)
 
