@@ -54,6 +54,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use aether_engine::core::active_inference::{ActiveInferenceEngine, LyapunovCbf, Zone};
 use aether_engine::core::fhrr::FhrrStore;
+use aether_engine::core::fhrr_bam::T12Bam;
 use aether_engine::core::koopman_sindy::{
     DelayEmbedding, OnlineKoopmanOperator, SindyEquationDiscoverer, SINDY_WINDOW,
 };
@@ -2203,21 +2204,20 @@ fn test_12_holographic_rag() {
     const FACTS: usize = 50;
     const QUERIES: usize = 20;
 
-    // FHRR: M_t = Î£_Î¼ e^{i(Î¸_e + Î¸_r + Î¸_v + Ïˆ_{Î¼,t})}; consulta = mÃ©dia dos K
-    // unbindings (fases por fato decorrelacionam o crosstalk).
-    let mut store = FhrrStore::with_traces(D, 6).expect("fhrr");
+    // FHRR/BAM: M_t = sum_mu e^{i(theta_e + theta_r + theta_v + psi_{mu,t})};
+    // fases u16 (BAM) com cleanup e unbinding em LUT Q15.
+    let mut bam = T12Bam::new(6, FACTS).expect("bam");
     let mut rng = ChaCha8Rng::seed_from_u64(0xFAC7);
     let mut atoms: Vec<(Vec<f32>, Vec<f32>, Vec<f32>)> = Vec::with_capacity(FACTS);
     for _ in 0..FACTS {
         let e = random_phases(D, &mut rng);
         let r = random_phases(D, &mut rng);
         let v = random_phases(D, &mut rng);
-        store.add_fact(&e, &r, &v).expect("add_fact");
+        bam.add_fact_radians(&e, &r, &v).expect("add_fact");
         atoms.push((e, r, v));
     }
-    assert_eq!(store.len(), FACTS);
+    assert_eq!(bam.len(), FACTS);
 
-    let mut scratch = store.scratch(FACTS);
     let mut hot_allocs = 0usize;
     let mut hits = 0usize;
     let mut latencies_us = Vec::with_capacity(QUERIES);
@@ -2235,22 +2235,18 @@ fn test_12_holographic_rag() {
             }
         }
 
-        // Caminho quente: `query_into` com workspace pre-alocado (0 alocacoes).
+        // Caminho quente BAM: `query_radians` com workspace pre-alocado.
         let t0 = Instant::now();
-        let mut recall = store
-            .query_into(&ec, &rc, &mask, &mut scratch)
-            .expect("query");
+        let mut recall = bam.query_radians(&ec, &rc, &mask).expect("query");
         let mut best_ns = t0.elapsed().as_nanos();
         for _ in 0..5 {
             let t = Instant::now();
-            recall = store
-                .query_into(&ec, &rc, &mask, &mut scratch)
-                .expect("query");
+            recall = bam.query_radians(&ec, &rc, &mask).expect("query");
             best_ns = best_ns.min(t.elapsed().as_nanos());
         }
         latencies_us.push(best_ns as f64 / 1000.0);
         let (_, q_allocs) = count_allocs(|| {
-            let _ = store.query_into(&ec, &rc, &mask, &mut scratch);
+            let _ = bam.query_radians(&ec, &rc, &mask);
         });
         hot_allocs += q_allocs;
 
@@ -2263,10 +2259,10 @@ fn test_12_holographic_rag() {
                 recall.role_similarity,
                 recall.value_index,
                 recall.similarity,
-                scratch.sims()[truth]
+                bam.sims()[truth]
             );
         }
-        let sims = scratch.sims();
+        let sims = bam.sims();
         let correct = sims[truth] as f64;
         let mut sum = 0.0f64;
         let mut count = 0usize;
@@ -2303,14 +2299,14 @@ fn test_12_holographic_rag() {
             "RAG holografico (50 fatos, 40% oclusao)",
             score,
             "MEASURED",
-            "FHRR (Plate 2003) com cleanup memory: bind/unbind Hadamard, O(D) por consulta",
+            "BAM u16 (fases inteiras, LUT Q15) com cleanup/unbinding zero-alocacao",
         )
         .m("recall_at_1", recall_at_1)
         .m("snr_sigma", snr)
         .m("latency_us_mean", mean_latency)
         .m("facts", FACTS as f64)
         .m("dim", D as f64)
-        .m("traces", store.traces() as f64)
+        .m("traces", bam.traces() as f64)
         .m("hot_path_allocs", hot_allocs as f64)
         .m("occlusion_pct", 40.0),
     );

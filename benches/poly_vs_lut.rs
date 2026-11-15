@@ -38,8 +38,8 @@ fn cos_mean_poly(a: &[u16], b: &[u16]) -> f64 {
             s[l] = ca[l].wrapping_sub(cb[l]).wrapping_add(QUARTER) as i16;
         }
         let c = poly_sin_q14(&s);
-        for l in 0..LANES {
-            acc += c[l] as i64;
+        for &v in c.iter() {
+            acc += v as i64;
         }
     }
     acc as f64 / Q14_ONE as f64 / a.len() as f64
@@ -51,7 +51,8 @@ fn cos_mean_lut(a: &[u16], b: &[u16]) -> f64 {
     let mut acc = 0.0f64;
     for i in 0..a.len() {
         let d = BamPhase(a[i].wrapping_sub(b[i]));
-        acc += lut.sin_cos(d).0 as f64;
+        // `sin_cos` devolve `(sin, cos)`: aqui queremos o cosseno.
+        acc += lut.sin_cos(d).1 as f64;
     }
     acc / a.len() as f64
 }
@@ -111,8 +112,11 @@ parabola: erro max={max_poly:.3e} medio={:.3e}\n  LUT:      erro max={max_lut:.3
 
     // --- 2. margem real do store (poly no caminho) ---
     let mut store = BamHolographicStore::<D>::new(6).expect("store");
-    let mut atoms: Vec<(BamHolographicVector<D>, BamHolographicVector<D>, BamHolographicVector<D>)> =
-        Vec::new();
+    let mut atoms: Vec<(
+        BamHolographicVector<D>,
+        BamHolographicVector<D>,
+        BamHolographicVector<D>,
+    )> = Vec::new();
     for _ in 0..FACTS {
         let e = BamHolographicVector::<D>::random(&mut rng);
         let r = BamHolographicVector::<D>::random(&mut rng);
@@ -127,7 +131,9 @@ parabola: erro max={max_poly:.3e} medio={:.3e}\n  LUT:      erro max={max_lut:.3
     for _ in 0..QUERIES {
         let truth = (rng.next_u64() as usize) % FACTS;
         let vis = D * 60 / 100;
-        let hidden: Vec<bool> = (0..D).map(|_| rng.next_u64() % 100 < (100 * vis / D) as u64).collect();
+        let hidden: Vec<bool> = (0..D)
+            .map(|_| rng.next_u64() % 100 < (100 * vis / D) as u64)
+            .collect();
         let mask = BamMask::<D>::from_bools(&hidden).expect("mask");
         let hit = store
             .query_into(&atoms[truth].0, &atoms[truth].1, &mask, &mut sc)

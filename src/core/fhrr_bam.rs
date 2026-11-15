@@ -43,6 +43,21 @@ impl T12Bam {
         self.store.memory_bytes()
     }
 
+    /// Número de fatos gravados.
+    pub fn len(&self) -> usize {
+        self.store.len()
+    }
+
+    /// `true` se nenhum fato foi gravado.
+    pub fn is_empty(&self) -> bool {
+        self.store.is_empty()
+    }
+
+    /// Número de traços `K`.
+    pub fn traces(&self) -> usize {
+        self.store.traces()
+    }
+
     /// Grava fato a partir de fases em radianos (`len == T12_D`).
     pub fn add_fact_radians(&mut self, e: &[f32], r: &[f32], v: &[f32]) -> Result<usize> {
         let eb = BamHolographicVector::<T12_D>::from_radians(e)?;
