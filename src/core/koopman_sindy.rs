@@ -659,10 +659,8 @@ impl SindyEquationDiscoverer {
 
         let c0 = self.stlsq(rows, &y0, threshold);
         let c1 = self.stlsq(rows, &y1, threshold);
-        for t in 0..SINDY_TERMS {
-            self.xi[0][t] = c0[t];
-            self.xi[1][t] = c1[t];
-        }
+        self.xi[0][..SINDY_TERMS].copy_from_slice(&c0[..SINDY_TERMS]);
+        self.xi[1][..SINDY_TERMS].copy_from_slice(&c1[..SINDY_TERMS]);
         self.rebuild_active();
         Ok(vec![c0, c1])
     }
@@ -987,5 +985,13 @@ mod tests {
         assert!((coef[1][9] + 0.3).abs() < 0.05, "c2 x2^3={}", coef[1][9]);
         assert_eq!(coef[0][3], 0.0);
         assert_eq!(coef[1][0], 0.0);
+
+        // Avaliador especializado ≡ avaliador completo.
+        for x in [[0.37f64, -0.21], [-0.9, 0.4], [0.0, 0.0]] {
+            let full = sindy.rhs(x);
+            let act = sindy.rhs_active(x);
+            assert!((full[0] - act[0]).abs() < 1e-12, "rhs x1 {x:?}");
+            assert!((full[1] - act[1]).abs() < 1e-12, "rhs x2 {x:?}");
+        }
     }
 }

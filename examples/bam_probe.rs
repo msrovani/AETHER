@@ -24,6 +24,7 @@ use std::time::{Duration, Instant};
 use aether_engine::core::affinity::{core_ids, core_plan, pin_reflex_core, pin_to_core};
 use aether_engine::core::fhrr::FhrrStore;
 use aether_engine::core::fhrr_bam::{T12Bam, T12_D, T12_FACTS, T12_TRACES};
+use aether_engine::core::koopman_sindy::SindyEquationDiscoverer;
 use aether_engine::simulation::closed_loop_organism::{
     ClosedLoopOrganism, OrganismConfig, OrganismFrame,
 };
@@ -493,8 +494,54 @@ fn roofline() {
     println!("(a medida real do backend wgpu fica para a Fase 2)");
 }
 
+fn sindy_section() {
+    let mut series = Vec::with_capacity(4000);
+    let (mut x1, mut x2) = (1.0f64, 0.5f64);
+    let dt = 0.0005f32;
+    for _ in 0..4000 {
+        series.push([x1 as f32, x2 as f32]);
+        let d1 = -0.5 * x1 + 1.2 * x2 * x2;
+        let d2 = 0.8 * x1 - 0.3 * x2 * x2 * x2;
+        x1 += d1 * dt as f64;
+        x2 += d2 * dt as f64;
+    }
+    let mut d = SindyEquationDiscoverer::new();
+    d.discover(&series, dt, 0.02).expect("sindy");
+    let x = [0.37f64, -0.21f64];
+    let full = d.rhs(x);
+    let act = d.rhs_active(x);
+    assert!((full[0] - act[0]).abs() < 1e-12);
+    assert!((full[1] - act[1]).abs() < 1e-12);
+
+    let n = 2_000_000u64;
+    let t = Instant::now();
+    let mut acc = 0.0f64;
+    for _ in 0..n {
+        let y = d.rhs(black_box(x));
+        acc += y[0];
+    }
+    black_box(acc);
+    let full_ns = t.elapsed().as_nanos() as f64 / n as f64;
+
+    let t = Instant::now();
+    let mut acc = 0.0f64;
+    for _ in 0..n {
+        let y = d.rhs_active(black_box(x));
+        acc += y[0];
+    }
+    black_box(acc);
+    let act_ns = t.elapsed().as_nanos() as f64 / n as f64;
+
+    println!("\n=== SINDy: avaliador completo vs especializado ===");
+    println!("rhs (10 termos): {full_ns:.2} ns/avaliacao");
+    println!("rhs_active (termos ativos): {act_ns:.2} ns/avaliacao");
+    println!("speedup especializado: {:.2}x", full_ns / act_ns.max(1e-9));
+    println!("(JIT medido na Fase 5: 5.24 ns; nativo fixo: 0.82 ns)");
+}
+
 fn main() {
     println!("AETHER — Fase 0/1 hardware probe");
     t12_comparison();
+    sindy_section();
     roofline();
 }
