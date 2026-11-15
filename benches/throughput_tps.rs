@@ -132,9 +132,7 @@ fn peak_rss_mb() -> Option<f64> {
     };
     // SAFETY: `c` é um PROCESS_MEMORY_COUNTERS com `cb` preenchido e o handle
     // é o pseudo-handle do processo atual, sempre válido.
-    let ok = unsafe {
-        K32GetProcessMemoryInfo(GetCurrentProcess(), &mut c, c.cb)
-    };
+    let ok = unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut c, c.cb) };
     if ok != 0 {
         Some(c.peak_working_set_size as f64 / (1024.0 * 1024.0))
     } else {
@@ -320,7 +318,7 @@ fn main() {
             "    {{\"name\": \"{}\", \"steps\": {}, \"cycles\": {}, \"wall_s\": {:.4}, \
              \"p50_us\": {:.4}, \"p95_us\": {:.4}, \"p99_us\": {:.4}, \"p99_9_us\": {:.4}, \
              \"cycles_per_s\": {:.2}, \"sop_per_s\": {:.2}, \"eq_t_per_s\": {:.2}, \
-             \"hot_path_allocations\": {}}}",
+             \"hot_path_allocations\": {}, \"heap_peak_mb\": {:.4}}}",
             s.name,
             regimes[i].steps,
             s.cycles,
@@ -332,7 +330,8 @@ fn main() {
             s.cycles_per_s,
             s.sop_per_s,
             s.eq_t_per_s,
-            s.hot_allocs
+            s.hot_allocs,
+            s.mem_peak_mb
         ));
         if i + 1 < stats.len() {
             json.push(',');
