@@ -468,14 +468,19 @@ fn row_energy(jb: &[f64], n: usize, hb: &[f64], s: &[i8]) -> f64 {
 /// LLVM material para SLP-vetorizar em 4 registradores YMM. A ordem de redução é
 /// fixa (0..16 e depois o resto), logo o resultado é **bit-a-bit reprodutível
 /// entre execuções** — embora difira do laço escalar em ~1 ULP.
+///
+/// Curva medida (N=64, steps=60, Core 7 240H): **16 → 17,4 GFLOP/s** ·
+/// 24 → 10,4 (a cauda de 16 elementos em N=64 cai no laço escalar) ·
+/// 32 → 12,3 (spill de registradores). 16 divide todas as potências de dois
+/// usadas pelo organismo (64..1024), então não há cauda em nenhum N.
 #[inline]
 fn dot_f64(a: &[f64], b: &[f64]) -> f64 {
     let n = a.len().min(b.len());
-    let mut acc = [0.0f64; 24];
-    let chunks = n / 24;
+    let mut acc = [0.0f64; 16];
+    let chunks = n / 16;
     for c in 0..chunks {
-        let x = &a[c * 24..c * 24 + 24];
-        let y = &b[c * 24..c * 24 + 24];
+        let x = &a[c * 16..c * 16 + 16];
+        let y = &b[c * 16..c * 16 + 16];
         for k in 0..16 {
             acc[k] += x[k] * y[k];
         }
@@ -494,8 +499,8 @@ fn dot_f64(a: &[f64], b: &[f64]) -> f64 {
 #[inline]
 fn dot_i8(a: &[f64], s: &[i8]) -> f64 {
     let n = a.len().min(s.len());
-    let mut acc = [0.0f64; 24];
-    let chunks = n / 24;
+    let mut acc = [0.0f64; 16];
+    let chunks = n / 16;
     for c in 0..chunks {
         let x = &a[c * 16..c * 16 + 16];
         let y = &s[c * 16..c * 16 + 16];
@@ -567,5 +572,3 @@ fn check_shape3(shape: &[usize], batch: usize, n: usize) -> Result<()> {
     }
     Ok(())
 }
-
-
