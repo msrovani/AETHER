@@ -130,8 +130,9 @@ no Windows, o hub é a superfície única de métricas + testes práticos.
 | Hover / clique | tooltips pedagógicos; ficha demonstrativa T0x no click |
 | Jobs | single-flight: auditoria, bench vazão, sonda HW, demo organism/daemon |
 | Gaps | `SCORECARD_MISSING`, `TAIL_LATENCY_HIGH`, `L1D_PRESSURE`, `AFFINITY_OFF`, `TOOLCHAIN_PATH`, … |
-| Docs | [USER_GUIDE.md](USER_GUIDE.md) · [DASHBOARD_METRICS.md](DASHBOARD_METRICS.md) |
-| Fora de escopo agora | live streaming do daemon, macOS/Linux GUI, MSI, cloud |
+| Docs | [USER_GUIDE.md](USER_GUIDE.md) · [DASHBOARD_METRICS.md](DASHBOARD_METRICS.md) · [HUB_DASHBOARD.md](HUB_DASHBOARD.md) |
+| Gráficos | coluna direita: telemetria ao vivo do demo organismo (in-process) e parse do daemon |
+| Fora de escopo agora | macOS/Linux GUI, MSI, cloud, multicast peer-visualizer completo |
 
 Implementação: `src/dashboard/*` (`catalog`, `jobs`, `host_probe`, `gaps`, `model`) + `src/bin/aether_dashboard.rs` (egui/eframe).
 

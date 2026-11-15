@@ -31,8 +31,8 @@ cargo test --release          # 95 testes: fase 1 + fase 2 + engenharia + FHRR
 cargo clippy --all-targets -- -D warnings
 cargo run --release --bin aether-organism   # Fase 1: painel em tempo real
 cargo run --release --bin aether-daemon     # Fase 2: organismo encarnado
-# Windows — hub de métricas (hover/fichas + jobs auditoria/bench/HW):
-# docs/USER_GUIDE.md · docs/DASHBOARD_METRICS.md
+# Windows — hub de métricas (detalhe à direita + gráficos dos demos):
+# docs/USER_GUIDE.md · docs/HUB_DASHBOARD.md · docs/DASHBOARD_METRICS.md
 cargo test --release --test cognitive_audit
 cargo run --release --bin aether-dashboard --features dashboard
 ```
