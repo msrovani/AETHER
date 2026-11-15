@@ -3,6 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.60] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 4 arquivo(s) (src:4).
+- Gate: ok (0s).
+
+- `src/core/bam_phase.rs`
+- `src/core/silicon_entropy.rs`
+- `src/core/sindy_jit.rs`
+- `src/core/spsc_ring.rs`
+
 ## [0.0.59] - 2026-11-15
 
 ### Changed
