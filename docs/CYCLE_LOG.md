@@ -54,3 +54,4 @@
 | 2026-11-15T03:45:00Z | 0.0.35 | 3 | .:1, docs:2 | manual release | - | sim |
 | 2026-11-15T03:46:05Z | wip | 1 | scripts:1 | ok (2s) | - | sim |
 | 2026-11-15T03:51:16Z | wip | 3 | .:2, .github:1 | ok (10s) | - | sim |
+| 2026-11-15T03:56:04Z | 0.0.36 | 3 | .:1, benches:1, tests:1 | ok (1s) | - | sim |

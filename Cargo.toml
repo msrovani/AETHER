@@ -1,9 +1,9 @@
-[package]
+﻿[package]
 name = "aether_engine"
-version = "0.0.35"
+version = "0.0.36"
 edition = "2021"
 rust-version = "1.78"
-description = "AETHER â€” motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
+description = "AETHER Ã¢â‚¬â€ motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
 license = "MIT OR Apache-2.0"
 publish = false
 
@@ -79,6 +79,11 @@ required-features = ["m8"]
 
 [[bench]]
 name = "organism"
+harness = false
+required-features = ["m4"]
+
+[[bench]]
+name = "throughput_tps"
 harness = false
 required-features = ["m4"]
 
