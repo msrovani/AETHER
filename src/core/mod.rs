@@ -7,6 +7,15 @@
 #[cfg(feature = "m1")]
 pub mod thermodynamic_solver;
 
+#[cfg(feature = "m1")]
+pub mod active_inference;
+
+#[cfg(feature = "m1")]
+pub mod koopman_sindy;
+
+#[cfg(feature = "m1")]
+pub mod renormalization;
+
 #[cfg(feature = "m2")]
 pub mod wave_interference;
 

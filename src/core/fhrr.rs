@@ -307,11 +307,6 @@ impl FhrrStore {
                 acc_im[j] += ti * rr - tr * ri;
             }
         }
-        let inv = 1.0 / self.traces as f32;
-        for j in 0..dim {
-            acc_re[j] *= inv;
-            acc_im[j] *= inv;
-        }
         (acc_re, acc_im)
     }
 
@@ -400,18 +395,28 @@ impl FhrrStore {
 
         let (value_re, value_im) = self.unbind(&self.roles[best_k], best_k);
 
-        // Similaridade com todos os valores (zip vetorizável).
+        // Similaridade com todos os valores: varredura em blocos de 8, uma
+        // única normalização no fim (a soma crua é K× o sinal; argmax/SNR não
+        // dependem da escala, mas a similaridade reportada precisa ser ~1).
+        let inv = 1.0f32 / (self.dim as f32 * self.traces as f32);
         let mut sims = vec![0.0f32; self.values.len()];
         for (k, v) in self.values.iter().enumerate() {
             let mut acc = 0.0f32;
-            for ((zr, zi), (vr, vi)) in value_re
-                .iter()
-                .zip(value_im.iter())
-                .zip(v.re.iter().zip(v.im.iter()))
-            {
-                acc += zr * vr + zi * vi;
+            let mut j = 0usize;
+            while j + 8 <= self.dim {
+                let mut lane = 0.0f32;
+                for l in 0..8 {
+                    let idx = j + l;
+                    lane += value_re[idx] * v.re[idx] + value_im[idx] * v.im[idx];
+                }
+                acc += lane;
+                j += 8;
             }
-            sims[k] = acc / self.dim as f32;
+            while j < self.dim {
+                acc += value_re[j] * v.re[j] + value_im[j] * v.im[j];
+                j += 1;
+            }
+            sims[k] = acc * inv;
         }
 
         let mut best_v = 0usize;
