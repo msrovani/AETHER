@@ -131,6 +131,11 @@ name = "bam_phase_review"
 harness = false
 required-features = ["m1"]
 
+[[bench]]
+name = "poly_vs_lut"
+harness = false
+required-features = ["m1"]
+
 [profile.release]
 opt-level = 3
 lto = "fat"
