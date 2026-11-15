@@ -89,6 +89,15 @@ pub struct MorphogenesisConfig {
     pub max_dt: f32,
     /// Teto de Gershgorin como múltiplo do alvo espectral.
     pub gershgorin_cap: f32,
+    /// Densidade alvo de sinapses ativas (plasticidade estrutural homeostática).
+    ///
+    /// `0.0` desliga (comportamento clássico: a topologia só decai). Com
+    /// `0 < d < 1` a cada passo as sinapses mais fracas são podadas até a
+    /// densidade `d`, preservando as mais fortes — poda por quota análoga à
+    /// plasticidade estrutural homeostática de Gallinaro & Rotter
+    /// (arXiv:1706.02912) e Millán et al. (arXiv:1705.02773). Impede o
+    /// colapso ρ→0 sob silêncio prolongado.
+    pub homeostatic_density: f32,
 }
 
 impl Default for MorphogenesisConfig {
@@ -103,6 +112,7 @@ impl Default for MorphogenesisConfig {
             homeostasis_period: 2,
             max_dt: 0.5,
             gershgorin_cap: 4.0,
+            homeostatic_density: 0.0,
         }
     }
 }
@@ -135,6 +145,11 @@ impl MorphogenesisConfig {
         }
         if !self.gershgorin_cap.is_finite() || self.gershgorin_cap < 1.0 {
             self.gershgorin_cap = d.gershgorin_cap;
+        }
+        if !self.homeostatic_density.is_finite() || self.homeostatic_density < 0.0 {
+            self.homeostatic_density = 0.0;
+        } else {
+            self.homeostatic_density = self.homeostatic_density.min(1.0);
         }
         self
     }
@@ -222,6 +237,8 @@ pub struct MorphogeneticField {
     power_v: Vec<f32>,
     /// Buffer da iteração de potência (J·v).
     power_av: Vec<f32>,
+    /// Buffer da poda homeostática por quota `(|w|, i, k)`.
+    prune_buf: Vec<(f32, u32, u32)>,
 }
 
 impl std::fmt::Debug for MorphogeneticField {
@@ -258,6 +275,7 @@ impl MorphogeneticField {
             surprise: 0.0,
             power_v: vec![0.0f32; n],
             power_av: vec![0.0f32; n],
+            prune_buf: Vec::new(),
         };
         field.sanitize();
         field
@@ -475,10 +493,61 @@ impl MorphogeneticField {
         if self.cycles % self.cfg.homeostasis_period == 0 {
             self.try_homeostasis()?;
         }
+        if self.cfg.homeostatic_density > 0.0 {
+            self.enforce_homeostatic_density();
+        }
 
         // Energia livre calculada UMA vez por passo (após a normalização).
         self.free_energy = self.free_energy(surprise);
         Ok(self.free_energy)
+    }
+
+    /// Poda homeostática por quota.
+    ///
+    /// Mantém no máximo `homeostatic_density · N(N−1)/2` sinapses ativas,
+    /// removendo as de menor `|J_ij|` (poda *weight-dependent*). Sem essa
+    /// quota, um bloco de silêncio zera o ganho hebbiano e o decaimento
+    /// metabólico dissolve a rede inteira (ρ→0): a plasticidade estrutural
+    /// homeostática de Gallinaro & Rotter (arXiv:1706.02912) e o acoplamento
+    /// poda↔memória de Millán et al. (arXiv:1705.02773) mostram que a
+    /// conectividade deve estabilizar num ponto de operação, não em zero.
+    fn enforce_homeostatic_density(&mut self) {
+        let n = self.n;
+        if n < 2 {
+            return;
+        }
+        let pairs = n * (n - 1) / 2;
+        let density = self.cfg.homeostatic_density;
+        let target = ((density * pairs as f32).round() as usize).clamp(1, pairs);
+
+        self.prune_buf.clear();
+        for i in 0..n {
+            for k in (i + 1)..n {
+                let w = self.j[i * n + k];
+                if w != 0.0 && w.is_finite() {
+                    self.prune_buf.push((w.abs(), i as u32, k as u32));
+                }
+            }
+        }
+        let active = self.prune_buf.len();
+        if active <= target {
+            return;
+        }
+
+        // Ordem total determinística: |J| crescente, desempate por (i,k).
+        self.prune_buf.sort_unstable_by(|a, b| {
+            a.0.total_cmp(&b.0)
+                .then_with(|| a.1.cmp(&b.1))
+                .then_with(|| a.2.cmp(&b.2))
+        });
+
+        let remove = active - target;
+        for idx in 0..remove {
+            let (_, i, k) = self.prune_buf[idx];
+            let (i, k) = (i as usize, k as usize);
+            self.j[i * n + k] = 0.0;
+            self.j[k * n + i] = 0.0;
+        }
     }
 
     /// Homeostase espectral tolerante: ignora erros de ρ não finito.

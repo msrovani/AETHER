@@ -774,6 +774,88 @@ impl ComplexPhaseMemory {
         self.phase_energy()
     }
 
+    /// Similaridade invariante a rotação global entre `phases` e o padrão `mu`.
+    ///
+    /// `sim = |Σ_i e^{i(φ_i − ψ_i^μ)}| / N ∈ [0,1]`. É o parâmetro de ordem
+    /// complexo entre o estado e o atrator gravado; rotações rígidas do padrão
+    /// não reduzem a similaridade (o imprint as trata como duplicata).
+    pub fn pattern_similarity(&self, phases: &[f32], mu: usize) -> f32 {
+        let n = self.n;
+        if n == 0 || mu >= self.pat_count || phases.len() != n {
+            return 0.0;
+        }
+        let base = mu * n;
+        let mut cr = 0.0f32;
+        let mut ci = 0.0f32;
+        for i in 0..n {
+            let (s, c) = phases[i].sin_cos();
+            cr += c * self.pat_re[base + i] + s * self.pat_im[base + i];
+            ci += s * self.pat_re[base + i] - c * self.pat_im[base + i];
+        }
+        (cr * cr + ci * ci).sqrt() / n as f32
+    }
+
+    /// *Cleanup memory*: padrão gravado mais próximo, similaridade e rotação.
+    ///
+    /// Devolve `(mu, sim, δ)` tal que `ψ^μ + δ` é a versão de fase do estado
+    /// alinhada ao atrator. É o readout padrão de memórias associativas
+    /// (Plate, HRR 2003; Hopfield 1982): a dinâmica reconstrói, o cleanup
+    /// escolhe o item discreto.
+    pub fn cleanup(&self, phases: &[f32]) -> Option<(usize, f32, f32)> {
+        let n = self.n;
+        if n == 0 || self.pat_count == 0 || phases.len() != n {
+            return None;
+        }
+        let mut best = (0usize, 0.0f32, 0.0f32);
+        for mu in 0..self.pat_count {
+            let base = mu * n;
+            let mut cr = 0.0f32;
+            let mut ci = 0.0f32;
+            for i in 0..n {
+                let (s, c) = phases[i].sin_cos();
+                cr += c * self.pat_re[base + i] + s * self.pat_im[base + i];
+                ci += s * self.pat_re[base + i] - c * self.pat_im[base + i];
+            }
+            let sim = (cr * cr + ci * ci).sqrt() / n as f32;
+            if sim > best.1 {
+                best = (mu, sim, ci.atan2(cr));
+            }
+        }
+        Some(best)
+    }
+
+    /// `recall` seguido de *cleanup* e consolidação do atrator vencedor.
+    ///
+    /// Se a similaridade do melhor padrão for `>= min_similarity`, o estado é
+    /// substituído por `ψ^μ + δ` (readout discreto) e a memória consolida esse
+    /// estado. Caso contrário nada é alterado — a pista não tem evidência
+    /// suficiente para uma resposta confiável (abstenção).
+    ///
+    /// Retorna `(fases, energia, Some((mu, sim)))` ou `(fases, energia, None)`.
+    pub fn recall_clean(
+        &mut self,
+        partial_cue: &[f32],
+        mask: &[bool],
+        steps: usize,
+        dt: f32,
+        min_similarity: f32,
+    ) -> (Vec<f32>, f32, Option<(usize, f32)>) {
+        let (mut out, energy) = self.recall(partial_cue, mask, steps, dt);
+        let Some((mu, sim, rot)) = self.cleanup(&out) else {
+            return (out, energy, None);
+        };
+        if sim < min_similarity {
+            return (out, energy, None);
+        }
+        let n = self.n;
+        let base = mu * n;
+        for i in 0..n {
+            out[i] = wrap(self.pat_im[base + i].atan2(self.pat_re[base + i]) + rot);
+        }
+        self.phases.copy_from_slice(&out);
+        (out, energy, Some((mu, sim)))
+    }
+
     /// Igual a [`Self::recall`], mas com validação explícita.
     pub fn try_recall(
         &mut self,

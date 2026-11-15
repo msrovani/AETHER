@@ -13,4 +13,7 @@ pub mod wave_interference;
 #[cfg(feature = "m3")]
 pub mod kuramoto_field;
 
+#[cfg(feature = "m5")]
+pub mod fhrr;
+
 pub use crate::error::{AetherError, Result};

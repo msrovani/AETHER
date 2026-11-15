@@ -46,8 +46,8 @@ fn cosine_sim(a: &[f32], b: &[f32]) -> f32 {
     let mut na = 0.0f32;
     let mut nb = 0.0f32;
     for i in 0..a.len() {
-        let (ca, sa) = a[i].sin_cos();
-        let (cb, sb) = b[i].sin_cos();
+        let (sa, ca) = a[i].sin_cos();
+        let (sb, cb) = b[i].sin_cos();
         dot += ca * cb + sa * sb;
         na += 1.0;
         nb += 1.0;
@@ -78,9 +78,10 @@ impl FastKernel {
                     continue;
                 }
                 let idx = i * n + j;
-                let (c, s) = mem.phase_shifts[idx].sin_cos();
-                cr[idx] = mem.weights[idx] * c;
-                ci[idx] = -mem.weights[idx] * s;
+                // atencao: sin_cos() devolve (sin, cos)
+                let (sd, cd) = mem.phase_shifts[idx].sin_cos();
+                cr[idx] = mem.weights[idx] * cd;
+                ci[idx] = -mem.weights[idx] * sd;
             }
         }
         Self {
@@ -93,7 +94,7 @@ impl FastKernel {
         }
     }
 
-    fn run(&mut self, cue: &[f32], mask: &[bool], steps: usize, dt: f32, clamp: f32) {
+    fn run(&mut self, cue: &[f32], mask: &[bool], steps: usize, dt: f32, clamp: f32, flip: bool) {
         let n = self.n;
         let inv_n = 1.0 / n as f32;
         for i in 0..n {
@@ -103,9 +104,9 @@ impl FastKernel {
         }
         for _ in 0..steps {
             for j in 0..n {
-                let (c, s) = self.phases[j].sin_cos();
-                self.cos_p[j] = c;
-                self.sin_p[j] = s;
+                let (sj, cj) = self.phases[j].sin_cos();
+                self.cos_p[j] = cj;
+                self.sin_p[j] = sj;
             }
             for i in 0..n {
                 let mut re = 0.0f32;
@@ -116,11 +117,14 @@ impl FastKernel {
                     re += self.cr[idx] * self.cos_p[j] - self.ci[idx] * self.sin_p[j];
                     im += self.cr[idx] * self.sin_p[j] + self.ci[idx] * self.cos_p[j];
                 }
-                let (cpi, spi) = self.phases[i].sin_cos();
+                let (spi, cpi) = self.phases[i].sin_cos();
                 let mut drive = (im * cpi - re * spi) * inv_n;
                 if mask[i] {
                     let err = cue[i] - self.phases[i];
                     drive += clamp * err.sin();
+                }
+                if flip {
+                    drive = -drive;
                 }
                 let v = self.phases[i] + drive * dt;
                 self.phases[i] = v.rem_euclid(TAU);
@@ -129,7 +133,59 @@ impl FastKernel {
     }
 }
 
+/// Teste da identidade, sem dinamica: compara a soma com `sin` por aresta com
+/// `Im(e^{-i phi_i} sum_j A_ij e^{i phi_j})` para estados aleatorios.
+fn teste_identidade() {
+    let n = 4usize;
+    let w = [
+        0.0f32, 1.3, -0.7, 0.4, //
+        0.9, 0.0, 2.1, -1.1, //
+        0.2, -0.5, 0.0, 1.7, //
+        -0.8, 0.6, 1.2, 0.0,
+    ];
+    let d = [
+        0.0f32, 0.7, 2.4, -0.3, //
+        1.9, 0.0, -1.2, 0.5, //
+        2.9, -0.8, 0.0, 1.1, //
+        -2.2, 0.3, 0.9, 0.0,
+    ];
+    let phi = [0.3f32, 2.1, -1.4, 3.0];
+    let mut pior = 0.0f32;
+    for i in 0..n {
+        // (a) forma direta
+        let mut direto = 0.0f32;
+        for j in 0..n {
+            if i == j {
+                continue;
+            }
+            direto += w[i * n + j] * (phi[j] - phi[i] - d[i * n + j]).sin();
+        }
+        // (b) produto complexo
+        let mut re = 0.0f32;
+        let mut im = 0.0f32;
+        for j in 0..n {
+            if i == j {
+                continue;
+            }
+            let (sd, cd) = d[i * n + j].sin_cos();
+            let (sp, cp) = phi[j].sin_cos();
+            let ww = w[i * n + j];
+            // A = W e^{-i delta}
+            let (cr, ci) = (ww * cd, -ww * sd);
+            re += cr * cp - ci * sp;
+            im += cr * sp + ci * cp;
+        }
+        let (spi, cpi) = phi[i].sin_cos();
+        let via = im * cpi - re * spi;
+        pior = pior.max((direto - via).abs());
+        println!("  i={i}: direto={direto:+.6} via_complexo={via:+.6}");
+    }
+    println!("  pior diferenca absoluta = {pior:.3e}\n");
+}
+
 fn main() {
+    println!("=== teste da identidade (sem dinamica) ===");
+    teste_identidade();
     let cfg = PhaseMemoryConfig {
         omega0: 0.0,
         clamp_strength: 8.0,
@@ -165,31 +221,78 @@ fn main() {
         .collect();
 
     println!("\nN={N} fatos={FACTS} | 5 consultas, 40% ocluido");
-    println!("{:<7} {:>12} {:>12} {:>10} {:>12}", "passos", "recall us", "kernel us", "ganho", "erro_fase");
+    println!(
+        "{:<7} {:>11} {:>10} {:>9} {:>12} {:>12}",
+        "passos", "recall us", "kernel us", "ganho", "err_recall", "err_kernel"
+    );
+
+    println!("\n--- convergencia: 1 passo ja tem de bater? ---");
+    println!("{:<7} {:>10} {:>10} {:>10}", "passos", "max_err", "med_err", "max_flip");
+    for steps in [1usize, 2, 3, 5, 10] {
+        let mut max_err = 0.0f32;
+        let mut sum_err = 0.0f32;
+        let mut max_flip = 0.0f32;
+        for (truth, cue, mask) in &queries {
+            let _ = truth;
+            mem.reset_phases(0.0);
+            let (rec, _e) = mem.recall(cue, mask, steps, 0.05);
+            kernel.run(cue, mask, steps, 0.05, 8.0, false);
+            for i in 0..N {
+                let e = ang(kernel.phases[i], rec[i]);
+                max_err = max_err.max(e);
+                sum_err += e;
+            }
+            kernel.run(cue, mask, steps, 0.05, 8.0, true);
+            for i in 0..N {
+                let e = ang(kernel.phases[i], rec[i]);
+                max_flip = max_flip.max(e);
+            }
+        }
+        println!(
+            "{:<7} {:>10.3e} {:>10.3e} {:>10.3e}",
+            steps,
+            max_err,
+            sum_err / (queries.len() * N) as f32,
+            max_flip
+        );
+    }
 
     for steps in [10usize, 20, 40, 80] {
         // (1) `recall` oficial.
         let mut t_recall = 0.0f64;
         let mut out_ref: Vec<Vec<f32>> = Vec::new();
-        for (_, cue, mask) in &queries {
+        let mut err_recall = 0.0f32;
+        let mut cnt = 0usize;
+        for (truth, cue, mask) in &queries {
             mem.reset_phases(0.0);
             let t0 = Instant::now();
             let (rec, _e) = mem.recall(cue, mask, steps, 0.05);
             t_recall += t0.elapsed().as_secs_f64() * 1e6;
+            for i in 0..N {
+                if !mask[i] {
+                    err_recall += ang(rec[i], facts[*truth][i]);
+                    cnt += 1;
+                }
+            }
             out_ref.push(rec);
         }
+        err_recall /= cnt as f32;
         t_recall /= queries.len() as f64;
 
         // (2) kernel proposto.
         let mut t_fast = 0.0f64;
-        let mut max_err = 0.0f32;
+        let mut err_kernel = 0.0f32;
+        let mut cnt_k = 0usize;
         let mut hits_fast = 0usize;
-        for (k, (truth, cue, mask)) in queries.iter().enumerate() {
+        for (truth, cue, mask) in &queries {
             let t0 = Instant::now();
-            kernel.run(cue, mask, steps, 0.05, 8.0);
+            kernel.run(cue, mask, steps, 0.05, 8.0, false);
             t_fast += t0.elapsed().as_secs_f64() * 1e6;
             for i in 0..N {
-                max_err = max_err.max(ang(kernel.phases[i], out_ref[k][i]));
+                if !mask[i] {
+                    err_kernel += ang(kernel.phases[i], facts[*truth][i]);
+                    cnt_k += 1;
+                }
             }
             let sims: Vec<f32> = facts.iter().map(|p| cosine_sim(&kernel.phases, p)).collect();
             let mut best = 0usize;
@@ -203,15 +306,18 @@ fn main() {
             }
         }
         t_fast /= queries.len() as f64;
+        err_kernel /= cnt_k as f32;
         println!(
-            "{:<7} {:>12.1} {:>12.1} {:>9.1}x {:>11.2e} (acertos fast {}/5)",
+            "{:<7} {:>11.0} {:>10.0} {:>8.1}x {:>12.4} {:>12.4} (acertos fast {}/5)",
             steps,
             t_recall,
             t_fast,
             t_recall / t_fast,
-            max_err,
+            err_recall,
+            err_kernel,
             hits_fast
         );
+        let _ = &out_ref;
     }
     println!();
 }
