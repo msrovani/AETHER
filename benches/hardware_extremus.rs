@@ -197,10 +197,14 @@ struct SindyBench {
     jitted: bool,
     /// Custo da última compilação Cranelift (µs); 0 se a feature `jit` está off.
     compile_us: f64,
+    /// Custo da **primeira** compilação (cold start, inclui setup da ISA).
+    first_compile_us: f64,
     /// Termos ativos da equação de teste.
     active_terms: usize,
-    /// Avaliações para amortizar a compilação; `NaN` se o JIT não ganha/não existe.
+    /// Avaliações para amortizar a primeira compilação; `NaN` se o JIT não ganha.
     break_even_evals: f64,
+    /// Avaliações para amortizar uma recompilação em regime.
+    steady_break_even_evals: f64,
 }
 
 /// Benchmark A: `dx = Θ(x)·Ξ` com 4 termos ativos
@@ -214,6 +218,7 @@ fn bench_sindy() -> SindyBench {
     let active_terms = xi.iter().flatten().filter(|v| **v != 0.0).count();
     let (mut jit, integ) = SindyJit::new();
     let out = jit.publish_coefficients(&xi).expect("publish");
+    let first_compile_us = jit.stats().last_compile_us as f64;
     let mut xi32 = [0.0f32; 20];
     for (c, row) in xi.iter().enumerate() {
         for (t, v) in row.iter().enumerate() {
@@ -382,24 +387,29 @@ fn bench_spsc() -> f64 {
 
 fn main() {
     println!("== AETHER FASE 5 — hardware extremus ==");
+    println!(
+        "[env] jit_compilado={} | feature affinity={}",
+        jit_compiled_in(),
+        cfg!(feature = "affinity")
+    );
+
+    // ---- C. BAM u16 vs FHRR f32 (T12) -----------------------------------
+    println!("\n== C. BAM u16 vs FHRR f32 (T12) ==");
     let micro = bench_bam_micro();
     for (n, v) in micro {
         println!("[bam] {n:<18} {v:>10.1} ns");
     }
-    println!(
-        "[bam] ganho sin_cos LUT x{:.0} | jit_compilado={}",
-        micro[0].1 / micro[1].1,
-        jit_compiled_in()
-    );
+    println!("[bam] ganho sin_cos LUT x{:.0}", micro[0].1 / micro[1].1);
     let mut json = String::from("{\n");
     for (n, v) in micro {
         json += &format!("  \"bam_{n}_ns\": {v:.2},\n");
     }
-    let (bam160, bam256, bam512, fh160) = (
+    let (bam160, bam256, bam512, fh160, fh256) = (
         t12::<160>(true),
         t12::<256>(true),
         t12::<512>(true),
         t12::<160>(false),
+        t12::<256>(false),
     );
     println!(
         "[T12] protocolo: {FACTS} fatos, K=6, 40% visivel, +-0.25 rad, n={}",
@@ -410,29 +420,109 @@ fn main() {
         ("BAM D=256", bam256),
         ("BAM D=512", bam512),
         ("FHRR f32 D=160", fh160),
+        ("FHRR f32 D=256", fh256),
     ] {
         println!(
             "[T12] {n:<15} recall={:.3} p50={:.2} us p95={:.2} us p99={:.2} us",
             r.0, r.1, r.2, r.3
         );
     }
-    println!("[T12] speedup D=160 (p50): x{:.2}", fh160.1 / bam160.1);
-    json += &format!(
-        "  \"t12_bam_d256_p50_us\": {:.3},\n  \"t12_bam_d256_p95_us\": {:.3},\n  \"t12_bam_d160_p50_us\": {:.3},\n  \"t12_bam_d512_p50_us\": {:.3},\n  \"t12_fhrr_f32_d160_p50_us\": {:.3},\n",
-        bam256.1, bam256.2, bam160.1, bam512.1, fh160.1
+    println!(
+        "[T12] speedup p50: D=160 x{:.2} | D=256 x{:.2}",
+        fh160.1 / bam160.1,
+        fh256.1 / bam256.1
     );
+    json += &format!(
+        "  \"t12_bam_d160_p50_us\": {:.3},\n  \"t12_bam_d256_p50_us\": {:.3},\n  \"t12_bam_d512_p50_us\": {:.3},\n  \"t12_fhrr_f32_d160_p50_us\": {:.3},\n  \"t12_fhrr_f32_d256_p50_us\": {:.3},\n",
+        bam160.1, bam256.1, bam512.1, fh160.1, fh256.1
+    );
+
+    // ---- A. SINDy RHS + break-even do JIT --------------------------------
+    println!("\n== A. SINDy RHS & break-even (4 termos ativos) ==");
+    let s = bench_sindy();
+    println!(
+        "[sindy] nativo {:.2} ns | interpretado {:.2} ns | {} {:.2} ns (termos ativos={})",
+        s.native_ns,
+        s.interp_ns,
+        if s.jitted { "JIT" } else { "fallback" },
+        s.jit_ns,
+        s.active_terms
+    );
+    if s.jitted {
+        println!(
+            "[sindy] compilacao {:.1} us | ganho {:.2} ns/avaliacao | break_even = {:.0} avaliacoes ({:.1} ms)",
+            s.compile_us,
+            s.interp_ns - s.jit_ns,
+            s.break_even_evals,
+            s.break_even_evals * s.jit_ns / 1e6
+        );
+    } else {
+        println!("[sindy] feature `jit` desligada: fallback interpretado, break_even = n/a");
+    }
+    json += &format!(
+        "  \"sindy_native_ns\": {:.3},\n  \"sindy_interp_ns\": {:.3},\n  \"sindy_jit_ns\": {:.3},\n  \"sindy_jit_active\": {},\n  \"sindy_active_terms\": {},\n  \"sindy_compile_us\": {:.1},\n  \"sindy_break_even_evals\": {:.0},\n",
+        s.native_ns,
+        s.interp_ns,
+        s.jit_ns,
+        s.jitted,
+        s.active_terms,
+        s.compile_us,
+        if s.break_even_evals.is_finite() { s.break_even_evals } else { -1.0 }
+    );
+
     let (hw, det) = bench_entropy();
     println!("[entropia] gaussiana: silicio {hw:.1} ns | determinista {det:.1} ns");
-    let (nat, interp, jit, jitted) = bench_sindy();
-    println!(
-        "[sindy] dx=Theta*Xi: nativo {nat:.2} ns | interpretado {interp:.2} ns | {} {jit:.2} ns",
-        if jitted { "JIT" } else { "fallback" }
-    );
     let mps = bench_spsc();
     println!("[spsc] produtor->consumidor 2 threads: {mps:.1} Mmsg/s");
     json += &format!(
-        "  \"entropy_gauss_hw_ns\": {hw:.2},\n  \"entropy_gauss_seed_ns\": {det:.2},\n  \"sindy_native_ns\": {nat:.3},\n  \"sindy_interp_ns\": {interp:.3},\n  \"sindy_jit_ns\": {jit:.3},\n  \"sindy_jit_active\": {jitted},\n  \"spsc_mmsg_s\": {mps:.2}\n}}\n"
+        "  \"entropy_gauss_hw_ns\": {hw:.2},\n  \"entropy_gauss_seed_ns\": {det:.2},\n  \"spsc_mmsg_s\": {mps:.2},\n"
     );
+
+    // ---- B. Cauda do ciclo reflexivo (pinning) --------------------------
+    println!("\n== B. Cauda do ciclo reflexivo (pinning) ==");
+    let ids = core_ids();
+    let all_load: Vec<usize> = if ids.is_empty() {
+        let n = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4);
+        (0..n).collect()
+    } else {
+        ids.clone()
+    };
+    let reflex_core = aether_engine::core::affinity::report_only(0).core;
+    let pinned_load: Vec<usize> = match reflex_core {
+        Some(c) => all_load.iter().copied().filter(|id| *id != c).collect(),
+        None => all_load.clone(),
+    };
+    let events = 120_000usize;
+    let (s50, s99, s999, sn, _) = reflex_tail(false, &all_load, events);
+    let (p50, p99, p999, pn, pin_ok) = reflex_tail(true, &pinned_load, events);
+    println!(
+        "[reflexo] feature affinity={} | carga solta em {} nucleos | carga dedicada em {} | pin_ok={}",
+        cfg!(feature = "affinity"),
+        all_load.len(),
+        pinned_load.len(),
+        pin_ok
+    );
+    println!(
+        "{:<8} {:>10} {:>10} {:>10} {:>8}",
+        "MODO", "p50 us", "p99 us", "p99.9 us", "n"
+    );
+    println!(
+        "{:<8} {:>10.2} {:>10.2} {:>10.2} {:>8}",
+        "solto", s50, s99, s999, sn
+    );
+    println!(
+        "{:<8} {:>10.2} {:>10.2} {:>10.2} {:>8}",
+        "fixado", p50, p99, p999, pn
+    );
+    let reduction = 100.0 * (1.0 - p999 / s999.max(1e-9));
+    println!("[reflexo] reducao p99.9 = {reduction:.1}%");
+    json += &format!(
+        "  \"reflex_p50_solto_us\": {s50:.3},\n  \"reflex_p99_solto_us\": {s99:.3},\n  \"reflex_p999_solto_us\": {s999:.3},\n  \"reflex_p50_fixado_us\": {p50:.3},\n  \"reflex_p99_fixado_us\": {p99:.3},\n  \"reflex_p999_fixado_us\": {p999:.3},\n  \"reflex_p999_reduction_pct\": {reduction:.1},\n  \"affinity_feature\": {},\n  \"pin_ok\": {pin_ok}\n}}\n",
+        cfg!(feature = "affinity")
+    );
+
     if let Err(e) = fs::create_dir_all("target")
         .and_then(|_| fs::write("target/aether_bench_hardware.json", &json))
     {

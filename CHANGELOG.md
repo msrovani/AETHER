@@ -3,6 +3,17 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.70] - 2026-11-15
+
+### Changed
+
+- Ciclo automatico: 3 arquivo(s) (.github:1, benches:1, tests:1).
+- Gate: ok (1s).
+
+- `.github/workflows/ci.yml`
+- `benches/hardware_extremus.rs`
+- `tests/phase5_hardware.rs`
+
 ## [0.0.69] - 2026-11-15
 
 ### Changed

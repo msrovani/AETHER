@@ -416,6 +416,12 @@ fn sindy_descobre_duffing_e_jit_publica_sem_interromper() {
     ));
     assert!(active <= 6, "Xi deve ser esparsa ({active} termos)");
     assert_eq!(integ.is_jit_active(), jit_compiled_in());
+    // Com a feature `jit` ativa, cair no interpretador é regressão silenciosa.
+    #[cfg(feature = "jit")]
+    assert!(
+        jit_compiled_in() && jit.stats().compiles > 0,
+        "feature `jit` ativa mas a publicacao caiu no fallback interpretado"
+    );
 
     // Trajetória integrada pelo kernel ≈ verdade (1 unidade de tempo).
     let mut xf = [0.8f32, 0.3];
@@ -493,6 +499,12 @@ fn jit_hot_swap_sob_avaliacao_continua_nunca_rasga_estado() {
         assert_eq!(st.compiles as usize, gens + 1);
         assert_eq!(st.failures, 0);
     }
+    // Feature ligada ⇒ nenhuma geração pode ter caído no interpretador.
+    #[cfg(feature = "jit")]
+    assert!(
+        jit_compiled_in() && st.compiles > 0,
+        "feature `jit` ativa mas o hot-swap caiu no fallback interpretado"
+    );
 }
 
 // ---------------------------------------------------------------------------

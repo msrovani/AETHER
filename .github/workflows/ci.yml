@@ -1,11 +1,15 @@
 # CI do AETHER — porta de qualidade da ARCHITECTURE.md §7.
 #
 # Contratos cobertos aqui:
-#   - fmt / clippy -D warnings / test --release em Linux (alvo primário) e
-#     Windows (alvo secundário obrigatório, §7);
+#   - matriz 1 (build padrão, `#![deny(unsafe_code)]`): fmt + clippy
+#     `--all-targets` + `test --release`, em Linux e Windows;
+#   - matriz 2 (`--all-features`): clippy + test com `jit` e `affinity`
+#     ligados, garantindo que os caminhos opt-in não apodreçam;
 #   - compilação de cada pilar isolado (features m1..m8), que é a promessa de
 #     paralelismo de agentes sem colisão de código;
-#   - benchmarks NÃO rodam aqui (§7: ruído de CI; rodam em runner dedicado).
+#   - organismo headless (Definição de Pronto §8).
+#
+# Benchmarks NÃO rodam aqui (§7: ruído de CI; rodam em runner dedicado).
 #
 # `RUSTFLAGS` fixa `x86-64-v2` para reprodutibilidade, como pede a §7. O job
 # noturno de `--features simd` da §7 não existe porque a feature `simd` não foi
@@ -32,8 +36,10 @@ env:
   RUSTFLAGS: "-C target-cpu=x86-64-v2"
 
 jobs:
-  gate:
-    name: gate (${{ matrix.os }})
+  # Matriz 1 — build padrão. É o contrato do crate distribuído:
+  # `#![deny(unsafe_code)]`, features default m1..m8, sem JIT nem pinning.
+  gate-default:
+    name: gate padrão (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -49,15 +55,46 @@ jobs:
           components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: default-${{ matrix.os }}
 
       - name: fmt
         run: cargo fmt --all --check
 
-      - name: clippy
+      - name: clippy (default)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: test (release, default)
+        run: cargo test --release
+
+  # Matriz 2 — todos os opt-in ligados. Impede que `jit` e `affinity`
+  # regridam silenciosamente para os fallbacks (os testes com
+  # `#[cfg(feature = "jit")] assert!(...)` só valem aqui).
+  gate-all-features:
+    name: gate all-features (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: toolchain (stable + clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: all-features-${{ matrix.os }}
+
+      - name: clippy (all-features)
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: test (release)
-        run: cargo test --release
+      - name: test (release, all-features)
+        run: cargo test --release --all-features
 
   features:
     name: feature isolada (${{ matrix.feature }})
