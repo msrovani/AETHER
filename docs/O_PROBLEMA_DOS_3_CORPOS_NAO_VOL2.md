@@ -406,7 +406,7 @@ posiform — fica registrado como próximo passo, não como resultado.
 **Gates:** G1 soundness ✅ · G2 alcance ✅ (≥ dominância; estrito em 25%/45%;
 estrito no controle só com ℤ₂) · G3 completude em 45% ✅ (199/200) ·
 G4 "melhora o BSB puro no controle" ❌ (empate em 185 e −7,6 pp com ℤ₂).
-Artefatos: `target/aether_e2c2.json`, fórum **MSG 0195**.
+Artefatos: `target/aether_e2c2.json`, fórum **MSG 0140**.
 
 ---
 
@@ -543,50 +543,6 @@ D=160 não serve — pela lei linear, seria **D≈2.500**, com vetor de 20 KB e 
 **fatoração por ressonador** deixam de ser otimização e passam a ser **requisito**
 do braço da linguagem.
 
-### 3.6.1 E1b-2 — memória de fase: aleatório vs harmônico (a fronteira do M5)
-
-**Executado em 2026-11-15.** `examples/e1b_capacity.rs --phase-only` +
-`tests/e1b_capacity.rs`. Mesmo protocolo do Arm B: `D = 160`, **20% da pista
-oculta** (32 de 160), 40 ciclos de `imprint`, `recall` de 200 passos, erro
-angular médio **só nas posições ocultas**. Varredura `M ∈ {4, 8, 16, 24, 32, 40,
-48}` (antes ia até 64 em potências de dois).
-
-| `M` | aleatório (rad) | harmônico (rad) | < 0,15 rad |
-|---:|---:|---:|---|
-| 4 | **0,034** | 0,062 | ambos |
-| 8 | 0,190 | **0,142** | só harmônico |
-| 16 | 0,448 | 0,362 | nenhum |
-| 24 | 0,635 | 0,493 | nenhum |
-| 32 | 0,742 | 0,590 | nenhum |
-| 40 | 0,834 | 0,699 | nenhum |
-| 48 | 0,962 | 0,873 | nenhum |
-
-| Limite operacional seguro (`erro < 0,15 rad`) | `M_harm = 8` · `M_rand = 4` |
-|---|---|
-| Declarado por `ComplexPhaseMemory::pattern_capacity()` | **40** |
-| Otimismo do declarado vs harmônico | **5×** (era 10× vs aleatório) |
-
-**Três achados:**
-
-1. **O padrão estruturado dobra a fronteira, não a multiplica.** Harmônico
-   sustenta `M = 8` a erro < 0,15 rad contra `M = 4` do aleatório — **2×**, não
-   os 10× que o `pattern_capacity() = 40` sugeria. Em `M = 4` o aleatório é
-   *melhor* (0,034 vs 0,062): a base periódica tem menos graus de liberdade e
-   paga por isso quando o número de padrões é pequeno.
-2. **Acima de 8 os dois braços colapsam juntos.** Em `M = 48` o erro é
-   0,962/0,873 rad — ou seja, a bacia de atração do M5 acaba bem antes de
-   `N/4`, e a diferença harmônico−aleatório (~15%) não muda o regime.
-3. **A fronteira do M5 é 8, não 40.** Para o PLH isso fixa o desenho: o M5 não
-   é armazenamento de fatos (é o `FhrrStore`/shards que é), é **atrator de
-   trabalho** com ~8 padrões ativos. `pattern_capacity()` deve ser lido como
-   *teto da janela deslizante*, nunca como capacidade de recall.
-
-**Nota de comparabilidade:** o E1b v1 registrou 0,126 rad (M=4) e 0,274 rad
-(M=8) no braço aleatório. Os valores absolutos caíram (0,034/0,190) porque o M5
-recebeu a regra de projeção complexa depois daquela medição; **a fronteira
-(4 aleatório / 8 harmônico) é a mesma**. Artefato:
-`target/aether_e1b.json` (`phase_capacity_error_0_15`), fórum **MSG 0196**.
-
 ---
 
 ## 4. Risco 3 — Transplantação dá geometria, não verdade
@@ -622,20 +578,13 @@ Números alegados [C]: Spearman **ρ > 0,98**; BERT contextual ρ = 0,9906, Reca
 significa **22% de respostas plausíveis e erradas** — isto é, exatamente o modo de
 falha que o risco aponta.
 
-> **Medi��o E3 (2026-11-16, `tests/e3_transplant_gate.rs`).** O gate de analogia em
-> fase mediu **Recall@1 = 0,0208** (esperado = 0,80) � praticamente o acaso �
-> **enquanto o gate m�trico do JL passou** (a estrutura de similaridade foi
-> preservada). Duas leituras poss�veis, e a distin��o importa:
->
-> 1. **bug de *readout*** no pipeline de analogia (papel/permuta��o errados) � o
->    dono do E3 est� corrigindo;
-> 2. **limite real**: transplantar a **geometria** n�o transfere a **rela��o**.
->    � exatamente o que �4.2 previa e o que o E3b confirmou por outro caminho
->    (coer�ncia ? verdade).
->
-> At� a reconcilia��o, o n�mero **n�o** entra como resultado: entra como *alerta
-> aberto* (MSG 0194). O que j� se pode afirmar: **o JL preserva m�trica; a
-> analogia n�o veio de gra�a.**
+> **Resolvido no mesmo dia (MSG 0210).** O `0,0208` era **artefato de medição**:
+> o ruído do banco estava em `0,25` **por coordenada**
+> (`‖n‖ ≈ 0,25·√384 ≈ 4,9` contra sinal de norma ≈2 ⇒ **SNR < 1**). Normalizado
+> para `0,25/√D_IN`, o gate fechou **6/6**. A fórmula e o encoder estavam
+> corretos desde o início — sinal invertido e *wrapping* foram descartados
+> antes. O claim de 78% do preprint segue **[C]**: **nem confirmado nem
+> refutado** por nós.
 
 ### 4.2 A distinção que o projeto precisa gravar
 
