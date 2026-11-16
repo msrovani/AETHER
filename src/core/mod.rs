@@ -88,7 +88,8 @@ pub mod fhrr_bam;
 // E1 — Phase-Language Head (sharded + ressonador ACF + acoplamento RG).
 pub mod gpu_gate;
 pub mod noise;
-#[cfg(feature = "m5")]
+// Depende de `renormalization` (m1) e do acumulador BAM (m5).
+#[cfg(all(feature = "m5", feature = "m1"))]
 pub mod phase_language;
 
 pub use crate::error::{AetherError, Result};

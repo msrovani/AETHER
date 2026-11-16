@@ -101,13 +101,13 @@ fn random_3sat(n: usize, m: usize, seed: u64) -> Vec<Clause3> {
         .collect()
 }
 
-fn planted_3sat(n: usize, m: usize, seed: u64) -> Vec<Clause3> {
+fn planted_3sat(n: usize, m: usize, k_units: usize, seed: u64) -> Vec<Clause3> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let mut star = vec![1i8; n];
     for v in star.iter_mut() {
         *v = if rng.gen::<bool>() { 1 } else { -1 };
     }
-    (0..m)
+    let mut out: Vec<Clause3> = (0..m)
         .map(|_| {
             let i = rng.gen_range(0..n);
             let mut j = rng.gen_range(0..n);
@@ -129,7 +129,17 @@ fn planted_3sat(n: usize, m: usize, seed: u64) -> Vec<Clause3> {
             }
             Clause3::new3(i, si, j, sj, k, sk)
         })
-        .collect()
+        .collect();
+    // unidades plantadas: exercitam o estágio (1) do pipeline
+    let mut order: Vec<usize> = (0..n).collect();
+    for idx in (1..n).rev() {
+        let sw = rng.gen_range(0..=idx);
+        order.swap(idx, sw);
+    }
+    for &v in order.iter().take(k_units.min(n)) {
+        out.push(Clause3::new2(v, star[v], v, star[v]));
+    }
+    out
 }
 
 fn brute_force_sat(n: usize, clauses: &[Clause3]) -> bool {
@@ -177,10 +187,11 @@ fn pair_penalty(n: usize, clauses: &[Clause3]) -> (Vec<f64>, Vec<f64>) {
 fn g1_g2_pipeline_iguala_forca_bruta_e_certificado_nunca_mente() {
     let n = 14usize;
     let m = (4.3 * n as f64).round() as usize;
+    let k_units = (0.2 * n as f64).round() as usize;
     let instances = 64usize;
     let half = instances / 2;
 
-    let mut pipe = LogicPipeline::new(n, m + 4, 48, 4, 5, 0.5);
+    let mut pipe = LogicPipeline::new(n, m + k_units + 4, 48, 4, 5, 0.5);
     let mut arm1 = BsbCore::new(n, 48, 0.05);
 
     let mut states = vec![0i8; n];
@@ -201,7 +212,7 @@ fn g1_g2_pipeline_iguala_forca_bruta_e_certificado_nunca_mente() {
         let clauses = if inst < half {
             random_3sat(n, m, 0xE2_100 + inst as u64)
         } else {
-            planted_3sat(n, m, 0xE2_200 + inst as u64)
+            planted_3sat(n, m, k_units, 0xE2_200 + inst as u64)
         };
         let sat = brute_force_sat(n, &clauses);
         if sat {

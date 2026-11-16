@@ -194,7 +194,7 @@ fn random_3sat(n: usize, m: usize, seed: u64) -> Vec<Clause3> {
 ///
 /// Todas as instâncias são satisfatíveis por construção, mas continuam apertadas
 /// (mesma razão cláusula/variável).
-fn planted_3sat(n: usize, m: usize, seed: u64) -> (Vec<Clause3>, Vec<i8>) {
+fn planted_3sat(n: usize, m: usize, k_units: usize, seed: u64) -> (Vec<Clause3>, Vec<i8>) {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let mut star = vec![1i8; n];
     for v in star.iter_mut() {
@@ -224,6 +224,15 @@ fn planted_3sat(n: usize, m: usize, seed: u64) -> (Vec<Clause3>, Vec<i8>) {
             sj = star[j];
         }
         out.push(Clause3::new3(i, si, j, sj, k, sk));
+    }
+    // unidades plantadas (20% das variaveis): exercitam o presolve
+    let mut order: Vec<usize> = (0..n).collect();
+    for idx in (1..n).rev() {
+        let sw = rng.gen_range(0..=idx);
+        order.swap(idx, sw);
+    }
+    for &v in order.iter().take(k_units.min(n)) {
+        out.push(Clause3::new2(v, star[v], v, star[v]));
     }
     (out, star)
 }
@@ -352,9 +361,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = parse_args();
     let n = args.n;
     let m = (args.ratio * n as f64).round() as usize;
+    let k_units = (0.2 * n as f64).round() as usize;
     let half = args.instances / 2;
 
-    let mut pipe = LogicPipeline::new(n, m + 4, args.steps, args.restarts, args.rounds, args.eta);
+    let mut pipe = LogicPipeline::new(n, m + k_units + 4, args.steps, args.restarts, args.rounds, args.eta);
     let mut arm1_bsb = BsbCore::new(n, args.steps, 0.05);
 
     let mut s1 = ArmStats::default();
@@ -389,7 +399,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         args.instances, n, m, args.ratio, args.steps, args.restarts, args.rounds, args.eta
     );
     println!(
-        "classes: {} aleatórias + {} plantadas (apertadas)",
+        "classes: {} aleatórias + {} plantadas (apertadas, {k_units} unidades plantadas)",
         half,
         args.instances - half
     );
@@ -402,7 +412,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 false,
             )
         } else {
-            let (c, _) = planted_3sat(n, m, args.seed.wrapping_add(inst as u64));
+            let (c, _) = planted_3sat(n, m, k_units, args.seed.wrapping_add(inst as u64));
             (c, true)
         };
         let sat = brute_force_sat(n, &clauses);

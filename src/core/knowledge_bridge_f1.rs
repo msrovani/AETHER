@@ -29,6 +29,9 @@
 //! | **R7** — zero drift para RAG | o `T0` não tem acesso a ledger: [`SpscKnowledgePhaseBridge::record`] só escreve no anel. `t0_ledger_calls` fica `0`. |
 //! | **R8** — isolamento de escopo | todo evento carrega [`ScopeId`]; [`ScopeLedger`] só devolve o que casa com o escopo pedido. |
 //! | **K6** — timebase | `tick` (60 Hz interno) e `wall_ms` (epoch/monotônico externo) viajam **separados**; o `T1` copia `wall_ms` para `created_tick` sem nunca converter `tick`. |
+//!
+//! Gates: `tests/f1_knowledge_bridge_gate.rs` (4) e
+//! `tests/alloc_invariants.rs` (zero alocação em `record`).
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;

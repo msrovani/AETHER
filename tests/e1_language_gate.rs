@@ -18,6 +18,7 @@
 //! teste é a versão compacta e determinística para CI.
 
 #![deny(unsafe_code)]
+#![cfg(all(feature = "m5", feature = "m1"))]
 
 use std::f32::consts::TAU;
 use std::hint::black_box;

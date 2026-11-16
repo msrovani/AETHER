@@ -506,15 +506,19 @@ impl PoBTerm {
 // ---------------------------------------------------------------------------
 
 /// Propaga unidades até o fixpoint. `true` = conflito.
+///
+/// Conta **variáveis livres distintas** (não ocorrências): uma cláusula com o
+/// mesmo literal repetido é uma unidade, e `(x ∨ ¬x ∨ …)` é tautologia.
 fn propagate3(n: usize, clauses: &[Clause3], fixed: &mut [Option<i8>]) -> bool {
     let mut changed = true;
     while changed {
         changed = false;
         for c in clauses {
-            let mut n_free = 0usize;
-            let mut free_v = 0usize;
-            let mut free_s = 0i8;
             let mut sat = false;
+            let mut taut = false;
+            let mut nfree = 0usize;
+            let mut seen_v = [usize::MAX; 3];
+            let mut seen_s = [0i8; 3];
             for idx in 0..c.len() {
                 let (v, s) = c.lit(idx);
                 debug_assert!(v < n);
@@ -526,24 +530,36 @@ fn propagate3(n: usize, clauses: &[Clause3], fixed: &mut [Option<i8>]) -> bool {
                         }
                     }
                     None => {
-                        n_free += 1;
-                        free_v = v;
-                        free_s = s;
+                        let mut dup = false;
+                        for k in 0..nfree {
+                            if seen_v[k] == v {
+                                dup = true;
+                                if seen_s[k] != s {
+                                    taut = true;
+                                }
+                            }
+                        }
+                        if !dup {
+                            seen_v[nfree] = v;
+                            seen_s[nfree] = s;
+                            nfree += 1;
+                        }
                     }
                 }
             }
-            if sat {
+            if sat || taut {
                 continue;
             }
-            if n_free == 0 {
+            if nfree == 0 {
                 return true;
             }
-            if n_free == 1 {
-                match fixed[free_v] {
-                    Some(v) if v != free_s => return true,
+            if nfree == 1 {
+                let (v, s) = (seen_v[0], seen_s[0]);
+                match fixed[v] {
+                    Some(x) if x != s => return true,
                     Some(_) => {}
                     None => {
-                        fixed[free_v] = Some(free_s);
+                        fixed[v] = Some(s);
                         changed = true;
                     }
                 }
