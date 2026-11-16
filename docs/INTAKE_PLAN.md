@@ -4,6 +4,9 @@
 > Doador padrão: `Qwen/Qwen3-Embedding-0.6B` (Apache-2.0) · D_HV = 10.240 bits  
 > T0 / `step_into` **intocados**. Núcleo recebe só binário.
 
+**Playbook operacional (clonar nova rodada):** [`DOACAO_PLAYBOOK.md`](DOACAO_PLAYBOOK.md)  
+**Números da 1ª rodada:** [`TRANSPLANT_HV.md`](TRANSPLANT_HV.md)
+
 ## Frase-guia
 
 Não adaptar o organismo; adicionar pipeline de destilação offline + leitor T1.

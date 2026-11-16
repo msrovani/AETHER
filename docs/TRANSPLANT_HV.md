@@ -1,7 +1,7 @@
 # TRANSPLANTE HV — relatório de implementação
 
-> CLAIM: MSG **0229** / **0244** · Tópico `INTAKE_TRANSPLANT`  
-> Spec: [`INTAKE_PLAN.md`](INTAKE_PLAN.md)
+> CLAIM: MSG **0229** / **0244** / **0245** · Tópico `INTAKE_TRANSPLANT`  
+> Spec: [`INTAKE_PLAN.md`](INTAKE_PLAN.md) · **Clonar rodada:** [`DOACAO_PLAYBOOK.md`](DOACAO_PLAYBOOK.md)
 
 ## O que foi entregue
 

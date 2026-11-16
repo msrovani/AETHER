@@ -517,6 +517,7 @@ Todos com: `--release`, seed fixa (`ChaCha8Rng`), `alloc_invariants` verde,
 | **E2** ✅ | lógica como Ising + certificado | `examples/ising_logic_probe.rs` | **169/169** satisfatíveis `n = 20` (100%) · decisivas **100%** · **0 alloc** · G3b **FAIL declarado** (6× o teto; envelope `n ≥ 8` fora) |
 | **E2d** ✅ | aquisição CRAM→Logos (custos pairwise) | `examples/cram_logos_probe.rs` · `docs/CRAM_LOGOS.md` | Shidoku 4×4: hand-set **100%** · PL **100%** · fit ~**3,7 ms** · G1–G3 PASS · 52 params |
 | **E3** ✅ | transplantação de embeddings | `examples/transplant_probe.rs` | **ρ = 0,9528** · relação **0,9990** · analogia R@1 **0,9549** · proveniência **100%** |
+| **Doação** ✅ | ETL + HvBank 10.240 bits (INTAKE) | `docs/DOACAO_PLAYBOOK.md` · `harvest_transplant.py` · `transplant_hv_probe` | Spearman **0,9539** · Recall@10 **1,0** · 8 gates PASS · clonável por rodada |
 | **E4** | self-field + ablação | `tests/self_field_audit.rs` | ECE melhora; T01 **não** regride |
 | **E5** | currículo por progresso | `tests/curriculum_audit.rs` | readaptação pós-ruptura < T03 (150 ciclos) |
 
@@ -722,6 +723,11 @@ Propostas deste dossiê (ainda inexistentes):
 
 # E3 — transplantação de embeddings
 .\scripts\cargo.ps1 run --release --example transplant_probe
+
+# Doação / INTAKE_TRANSPLANT — nova rodada (ver docs/DOACAO_PLAYBOOK.md)
+python tools/harvest_transplant.py --limit 200 --dry-run --out data --no-whiten
+.\scripts\cargo.ps1 run --release --example transplant_hv_probe --features m1
+.\scripts\cargo.ps1 test --release --test transplant_hv_gate
 ```
 
 ---

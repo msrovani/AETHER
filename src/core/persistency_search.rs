@@ -1,61 +1,61 @@
-//! E2c-3 — busca exata guiada por **persistência** (roof dual como propagador).
+﻿//! E2c-3 â€” busca exata guiada por **persistÃªncia** (roof dual como propagador).
 //!
-//! O E2c-2 mostrou que o roof dual sozinho não reduz o vidro denso: no root de
-//! um vidro puro (`h = 0`) ele fixa **0** variáveis — e isso é teorema, não bug:
-//! a energia é invariante por `s → −s`, então toda variável aparece com os dois
-//! sinais entre os dois ótimos espelhados.
+//! O E2c-2 mostrou que o roof dual sozinho nÃ£o reduz o vidro denso: no root de
+//! um vidro puro (`h = 0`) ele fixa **0** variÃ¡veis â€” e isso Ã© teorema, nÃ£o bug:
+//! a energia Ã© invariante por `s â†’ âˆ’s`, entÃ£o toda variÃ¡vel aparece com os dois
+//! sinais entre os dois Ã³timos espelhados.
 //!
 //! A literatura de 2026 fecha duas portas e abre uma:
 //!
-//! * **Naumann & Andres (arXiv:2610.20346):** todo posiforme ótimo de roof dual
-//!   já dá o **maior domínio de autarkia possível** — nenhum autarky de posiforme
-//!   quadrático fixa mais. *Strong persistency* não é extensão.
-//! * **Wang & Hahn (Front. Comput. Sci. 2026):** *probing* de variáveis + 2-SAT
-//!   do resíduo certifica o ótimo global; em QUBO denso, ~metade das variáveis
+//! * **Naumann & Andres (arXiv:2610.20346):** todo posiforme Ã³timo de roof dual
+//!   jÃ¡ dÃ¡ o **maior domÃ­nio de autarkia possÃ­vel** â€” nenhum autarky de posiforme
+//!   quadrÃ¡tico fixa mais. *Strong persistency* nÃ£o Ã© extensÃ£o.
+//! * **Wang & Hahn (Front. Comput. Sci. 2026):** *probing* de variÃ¡veis + 2-SAT
+//!   do resÃ­duo certifica o Ã³timo global; em QUBO denso, ~metade das variÃ¡veis
 //!   basta.
-//! * **Boros et al. (2008):** o bound iterado (`C + ν`) é mais forte que o roof
+//! * **Boros et al. (2008):** o bound iterado (`C + Î½`) Ã© mais forte que o roof
 //!   dual isolado.
 //!
 //! Esta busca usa o fato central medido no `examples/e2c3_probe.rs`: **uma
-//! ramificação quebra a simetria** e o roof dual passa a fixar o resto. Em
-//! `n=14`, 1.017 nós (plant 0), 59 (25%) e 16 (45%), sempre exato contra força
+//! ramificaÃ§Ã£o quebra a simetria** e o roof dual passa a fixar o resto. Em
+//! `n=14`, 1.017 nÃ³s (plant 0), 59 (25%) e 16 (45%), sempre exato contra forÃ§a
 //! bruta.
 //!
 //! # Garantia
 //!
-//! Cada fixação devolvida por [`RoofDualWorkspace::solve_into`] preserva o valor
-//! ótimo do subproblema. A busca enumera **todas** as folhas não podadas; a
-//! menor energia entre elas é o ótimo global. O relatório inclui `nodes`,
-//! `leaves` e `root_fixed` para que o custo seja auditável.
+//! Cada fixaÃ§Ã£o devolvida por [`RoofDualWorkspace::solve_into`] preserva o valor
+//! Ã³timo do subproblema. A busca enumera **todas** as folhas nÃ£o podadas; a
+//! menor energia entre elas Ã© o Ã³timo global. O relatÃ³rio inclui `nodes`,
+//! `leaves` e `root_fixed` para que o custo seja auditÃ¡vel.
 //!
 //! # Custo
 //!
-//! `O(nós · max-flow)`, com pior caso exponencial (como qualquer busca exata).
-//! É um caminho de **T1/T2**, não de T0: `new` aloca uma vez; `solve` não aloca.
+//! `O(nÃ³s Â· max-flow)`, com pior caso exponencial (como qualquer busca exata).
+//! Ã‰ um caminho de **T1/T2**, nÃ£o de T0: `new` aloca uma vez; `solve` nÃ£o aloca.
 
 use crate::core::certificate::energy;
 use crate::core::presolve::{RoofDualWorkspace, ROOF_MAX_N};
 
-/// Resultado de uma resolução exata.
+/// Resultado de uma resoluÃ§Ã£o exata.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SearchReport {
-    /// Energia do ótimo global (ou `f64::INFINITY` se o orçamento estourou).
+    /// Energia do Ã³timo global (ou `f64::INFINITY` se o orÃ§amento estourou).
     pub energy: f64,
-    /// Nós visitados (cada nó = uma chamada de roof dual).
+    /// NÃ³s visitados (cada nÃ³ = uma chamada de roof dual).
     pub nodes: u32,
     /// Folhas completas avaliadas.
     pub leaves: u32,
-    /// Nós podados pelo bound (`const_fixo + bound_resíduo ≥ incumbente`).
+    /// NÃ³s podados pelo bound (`const_fixo + bound_resÃ­duo â‰¥ incumbente`).
     pub pruned: u32,
-    /// Variáveis fixadas já no root (uma passada de roof dual).
+    /// VariÃ¡veis fixadas jÃ¡ no root (uma passada de roof dual).
     pub root_fixed: u32,
-    /// `true` se o orçamento de nós foi excedido antes de fechar a árvore.
+    /// `true` se o orÃ§amento de nÃ³s foi excedido antes de fechar a Ã¡rvore.
     pub exhausted: bool,
 }
 
-/// Workspace pré-alocado da busca exata.
+/// Workspace prÃ©-alocado da busca exata.
 ///
-/// Construa **uma vez** e reutilize em `solve`; a busca em si não aloca.
+/// Construa **uma vez** e reutilize em `solve`; a busca em si nÃ£o aloca.
 #[derive(Debug)]
 pub struct ExactSearch {
     assign: [i8; ROOF_MAX_N],
@@ -75,7 +75,7 @@ pub struct ExactSearch {
 
 impl ExactSearch {
     /// `node_budget` limita o custo; ao estourar, `SearchReport::exhausted`
-    /// fica `true` e a energia é `f64::INFINITY`. Use `u32::MAX` para sem limite.
+    /// fica `true` e a energia Ã© `f64::INFINITY`. Use `u32::MAX` para sem limite.
     pub fn new(node_budget: u32) -> Box<Self> {
         Box::new(Self {
             assign: [0; ROOF_MAX_N],
@@ -94,10 +94,10 @@ impl ExactSearch {
         })
     }
 
-    /// Resolve `min_s H(s)` exatamente, com `H` na convenção de
+    /// Resolve `min_s H(s)` exatamente, com `H` na convenÃ§Ã£o de
     /// [`crate::core::certificate::energy`].
     ///
-    /// `n` deve ser `≤ ROOF_MAX_N` (64); `j` é `n×n` em ordem C e `h` tem `n`.
+    /// `n` deve ser `â‰¤ ROOF_MAX_N` (64); `j` Ã© `nÃ—n` em ordem C e `h` tem `n`.
     pub fn solve(&mut self, n: usize, j: &[f64], h: &[f64]) -> SearchReport {
         assert!(n <= ROOF_MAX_N, "n > ROOF_MAX_N");
         assert!(j.len() >= n * n, "J menor que n*n");
@@ -127,7 +127,7 @@ impl ExactSearch {
             return f64::INFINITY;
         }
 
-        // Variáveis ainda livres.
+        // VariÃ¡veis ainda livres.
         let mut m = 0usize;
         for i in 0..n {
             if self.assign[i] == 0 {
@@ -144,7 +144,7 @@ impl ExactSearch {
             return e;
         }
 
-        // Reduz: h_i += Σ_{k fixo} J_ik·v_k; J só no bloco livre.
+        // Reduz: h_i += Î£_{k fixo} J_ikÂ·v_k; J sÃ³ no bloco livre.
         for a in 0..m {
             let i = self.free_idx[a];
             let mut hi = h[i];
@@ -167,7 +167,7 @@ impl ExactSearch {
             &mut self.fixed_tmp[..m],
         );
 
-        // B&B: constante das variáveis fixas + bound do resíduo.
+        // B&B: constante das variÃ¡veis fixas + bound do resÃ­duo.
         let mut const_fixed = 0.0;
         for i in 0..n {
             let si = self.assign[i];
@@ -190,13 +190,13 @@ impl ExactSearch {
             self.root_fixed = self.fixed_tmp[..m].iter().filter(|f| f.is_some()).count() as u32;
         }
 
-        // Aplica as persistências e desfaz ao voltar (sem vazar para o irmão).
+        // Aplica as persistÃªncias e desfaz ao voltar (sem vazar para o irmÃ£o).
         let mut applied = [0usize; ROOF_MAX_N];
         let mut ac = 0usize;
         for a in 0..m {
             if let Some(bit) = self.fixed_tmp[a] {
                 let i = self.free_idx[a];
-                // `pass_into` devolve bits 0/1; `assign` usa 0=livre, ±1.
+                // `pass_into` devolve bits 0/1; `assign` usa 0=livre, Â±1.
                 self.assign[i] = if bit == 1 { 1 } else { -1 };
                 applied[ac] = i;
                 ac += 1;
@@ -210,7 +210,7 @@ impl ExactSearch {
             return e;
         }
 
-        // Sem propagação: ramifica na livre com maior |h_eff| (busca um bom
+        // Sem propagaÃ§Ã£o: ramifica na livre com maior |h_eff| (busca um bom
         // incumbente cedo, o que fortalece o bound).
         let mut best_a = 0usize;
         let mut best_mag = -1.0f64;
@@ -289,8 +289,8 @@ mod tests {
         best
     }
 
-    /// Gadget estrela: centro com acoplamento `−1` e `k` folhas com `h = −10`.
-    /// O centro é constante em todos os ótimos e **não** é dominado por `h`.
+    /// Gadget estrela: centro com acoplamento `âˆ’1` e `k` folhas com `h = âˆ’10`.
+    /// O centro Ã© constante em todos os Ã³timos e **nÃ£o** Ã© dominado por `h`.
     #[test]
     fn estrela_e_resolvida_sem_ramificar() {
         for k in [2usize, 3, 5, 8] {
@@ -306,20 +306,20 @@ mod tests {
             let r = s.solve(n, &j, &h);
             assert!(!r.exhausted);
             assert!(r.root_fixed >= 1, "centro deveria ser fixado no root");
-            assert!(r.nodes <= 2, "estrela não deveria ramificar (k={k})");
+            assert!(r.nodes <= 2, "estrela nÃ£o deveria ramificar (k={k})");
         }
     }
 
-    /// `h = 0` puro e **denso**: root fixa 0 (teorema Z2), mas a busca é exata.
-    /// (Variáveis isoladas seriam trivialmente persistentes — qualquer valor
-    /// aparece em algum ótimo — por isso o teste usa o grafo denso.)
+    /// `h = 0` puro e **denso**: root fixa 0 (teorema Z2), mas a busca Ã© exata.
+    /// (VariÃ¡veis isoladas seriam trivialmente persistentes â€” qualquer valor
+    /// aparece em algum Ã³timo â€” por isso o teste usa o grafo denso.)
     #[test]
     fn vidro_puro_root_zero_mas_solucao_exata() {
         let n = 10usize;
         let (j, h) = make_instance(n, 0, DELTA, SEED0);
         let mut s = ExactSearch::new(u32::MAX);
         let r = s.solve(n, &j, &h);
-        assert_eq!(r.root_fixed, 0, "h=0 denso não tem persistência no root");
+        assert_eq!(r.root_fixed, 0, "h=0 denso nÃ£o tem persistÃªncia no root");
         assert!(!r.exhausted);
         let bf = brute_force(n, &j, &h);
         assert!((r.energy - bf).abs() < 1e-9);

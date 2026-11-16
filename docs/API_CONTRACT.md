@@ -266,7 +266,8 @@ margem (ambiguidade), não apenas a margem.
 ## Apêndice B — INTAKE_TRANSPLANT (aditivo, MSG 0229)
 
 Destilação **offline** (texto → HV + fatos). O organismo / `step_into` **não** muda.
-Leitor e formato: [`docs/INTAKE_PLAN.md`](INTAKE_PLAN.md).
+Playbook (clonar rodada): [`docs/DOACAO_PLAYBOOK.md`](DOACAO_PLAYBOOK.md).  
+Schema: [`docs/INTAKE_PLAN.md`](INTAKE_PLAN.md).
 
 | Peça | Feature / path | Notas |
 |---|---|---|

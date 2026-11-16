@@ -388,6 +388,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut solve_us: Vec<f64> = Vec::with_capacity(args.instances);
     let mut total_us: Vec<f64> = Vec::with_capacity(args.instances);
     let mut pre_sum = 0.0f64;
+    let mut bsb_sum = 0.0f64;
+    let mut rep_sum = 0.0f64;
     let mut pers_sum = 0.0f64;
     let mut dec_sum = 0.0f64;
     let mut probes_sum = 0usize;
@@ -477,6 +479,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         pre_sum += st.presolve_us;
         pers_sum += st.persistency_us;
         dec_sum += st.decompose_us;
+        bsb_sum += st.bsb_us;
+        rep_sum += st.repair_us;
         probes_sum += st.probes;
         fixed_sym += st.fixed_symbolic;
         fixed_pers += st.fixed_persistency;
@@ -569,10 +573,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!("  alocações por resolução (máx)     : {allocs_max}");
     println!(
-        "  · presolve {:.1} µs · persistência {:.1} µs · decomposição {:.1} µs · sondagens {:.1}/consulta",
+        "  · presolve {:.1} µs · persistência {:.1} µs · decomposição {:.1} µs · BSB {:.1} µs · reparo {:.1} µs · sondagens {:.1}/consulta",
         pre_sum / inst,
         pers_sum / inst,
         dec_sum / inst,
+        bsb_sum / inst,
+        rep_sum / inst,
         probes_sum as f64 / inst
     );
     println!();

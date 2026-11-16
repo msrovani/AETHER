@@ -1,0 +1,329 @@
+# Playbook de Doação — ETL, transplante e nova rodada de aprendizado
+
+> Documento operacional. Objetivo: **clonar** o processo para uma nova rodada
+> sem reinventar arquitetura.  
+> Spec técnica: [`INTAKE_PLAN.md`](INTAKE_PLAN.md) · Números da 1ª rodada: [`TRANSPLANT_HV.md`](TRANSPLANT_HV.md)  
+> CLAIM fórum: MSG **0229** / **0244** / **0245** · Tópico `INTAKE_TRANSPLANT`
+
+---
+
+## 0. Em uma frase
+
+**Doação** = importar um **mapa** (geometria) e, opcionalmente, um **escriba**
+(triplas), **nunca** uma mente (pesos/tokenizer). O resultado é um banco HV de
+**10.240 bits/átomo** + fatos no SGDB, com `provenance=Transplanted` e
+`authority ≤ 240`. O organismo a 146 µs **não** muda.
+
+```text
+corpus ──► ETL (offline) ──► data/ (HV + manifest + facts)
+                │
+                ├─► MAPA (embedder)  → embeddings → JL+sign → bank.bin
+                └─► ESCRIBA (LLM)    → triplas    → SGDB + shards FHRR
+```
+
+---
+
+## 1. Vocabulário (não misturar)
+
+| Termo | Significa | Não significa |
+|-------|-----------|---------------|
+| **Doador** | Par mapa+escriba (modelos HF) | O AETHER em runtime |
+| **Mapa** | Embedder (ex. Qwen3-0.6B) | LLM de 7B/70B |
+| **Escriba** | Extrator de triplas (ex. Qwen2.5-7B) | Embedder |
+| **Doação / transplante** | Geometria densos → HV binários | Copiar pesos |
+| **ETL** | Lote offline que gera `data/` | Hot path 60 Hz |
+| **HvBank** | View materializada de bits | Fonte de verdade |
+| **SGDB** | Cartório (texto, autoridade, citação) | Índice de similaridade rápida |
+| **Certificado** | Factibilidade + evidência | Verdade do mundo |
+
+**Regra de ouro (derivado vs fonte):**
+
+- Se dá para recalcular de `(SGDB + modelo@rev + seed)` → **cache** (apagável):
+  `bank.bin`, `bank.idx`, embeds, shards.
+- Se não dá → **registro** (durável): SGDB + `manifest.json` (+ whitening se usado).
+
+---
+
+## 2. Papéis e licenças (decidir antes de baixar)
+
+| Papel | Modelo padrão | Licença | Uso |
+|-------|---------------|---------|-----|
+| Mapa | `Qwen/Qwen3-Embedding-0.6B` | Apache-2.0 | **Produto** |
+| Mapa (PT-BR lab) | `tardellirs/colibri-embed-ptbr` | Gemma | Só se produto permitir |
+| Escriba | `Qwen/Qwen2.5-7B-Instruct` | Apache-2.0 | Batch offline |
+| Escriba barato | `mohar07/qwen3-0.6b-kg-triplets` | MIT | Opcional |
+| — | `victorlxh/ICKG-v3.2` | non-commercial | **Proibido** |
+
+- Dimensão operacional do mapa: **`dim_in = 768`** (MRL truncate se o modelo for 1024).
+- HV: **`dim_hv = 10240`** → **160 × u64** = **1,28 KB/átomo**.
+- Authority: transplantado **≤ 240**; **255 = HITL exclusivo**.
+
+---
+
+## 3. Onde cada coisa mora
+
+| Camada | Local | Regenerável? |
+|--------|-------|--------------|
+| Fonte de verdade | **neural-sgdb** (externo) | Não |
+| Manifesto da rodada | `data/manifest.json` | Não (assinatura da rodada) |
+| Whitening ZCA | `data/emb/whitening.bin` | Não (se a rodada usou) |
+| Embeddings cache | `data/emb/bank.f32` | Sim (do mapa + corpus) |
+| HV binário | `data/hv/bank.bin` + `bank.idx` | Sim (embeds + seed + P) |
+| Fatos / conflitos | `data/facts.jsonl` | Sim (do escriba + corpus) |
+| Ledger mock (CI) | `data/sgdb_mock_ledger.json` | Sim |
+| Gates | `target/aether_transplant_hv.json` | Descartável |
+
+**Núcleo Rust** (`src/core/hv.rs`): só lê bits/ids — **zero `String` no sinal**.
+
+**Latência:**
+
+| Faixa | Orçamento | Quem |
+|-------|-----------|------|
+| T0 | 146 µs | organismo / solver — **intocado** |
+| T1 | ~1 ms | `HvBank::top_k_into` (~10k átomos) |
+| T2 | 10–50 ms | SGDB (citação, autoridade, conflito) |
+
+---
+
+## 4. Processo ETL — 6 estágios (o que o script faz)
+
+Ferramenta: [`tools/harvest_transplant.py`](../tools/harvest_transplant.py)
+
+### Estágio 1 — Coleta e tiering
+
+Cada fonte entra com: `authority`, `wall_ms`, `url/hash`, `lang`.
+
+| Fonte | Authority |
+|-------|-----------|
+| HITL | **255** |
+| Norma / doc oficial | 200–240 |
+| LLM / escriba | 60–120 |
+| Web aberta | 30–80 |
+
+### Estágio 2 — Extração (escriba)
+
+- **Dry-run (CI/lab sem rede):** corpus sintético PT-BR + conflitos plantados.
+- **Produção:** GLiNER+REBEL (vazão) → Qwen2.5-7B JSON estrito (precisão).
+- Emite: triplas `(sujeito, relação, objeto, confiança, citação)` e, se houver
+  regra verificável, cláusulas CNF (futuro Logos).
+
+### Estágio 3 — Dedup + branqueamento
+
+1. Normalizar NFC (preservar caixa de entidades).
+2. Dedup por hash do trio / rótulo de átomo.
+3. Só conceitos únicos passam pelo embedder.
+4. Opcional ZCA: `x' = W(x − μ)` + L2; gravar `whitening.bin` e hash no manifest.
+5. **Ablação obrigatória:** rodar com e sem `--no-whiten`; reportar os dois no RELATORIO.
+
+### Estágio 4 — Projeção JL + binarização
+
+```text
+x (f32[dim_in], L2)  →  y = Pᵀ x  →  bit = (y ≥ 0)  →  160 × u64 LE
+```
+
+- `P` gaussiana semeada (`--seed`); **nunca** `thread_rng`.
+- Header AETHV1 registra `dim_in`, `seed`, `flags.whitened`, `sha256_payload`.
+- Margem JL cai com `n` átomos: se `n > 50k`, **suba D** ou declare ε no manifest.
+
+### Estágio 5 — Shards FHRR (fatos)
+
+- Particionar por **relação**; **≤ 48 fatos/shard** (teto medido ~64 @ D=160).
+- Keys `u128` = SHA-256 do rótulo normalizado (16 bytes LE).
+- **Não** meter o vocabulário 50k–320k no FHRR-160.
+
+### Estágio 6 — Empacotamento + cartório
+
+- Escreve `bank.bin` / `bank.idx` / `manifest.json` / `facts.jsonl`.
+- Strings e citações → SGDB (`remember` + `audit_checkpoint`).
+- Conflito → `contradicts` (**nunca** sobrescreve o fato anterior).
+
+---
+
+## 5. Como clonar — nova rodada de aprendizado
+
+Trate cada rodada como um **lote versionado**. Não misture seeds/manifests.
+
+### 5.1 Checklist antes de começar
+
+1. [ ] Abrir `CLAIM` no fórum (`INTAKE_TRANSPLANT` ou tópico da rodada).
+2. [ ] Fixar doador (mapa + escriba) e anotar **revision/commit HF**.
+3. [ ] Escolher `seed` novo (u64) e `dim_in` (768 padrão).
+4. [ ] Escolher diretório de saída: `data/rounds/YYYYMMDD_nome/` (não sobrescrever a rodada anterior às cegas).
+5. [ ] Confirmar licença Apache (ou waiver Gemma se colibri).
+6. [ ] Corpus da rodada: path + hash (ou dry-run sintético).
+
+### 5.2 Comandos — rodada lab (dry-run, sem rede)
+
+```powershell
+# A partir da raiz do repo AETHER
+$ROUND = "data/rounds/$(Get-Date -Format 'yyyyMMdd')_lab"
+New-Item -ItemType Directory -Force -Path $ROUND | Out-Null
+
+# 1) ETL
+python tools/harvest_transplant.py `
+  --limit 200 `
+  --dry-run `
+  --out $ROUND `
+  --seed 0xDEADBEEF `
+  --dim-in 768 `
+  --no-whiten
+
+# 2) Ablação whitening (opcional mas recomendada)
+python tools/harvest_transplant.py `
+  --limit 200 --dry-run --out "${ROUND}_whiten" --seed 0xDEADBEEF
+
+# 3) Gates
+# (probe lê data/ por padrão — copie ou use junction)
+Copy-Item -Recurse -Force "$ROUND\*" data\
+.\scripts\cargo.ps1 run --release --example transplant_hv_probe --features m1
+.\scripts\cargo.ps1 test --release --test transplant_hv_gate
+
+# 4) Arquivar resultado
+Copy-Item target/aether_transplant_hv.json "$ROUND/aether_transplant_hv.json"
+```
+
+### 5.3 Comandos — rodada produção (com mapa real)
+
+Quando o sidecar HF estiver ligado (mesmo contrato de artefatos):
+
+```powershell
+$ROUND = "data/rounds/20261116_prod_qwen3"
+# 1) Embedder real → escreve emb/bank.f32 + ids (mesmo layout do dry-run)
+# 2) Escriba 7B → facts.jsonl
+# 3) harvest (ou etapa JL-only) com --donor Qwen/Qwen3-Embedding-0.6B --seed <NOVO>
+# 4) Carga SGDB: remember(átomos) + audit_checkpoint(manifest.sha256_bank)
+# 5) probe + gate; só então publicar RELATORIO
+```
+
+**Contrato do artefato não muda** entre dry-run e produção: só mudam
+`manifest.donor`, `revision` e a qualidade dos embeds/triplas.
+
+### 5.4 O que mudar a cada rodada (e o que não)
+
+| Mudar | Não mudar |
+|-------|-----------|
+| `seed` | `dim_hv = 10240` (salvo decisão explícita de subir D) |
+| corpus / `--limit` | Formato AETHV1 (magic/header) |
+| `donor` + `revision` | T0 / `step_into` |
+| authority por fonte | Cap 240 / HITL 255 |
+| whitening on/off | Proibição de `String` no núcleo |
+| pasta `data/rounds/...` | Claims alheios (`transplant.rs`, etc.) |
+
+### 5.5 Critério de “rodada aceita”
+
+1. `manifest.json` gravado com `sha256_bank`, `seed`, `donor`, `count`.
+2. `target/aether_transplant_hv.json` (ou cópia na pasta da rodada) com `"pass": true`.
+3. Oito gates (ver §6) verdes.
+4. `RELATORIO` no fórum com os números + path da rodada.
+5. SGDB: 100% dos `key` do `bank.idx` têm registro (citação + authority).
+
+Se falhar Spearman/JL: **não** baixe o gate — ajuste corpus/seed/D ou declare ε.
+
+---
+
+## 6. Gates (obrigatórios)
+
+| Gate | Alvo |
+|------|------|
+| Spearman (1−cos ↔ Hamming), convenção E3 | ≥ 0,95 |
+| Recall@10 | ≥ 0,90 |
+| Distorção JL média | ≤ 12% |
+| Determinismo (reload) | bytes idênticos |
+| Latência top-k @ ≤10k | ≤ 1,5 ms |
+| Alloc no caminho armado | **0 B** |
+| Conflitos detectados / plantados | ≥ 95% |
+| Rebuild plano de shards | idêntico ao manifest |
+
+Leitor: `examples/transplant_hv_probe.rs` · CI: `tests/transplant_hv_gate.rs` · API: `src/core/hv.rs`.
+
+---
+
+## 7. Fluxo de consulta (após a doação)
+
+```text
+pergunta (borda)
+   │
+   ├─► embedder (T1/T2, fora do 60 Hz)
+   ├─► JL+sign → query HV
+   ├─► HvBank::top_k_into  → ids
+   ├─► SGDB.resolve(ids)   → texto, citação, authority
+   └─► Certificate + Evidence(Hypervector, authority≤240)
+         └─► decide_with_evidence → Act/Cite/Propose/Abstain
+```
+
+O organismo **não** espera o HV no `step_into`. Pedido assíncrono (ring) se
+integrado ao loop; senão, só tools/API de lab.
+
+---
+
+## 8. Arquivos canônicos (mapa mental)
+
+```text
+tools/harvest_transplant.py          # ETL
+examples/transplant_hv_probe.rs      # medição + JSON
+tests/transplant_hv_gate.rs          # CI
+src/core/hv.rs                       # HvBank + LSH (>10k)
+src/core/certificate.rs              # Evidence (append)
+src/knowledge/sgdb_bridge.rs         # mock + loader
+data/manifest.json                   # assinatura da rodada ativa
+data/hv/bank.bin | bank.idx
+data/emb/bank.f32 | whitening.bin
+data/facts.jsonl
+docs/DOACAO_PLAYBOOK.md              # este arquivo
+docs/INTAKE_PLAN.md                  # schema binário
+docs/TRANSPLANT_HV.md                # números da 1ª rodada
+```
+
+---
+
+## 9. Anti-padrões (já pagos)
+
+1. Copiar pesos / tokenizer para o crate.
+2. Meter HV no ciclo de 146 µs.
+3. Usar Colibri em produto sem ler licença Gemma.
+4. Guardar 10.240 bits dentro do SGDB (infla sem ganho).
+5. Empilhar >48 fatos no mesmo shard FHRR.
+6. Declarar gate verde sem JSON numérico.
+7. `Set-Content -Encoding UTF8` em `.rs`/`.md` (duplo-encode).
+8. Sobrescrever `data/` de uma rodada sem arquivar o `manifest` anterior.
+
+---
+
+## 10. Template de RELATORIO (nova rodada)
+
+```text
+RELATORIO:INTAKE_TRANSPLANT
+rodada=<YYYYMMDD_nome>
+donor=<modelo>@<revision>
+seed=<u64>
+count=<n>
+whitened=<true|false>
+spearman=...
+recall10=...
+jl_dist=...
+lat_ms=...
+alloc=...
+conflicts=...
+pass=true|false
+path=data/rounds/<nome>/
+json=.../aether_transplant_hv.json
+```
+
+---
+
+## 11. Próxima rodada — receita mínima
+
+```powershell
+# 1. CLAIM no fórum
+# 2. Nova pasta + novo seed
+# 3. ETL
+python tools/harvest_transplant.py --limit 200 --dry-run --out data/rounds/NOVA --seed <SEED>
+# 4. Apontar data/ → rodada (ou copiar)
+# 5. Probe + gate
+.\scripts\cargo.ps1 run --release --example transplant_hv_probe --features m1
+.\scripts\cargo.ps1 test --release --test transplant_hv_gate
+# 6. Se pass: RELATORIO + (opcional) remember no SGDB real
+# 7. Se fail: não publicar; ajustar corpus/seed; repetir
+```
+
+Isso é tudo que um agente novo precisa para **clonar o aprendizado** sem tocar no organismo.

@@ -184,6 +184,10 @@ pub struct StageStats {
     pub probes: usize,
     /// Tempo do estágio (4).
     pub solve_us: f64,
+    /// Tempo do kernel BSB (componentes × reinícios × rodadas).
+    pub bsb_us: f64,
+    /// Tempo do reparo de factibilidade.
+    pub repair_us: f64,
     /// `H(s*)` na convenção do solver (offset do gadget omitido).
     pub energy: f64,
     /// `min_i ΔH_i` sobre as variáveis livres (`∞` se não há nenhuma).
@@ -364,6 +368,139 @@ impl BsbCore {
         states[..n].copy_from_slice(&self.s[..n]);
         row_energy(j, n, h, states)
     }
+
+    /// `relax_into` com `J` em **CSR** (mesmo resultado bit-a-bit).
+    ///
+    /// O QUBO expandido tem ~9 monômios por cláusula, mas a matriz densa é
+    /// `(5m)²`: o matvec cai de `O(n²)` para `O(nnz)` por passo. A ordem de
+    /// acumulação é idêntica à do kernel denso (16 acumuladores por linha).
+    #[allow(clippy::too_many_arguments)]
+    pub fn relax_csr_into(
+        &mut self,
+        ptr: &[u32],
+        col: &[u32],
+        val: &[f64],
+        h: &[f64],
+        n: usize,
+        seed: u64,
+        states: &mut [i8],
+    ) -> f64 {
+        assert!(n <= self.n_max, "BsbCore: n > n_max");
+        assert!(ptr.len() > n && h.len() >= n && states.len() >= n);
+        if n == 0 {
+            return 0.0;
+        }
+        let steps = self.steps;
+        let dt = self.dt;
+        let a0 = self.a0;
+
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        for i in 0..n {
+            self.x[i] = (rng.gen::<f64>() - 0.5) * 0.2;
+            self.y[i] = (rng.gen::<f64>() - 0.5) * 0.2;
+        }
+        for i in 0..n {
+            let s = sign(self.x[i]);
+            states[i] = s;
+            self.best[i] = s;
+        }
+        let e0 = row_energy_csr(ptr, col, val, h, n, states);
+        let mut e_best = e0;
+
+        // `c0` é normalizado pelo número de **elementos da matriz densa** (n²),
+        // inclusive os zeros, como no kernel denso.
+        let mut sum = 0.0;
+        let mut sumsq = 0.0;
+        for v in &val[..ptr[n] as usize] {
+            sum += *v;
+            sumsq += *v * *v;
+        }
+        let count = (n * n) as f64;
+        let mean = sum / count;
+        let var = (sumsq / count - mean * mean).max(0.0);
+        let std = var.sqrt();
+        let inv_sqrt_n = 1.0 / (n as f64).sqrt();
+        let c0 = if std < STD_MIN {
+            0.5 * inv_sqrt_n
+        } else {
+            0.5 * inv_sqrt_n / std
+        };
+
+        for k in 0..steps {
+            let a = a0 * ((k + 1) as f64) / (steps as f64);
+            let drift = a0 - a;
+            for i in 0..n {
+                self.hx[i] = dot_f64_csr(ptr, col, val, i, &self.x[..n], n) + h[i];
+            }
+            for i in 0..n {
+                self.y[i] += dt * (-drift * self.x[i] + c0 * self.hx[i]);
+                let xn = self.x[i] + dt * a0 * self.y[i];
+                if xn > 1.0 {
+                    self.x[i] = 1.0;
+                    self.y[i] = 0.0;
+                } else if xn < -1.0 {
+                    self.x[i] = -1.0;
+                    self.y[i] = 0.0;
+                } else {
+                    self.x[i] = xn;
+                }
+            }
+            for i in 0..n {
+                self.s[i] = sign(self.x[i]);
+            }
+            {
+                let sf = &mut self.g[..n];
+                for i in 0..n {
+                    sf[i] = f64::from(self.s[i]);
+                }
+                let mut e = 0.0;
+                for i in 0..n {
+                    e -= 0.5 * sf[i] * dot_f64_csr(ptr, col, val, i, sf, n);
+                }
+                for i in 0..n {
+                    e -= h[i] * sf[i];
+                }
+                if e < e_best {
+                    e_best = e;
+                    for i in 0..n {
+                        self.best[i] = self.s[i];
+                    }
+                }
+            }
+        }
+
+        for i in 0..n {
+            self.s[i] = self.best[i];
+        }
+        let e = descend_csr(n, ptr, col, val, h, &mut self.s[..n], &mut self.g[..n]);
+
+        if e >= e0 {
+            for i in 0..n {
+                self.best[i] = self.s[i];
+            }
+            let mut best_e = e;
+            for i in 0..n {
+                self.s_try[..n].copy_from_slice(&self.best[..n]);
+                self.s_try[i] = -self.s_try[i];
+                let e_try = descend_csr(
+                    n,
+                    ptr,
+                    col,
+                    val,
+                    h,
+                    &mut self.s_try[..n],
+                    &mut self.g_try[..n],
+                );
+                if e_try < best_e {
+                    best_e = e_try;
+                    self.s[..n].copy_from_slice(&self.s_try[..n]);
+                }
+            }
+        }
+
+        states[..n].copy_from_slice(&self.s[..n]);
+        row_energy_csr(ptr, col, val, h, n, states)
+    }
 }
 
 #[inline]
@@ -491,7 +628,6 @@ fn descend_csr(
         }
     }
     row_energy_csr(ptr, col, val, hb, n, s)
-}
 }
 
 
@@ -1041,6 +1177,14 @@ impl LogicPipeline {
             jabs: vec![0.0; n_exp_max],
             touched: Vec::with_capacity(18 * m_max + 8),
             sat_count: vec![0; m_max],
+            csr_ptr: vec![0; n_exp_max + 1],
+            csr_col: vec![0; 18 * m_max + 8],
+            csr_val: vec![0.0; 18 * m_max + 8],
+            loc_ptr: vec![0; n_exp_max + 1],
+            loc_col: vec![0; 18 * m_max + 8],
+            loc_val: vec![0.0; 18 * m_max + 8],
+            local_of: vec![u32::MAX; n_exp_max],
+            csr_fill: vec![0; n_exp_max],
             residual: Vec::with_capacity(n_exp_max),
             exp_state: vec![1; n_exp_max],
             parent: vec![0; n_exp_max],
@@ -1338,6 +1482,8 @@ impl LogicPipeline {
         for round in 0..self.rounds {
             rounds_run += 1;
             self.emit_qubo(n_exp);
+            self.build_csr(n_exp);
+            let t_bsb = Instant::now();
 
             // --- resolve cada componente ---
             let mut comps = 0usize;
@@ -1357,21 +1503,19 @@ impl LogicPipeline {
                     continue;
                 }
                 for a in 0..s {
-                    let va = self.comp_vars[start + a];
-                    self.hc[a] = self.hq[va];
-                    for b in 0..s {
-                        let vb = self.comp_vars[start + b];
-                        self.jc[a * s + b] = self.jq[va * n_exp + vb];
-                    }
+                    self.hc[a] = self.hq[self.comp_vars[start + a]];
                 }
+                self.gather_component(start, s);
                 let mut local_best = f64::INFINITY;
                 for restart in 0..self.restarts {
                     let sd = seed
                         ^ (round as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)
                         ^ (restart as u64).wrapping_mul(0x85EB_CA77_C2B2_AE63)
                         ^ (start as u64).wrapping_mul(0xC2B2_AE3D_27D4_EB4F);
-                    let e = self.bsb.relax_into(
-                        &self.jc[..s * s],
+                    let e = self.bsb.relax_csr_into(
+                        &self.loc_ptr[..=s],
+                        &self.loc_col,
+                        &self.loc_val,
                         &self.hc[..s],
                         s,
                         sd,
@@ -1390,6 +1534,7 @@ impl LogicPipeline {
             }
             comps_last = comps;
             largest_last = largest;
+            self.last.bsb_us += t_bsb.elapsed().as_secs_f64() * 1e6;
 
             // --- monta a atribuição original ---
             for v in 0..n {
@@ -1399,7 +1544,9 @@ impl LogicPipeline {
                 };
             }
             // --- reparo de factibilidade (min-conflicts com tabu) ---
+            let t_rep = Instant::now();
             let viol = self.repair_into(n, clauses);
+            self.last.repair_us += t_rep.elapsed().as_secs_f64() * 1e6;
             // devolve o reparo ao estado expandido (aux ficam como estão: E/ΔE
             // passam a ser diagnóstico, a decisão é a contagem exata)
             for v in 0..n {
@@ -1407,8 +1554,10 @@ impl LogicPipeline {
                     self.exp_state[self.res_of[v]] = self.cur_orig[v];
                 }
             }
-            let e = qubo_energy(
-                &self.jq[..n_exp * n_exp],
+            let e = row_energy_csr(
+                &self.csr_ptr[..=n_exp],
+                &self.csr_col,
+                &self.csr_val,
                 &self.hq[..n_exp],
                 n_exp,
                 &self.exp_state[..n_exp],
@@ -1588,6 +1737,115 @@ impl LogicPipeline {
             }
         }
         viol
+    }
+
+    /// Monta a CSR do QUBO expandido a partir de `touched` (sem varrer `n²`).
+    ///
+    /// Duplicatas do mesmo par `(i,j)` são **agregadas** e as colunas ficam em
+    /// ordem crescente, para que a soma esparsa reproduza bit-a-bit a matriz
+    /// densa (o kernel denso acumula `J_ij·x_j` numa única parcela por par).
+    fn build_csr(&mut self, n_exp: usize) {
+        for p in self.csr_ptr[..=n_exp].iter_mut() {
+            *p = 0;
+        }
+        for &idx in self.touched.iter() {
+            let i = idx as usize / n_exp;
+            self.csr_ptr[i + 1] += 1;
+        }
+        for i in 0..n_exp {
+            self.csr_ptr[i + 1] += self.csr_ptr[i];
+        }
+        if self.csr_ptr[n_exp] as usize > self.csr_col.len() {
+            // Não deveria acontecer (touched é limitado por 18·m_max).
+            self.csr_ptr[..=n_exp].fill(0);
+            return;
+        }
+        self.csr_fill[..n_exp].copy_from_slice(&self.csr_ptr[..n_exp]);
+        for &idx in self.touched.iter() {
+            let i = idx as usize / n_exp;
+            let j = (idx as usize % n_exp) as u32;
+            let at = self.csr_fill[i] as usize;
+            self.csr_col[at] = j;
+            self.csr_val[at] = self.jq[idx as usize];
+            self.csr_fill[i] += 1;
+        }
+        // ordena por coluna e agrega duplicatas dentro de cada linha
+        let mut write = 0u32;
+        for row in 0..n_exp {
+            let start = self.csr_ptr[row] as usize;
+            let end = self.csr_ptr[row + 1] as usize;
+            self.csr_ptr[row] = write;
+            let mut k = start;
+            if start < end {
+                for a in (start + 1)..end {
+                    let (c, v) = (self.csr_col[a], self.csr_val[a]);
+                    let mut b = a;
+                    while b > start && self.csr_col[b - 1] > c {
+                        self.csr_col[b] = self.csr_col[b - 1];
+                        self.csr_val[b] = self.csr_val[b - 1];
+                        b -= 1;
+                    }
+                    self.csr_col[b] = c;
+                    self.csr_val[b] = v;
+                }
+                while k < end {
+                    let c = self.csr_col[k];
+                    let mut v = self.csr_val[k];
+                    let mut m = k + 1;
+                    while m < end && self.csr_col[m] == c {
+                        v += self.csr_val[m];
+                        m += 1;
+                    }
+                    self.csr_col[write as usize] = c;
+                    self.csr_val[write as usize] = v;
+                    write += 1;
+                    k = m;
+                }
+            }
+        }
+        self.csr_ptr[n_exp] = write;
+    }
+
+    /// Recorta o CSR global nas linhas do componente `comp_vars[start..start+s]`.
+    ///
+    /// Devolve `nnz` local. As colunas são remapeadas para índices locais e
+    /// reordenadas (o kernel esparso soma em ordem crescente de coluna local).
+    fn gather_component(&mut self, start: usize, s: usize) -> usize {
+        for a in 0..s {
+            self.local_of[self.comp_vars[start + a] as usize] = a as u32;
+        }
+        let mut write = 0u32;
+        self.loc_ptr[0] = 0;
+        for a in 0..s {
+            let v = self.comp_vars[start + a];
+            for k in self.csr_ptr[v] as usize..self.csr_ptr[v + 1] as usize {
+                let lw = self.local_of[self.csr_col[k] as usize];
+                if lw != u32::MAX {
+                    self.loc_col[write as usize] = lw;
+                    self.loc_val[write as usize] = self.csr_val[k];
+                    write += 1;
+                }
+            }
+            let (row_start, row_end) = (self.loc_ptr[a] as usize, write as usize);
+            if row_end > row_start + 1 {
+                for x in (row_start + 1)..row_end {
+                    let (c, v) = (self.loc_col[x], self.loc_val[x]);
+                    let mut b = x;
+                    while b > row_start && self.loc_col[b - 1] > c {
+                        self.loc_col[b] = self.loc_col[b - 1];
+                        self.loc_val[b] = self.loc_val[b - 1];
+                        b -= 1;
+                    }
+                    self.loc_col[b] = c;
+                    self.loc_val[b] = v;
+                }
+            }
+            self.loc_ptr[a + 1] = write;
+        }
+        for a in 0..s {
+            self.local_of[self.comp_vars[start + a] as usize] = u32::MAX;
+        }
+        write as usize
     }
 
     /// Emite o QUBO expandido (spin) com os pesos correntes de `lambda`.
@@ -2052,6 +2310,55 @@ mod tests {
         let mut fixed = vec![None; 2];
         let (conflict, _, _) = prop.presolve_into(2, &clauses, &mut fixed, PROBE_MAX);
         assert!(conflict);
+    }
+
+    #[test]
+    fn bsb_esparso_igual_ao_denso_bit_a_bit() {
+        // Matriz simétrica esparsa (≈ 6 vizinhos/linha) montada sem depender
+        // de aleatoriedade externa.
+        let n = 40usize;
+        let mut j = vec![0.0f64; n * n];
+        let mut state = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            ((state >> 40) as f64 / (1u64 << 24) as f64) * 2.0 - 1.0
+        };
+        let mut h = vec![0.0f64; n];
+        for i in 0..n {
+            h[i] = next() * 0.5;
+            for d in 1..=3usize {
+                let k = (i + d) % n;
+                let v = next();
+                j[i * n + k] += v;
+                j[k * n + i] += v;
+            }
+        }
+        // CSR (colunas crescentes, agregando o que já está somado)
+        let mut ptr = vec![0u32; n + 1];
+        let mut col = Vec::new();
+        let mut val = Vec::new();
+        for i in 0..n {
+            for k in 0..n {
+                if j[i * n + k] != 0.0 {
+                    col.push(k as u32);
+                    val.push(j[i * n + k]);
+                }
+            }
+            ptr[i + 1] = col.len() as u32;
+        }
+
+        let mut dense = BsbCore::new(n, 30, 0.05);
+        let mut sparse = BsbCore::new(n, 30, 0.05);
+        let mut sd = vec![0i8; n];
+        let mut ss = vec![0i8; n];
+        for seed in 0..8u64 {
+            let ed = dense.relax_into(&j, &h, n, seed, &mut sd);
+            let es = sparse.relax_csr_into(&ptr, &col, &val, &h, n, seed, &mut ss);
+            assert_eq!(sd, ss, "estados divergiram (seed {seed})");
+            assert_eq!(ed, es, "energia divergiu (seed {seed})");
+        }
     }
 
     #[test]

@@ -3,6 +3,22 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.122] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 8 arquivo(s) (docs:5, examples:1, src:2).
+- Gate: ok (8s).
+
+- `docs/API_CONTRACT.md`
+- `docs/INTAKE_PLAN.md`
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO.md`
+- `docs/TRANSPLANT_HV.md`
+- `examples/ising_logic_probe.rs`
+- `src/core/logic_pipeline.rs`
+- `src/core/persistency_search.rs`
+- `docs/DOACAO_PLAYBOOK.md`
+
 ## [0.0.121] - 2026-11-16
 
 ### Changed
