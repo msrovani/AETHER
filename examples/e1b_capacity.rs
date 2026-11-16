@@ -133,7 +133,7 @@ fn wrapped_abs(a: f32, b: f32) -> f32 {
     d.abs()
 }
 
-/// Arm B: erro angular de recall com 40% da pista oculta.
+/// Classe de padrão: aleatório (adversarial) ou harmônico (intencional).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PatternClass {
     Random,
@@ -186,7 +186,10 @@ fn audit_config() -> PhaseMemoryConfig {
     }
 }
 
-/// Erro angular médio nas posições ocultas.
+/// Erro angular médio nas posições ocultas (`hidden` via `--hidden`, default
+/// 20%). Chama `reset_phases(0)` antes de cada recall: sem isso a memória
+/// carrega o atrator anterior e a medida deixa de ser por padrão — foi
+/// exatamente o viés que inflou a primeira publicação (0,126 → 0,034).
 fn phase_memory_error(
     n: usize,
     patterns: usize,

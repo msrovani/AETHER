@@ -451,17 +451,26 @@ Curva em D=160, K=6: `1,00` até M=64 · `0,891` em 128 · `0,415` em 256 ·
 `Recall@1 = 1,0`. Medido aqui, 64 ainda dá 1,0 e 128 cai para 0,89 — o T12 estava
 a **78% da capacidade**, não no limite.
 
-**Arm B — memória de fase (M5), padrões aleatórios, 20% da pista oculta:**
+**Arm B — memória de fase (M5), `--hidden 0,20`, config da auditoria,
+`reset_phases(0)` antes de cada recall:**
 
 | padrões | 4 | 8 | 16 | 32 | 64 |
 |---|---:|---:|---:|---:|---:|
-| erro angular (rad) | 0,126 | 0,274 | 0,518 | 0,843 | 1,180 |
+| aleatório (rad) | 0,034 | 0,190 | 0,448 | 0,742 | 1,121 |
+| harmônico (rad) | 0,062 | 0,142 | 0,362 | 0,590 | 1,055 |
 
-Capacidade a erro < 0,15 rad ≈ **4 padrões**, contra
-`ComplexPhaseMemory::pattern_capacity() = 40`. **Fator 10 de otimismo** no
-declarado — mas o caso testado é o **adversarial**: padrões aleatórios não têm
-bacia de atração estruturada. Padrões harmônicos (usados nos testes M5) devem
-render mais; medir isso é E1b-2.
+Capacidade a erro < 0,15 rad: **~4** (aleatório) e **~8** (harmônico), contra
+`ComplexPhaseMemory::pattern_capacity() = 40` — **fator ~5 a ~10** de otimismo no
+declarado. O caso adversarial (aleatório) não tem bacia de atração estruturada;
+o harmônico dobra a capacidade, mas não chega ao número declarado.
+
+> **Errata (MSG 0111 / 0118 / 0120).** A primeira medição publicada
+> (0,126 / 0,274 / 0,518) estava **contaminada**: a memória carregava o atrator
+> anterior entre recalls. Com `reset_phases(0)` antes de cada consulta e
+> `hidden = 0,20` declarado, os números caem **~3,7×**. Artefato canônico:
+> `target/aether_e1b.json` (campos `error_random` / `error_harmonic`).
+> Métrica = **média** do erro angular nas posições ocultas, `seed = 0xE1B_0001`,
+> config `omega0=0, clamp=8, eta_w=0,12, eta_delta=0,08, gamma_w=0,002`.
 
 **Consequência arquitetural (a que importa):** se o PLH precisar de ~1.000 fatos,
 D=160 não serve — pela lei linear, seria **D≈2.500**, com vetor de 20 KB e 1.000
