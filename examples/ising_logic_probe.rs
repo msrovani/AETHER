@@ -364,7 +364,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let k_units = (0.2 * n as f64).round() as usize;
     let half = args.instances / 2;
 
-    let mut pipe = LogicPipeline::new(n, m + k_units + 4, args.steps, args.restarts, args.rounds, args.eta);
+    let mut pipe = LogicPipeline::new(
+        n,
+        m + k_units + 4,
+        args.steps,
+        args.restarts,
+        args.rounds,
+        args.eta,
+    );
     let mut arm1_bsb = BsbCore::new(n, args.steps, 0.05);
 
     let mut s1 = ArmStats::default();

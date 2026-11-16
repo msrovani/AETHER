@@ -97,6 +97,7 @@ const N_VAL: usize = 40;
 const N_SLOTS: usize = 4;
 const VALUES_PER_SLOT: usize = 10;
 const GROUPS: usize = 3;
+const ACTIVE_VALUES: usize = 4;
 
 struct Args {
     facts: usize,
@@ -351,8 +352,8 @@ fn analogy_recall(
                 continue;
             }
             for s in 0..N_SLOTS {
-                for v1 in 0..VALUES_PER_SLOT {
-                    for v2 in 0..VALUES_PER_SLOT {
+                for v1 in 0..ACTIVE_VALUES {
+                    for v2 in 0..ACTIVE_VALUES {
                         if v1 == v2 {
                             continue;
                         }
@@ -474,6 +475,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut rel_hits = [0usize; 3];
     let mut rel_total = 0usize;
     let mut margins: Vec<f32> = Vec::with_capacity(n);
+    let mut role_margins: Vec<f32> = Vec::with_capacity(n);
     let mut answer_tags_ok = 0usize;
     let mut answer_tags_total = 0usize;
     let sigmas = [0.0f32, args.cue_noise as f32, 1.2f32];
@@ -503,6 +505,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 if si == 0 {
                     margins.push(hit.margin);
+                    role_margins.push(hit.role_similarity);
                     answer_tags_total += 1;
                     if SourceTag::from_code(ds.facts[i].tag.code()).is_some() {
                         answer_tags_ok += 1;
@@ -526,7 +529,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ---------- analogia em fase ----------
     // Banco controlado: 3 grupos × 4 slots × 4 valores = 48 entidades.
-    let active = 4usize;
+    let active = ACTIVE_VALUES;
     let bank_len = GROUPS * N_SLOTS * active;
     let mut attr: Vec<Vec<Vec<f32>>> = Vec::with_capacity(N_SLOTS);
     let mut rng = ChaCha8Rng::seed_from_u64(args.data_seed ^ 0xA77);
@@ -573,7 +576,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!();
 
-    // ---------- abstenção calibrada (margem) ----------
+    // ---------- abstenção calibrada (evidência + margem) ----------
     let half = margins.len() / 2;
     let mut train: Vec<f32> = margins[..half].to_vec();
     train.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
@@ -584,6 +587,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .saturating_sub(1)
             .min(train.len() - 1);
         train[idx]
+    };
+    // A **margem sozinha não detecta OOD**: o unbinding sempre "acha" um valor
+    // para o melhor papel. A evidência (`role_similarity`) é o portão do domínio.
+    let mut roles: Vec<f32> = role_margins[..half.min(role_margins.len())].to_vec();
+    roles.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let evidence_cut = if roles.is_empty() {
+        0.0
+    } else {
+        roles[roles.len() / 20]
     };
 
     let mut accepted = 0usize;
@@ -609,7 +621,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let (e, r, _) = ds.triples[i];
             let local = i - shard_off;
             let hit = store.query_match(&entity_phase[e], &relation_phase[r], &mask)?;
-            if hit.margin >= threshold {
+            if hit.margin >= threshold && hit.role_similarity >= evidence_cut {
                 accepted += 1;
                 if hit.value_index != local {
                     false_accepted += 1;
@@ -629,7 +641,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let rel = gauss_vec(&mut rng_noise, FHRR_DIM, std::f32::consts::TAU / 3.0);
         let hit = ood_store.query_match(&cue, &rel, &mask)?;
         ood += 1;
-        if hit.margin < threshold {
+        if hit.margin < threshold || hit.role_similarity < evidence_cut {
             ood_abstained += 1;
         }
     }
@@ -639,8 +651,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         0.0
     };
 
-    println!("abstenção por margem (limiar calibrado em 50% do treino)");
-    println!("  limiar                         : {threshold:.4}");
+    println!("abstenção (evidência `role_similarity` + margem, calibradas no treino)");
+    println!(
+        "  limiar de margem (50% cobertura): {threshold:.4} · evidência (p5): {evidence_cut:.4}"
+    );
     println!(
         "  aceitos                        : {accepted} · falsos confiáveis {:.2}%",
         100.0 * false_conf

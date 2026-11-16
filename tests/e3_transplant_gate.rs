@@ -335,7 +335,10 @@ fn g2_analogia_em_fase_e_medida_sem_alvo() {
                 // não-aditividade controlada (embedding real não é aditivo).
                 // Sem normalizar: normalizar é não-linear e destrói a identidade
                 // a:b :: c:d que a analogia em fase explora.
-                add_assign(&mut x, &gauss_vec(&mut rng, D_IN, 0.25 / (D_IN as f32).sqrt()));
+                add_assign(
+                    &mut x,
+                    &gauss_vec(&mut rng, D_IN, 0.25 / (D_IN as f32).sqrt()),
+                );
                 bank.push(x);
             }
         }
@@ -516,7 +519,11 @@ fn g3_abstencao_por_margem_tem_poucos_falsos_confiaveis() {
     } else {
         0.0
     };
-    assert!(false_conf < 0.05, "falsos confiáveis = {:.1}%", 100.0 * false_conf);
+    assert!(
+        false_conf < 0.05,
+        "falsos confiáveis = {:.1}%",
+        100.0 * false_conf
+    );
     // dentro do domínio, o limiar de margem aceita ~50% (por construção)
     let inside = in_domain.iter().filter(|m| **m >= cut).count();
     assert!(

@@ -563,9 +563,11 @@ alocação, sem violar a lei do E1b em nenhum acumulador.
 | 6 | **Um atrator pode virar "gist" sem perder a habilidade?** | ⏳ **aberta** (F2) | Hoje o atrator é binário: está ou não está. Fecha consolidando no L4 (texto/energia) e medindo retenção após N consolidações. |
 | 7 | **A ponte de fase preserva o suficiente?** | ⏳ **aberta** (F3) | Fecha com `cue_into` (ledger → vetor → semente de atrator) e medindo recall@1 no round-trip **vs** recall direto; gate: perda < 5%. |
 
-**Placar: 3 respondidas, 1 parcial (E2b/E2c), 3 abertas — e cada aberta tem um
-experimento que a fecha.** Nenhuma resposta foi inferida: as fechadas têm artefato
-em `target/`.
+**Placar: 4 respondidas, 3 abertas — e cada aberta tem um experimento que a
+fecha.** A pergunta 4 foi fechada em duas metades: o presolve/roof dual é *sound*
+(e o teto do controle é 0% por simetria), mas fecha parcialmente — o caminho para
+os 93,6% teóricos é `probing` condicionado. Nenhuma resposta foi inferida: as
+fechadas têm artefato em `target/`.
 
 > *"Três perguntas tinham resposta e não sabíamos; uma está parcialmente
 > respondida; três continuam abertas — e agora sabemos exatamente como fechá-las."*

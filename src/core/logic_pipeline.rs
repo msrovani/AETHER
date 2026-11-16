@@ -1183,7 +1183,8 @@ impl LogicPipeline {
     }
 
     /// Emite o QUBO expandido (spin) com os pesos correntes de `lambda`.
-    fn emit_qubo(&mut self, n_exp: usize) {        let nn = n_exp * n_exp;
+    fn emit_qubo(&mut self, n_exp: usize) {
+        let nn = n_exp * n_exp;
         self.jq[..nn].fill(0.0);
         self.hq[..n_exp].fill(0.0);
         self.lin[..n_exp].fill(0.0);

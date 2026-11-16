@@ -203,6 +203,50 @@ fn caso_submodular_e_resolvido_no_otimo() {
 }
 
 #[test]
+fn teto_z2_no_controle_e_zero_por_forca_bruta() {
+    // Com h = 0 a energia é invariante por s → −s: para **toda** variável os
+    // dois sinais aparecem entre os ótimos. Logo nenhuma variável é persistente
+    // e 0,0% é o teto — o `0,0%` do E2c v1 não era miopia. Verificado por força
+    // bruta (enumera todos os ótimos de cada instância).
+    let n = 10usize;
+    for inst in 0..12usize {
+        let (j, h) = random_glass(n, 0, 0.0, 0xE2C2_5000 + inst as u64);
+        let mut best = f64::INFINITY;
+        let mut pos = vec![false; n];
+        let mut neg = vec![false; n];
+        let mut s = vec![0i8; n];
+        for mask in 0..(1u64 << n) {
+            for (i, si) in s.iter_mut().enumerate() {
+                *si = if (mask >> i) & 1 == 0 { -1 } else { 1 };
+            }
+            let e = energy(&j, &h, n, &s);
+            if e < best - 1e-9 {
+                best = e;
+                pos.iter_mut().for_each(|v| *v = false);
+                neg.iter_mut().for_each(|v| *v = false);
+            }
+            if (e - best).abs() <= 1e-9 {
+                for i in 0..n {
+                    if s[i] > 0 {
+                        pos[i] = true;
+                    } else {
+                        neg[i] = true;
+                    }
+                }
+            }
+        }
+        for i in 0..n {
+            assert!(
+                pos[i] && neg[i],
+                "inst {inst}: variável {i} só aparece com um sinal — quebra a simetria Z2"
+            );
+        }
+        // E o roof dual concorda: nenhuma variável persistente.
+        assert_eq!(roof_dual_qumo(n, &j, &h).fixed_count(), 0);
+    }
+}
+
+#[test]
 fn roof_dual_nao_aloca_apos_warmup() {
     use std::alloc::{GlobalAlloc, Layout, System};
     use std::cell::Cell;
