@@ -3,16 +3,57 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
-## [0.0.90] - 2026-11-15
+## [0.0.92] - 2026-11-16
 
 ### Changed
 
-- Ciclo automatico: 3 arquivo(s) (examples:1, src:1, tests:1).
+- Ciclo automatico: 7 arquivo(s) (.:3, docs:2, examples:1, tests:1).
 - Gate: ok (5s).
 
-- `src/core/presolve.rs`
-- `examples/e2c_persistency.rs`
-- `tests/e2c_persistency.rs`
+- `CHANGELOG.md`
+- `Cargo.lock`
+- `Cargo.toml`
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL2.md`
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md`
+- `examples/e1b_capacity.rs`
+- `tests/e1b_capacity.rs`
+
+## [0.0.91] - 2026-11-15
+
+### Added
+
+- `examples/e1b_capacity.rs` — capacidade de memória em duas frentes: store FHRR
+  (`D ∈ {64,160,320,640}` × `K ∈ {1,6}`) e memória de fase (erro angular vs nº
+  de padrões).
+- `tests/e1b_capacity.rs` — 4 gates: D=160 sustenta 64 fatos a 99%, degrada em
+  256, capacidade é linear em D, mais traços ajudam.
+
+### Measured
+
+**Store FHRR (fatos `e⊗r⊗v`, recall@1 ≥ 99%):**
+
+| D | K=1 | K=6 | M/D |
+|---:|---:|---:|---:|
+| 64 | 8 | 32 | 0,50 |
+| **160** | 16 | **64** | **0,40** |
+| 320 | 32 | 128 | 0,40 |
+| 640 | 32 | 256 | 0,40 |
+
+**Memória de fase (padrões aleatórios, 20% oculto):** erro 0,126 → 1,180 rad de
+4 → 64 padrões; capacidade a < 0,15 rad ≈ **4** (declarado: 40).
+
+### Changed
+
+- **A lei é linear, não quadrática:** capacidade ≈ **0,4·D** (K=6). A lei `M ∝ D²`
+  (arXiv:1906.11684) vale para fatoração por ressonador, não para armazenamento
+  por superposição — a expectativa estava inflada em ~40× em D=160.
+- Corroboração: o T12 da auditoria (50 fatos em D=160, `Recall@1 = 1,0`) estava a
+  **78% da capacidade**.
+- **Consequência:** para ~1.000 fatos seria necessário D≈2.500 (≈20 MB) ⇒
+  sharding por papel/relação ou fatoração por ressonador viram **requisito** do
+  PLH, não otimização.
+- Vol. II §3.6 e Vol. III (§11, §12) atualizados; **E1b-2** (padrões estruturados)
+  entra na fila.
 
 ## [0.0.90] - 2026-11-15
 

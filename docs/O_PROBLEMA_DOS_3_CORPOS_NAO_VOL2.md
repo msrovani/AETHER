@@ -425,6 +425,50 @@ Isso espelha o T12 medido (**SNR 5,88σ**) [M] e `should_abstain` já existente.
 | Ganho do ACF | ≥ 10× capacidade |
 | Profundidade de composição com erro < 5% | ≥ 4 passos |
 
+### 3.6 E1b — a capacidade real em D=160 (e a lei que não era D²)
+
+**Executado em 2026-11-15.** `examples/e1b_capacity.rs` + `tests/e1b_capacity.rs`.
+`FhrrStore` com fatos `e ⊗ r ⊗ v` superpostos, `recall@1` com pista completa,
+200 consultas amostradas, alvo ≥ 99%.
+
+| D | K=1 | **K=6** | M/D (K=6) |
+|---:|---:|---:|---:|
+| 64 | 8 | **32** | 0,50 |
+| **160** | 16 | **64** | **0,40** |
+| 320 | 32 | **128** | 0,40 |
+| 640 | 32 | **256** | 0,40 |
+
+Curva em D=160, K=6: `1,00` até M=64 · `0,891` em 128 · `0,415` em 256 ·
+`0,100` em 512 · `0,010` em 2048.
+
+> **Achado #5 — a lei é linear, não quadrática.** Capacidade ≈ **0,4·D** para
+> K=6 (e ≈0,1·D para K=1). A lei `M_max ∝ D²` citada no Vol. I (arXiv:1906.11684)
+> vale para **fatoração por ressonador com codebook conhecido**, não para
+> armazenamento por superposição. Confundir as duas inflava a expectativa em
+> **~40×** em D=160.
+
+**Corroboração:** o T12 da auditoria usa **50 fatos** em D=160, K=6 e mede
+`Recall@1 = 1,0`. Medido aqui, 64 ainda dá 1,0 e 128 cai para 0,89 — o T12 estava
+a **78% da capacidade**, não no limite.
+
+**Arm B — memória de fase (M5), padrões aleatórios, 20% da pista oculta:**
+
+| padrões | 4 | 8 | 16 | 32 | 64 |
+|---|---:|---:|---:|---:|---:|
+| erro angular (rad) | 0,126 | 0,274 | 0,518 | 0,843 | 1,180 |
+
+Capacidade a erro < 0,15 rad ≈ **4 padrões**, contra
+`ComplexPhaseMemory::pattern_capacity() = 40`. **Fator 10 de otimismo** no
+declarado — mas o caso testado é o **adversarial**: padrões aleatórios não têm
+bacia de atração estruturada. Padrões harmônicos (usados nos testes M5) devem
+render mais; medir isso é E1b-2.
+
+**Consequência arquitetural (a que importa):** se o PLH precisar de ~1.000 fatos,
+D=160 não serve — pela lei linear, seria **D≈2.500**, com vetor de 20 KB e 1.000
+átomos ≈ 20 MB (fora do L2). Portanto **sharding por papel/relação** ou
+**fatoração por ressonador** deixam de ser otimização e passam a ser **requisito**
+do braço da linguagem.
+
 ---
 
 ## 4. Risco 3 — Transplantação dá geometria, não verdade

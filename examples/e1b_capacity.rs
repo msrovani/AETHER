@@ -211,8 +211,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if dims.len() >= 2 {
         let d0 = dims[0];
         let d1 = *dims.last().unwrap();
-        let c0 = results.iter().find(|r| r.0 == d0 && r.1 == k_ref).map(|r| r.2);
-        let c1 = results.iter().find(|r| r.0 == d1 && r.1 == k_ref).map(|r| r.2);
+        let c0 = results
+            .iter()
+            .find(|r| r.0 == d0 && r.1 == k_ref)
+            .map(|r| r.2);
+        let c1 = results
+            .iter()
+            .find(|r| r.0 == d1 && r.1 == k_ref)
+            .map(|r| r.2);
         if let (Some(c0), Some(c1)) = (c0, c1) {
             if c0 > 0 && c1 > 0 && d1 > d0 {
                 slope = ((c1 as f64) / (c0 as f64)).ln() / ((d1 as f64) / (d0 as f64)).ln();
@@ -243,14 +249,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         phase_errs.push((k, err));
         println!("{:>5} {:>10} {:>12} {:>12.3}", n, k, "—", err);
     }
-    println!("  (*) `ComplexPhaseMemory::pattern_capacity()` = {}", mem_ref.pattern_capacity());
+    println!(
+        "  (*) `ComplexPhaseMemory::pattern_capacity()` = {}",
+        mem_ref.pattern_capacity()
+    );
     println!();
 
     // ---------------- veredito ----------------
-    let cap160 = results
-        .iter()
-        .find(|r| r.0 == 160 && r.1 == 6)
-        .map(|r| r.2);
+    let cap160 = results.iter().find(|r| r.0 == 160 && r.1 == 6).map(|r| r.2);
     println!("veredito");
     match cap160 {
         Some(c) => println!("  capacidade medida em D=160, K=6 : {c} fatos"),
@@ -287,4 +293,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("artefato: {path}");
     Ok(())
 }
-

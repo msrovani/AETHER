@@ -380,7 +380,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | **E6** ✅ | II | perfil por estágio — **executado** | cobertura **99,98%**; solver **84,4%** · 7,5 GFLOP/s | bloqueio transversal **removido** |
 | **E6b** ✅ | II | kernel do solver (16 acumuladores, Rust safe) | **17,10 GFLOP/s (2,30×)** · ACQ 100 · 24 suítes verdes | R1, R5 |
 | **E1** | I | linguagem em fase (papel–filler) | SNR > 5σ, 0 alloc | R2 |
-| **E1b** | II | ACF/IMF no `FhrrStore` | ≥10× capacidade, ciclo-limite <1% | R2 |
+| **E1b** ✅ | II | capacidade do store e da memória de fase — **executado** | **D=160: 64 fatos (K=6)** · lei **linear ~0,4·D** (não D²) · fase: ~4 padrões aleatórios | R2 |
 | **E2** | I | lógica como Ising + certificado | 3-SAT n≤20 = força bruta | R1 |
 | **E2b** ✅ | II | presolve simbólico antes do BSB — **executado** | **0 insound** · **64,8% redução** (+39,8 pp de cascata) · **200/200** resolvidas vs 183/200 | R1, R3 |
 | **E2c** ✅ | II | persistência de 1ª ordem (dominância) — **executado** | **0/600 ótimos alterados** · 0% sem viés (controle) · 42,9% com viés 45% | R1, R3 |
@@ -495,12 +495,13 @@ Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 3º ✅ E3b  certificado + proveniência  ← FEITO: verifica factibilidade, não acerto
 4º ✅ E2b  presolve simbólico          ← FEITO: 64,8% redução, 0 insound, 200/200
 5º ✅ E2c  persistência de 1ª ordem     ← FEITO: sound (0/600), míope por construção
-6º  E2c-2 roof dual (max-flow)         ← alcance além da dominância
-6º  E1b  capacidade/ciclo-limite       ← decide se VSA é viável em D=160
-7º  F1   ponte read-only               ← fecha K6 sem risco de drift
-8º  E1/E2/E3  os três "NÃO"            ← o programa científico
-9º  E4/E5/E7/E8  self, currículo, corpo, treino
-10º F2/F3  consolidação e fusão 2D
+6º ✅ E1b  capacidade em D=160          ← FEITO: 64 fatos · lei linear ~0,4·D
+7º  E2c-2 roof dual (max-flow)         ← alcance além da dominância
+8º  E1b-2 memória de fase estruturada  ← separar padrão aleatório de harmônico
+9º  F1   ponte read-only               ← fecha K6 sem risco de drift
+10º E1/E2/E3  os três "NÃO"            ← o programa científico
+11º E4/E5/E7/E8  self, currículo, corpo, treino
+12º F2/F3  consolidação e fusão 2D
 ```
 
 ### 12.5 As sete perguntas — placar
@@ -509,18 +510,18 @@ Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 |---|---|---|---|
 | 1 | **Onde vão os 146 µs?** | ✅ **respondida** (E6) | **84,4% no solver** (133,1 de 157,7 µs). readout 7,0% · entropy 3,0% · wave 2,5% · actuator 1,7% · ring_copy 1,1%. Cobertura 99,98%. |
 | 2 | **ΔE prevê acerto?** | ✅ **respondida** (E3b) | **Não em otimização livre** (AUC 0,46–0,55; bound 0,058 anti-preditivo). **Sim com restrições exatas**: 383 decisivas, precisão 100%. |
-| 3 | **Quantos padrões cabem em D=160?** | ⏳ **aberta** (E1b) | Teoria: `M_max ∝ D²` (arXiv:1906.11684) — mas **a constante não foi medida** para FHRR complexo. Ordem de grandeza entre 10³ e 10⁴. Fecha medindo Recall@1 vs nº de fatos superpostos. |
+| 3 | **Quantos padrões cabem em D=160?** | ✅ **respondida** (E1b) | **64 fatos** (`FhrrStore`, K=6, recall@1 ≥ 99%); 128 já cai para 89%. Lei **linear ~0,4·D** — **não** D². Memória de fase (M5): ~**4** padrões aleatórios a erro < 0,15 rad (declarado 40). |
 | 4 | **Roof dual reduz o suficiente em CNF de circuito?** | ⏳ **parcial** (E2b/E2c) | **CNF:** presolve por unidades+implicação dá **64,8%** (cascata +39,8 pp), 0 insound, 200/200. **QUBO:** dominância é sound (**0/600 ótimos alterados**) mas míope — **0% sem viés**, 42,9% com viés 45%. Falta o **roof dual completo (max-flow)**. |
 | 5 | **O self-field melhora calibração ou só replica a surpresa?** | ⏳ **aberta** (E4) | Falsificável: melhora ECE de abstenção **sem** melhorar T01. Se T01 também melhorar, a hipótese "metacognição é separada" cai. |
 | 6 | **Um atrator pode virar "gist" sem perder a habilidade?** | ⏳ **aberta** (F2) | Hoje o atrator é binário: está ou não está. Fecha consolidando no L4 (texto/energia) e medindo retenção após N consolidações. |
 | 7 | **A ponte de fase preserva o suficiente?** | ⏳ **aberta** (F3) | Fecha com `cue_into` (ledger → vetor → semente de atrator) e medindo recall@1 no round-trip **vs** recall direto; gate: perda < 5%. |
 
-**Placar: 2 respondidas, 1 parcial (E2b v1), 4 abertas — e cada aberta tem um
+**Placar: 3 respondidas, 1 parcial (E2b/E2c), 3 abertas — e cada aberta tem um
 experimento que a fecha.** Nenhuma resposta foi inferida: as fechadas têm artefato
 em `target/`.
 
-> *"Duas perguntas tinham resposta e não sabíamos; uma está meio respondida;
-> quatro continuam abertas — e agora sabemos exatamente como fechá-las."*
+> *"Três perguntas tinham resposta e não sabíamos; uma está parcialmente
+> respondida; três continuam abertas — e agora sabemos exatamente como fechá-las."*
 
 ---
 
