@@ -214,8 +214,13 @@ Precedência: flag > ambiente > erro explicativo.
 | `--layer L3` | — | `L3` |
 | `--authority N` | — | `255` (HITL) |
 | `--entity NOME` (repetível) | — | — |
+| `--entities a,b` | — | atalho para várias entidades |
 
 ### Receitas
+
+> `--mock` é um banco **por processo**: `put` e `recall` em invocações
+> separadas não se enxergam. Para persistência real use `--url`/`--stdio`;
+> para ver o ciclo completo em um comando, use `aether-sgdb demo`.
 
 ```bash
 # diagnóstico de máquina (exit 0 = ok, 1 = sem conexão)

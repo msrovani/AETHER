@@ -13,30 +13,36 @@ re-baseline); o C muda o próprio kernel e exige gate novo.
 
 ## Ferramenta de segurança (pré-requisito do lote A)
 
-**`tests/e2_pipeline_digest.rs`** — 64 instâncias fixas (mistura aleatória +
-plantada, `n ∈ {8,14,20}`), digest FNV de: `violations`, `states`, `fixed_symbolic`,
-`fixed_persistency`, `repair_moves`, `bsb_runs`, `components`. Grava
-`target/e2_digest.txt`.
+**`examples/e2_pipeline_digest.rs`** — 48 instâncias fixas (`n ∈ {8,14,20}` ×
+{aleatória, plantada} × 8 seeds), digest FNV de: `violations`, `decisive`,
+`fixed_symbolic`, `fixed_persistency`, `bsb_runs`, `repair_moves`, `components`,
+`energy`/`gap` (bits) e `out`. Grava `target/e2_digest.txt` com o detalhe por
+caso e compara com `EXPECTED_DIGEST`.
 
-* Rodar **antes** de cada item do lote A e comparar depois: digest igual = a
-  decisão não mudou. Sem isso, "bit-idêntico" é promessa, não medida.
-* Custo: ~2 s. Entra no fechamento de cada item.
+* **Baseline medida: `0xa3f3babd84c2c30f`** (código atual, lote A aplicado).
+* Rodar **antes e depois** de cada item: digest igual = decisão não mudou.
+* Já pagou o investimento: pegou um **bug real** de wrap-around no bitset de
+  cláusulas violadas (a varredura "cíclica" não voltava ao começo quando
+  `cursor ≥ 64`; o reparo terminava cedo e devolvia `0` violações com cláusulas
+  violadas). Sem o digest isso passaria como "otimização segura" — e teria
+  furado o G2 em produção.
 
 ---
 
-## Lote A — seguro (decisão idêntica, sem re-baseline de gates)
+## Lote A — status da execução
 
-| # | Item | Mudança concreta | Ganho esperado | Validação |
-|---:|---|---|---:|---|
-| A1 | 4 (limpeza) | Remover `jc`/`hc` mortos (`self.jc` só aparece em `memory_bytes`): −2·n_exp² f64 ≈ **−300 KB** | memória | clippy `dead_code` limpo; digest igual |
-| A2 | 2 (resto) | Bitset de cláusulas violadas (`Vec<u64>`, ⌈m/64⌉ palavras) + `cursor`: a busca da "primeira violada" salta palavras zero → **mesma cláusula** escolhida, `O(m/64)` em vez de `O(m)` | reparo 2–3× (90 → 35–45 µs) | digest igual (a ordem é a mesma) |
-| A3 | 1 (seguro) | **Heap preguiçoso** no `descend_csr`: chave `(delta, índice)` com invalidação por contador; empata pelo menor índice — exatamente a regra do `for i in 0..n` (`delta < pick_delta`). Delta só muda nos vizinhos do spin virado | **BSB 5–8×** (718 → 90–150 µs) | novo teste `descend_esparso_igual_ao_scan` em 200 vetores; digest igual |
-| A4 | 10 (revisado) | **Paralelizar reinícios** com `rayon` (já é dep): os `restarts` são independentes e determinísticos; `min` é ordem-independente. Pool de `BsbCore` (`N = restarts`) alocado em `new` | até **4×** no BSB em 4+ núcleos (com A3: ~40 µs) | digest igual; `threads=1` produz o mesmo digest |
-| A5 | 7 | Encadear os `Instant` (um par por estágio, derivando os demais por diferença) | ~0,1 µs | digest igual |
-| A6 | 4 (resíduo) | `gather_component`: pular a ordenação quando a linha já vem ordenada (flag por linha no `build_csr`); trocar `local_of` por *stamps* (u32 epoch) para não limpar | simbólico 1,3× | digest igual |
+| # | Item | Status | Observação |
+|---:|---|---|---|
+| A1 | remover `jc` morto | ✅ feito | −~300 KB de buffer |
+| A2 | bitset de violadas | ✅ feito (bit-idêntico) | digest igual; o ganho é pequeno porque `m` é pequeno (o scan linear já parava cedo) |
+| A3 | heap preguiçoso no `descend` | ⏳ pendente | é o item com ganho real (BSB 5–8×); exige heap de capacidade fixa |
+| A4 | paralelizar reinícios | ❌ **descartado** | `rayon`/`thread::scope` **aloca e faz syscall** ⇒ quebra G3 (zero-alloc no caminho de resolução). Só com pool SPSC dedicado, o que é mudança de arquitetura (vira A4′) |
+| A5 | timers encadeados | ⏭️ pulado | ganho ~0,1 µs; os timers atuais já dão o diagnóstico |
+| A6 | `gather_component` sem sort | ⏳ pendente | ganho no simbólico, ~1,3× |
 
-**Critério de saída do A:** digest idêntico nas 64 instâncias, 5/5 `e2_logic_gate`,
-6/6 unitários, `clippy -D warnings` e `fmt` limpos nos meus arquivos.
+Medido após A1+A2 (40 instâncias, `n=20`): total **p50 715 µs**, BSB **909 µs
+(média)**, reparo 172 µs (média, ruído), simbólico **20,1 µs p50**, digest
+estável, `e2_logic_gate` 5/5 e suíte completa verde.
 
 ---
 

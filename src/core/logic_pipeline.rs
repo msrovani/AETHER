@@ -1753,8 +1753,9 @@ impl LogicPipeline {
             (1u64 << (m % 64)) - 1
         };
         // (1) de `start` até o fim
-        for w in sw..words {
-            let mut word = self.viol_bits[w];
+        for (k, bits) in self.viol_bits[sw..words].iter().enumerate() {
+            let w = sw + k;
+            let mut word = *bits;
             if w == words - 1 {
                 word &= last_mask;
             }
@@ -1766,8 +1767,8 @@ impl LogicPipeline {
             }
         }
         // (2) do começo até `start` (o "wrap" da varredura cíclica)
-        for w in 0..=sw {
-            let mut word = self.viol_bits[w];
+        for (w, bits) in self.viol_bits[..=sw].iter().enumerate() {
+            let mut word = *bits;
             if w == words - 1 {
                 word &= last_mask;
             }

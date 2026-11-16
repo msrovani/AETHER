@@ -45,7 +45,7 @@ USO
 COMANDOS
   doctor                 diagnóstico de conexão, escopo e outbox
   ping                   health do servidor (view=status)
-  put <texto>            grava um fato textual (L3 por padrão, autoridade 255)
+  put <texto>            grava um fato textual (L3, autoridade 255; `-` = stdin)
   recall <consulta>      busca fatos (fase e texto)
   stat                   estado local + health do servidor
   sync                   reenvia o outbox e fecha o run
@@ -58,7 +58,7 @@ COMANDOS
   help                   esta ajuda
 
 TRANSPORTE (um destes; senão usa AETHER_SGDB_URL/AETHER_SGDB_STDIO)
-  --mock                 banco em memória (testes/demonstração)
+  --mock                 banco em memória (testes/demonstração; não persiste entre execuções)
   --url <URL>            servidor MCP HTTP: http://host:porta/mcp
   --stdio <cmd args>     servidor MCP local lançado por comando
 
@@ -70,7 +70,7 @@ ESCOPO E ESCRITA
   --scope-agent NOME     scope_agent (padrão aether-engine)
   --layer L3|L4|...      camada do fato textual (padrão L3)
   --authority N          autoridade 0..255 (padrão 255 = HITL)
-  --entity NOME          entidade extra (repetível)
+  --entity NOME          entidade extra (repetível; `--entities a,b` também)
   --ttl-ms N             TTL em ms
   --reason TEXTO         motivo do forget (padrão: operador)
 
@@ -94,6 +94,7 @@ AMBIENTE
 EXEMPLOS
   aether-sgdb doctor --url http://127.0.0.1:8090/mcp
   aether-sgdb put \"gate F4 verde\" --entity aether/f4
+  echo \"fato via pipe\" | aether-sgdb put - --entity aether/ops
   aether-sgdb recall gate --k 5 --json
   aether-sgdb sync --outbox target/aether_sgdb.jsonl
   aether-sgdb export target/fase.jsonl --organism 2742943747 --run 0
@@ -274,7 +275,14 @@ fn parse(argv: &[String]) -> Result<Invocation, String> {
                 inv.timeout_ms = Some(parse_num::<u64>(&value(&mut i)?, "--timeout-ms")?)
             }
             "--reason" => inv.reason = Some(value(&mut i)?),
-            "--entity" => inv.entities.push(value(&mut i)?),
+            "--entity" | "--entities" => {
+                for entity in value(&mut i)?.split(',') {
+                    let entity = entity.trim();
+                    if !entity.is_empty() {
+                        inv.entities.push(entity.to_string());
+                    }
+                }
+            }
             "--text" | "--query" => inv.positional.push(value(&mut i)?),
             "--view" => inv.view = value(&mut i)?,
             other if other.starts_with("--") => {
@@ -544,11 +552,20 @@ fn ping(inv: &Invocation, out: &mut dyn Write) -> i32 {
 }
 
 fn put(inv: &Invocation, out: &mut dyn Write) -> i32 {
-    let text = inv.text();
+    let mut text = inv.text();
+    if text.trim() == "-" {
+        // `put -` lê stdin (pipe de um arquivo/echo).
+        let mut buffer = String::new();
+        if std::io::Read::read_to_string(&mut std::io::stdin(), &mut buffer).is_err() {
+            let _ = writeln!(out, "erro: não li o stdin");
+            return EXIT_FAIL;
+        }
+        text = buffer;
+    }
     if text.trim().is_empty() {
         let _ = writeln!(
             out,
-            "erro de uso: put exige o texto como argumento ou --text"
+            "erro de uso: put exige o texto como argumento, --text ou `-` (stdin)"
         );
         return EXIT_USAGE;
     }
@@ -720,6 +737,7 @@ fn stat(inv: &Invocation, out: &mut dyn Write) -> i32 {
     let mut ledger = SgdbLedger::new(transport, cfg.clone(), inv.scope());
     let status = ledger.status();
     let health = ledger.client_mut().health_view(&inv.view);
+    let health_ok = health.is_ok();
     if inv.json {
         let mut object: Vec<(&str, Json)> = vec![
             ("online", Json::Bool(status.online)),
@@ -779,7 +797,7 @@ fn stat(inv: &Invocation, out: &mut dyn Write) -> i32 {
             }
         }
     }
-    if status.online {
+    if status.online && health_ok {
         EXIT_OK
     } else {
         EXIT_FAIL
@@ -805,20 +823,26 @@ fn sync(inv: &Invocation, out: &mut dyn Write) -> i32 {
     let scope = inv.scope();
     let mut ledger = SgdbLedger::new(transport, cfg.clone(), scope);
     let delivered = ledger.flush_now();
-    let committed = ledger.client_mut().commit_run(scope).is_ok();
+    let commit = ledger.client_mut().commit_run(scope);
+    let committed = commit.is_ok();
     let status = ledger.status();
     if inv.json {
-        let _ = writeln!(
-            out,
-            "{}",
-            Json::obj([
-                ("ok", Json::Bool(status.online)),
-                ("delivered", Json::num(delivered as f64)),
-                ("pending", Json::num(status.pending as f64)),
-                ("commit_run", Json::Bool(committed)),
-                ("errors", Json::num(status.metrics.errors as f64)),
-            ])
-        );
+        let mut object: Vec<(&str, Json)> = vec![
+            ("ok", Json::Bool(status.online && committed)),
+            ("delivered", Json::num(delivered as f64)),
+            ("pending", Json::num(status.pending as f64)),
+            ("commit_run", Json::Bool(committed)),
+            ("errors", Json::num(status.metrics.errors as f64)),
+        ];
+        if let Err(error) = &commit {
+            object.push(("error", Json::str(error.to_string())));
+            object.push(("hint", Json::str(error.hint())));
+        }
+        let pairs: Vec<(String, Json)> = object
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value))
+            .collect();
+        let _ = writeln!(out, "{}", Json::Obj(pairs));
     } else {
         let _ = writeln!(out, "entregues : {delivered}");
         let _ = writeln!(out, "pendentes : {}", status.pending);
@@ -827,11 +851,14 @@ fn sync(inv: &Invocation, out: &mut dyn Write) -> i32 {
             "commit_run: {}",
             if committed { "ok" } else { "falhou" }
         );
-        if let Some(error) = &status.last_error {
+        if let Err(error) = &commit {
+            let _ = writeln!(out, "erro      : {error}");
+            let _ = writeln!(out, "dica      : {}", error.hint());
+        } else if let Some(error) = &status.last_error {
             let _ = writeln!(out, "erro      : {error}");
         }
     }
-    if status.online {
+    if status.online && committed {
         EXIT_OK
     } else {
         EXIT_FAIL
