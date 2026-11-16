@@ -650,10 +650,7 @@ impl<T: Transport> SgdbClient<T> {
         let mut args = vec![
             (
                 "entities".to_string(),
-                Json::Arr(vec![
-                    Json::str(wire::scope_entity(scope)),
-                    Json::str("aether/fact"),
-                ]),
+                Json::Arr(vec![Json::str("aether/fact")]),
             ),
             (
                 "scope_app".to_string(),

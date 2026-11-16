@@ -40,6 +40,7 @@
 //! | [`StdioTransport`] | servidor MCP local (`nsgdb` lançado por comando) |
 //! | [`HttpTransport`] | servidor MCP em `http://host:porta/mcp` |
 
+pub mod cli;
 pub mod client;
 pub mod ledger;
 pub mod transport;

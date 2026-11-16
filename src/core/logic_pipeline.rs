@@ -1693,6 +1693,10 @@ impl LogicPipeline {
             let dir = self.cur_orig[best_i];
             viol = self.flip_counters(best_i, dir, viol);
             self.cur_orig[best_i] = -dir;
+            debug_assert!(
+                self.check_repair_state(m, viol),
+                "estado do reparo inconsistente (m={m}, cursor={cursor})"
+            );
             self.tabu[best_i] = clock + ttl;
             clock = clock.wrapping_add(1);
             if clock == 0 {
@@ -1701,6 +1705,22 @@ impl LogicPipeline {
             }
             moves += 1;
         }
+    }
+
+    /// Consistência de `sat_count`, `viol` e `viol_bits` (usada em `debug_assert!`).
+    fn check_repair_state(&self, m: usize, viol: u32) -> bool {
+        let mut count = 0u32;
+        for ci in 0..m {
+            let bit = self.viol_bits[ci >> 6] & (1u64 << (ci & 63)) != 0;
+            let zero = self.sat_count[ci] == 0;
+            if bit != zero {
+                return false;
+            }
+            if zero {
+                count += 1;
+            }
+        }
+        count == viol
     }
 
     /// Primeira cláusula violada em ordem **cíclica** a partir de `cursor`.

@@ -33,12 +33,11 @@ use aether_engine::core::knowledge_bridge_f1::{Certificate, ScopeId};
 use aether_engine::core::kuramoto_field::{KuramotoConfig, KuramotoPhaseNode, NodeHandle};
 use aether_engine::core::wave_interference::WaveInterferenceBlock;
 use aether_engine::error::Result;
+use aether_engine::knowledge::sgdb::client::open_transport;
 use aether_engine::knowledge::sgdb::ledger::{
     encode_phases, phase_key, ORGANISM_AUTHORITY, ORGANISM_LAYER,
 };
-use aether_engine::knowledge::sgdb::{
-    HttpTransport, MockTransport, SgdbConfig, StdioTransport, T2Worker, Transport,
-};
+use aether_engine::knowledge::sgdb::{SgdbConfig, T2Worker};
 use aether_engine::morphogenesis::{MorphogenesisConfig, MorphogeneticField};
 use aether_engine::phase_memory::{ComplexPhaseMemory, PhaseMemoryConfig};
 use aether_engine::thermodynamic_dreamer::{DreamEnsemble, DreamerConfig, ThermodynamicDreamer};
@@ -75,6 +74,8 @@ pub struct DaemonConfig {
     pub sgdb: Option<String>,
     /// Diário local de replay (offline).
     pub sgdb_outbox: Option<std::path::PathBuf>,
+    /// Token `Bearer` do MCP HTTP (ou `AETHER_SGDB_TOKEN`).
+    pub sgdb_token: Option<String>,
     /// Emite um padrão a cada N ciclos (`0` desliga).
     pub sgdb_every: u64,
     /// Identidade durável da linhagem (`run` no escopo do SGDB).
@@ -96,6 +97,7 @@ impl Default for DaemonConfig {
             dream_steps: 120,
             sgdb: None,
             sgdb_outbox: None,
+            sgdb_token: None,
             sgdb_every: 60,
             sgdb_run: 0,
         }

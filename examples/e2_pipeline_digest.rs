@@ -132,7 +132,7 @@ fn main() {
                 digest = mix(digest, local);
 
                 lines.push_str(&format!(
-                    "n={n:>2} fam={family} seed={seed:>2} viol={:>2} dec={} sym={:>2} pers={:>2} runs={:>2} rep={:>4} comp={} E={:.6}\n",
+                    "n={n:>2} fam={family} seed={seed:>2} viol={:>2} dec={} sym={:>2} pers={:>2} runs={:>2} rep={:>4} comp={} E={:.6} Eb={:016x} gb={:016x}\n",
                     st.violations,
                     u8::from(st.decisive),
                     st.fixed_symbolic,
@@ -140,7 +140,9 @@ fn main() {
                     st.bsb_runs,
                     st.repair_moves,
                     st.components,
-                    st.energy
+                    st.energy,
+                    st.energy.to_bits(),
+                    st.gap.to_bits()
                 ));
             }
         }

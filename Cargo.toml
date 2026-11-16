@@ -32,6 +32,12 @@ name = "aether-dashboard"
 path = "src/bin/aether_dashboard.rs"
 required-features = ["dashboard"]
 
+# CLI do encaixe neural-sgdb (T2): doctor/put/recall/sync/export/import.
+[[bin]]
+name = "aether-sgdb"
+path = "src/bin/aether_sgdb.rs"
+required-features = ["sgdb"]
+
 # Fase 6: governador de hardware real (telemetria viva + frame binario 32 B).
 [[bin]]
 name = "aether-governor"

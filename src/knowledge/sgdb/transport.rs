@@ -43,6 +43,10 @@ impl<T: Transport + ?Sized> Transport for Box<T> {
     fn call(&mut self, request: &Json) -> Result<Json, SgdbError> {
         (**self).call(request)
     }
+
+    fn describe(&self) -> String {
+        (**self).describe()
+    }
 }
 
 /// Envelope de requisição (`id` já resolvido pelo cliente).
