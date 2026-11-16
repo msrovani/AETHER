@@ -3,6 +3,30 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [Unreleased]
+
+### Added
+
+- `docs/E8_RESERVOIR_LESSONS.md`: lições, referências e armadilhas do E8
+  (Mackey–Glass τ em tempo, NARMA supervisionado, ridge vs RLS, fast_tanh).
+- `docs/CORPO3_ERRATA.md`: fechamento de E4/E5/E7/E8/F2/F3 com números de release.
+
+### Changed
+
+- `src/core/reservoir.rs`: reservatório esparso (10 conexões/nó), raio espectral
+  por iteração de potência, readout ridge/Cholesky com varredura de λ sem
+  reexecutar, `fast_tanh` (Padé) e baseline conjunto de 40 passadas.
+- `tests/e8_reservoir_gate.rs`: gates de Mackey–Glass (NRMSE, 10⁶ em <60 s,
+  throughput), NARMA-10 e speedup ≥20× do congelado.
+- `examples/reservoir_readout_bench.rs`: benchmark com MG/NARMA, 5 sementes,
+  ablação de esparsidade, λ sweep, RLS e busca conjunta.
+
+### Results
+
+- Mackey–Glass 10⁶: NRMSE **2,33 × 10⁻⁵**, treino **1,57 s**, **1,73 M pred/s**.
+- NARMA-10: NRMSE **0,1286**.
+- Conjunto (40 passadas): **39,6–45,7×** mais lento; congelado não regride >5%.
+
 ## [0.0.118] - 2026-11-16
 
 ### Changed
