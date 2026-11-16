@@ -190,7 +190,7 @@ fn g1_sharding_holds_1000_facts_and_flat_collapses() {
         "shard com {} fatos > {SHARD_CAP}",
         mem.max_load()
     );
-    let r = recall(&mem, &facts, &cb, &a, 200);
+    let r = recall(&mem, &facts, &cb, &a, facts.len());
     assert!(r >= 0.99, "recall sharded {r} < 0.99");
 
     let flat = build_flat(&facts, &cb, &a, K_TRACES);

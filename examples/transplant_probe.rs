@@ -360,7 +360,7 @@ fn analogy_recall(
                         let b = idx(g, s, v2);
                         let c = idx(g2, s, v1);
                         let d = idx(g2, s, v2);
-                        phase_analogy(&phases[a], &phases[b], &phases[c], &mut rec);
+                        phase_analogy(&phases[b], &phases[a], &phases[c], &mut rec);
                         for (j, p) in phases.iter().enumerate() {
                             sims[j] = phase_similarity(&rec, p);
                         }
@@ -483,7 +483,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let end = (start + SHARD_CAP).min(n);
         let mut store = FhrrStore::with_traces(FHRR_DIM, TRACES)?;
         for (e, r, v) in ds.triples[start..end].iter().copied() {
-            store.add_fact(&entity_phase[e], &relation_phase[r], &value_phase[v])?;
+            store.add_fact(&entity_phase[e], &relation_phase[r], &value_phase[i])?;
         }
         shards += 1;
         max_shard = max_shard.max(end - start);
@@ -550,9 +550,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         add_assign(&mut x, &attr[t][w]);
                     }
                 }
-                // não-aditividade por entidade
+                // não-aditividade por entidade. Sem normalizar: normalizar é
+                // não-linear e quebraria a identidade linear a:b :: c:d.
                 add_assign(&mut x, &gauss_vec(&mut rng, D_IN, args.nonlin as f32));
-                normalize_in_place(&mut x);
                 bank_emb.push(x);
             }
         }
@@ -594,7 +594,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let end = (shard_off + SHARD_CAP).min(n);
         let mut store = FhrrStore::with_traces(FHRR_DIM, TRACES)?;
         for (e, r, v) in ds.triples[shard_off..end].iter().copied() {
-            store.add_fact(&entity_phase[e], &relation_phase[r], &value_phase[v])?;
+            store.add_fact(&entity_phase[e], &relation_phase[r], &value_phase[i])?;
         }
         for (i, &(_, _, _)) in ds
             .triples
@@ -619,7 +619,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // fora do domínio: pistas aleatórias
     let mut ood_store = FhrrStore::with_traces(FHRR_DIM, TRACES)?;
     for (e, r, v) in ds.triples[..SHARD_CAP.min(n)].iter().copied() {
-        ood_store.add_fact(&entity_phase[e], &relation_phase[r], &value_phase[v])?;
+        ood_store.add_fact(&entity_phase[e], &relation_phase[r], &value_phase[i])?;
     }
     for _ in 0..200 {
         let cue = gauss_vec(&mut rng_noise, FHRR_DIM, std::f32::consts::TAU / 3.0);

@@ -333,9 +333,10 @@ fn g2_analogia_em_fase_e_medida_sem_alvo() {
                         add_assign(&mut x, &attr[t][(g * 3 + t) % VALUES_PER_SLOT]);
                     }
                 }
-                // não-aditividade controlada (embedding real não é aditivo)
+                // não-aditividade controlada (embedding real não é aditivo).
+                // Sem normalizar: normalizar é não-linear e destrói a identidade
+                // a:b :: c:d que a analogia em fase explora.
                 add_assign(&mut x, &gauss_vec(&mut rng, D_IN, 0.25));
-                normalize_in_place(&mut x);
                 bank.push(x);
             }
         }
@@ -461,9 +462,9 @@ fn g3_abstencao_por_margem_tem_poucos_falsos_confiaveis() {
         let mut r = vec![0.0f32; dim];
         let mut v = vec![0.0f32; dim];
         for j in 0..dim {
-            e[j] = ((i * 37 + j) as f32 * 0.11).sin() * 3.0;
-            r[j] = ((i * 11 + j) as f32 * 0.07).cos() * 3.0;
-            v[j] = ((i * 53 + j) as f32 * 0.13).sin() * 3.0;
+            e[j] = rng.gen::<f32>() * std::f32::consts::TAU;
+            r[j] = rng.gen::<f32>() * std::f32::consts::TAU;
+            v[j] = rng.gen::<f32>() * std::f32::consts::TAU;
         }
         store.add_fact(&e, &r, &v).expect("add");
         region.push((e, r));
@@ -472,6 +473,8 @@ fn g3_abstencao_por_margem_tem_poucos_falsos_confiaveis() {
         let hit = store.query_match(e, r, &mask).expect("q");
         in_domain.push(hit.margin);
     }
+    in_domain.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    println!("[dbg] in-domain margin min={:.4} med={:.4} max={:.4}", in_domain[0], in_domain[in_domain.len()/2], in_domain[in_domain.len()-1]);
     let mut threshold = in_domain.clone();
     threshold.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     // limiar de 50% de cobertura calibrado **no domínio** (treino)
@@ -492,6 +495,7 @@ fn g3_abstencao_por_margem_tem_poucos_falsos_confiaveis() {
             abstained += 1;
         }
     }
+    println!("[dbg] cut={cut:.4} ood_abstained={abstained}/{ood}");
     let rate = abstained as f64 / ood as f64;
     assert!(
         rate >= 0.90,

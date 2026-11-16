@@ -85,7 +85,7 @@ pub fn sample_host() -> HostSample {
     let cpu_us = t0.elapsed().as_secs_f64() as f32 * 1.0e6;
 
     // Disco: arquivo temporário de 4 KiB (ida e volta).
-    let path = std::env::temp_dir().join("aether_s0_probe.bin");
+    let path = std::env::temp_dir().join(format!("aether_s0_probe_{}.bin", std::process::id()));
     let t0 = Instant::now();
     let mut disk_us = 0.0f32;
     if let Ok(mut f) = std::fs::File::create(&path) {

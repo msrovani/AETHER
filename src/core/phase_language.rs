@@ -58,8 +58,10 @@ const Q14: f32 = 16_384.0;
 /// Escala Q15 dos codebooks pré-computados (`1.0 = 32767`).
 const Q15: f32 = 32_767.0;
 
-/// Traços por acumulador (`K` do E1b).
-pub const K_TRACES: usize = 6;
+/// Traços por acumulador. O bundle de 2 fasores por fato dobra os termos
+/// interferentes; `K=16` mantém o SNR > 5σ com 43 fatos (86 termos) e ainda
+/// cabe no orçamento de working set (< 500 KB).
+pub const K_TRACES: usize = 16;
 /// Shards (relações sintáticas endereçáveis).
 pub const SHARDS: usize = 24;
 /// Teto absoluto de fatos por acumulador (75% de `0,4·D = 64`).
@@ -509,78 +511,6 @@ pub fn cleanup_complex(
     }
 }
 
-/// Cleanup em duas escalas: pontua todos os átomos nos primeiros `COARSE_D`
-/// canais, mantém os `SHORTLIST` melhores e só então calcula o dot completo.
-///
-/// Usado apenas na enumeração de `MOD` do ressonador; a validação e a
-/// evidência final usam [`cleanup_complex`]. O erro de shortlist é medido no
-/// gate G1 (recall permanece 1,0000).
-pub fn cleanup_complex_coarse(
-    cue_re: &[f32; D],
-    cue_im: &[f32; D],
-    book: &[Q15Atom],
-    sims: &mut [f32; N_ENT],
-) -> Cleanup {
-    const COARSE_D: usize = 80;
-    const SHORTLIST: usize = 10;
-    const CUE_Q: f32 = 32.0;
-    let mut cr = [0i16; D];
-    let mut ci = [0i16; D];
-    for j in 0..D {
-        cr[j] = (cue_re[j] * CUE_Q).clamp(-256.0, 256.0) as i16;
-        ci[j] = (cue_im[j] * CUE_Q).clamp(-256.0, 256.0) as i16;
-    }
-
-    // Fase 1: pontuação barata nos canais [0, COARSE_D).
-    let mut best_idx = [0usize; SHORTLIST];
-    let mut best_sc = [i32::MIN; SHORTLIST];
-    for (i, atom) in book.iter().enumerate() {
-        let mut acc = 0i32;
-        for j in 0..COARSE_D {
-            acc += cr[j] as i32 * atom.re[j] as i32 + ci[j] as i32 * atom.im[j] as i32;
-        }
-        // Inserção ordenada (lista curta, sem alocar).
-        if acc > best_sc[SHORTLIST - 1] {
-            let mut pos = SHORTLIST - 1;
-            while pos > 0 && acc > best_sc[pos - 1] {
-                best_sc[pos] = best_sc[pos - 1];
-                best_idx[pos] = best_idx[pos - 1];
-                pos -= 1;
-            }
-            best_sc[pos] = acc;
-            best_idx[pos] = i;
-        }
-    }
-
-    // Fase 2: dot completo só nos candidatos.
-    let inv = 1.0 / (D as f32 * Q15 * CUE_Q);
-    let mut best = 0usize;
-    let mut best_sim = f32::NEG_INFINITY;
-    let mut second = f32::NEG_INFINITY;
-    for k in 0..SHORTLIST {
-        let i = best_idx[k];
-        let atom = &book[i];
-        let mut acc = 0i32;
-        for j in 0..D {
-            acc += cr[j] as i32 * atom.re[j] as i32 + ci[j] as i32 * atom.im[j] as i32;
-        }
-        let s = acc as f32 * inv;
-        sims[i] = s;
-        if s > best_sim {
-            second = best_sim;
-            best_sim = s;
-            best = i;
-        } else if s > second {
-            second = s;
-        }
-    }
-    Cleanup {
-        index: best,
-        sim: best_sim,
-        margin: best_sim - second,
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Shard holográfico (acumulador de `K` traços, 1 termo por fato)
 // ---------------------------------------------------------------------------
@@ -737,23 +667,24 @@ impl Shard {
                 let tr = &self.tre[t];
                 let ti = &self.tim[t];
                 for lane in 0..D / LANES {
-                let base = lane * LANES;
-                let mut sa = [0i16; LANES];
-                let mut ca = [0i16; LANES];
-                for l in 0..LANES {
-                    let phi = key[base + l].wrapping_add(psi);
-                    sa[l] = phi as i16;
-                    ca[l] = phi.wrapping_add(QUARTER) as i16;
-                }
-                let s = poly_sin_q14(&sa);
-                let c = poly_sin_q14(&ca);
-                for l in 0..LANES {
-                    let cc = c[l] as f32 * inv;
-                    let ss = s[l] as f32 * inv;
-                    let mr = tr[base + l] as f32;
-                    let mi = ti[base + l] as f32;
-                    z_re[base + l] += mr * cc + mi * ss;
-                    z_im[base + l] += mi * cc - mr * ss;
+                    let base = lane * LANES;
+                    let mut sa = [0i16; LANES];
+                    let mut ca = [0i16; LANES];
+                    for l in 0..LANES {
+                        let phi = key[base + l].wrapping_add(psi);
+                        sa[l] = phi as i16;
+                        ca[l] = phi.wrapping_add(QUARTER) as i16;
+                    }
+                    let s = poly_sin_q14(&sa);
+                    let c = poly_sin_q14(&ca);
+                    for l in 0..LANES {
+                        let cc = c[l] as f32 * inv;
+                        let ss = s[l] as f32 * inv;
+                        let mr = tr[base + l] as f32;
+                        let mi = ti[base + l] as f32;
+                        z_re[base + l] += mr * cc + mi * ss;
+                        z_im[base + l] += mi * cc - mr * ss;
+                    }
                 }
             }
         }
@@ -787,17 +718,31 @@ pub struct PlhMemory {
 }
 
 impl PlhMemory {
-    pub fn new(traces: usize, seed: u64) -> Self {
+    pub fn new(traces: usize, terms: usize, seed: u64) -> Self {
         Self {
             shards: (0..SHARDS)
-                .map(|i| Shard::new(traces, seed ^ (i as u64 + 1).wrapping_mul(0x9E37_79B9)))
+                .map(|i| {
+                    Shard::new(
+                        traces,
+                        terms,
+                        seed ^ (i as u64 + 1).wrapping_mul(0x9E37_79B9),
+                    )
+                })
                 .collect(),
         }
     }
 
-    pub fn add(&mut self, subj: u16, verb: u16, obj: u16, modu: u16, key: &Phases, value: &Phases) {
+    pub fn add_terms(
+        &mut self,
+        subj: u16,
+        verb: u16,
+        obj: u16,
+        modu: u16,
+        key: &Phases,
+        values: &[Phases],
+    ) {
         let idx = shard_of(subj as usize, verb as usize);
-        self.shards[idx].add(key, value, (subj, verb, obj, modu));
+        self.shards[idx].add_terms(key, values, (subj, verb, obj, modu));
     }
 
     pub fn finalize(&mut self) {
@@ -888,12 +833,10 @@ fn role_cue_into(
         let mut re = z_re[j];
         let mut im = z_im[j];
         if let Some((or, oi)) = other {
-            // O valor é um **produto** de fasores (soma de fases), não uma
-            // soma: desvincular o outro fator é multiplicar pelo conjugado.
-            let nr = re * or[j] + im * oi[j];
-            let ni = im * or[j] - re * oi[j];
-            re = nr;
-            im = ni;
+            // O valor é um **bundle** (soma de fasores): isolar o papel é
+            // subtrair o re-encode unitário do outro fator.
+            re -= or[j];
+            im -= oi[j];
         }
         // (re + i·im)·(c − i·s)
         let ur = re * anchor_re[j] + im * anchor_im[j];
@@ -920,59 +863,39 @@ fn role_cue_into(
 /// (`re-encode`), desvincula o papel próprio e faz cleanup na **cópia ACF**;
 /// no fim valida o vencedor na **cópia limpa**.
 pub fn resonate_pair(sc: &mut QueryScratch, cb: &Codebooks, a: &Anchors) -> PairFactors {
-    // O valor é um único fasor produto de dois fatores; sem conhecer nenhum
-    // deles, o cleanup de um papel isolado tem sinal ~1/√D (o outro fator é
-    // uma fase fixa por dimensão). A ressonância resolve isso enumerando o
-    // fator discreto menor (MOD, 8 candidatos) e pontuando o par completo.
-    let mut best_score = f32::NEG_INFINITY;
-    let mut best_o = 0usize;
-    let mut best_m = 0usize;
+    // Init: unbind each role anchor. The other factor is a unit phasor in the
+    // bundle; its projection onto a random atom is ~1/sqrt(D), so the cleanup
+    // already resolves the role with SNR ~6 sigma.
+    role_cue_into(
+        &sc.z_re,
+        &sc.z_im,
+        &a.o_re,
+        &a.o_im,
+        ROLE_O,
+        None,
+        &mut sc.cue_re,
+        &mut sc.cue_im,
+    );
+    let co = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.acf_q(ROLE_O), &mut sc.sims);
+    role_cue_into(
+        &sc.z_re,
+        &sc.z_im,
+        &a.m_re,
+        &a.m_im,
+        ROLE_M,
+        None,
+        &mut sc.cue_re,
+        &mut sc.cue_im,
+    );
+    let cm = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.acf_q(ROLE_M), &mut sc.sims);
+    let mut o = co.index;
+    let mut m = cm.index;
+
+    // Re-encode: subtract the clean atom of the other factor, unbind own role,
+    // cleanup on the ACF copy. The subtraction is exact because the value is a
+    // sum (bundle), not a product of phases.
     let mut iters = 0u8;
     let mut converged = false;
-
-    for m_cand in 0..N_MOD {
-        iters = iters.saturating_add(1);
-        role_cue_into(
-            &sc.z_re,
-            &sc.z_im,
-            &a.o_re,
-            &a.o_im,
-            ROLE_O,
-            Some((&cb.term_m_re[m_cand], &cb.term_m_im[m_cand])),
-            &mut sc.cue_re,
-            &mut sc.cue_im,
-        );
-        let co = cleanup_complex_coarse(&sc.cue_re, &sc.cue_im, cb.acf_q(ROLE_O), &mut sc.sims);
-        let o_cand = co.index;
-
-        role_cue_into(
-            &sc.z_re,
-            &sc.z_im,
-            &a.m_re,
-            &a.m_im,
-            ROLE_M,
-            Some((&cb.term_o_re[o_cand], &cb.term_o_im[o_cand])),
-            &mut sc.cue_re,
-            &mut sc.cue_im,
-        );
-        let cm = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.acf_q(ROLE_M), &mut sc.sims);
-
-        let score = co.sim + cm.sim;
-        if score > best_score {
-            best_score = score;
-            best_o = o_cand;
-            best_m = m_cand;
-        }
-        // Par coerente e com evidência alta: não há razão para varrer os
-        // outros modificadores (o verdadeiro fica ~2× acima do ruído).
-        if cm.index == m_cand && co.sim > 0.70 && cm.sim > 0.70 {
-            converged = true;
-            break;
-        }
-    }
-
-    let mut o = best_o;
-    let mut m = best_m;
     for _ in 0..PAIR_ITERS {
         iters = iters.saturating_add(1);
         let prev = (o, m);
@@ -1007,7 +930,7 @@ pub fn resonate_pair(sc: &mut QueryScratch, cb: &Codebooks, a: &Anchors) -> Pair
         }
     }
 
-    // Projeção re-encode consistente com o MOD final.
+    // Validation on the clean codebook.
     role_cue_into(
         &sc.z_re,
         &sc.z_im,
@@ -1309,10 +1232,13 @@ impl Fact {
         bind(&ks, &kv)
     }
 
-    pub fn value(&self, cb: &Codebooks, a: &Anchors) -> Phases {
-        let ko = role_term(a.of(ROLE_O), &cb.ent.clean[self.ids[2] as usize], ROLE_O);
-        let km = role_term(a.of(ROLE_M), &cb.modu.clean[self.ids[3] as usize], ROLE_M);
-        bind(&ko, &km)
+    /// Os dois fasores do predicado, guardados como **bundle** (soma), não
+    /// como produto de fases. É o que preserva o ganho `√D` no cleanup.
+    pub fn value_terms(&self, cb: &Codebooks, a: &Anchors) -> [Phases; 2] {
+        [
+            role_term(a.of(ROLE_O), &cb.ent.clean[self.ids[2] as usize], ROLE_O),
+            role_term(a.of(ROLE_M), &cb.modu.clean[self.ids[3] as usize], ROLE_M),
+        ]
     }
 }
 
@@ -1339,15 +1265,16 @@ pub fn build_sharded(
     traces: usize,
     seed: u64,
 ) -> PlhMemory {
-    let mut mem = PlhMemory::new(traces, seed);
+    let mut mem = PlhMemory::new(traces, 2, seed);
     for f in facts {
-        mem.add(
+        let terms = f.value_terms(cb, a);
+        mem.add_terms(
             f.ids[0],
             f.ids[1],
             f.ids[2],
             f.ids[3],
             &f.key(cb, a),
-            &f.value(cb, a),
+            &terms,
         );
     }
     mem.finalize();
@@ -1357,11 +1284,11 @@ pub fn build_sharded(
 /// Constrói **uma** superposição plana com todos os fatos (o controle que o
 /// E1b mostrou colapsar) — o mesmo `Shard`, sem sharding.
 pub fn build_flat(facts: &[Fact], cb: &Codebooks, a: &Anchors, traces: usize) -> Shard {
-    let mut s = Shard::new(traces, 0xF1A7_0001);
+    let mut s = Shard::new(traces, 2, 0xF1A7_0001);
     for f in facts {
-        s.add(
+        s.add_terms(
             &f.key(cb, a),
-            &f.value(cb, a),
+            &f.value_terms(cb, a),
             (f.ids[0], f.ids[1], f.ids[2], f.ids[3]),
         );
     }

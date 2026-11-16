@@ -349,13 +349,11 @@ fn e4_self_field_melhora_calibracao_sem_melhorar_t01() {
     assert!(hi < 0.0, "IC97.5 do ganho de ECE inclui zero: {hi:.4}");
 
     // Gate 2: T01 (desempenho sensorial puro) não melhora com o self-field.
-    // O recall é idêntico nos três braços; a abstenção não o altera.
+    // O recall é idêntico nos três braços; a abstenção não o altera. O número
+    // medido é a acurácia bruta do conjunto normal, antes de qualquer gate.
     let t01 = normal_hits as f32 / normal_total.max(1) as f32;
     println!("[E4] T01={t01:.4} ({normal_hits}/{normal_total})");
     assert!(t01 > 0.85, "T01 baixo demais: {t01:.4}");
-    // A abstenção do self-field não pode aumentar os acertos do recall puro:
-    // o conjunto respondido difere, mas o recall subjacente é o mesmo.
-    assert!(t01 <= 1.0, "T01 não é uma métrica de abstenção");
 
     // ------------------------------------------------------------------
     // Gate 3: erro de auto-predição pós-plasticidade < campo congelado
