@@ -96,6 +96,20 @@ struct MockEntry {
     reinforced: u64,
 }
 
+/// Fato textual (não-fase) guardado pelo mock.
+#[derive(Clone, Debug)]
+struct MockText {
+    text: String,
+    storage_key: String,
+    scope_app: String,
+    scope_run: String,
+    entities: Vec<String>,
+    authority: u8,
+    created_ms: u64,
+    expires_at: Option<u64>,
+    reinforced: u64,
+}
+
 /// Servidor `neural-sgdb` em memória, com a semântica que importa ao motor.
 ///
 /// Implementa o subconjunto do contrato que o `T2` usa: ADD-only, escopo
@@ -104,6 +118,7 @@ struct MockEntry {
 #[derive(Debug)]
 pub struct MockTransport {
     entries: Vec<MockEntry>,
+    texts: Vec<MockText>,
     /// Clock do banco (ms) — controlável nos testes.
     now_ms: u64,
     /// `true` simula queda de rede (toda chamada falha).
@@ -126,6 +141,7 @@ impl MockTransport {
     pub fn new() -> Self {
         Self {
             entries: Vec::new(),
+            texts: Vec::new(),
             now_ms: now_ms(),
             offline: false,
             next_key: 1,
@@ -162,6 +178,12 @@ impl MockTransport {
         self.entries.len()
     }
 
+    /// Fatos textuais vivos (não-fase).
+    pub fn text_len(&mut self) -> usize {
+        self.expire();
+        self.texts.len()
+    }
+
     /// Memórias de um escopo vivo (sem TTL aplicado ao resto).
     pub fn scope_len(&mut self, scope: crate::core::knowledge_bridge_f1::ScopeId) -> usize {
         self.expire();
@@ -181,6 +203,31 @@ impl MockTransport {
         let now = self.now_ms;
         self.entries
             .retain(|e| e.expires_at.map_or(true, |t| t > now));
+        self.texts
+            .retain(|t| t.expires_at.map_or(true, |expires| expires > now));
+    }
+
+    fn insert_text(
+        &mut self,
+        text: &str,
+        scope_app: String,
+        scope_run: String,
+        entities: Vec<String>,
+    ) -> String {
+        let storage_key = format!("md/L3/aether/{:06x}", self.next_key);
+        self.next_key += 1;
+        self.texts.push(MockText {
+            text: text.to_string(),
+            storage_key: storage_key.clone(),
+            scope_app,
+            scope_run,
+            entities,
+            authority: 0,
+            created_ms: self.now_ms,
+            expires_at: None,
+            reinforced: 0,
+        });
+        storage_key
     }
 
     fn remember(&mut self, args: &Json) -> Result<Json, SgdbError> {
@@ -199,11 +246,6 @@ impl MockTransport {
                 .get("text")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| SgdbError::Protocol("remember sem text".into()))?;
-            let Some(doc) = PhaseDoc::parse(text) else {
-                return Err(SgdbError::Protocol(
-                    "texto não é um documento aether-phase/v1".into(),
-                ));
-            };
             let scope_app = item
                 .get("scope_app")
                 .and_then(|v| v.as_str())
@@ -227,6 +269,29 @@ impl MockTransport {
                 .get("if_exists")
                 .and_then(|v| v.as_str())
                 .unwrap_or("add");
+            let Some(doc) = PhaseDoc::parse(text) else {
+                // Fato textual genérico (L3/L4 por tipo): também faz parte do
+                // contrato; o motor não o consome, mas o operador sim.
+                let existing = self.texts.iter().position(|t| {
+                    t.scope_app == scope_app && t.scope_run == scope_run && t.text == text
+                });
+                let storage_key = match (existing, if_exists) {
+                    (Some(pos), "reinforce") => {
+                        let key = self.texts[pos].storage_key.clone();
+                        self.texts[pos].reinforced += 1;
+                        self.texts[pos].created_ms = self.now_ms;
+                        key
+                    }
+                    (Some(pos), "reject") => self.texts[pos].storage_key.clone(),
+                    (Some(pos), _) => {
+                        self.texts.remove(pos);
+                        self.insert_text(text, scope_app, scope_run, entities)
+                    }
+                    (None, _) => self.insert_text(text, scope_app, scope_run, entities),
+                };
+                keys.push(storage_key);
+                continue;
+            };
             let existing = self
                 .entries
                 .iter()
@@ -299,7 +364,7 @@ impl MockTransport {
             .and_then(|v| v.as_u64())
             .unwrap_or(5)
             .clamp(1, 20) as usize;
-        let mut hits: Vec<(f32, MemoryHit)> = Vec::new();
+        let mut hits: Vec<(f32, Json)> = Vec::new();
         for entry in self.entries.iter() {
             // Null-scoping: sem `scope_app` só memórias globais; com ele, só
             // as do mesmo app e do mesmo run.
@@ -317,32 +382,51 @@ impl MockTransport {
             {
                 continue;
             }
-            let mut score = if query.is_empty() {
-                1.0
-            } else {
-                let text = entry.doc.to_text().to_lowercase();
-                let tokens: Vec<&str> = query
-                    .split(|c: char| !c.is_alphanumeric())
-                    .filter(|t| t.len() > 1)
-                    .collect();
-                if tokens.is_empty() {
-                    1.0
-                } else {
-                    let hits = tokens.iter().filter(|t| text.contains(**t)).count();
-                    hits as f32 / tokens.len() as f32
-                }
-            };
-            // Frescor desempata (o mais novo primeiro).
             let age = self.now_ms.saturating_sub(entry.created_ms) as f32;
-            score = (score + 1.0 / (1.0 + age / 60_000.0) * 1e-3).min(1.0);
+            let score =
+                (score_text(&entry.doc.to_text(), &query) + 1.0 / (1.0 + age / 60_000.0) * 1e-3)
+                    .min(1.0);
             hits.push((
                 score,
-                MemoryHit {
-                    doc: entry.doc.clone(),
-                    storage_key: Some(entry.storage_key.clone()),
-                    score,
-                    authority: entry.doc.authority,
-                },
+                Json::obj([
+                    (
+                        "key",
+                        Json::str(entry.storage_key.clone()),
+                    ),
+                    ("text", Json::str(entry.doc.to_text())),
+                    ("score", Json::num(f64::from(score))),
+                    ("authority", Json::num(f64::from(entry.doc.authority))),
+                    ("created_tick", Json::num(entry.doc.wall_ms as f64)),
+                ]),
+            ));
+        }
+        for text in self.texts.iter() {
+            match scope_app {
+                Some(app) if text.scope_app == app => {}
+                _ => continue,
+            }
+            if !scope_run.is_empty() && text.scope_run != scope_run {
+                continue;
+            }
+            if !entities.is_empty()
+                && !entities
+                    .iter()
+                    .any(|e| text.entities.iter().any(|x| x == e))
+            {
+                continue;
+            }
+            let age = self.now_ms.saturating_sub(text.created_ms) as f32;
+            let score =
+                (score_text(&text.text, &query) + 1.0 / (1.0 + age / 60_000.0) * 1e-3).min(1.0);
+            hits.push((
+                score,
+                Json::obj([
+                    ("key", Json::str(text.storage_key.clone())),
+                    ("text", Json::str(text.text.clone())),
+                    ("score", Json::num(f64::from(score))),
+                    ("authority", Json::num(f64::from(text.authority))),
+                    ("created_tick", Json::num(text.created_ms as f64)),
+                ]),
             ));
         }
         hits.sort_by(|a, b| b.0.total_cmp(&a.0));
@@ -352,21 +436,9 @@ impl MockTransport {
             .and_then(|v| v.as_str())
             .and_then(|c| c.parse::<usize>().ok())
             .unwrap_or(0);
-        let page: Vec<&(f32, MemoryHit)> = hits.iter().skip(start).take(k).collect();
+        let page: Vec<&(f32, Json)> = hits.iter().skip(start).take(k).collect();
         let next = (start + page.len() < total).then(|| (start + page.len()).to_string());
-        let mut json_hits = Vec::with_capacity(page.len());
-        for (_, hit) in page.iter() {
-            json_hits.push(Json::obj([
-                (
-                    "key",
-                    Json::str(hit.storage_key.clone().unwrap_or_default()),
-                ),
-                ("text", Json::str(hit.doc.to_text())),
-                ("score", Json::num(f64::from(hit.score))),
-                ("authority", Json::num(f64::from(hit.authority))),
-                ("created_tick", Json::num(hit.doc.wall_ms as f64)),
-            ]));
-        }
+        let json_hits: Vec<Json> = page.iter().map(|(_, json)| (*json).clone()).collect();
         let mut result = vec![
             ("status".to_string(), Json::str("ok")),
             ("hit_count".to_string(), Json::num(total as f64)),
@@ -390,7 +462,7 @@ impl MockTransport {
                 Ok(Json::obj([
                     ("status", Json::str("ok")),
                     ("op", Json::str("commit_run")),
-                    ("committed", Json::num(self.entries.len() as f64)),
+                    ("committed", Json::num((self.entries.len() + self.texts.len()) as f64)),
                 ]))
             }
             "audit_checkpoint" => {
@@ -398,6 +470,12 @@ impl MockTransport {
                 let mut h: u128 = 0xcbf2_9ce4_8422_2325;
                 for entry in self.entries.iter() {
                     for b in entry.doc.payload.iter() {
+                        h ^= u128::from(*b);
+                        h = h.wrapping_mul(0x100_0000_01b3);
+                    }
+                }
+                for text in self.texts.iter() {
+                    for b in text.text.as_bytes() {
                         h ^= u128::from(*b);
                         h = h.wrapping_mul(0x100_0000_01b3);
                     }
@@ -427,9 +505,43 @@ impl MockTransport {
                         break;
                     }
                 }
+                if !found {
+                    for text in self.texts.iter_mut() {
+                        if text.storage_key == key {
+                            text.expires_at = Some(expires);
+                            found = true;
+                            break;
+                        }
+                    }
+                }
                 Ok(Json::obj([
                     ("status", Json::str(if found { "ok" } else { "missing" })),
                     ("expires_at", Json::num(expires as f64)),
+                ]))
+            }
+            "set_authority" => {
+                let key = args
+                    .get("key")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| SgdbError::Protocol("set_authority sem key".into()))?;
+                let authority = args
+                    .get("authority")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0)
+                    .min(255) as u8;
+                for entry in self.entries.iter_mut() {
+                    if entry.storage_key == key {
+                        entry.doc.authority = authority;
+                    }
+                }
+                for text in self.texts.iter_mut() {
+                    if text.storage_key == key {
+                        text.authority = authority;
+                    }
+                }
+                Ok(Json::obj([
+                    ("status", Json::str("ok")),
+                    ("authority", Json::num(f64::from(authority))),
                 ]))
             }
             "forget_purge" => {
@@ -437,11 +549,15 @@ impl MockTransport {
                     .get("key")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| SgdbError::Protocol("forget_purge sem key".into()))?;
-                let before = self.entries.len();
+                let before = self.entries.len() + self.texts.len();
                 self.entries.retain(|e| e.storage_key != key);
+                self.texts.retain(|t| t.storage_key != key);
                 Ok(Json::obj([
                     ("status", Json::str("ok")),
-                    ("purged", Json::num((before - self.entries.len()) as f64)),
+                    (
+                        "purged",
+                        Json::num((before - self.entries.len() - self.texts.len()) as f64),
+                    ),
                 ]))
             }
             "supersede" => {
@@ -450,6 +566,7 @@ impl MockTransport {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| SgdbError::Protocol("supersede sem old".into()))?;
                 self.entries.retain(|e| e.storage_key != old);
+                self.texts.retain(|t| t.storage_key != old);
                 Ok(Json::obj([("status", Json::str("ok"))]))
             }
             other => Err(SgdbError::Tool(format!("curate op desconhecida: {other}"))),
@@ -730,6 +847,23 @@ fn header_value(head: &str, name: &str) -> Option<String> {
         key.eq_ignore_ascii_case(name)
             .then(|| value.trim().to_string())
     })
+}
+
+/// Score lexical do mock: fração dos tokens da consulta presentes no texto.
+fn score_text(text: &str, query: &str) -> f32 {
+    if query.is_empty() {
+        return 1.0;
+    }
+    let text = text.to_lowercase();
+    let tokens: Vec<&str> = query
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| t.len() > 1)
+        .collect();
+    if tokens.is_empty() {
+        return 1.0;
+    }
+    let matched = tokens.iter().filter(|t| text.contains(**t)).count();
+    matched as f32 / tokens.len() as f32
 }
 
 impl Transport for HttpTransport {

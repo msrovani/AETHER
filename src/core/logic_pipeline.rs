@@ -1653,6 +1653,21 @@ impl LogicPipeline {
                 self.last.repair_moves += moves;
                 return 0;
             };
+            debug_assert_eq!(
+                chosen,
+                {
+                    let mut lin = usize::MAX;
+                    for t in 0..m {
+                        let idx = (cursor + t) % m;
+                        if self.sat_count[idx] == 0 {
+                            lin = idx;
+                            break;
+                        }
+                    }
+                    lin
+                },
+                "bitset divergiu da varredura linear"
+            );
             cursor = chosen + 1;
             let c = clauses[chosen];
             let mut best_v = u32::MAX;

@@ -304,6 +304,11 @@ impl<T: Transport> SgdbClient<T> {
         &self.cfg
     }
 
+    /// Configuração mutável (ajustes pontuais do host).
+    pub fn config_mut(&mut self) -> &mut SgdbConfig {
+        &mut self.cfg
+    }
+
     /// Transporte (acesso ao `MockTransport` nos testes).
     pub fn transport(&self) -> &T {
         &self.transport
@@ -834,5 +839,38 @@ mod tests {
         assert_eq!(client.recall_scope(scope, 4).unwrap().len(), 1);
         client.transport_mut().set_now(1_500);
         assert_eq!(client.recall_scope(scope, 4).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn recall_all_atravessa_o_teto_de_20() {
+        let scope = ScopeId::new(5, 5, 5);
+        let mut client = SgdbClient::new(MockTransport::new(), SgdbConfig::default());
+        let records: Vec<DraftRecord> = (0..25u8).map(|k| record(scope, k, 200)).collect();
+        client.remember_records(&records).unwrap();
+        assert_eq!(client.recall_scope(scope, 20).unwrap().len(), 20);
+        assert_eq!(client.recall_all(scope, "", 40).unwrap().len(), 25);
+    }
+
+    #[test]
+    fn texto_faz_round_trip_e_nao_mistura_com_fase() {
+        let scope = ScopeId::new(6, 6, 6);
+        let mut client = SgdbClient::new(MockTransport::new(), SgdbConfig::default());
+        let key = client
+            .remember_text(
+                scope,
+                "o gate F4 roda no CI",
+                &["aether/f4".to_string()],
+                "L3",
+                255,
+                None,
+            )
+            .unwrap();
+        assert!(key.is_some());
+        client.remember_records(&[record(scope, 1, 200)]).unwrap();
+        let hits = client.recall_text(scope, "gate", 8).unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].text, "o gate F4 roda no CI");
+        assert_eq!(hits[0].authority, 255);
+        assert!(!hits[0].is_phase);
     }
 }

@@ -189,6 +189,7 @@ fn f4_gate_offline_outbox_replay_e_ttl() {
     // Banco fora: tudo vai para o outbox local (nada se perde).
     let mut offline = SgdbLedger::new(MockTransport::new(), SgdbConfig::durable(&path), scope);
     offline.client_mut().transport_mut().set_offline(true);
+    offline.client_mut().config_mut().retries = 0;
     for i in 0..5u8 {
         offline.stage(record(scope, i, 200));
     }

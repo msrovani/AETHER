@@ -146,7 +146,7 @@ impl T2Worker {
                     ledger.stage_batch(tail);
                 }
                 ledger.commit_run();
-                ledger.flush();
+                ledger.flush_now();
                 let _ = ledger.client_mut().commit_run(scope);
                 shared.snapshot(&ledger);
             })

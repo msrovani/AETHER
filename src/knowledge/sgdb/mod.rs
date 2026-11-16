@@ -48,8 +48,12 @@ pub mod worker;
 
 use std::fmt;
 
-pub use client::{SgdbClient, SgdbConfig};
-pub use ledger::{encode_phases, phase_key, phases_from_payload, SgdbLedger, SgdbMetrics};
+pub use client::{
+    open, open_transport, RecallPage, SgdbClient, SgdbConfig, TextHit,
+};
+pub use ledger::{
+    encode_phases, phase_key, phases_from_payload, SgdbLedger, SgdbMetrics, SgdbStatus,
+};
 pub use transport::{HttpTransport, MockTransport, Outbox, StdioTransport, Transport};
 pub use wire::{MemoryHit, PhaseDoc};
 pub use worker::T2Worker;

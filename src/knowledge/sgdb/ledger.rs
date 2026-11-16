@@ -22,7 +22,7 @@
 //! para a fila em memória; o próximo commit tenta de novo **antes** do lote
 //! novo. O replay é idempotente por `(scope, key)` com `if_exists=reinforce`.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::core::certificate::Evidence;
 use crate::core::knowledge_bridge_f1::{
@@ -32,6 +32,7 @@ use crate::core::knowledge_fusion::{Decision, FusionLedger};
 use crate::knowledge::sgdb::client::{SgdbClient, SgdbConfig};
 use crate::knowledge::sgdb::transport::{Outbox, Transport};
 use crate::knowledge::sgdb::wire::{self, MemoryHit, PhaseDoc};
+use crate::knowledge::sgdb::SgdbError;
 
 /// Telemetria acumulada do `T2` (inteiros; não ordena decisão).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -52,6 +53,23 @@ pub struct SgdbMetrics {
     pub errors: u64,
 }
 
+/// Estado resumido do `T2` (diagnóstico/CLI).
+#[derive(Clone, Debug)]
+pub struct SgdbStatus {
+    /// Descrição do transporte (`mock`, URL, stdio).
+    pub transport: String,
+    /// `true` se não há pendências nem backoff ativo.
+    pub online: bool,
+    /// Documentos esperando entrega.
+    pub pending: usize,
+    /// Falhas consecutivas (backoff).
+    pub failures: u32,
+    /// Métricas acumuladas.
+    pub metrics: SgdbMetrics,
+    /// Último erro de transporte.
+    pub last_error: Option<String>,
+}
+
 /// Ledger de conhecimento com o SGDB como fonte durável.
 #[derive(Debug)]
 pub struct SgdbLedger<T: Transport> {
@@ -63,12 +81,16 @@ pub struct SgdbLedger<T: Transport> {
     outbox: Option<Outbox>,
     metrics: SgdbMetrics,
     last_error: Option<String>,
+    failures: u32,
+    not_before: Option<Instant>,
+    retry_base_ms: u64,
 }
 
 impl<T: Transport> SgdbLedger<T> {
     /// Cria o ledger para um escopo com o transporte informado.
     pub fn new(transport: T, cfg: SgdbConfig, scope: ScopeId) -> Self {
         let outbox = cfg.outbox.clone().map(Outbox::new);
+        let retry_base_ms = cfg.retry_backoff_ms;
         Self {
             client: SgdbClient::new(transport, cfg),
             local: FusionLedger::new(),
@@ -78,12 +100,16 @@ impl<T: Transport> SgdbLedger<T> {
             outbox,
             metrics: SgdbMetrics::default(),
             last_error: None,
+            failures: 0,
+            not_before: None,
+            retry_base_ms,
         }
     }
 
     /// Cria com um cliente já configurado (ex.: transporte compartilhado).
     pub fn with_client(client: SgdbClient<T>, scope: ScopeId) -> Self {
         let outbox = client.config().outbox.clone().map(Outbox::new);
+        let retry_base_ms = client.config().retry_backoff_ms;
         Self {
             client,
             local: FusionLedger::new(),
@@ -93,6 +119,9 @@ impl<T: Transport> SgdbLedger<T> {
             outbox,
             metrics: SgdbMetrics::default(),
             last_error: None,
+            failures: 0,
+            not_before: None,
+            retry_base_ms,
         }
     }
 
@@ -157,19 +186,27 @@ impl<T: Transport> SgdbLedger<T> {
     pub fn commit_run(&mut self) -> usize {
         let batch = std::mem::take(&mut self.staged);
         if !batch.is_empty() {
-            self.flush();
+            // Tenta reenviar pendências primeiro (se não estiver em backoff).
+            self.flush_inner(false);
             let mut docs: Vec<PhaseDoc> = batch.iter().map(PhaseDoc::from_record).collect();
             let count = docs.len();
-            match self.client.remember_docs(&mut docs) {
-                Ok(written) => {
-                    self.metrics.remembered += written as u64;
-                    self.last_error = None;
-                }
-                Err(e) => {
-                    self.metrics.errors += 1;
-                    self.last_error = Some(e.to_string());
-                    self.spool(docs);
-                    self.metrics.spooled += count as u64;
+            if self.backing_off() {
+                // Servidor ainda em backoff: não insiste a cada ciclo.
+                self.spool(docs);
+                self.metrics.spooled += count as u64;
+            } else {
+                match self.client.remember_docs(&mut docs) {
+                    Ok(written) => {
+                        self.metrics.remembered += written as u64;
+                        self.last_error = None;
+                        self.failures = 0;
+                        self.not_before = None;
+                    }
+                    Err(e) => {
+                        self.record_failure(&e);
+                        self.spool(docs);
+                        self.metrics.spooled += count as u64;
+                    }
                 }
             }
             self.local.stage_batch(batch);
@@ -181,9 +218,65 @@ impl<T: Transport> SgdbLedger<T> {
 
     /// Reenvia o que ficou pendente (outbox ou fila em memória).
     ///
-    /// Devolve quantos documentos foram entregues agora. Não lança: o pior caso
-    /// é continuar offline (e o chamador segue operando).
+    /// Respeita o backoff após falha: evita martelar um servidor fora.
+    /// Devolve quantos documentos foram entregues agora.
     pub fn flush(&mut self) -> usize {
+        self.flush_inner(false)
+    }
+
+    /// Reenvia **agora**, ignorando o backoff (usado em shutdown/`sync`).
+    pub fn flush_now(&mut self) -> usize {
+        self.flush_inner(true)
+    }
+
+    /// Zera o backoff (após o operador subir o servidor, por exemplo).
+    pub fn retry_now(&mut self) {
+        self.failures = 0;
+        self.not_before = None;
+    }
+
+    /// Estado resumido para `doctor`/`stat`.
+    pub fn status(&self) -> SgdbStatus {
+        SgdbStatus {
+            transport: self.client.describe(),
+            online: !self.backing_off() && !self.is_offline(),
+            pending: self.pending_len(),
+            failures: self.failures,
+            metrics: self.metrics,
+            last_error: self.last_error.clone(),
+        }
+    }
+
+    fn pending_len(&self) -> usize {
+        self.pending.len()
+            + self
+                .outbox
+                .as_ref()
+                .map(|outbox| outbox.len())
+                .unwrap_or(0)
+    }
+
+    fn backing_off(&self) -> bool {
+        self.not_before
+            .is_some_and(|deadline| Instant::now() < deadline)
+    }
+
+    fn record_failure(&mut self, error: &SgdbError) {
+        self.metrics.errors += 1;
+        self.last_error = Some(error.to_string());
+        self.failures = self.failures.saturating_add(1);
+        let factor = 1u64 << (self.failures.saturating_sub(1)).min(6);
+        let delay = self
+            .retry_base_ms
+            .saturating_mul(factor)
+            .clamp(50, 30_000);
+        self.not_before = Some(Instant::now() + Duration::from_millis(delay));
+    }
+
+    fn flush_inner(&mut self, ignore_backoff: bool) -> usize {
+        if !ignore_backoff && self.backing_off() {
+            return 0;
+        }
         let mut docs = self.drain_pending();
         if docs.is_empty() {
             return 0;
@@ -191,14 +284,15 @@ impl<T: Transport> SgdbLedger<T> {
         match self.client.remember_docs(&mut docs) {
             Ok(written) => {
                 self.last_error = None;
+                self.failures = 0;
+                self.not_before = None;
                 self.metrics.replayed += written as u64;
                 let remaining = docs.split_off(written.min(docs.len()));
                 self.replace_pending(remaining);
                 written
             }
             Err(e) => {
-                self.metrics.errors += 1;
-                self.last_error = Some(e.to_string());
+                self.record_failure(&e);
                 self.replace_pending(docs);
                 0
             }
@@ -236,7 +330,26 @@ impl<T: Transport> SgdbLedger<T> {
     /// voltam do SGDB e ficam disponíveis para `cue_into` mesmo offline. É o
     /// "o ledger não substitui a fase — ele a reacende" do Vol. III §7.
     pub fn hydrate(&mut self, scope: ScopeId, k: usize) -> usize {
-        let hits = self.recall(scope, "", k);
+        self.hydrate_all(scope, k)
+    }
+
+    /// *Warm start* atravessando páginas (sem o teto de 20 do `recall`).
+    pub fn hydrate_all(&mut self, scope: ScopeId, max: usize) -> usize {
+        let hits = match self.client.recall_all(scope, "", max.max(1)) {
+            Ok(hits) => {
+                if hits.is_empty() {
+                    self.metrics.recall_misses += 1;
+                } else {
+                    self.metrics.recall_hits += 1;
+                }
+                hits
+            }
+            Err(e) => {
+                self.metrics.recall_misses += 1;
+                self.record_failure(&e);
+                Vec::new()
+            }
+        };
         if hits.is_empty() {
             return 0;
         }
@@ -485,13 +598,15 @@ mod tests {
     fn falha_de_rede_nao_perde_e_replay_entrega() {
         let scope = ScopeId::new(4, 5, 6);
         let mut ledger = SgdbLedger::new(MockTransport::new(), SgdbConfig::default(), scope);
+        ledger.client_mut().config_mut().retries = 0;
         ledger.client_mut().transport_mut().set_offline(true);
         ledger.stage(record(scope, 7));
         ledger.commit_run();
         assert_eq!(ledger.metrics().spooled, 1);
         assert!(ledger.is_offline());
-        // Volta a rede: o próximo commit reenvia o pendente.
+        // Volta a rede: o próximo commit reenvia o pendente (zera backoff).
         ledger.client_mut().transport_mut().set_offline(false);
+        ledger.retry_now();
         ledger.stage(record(scope, 8));
         ledger.commit_run();
         assert_eq!(ledger.metrics().replayed, 1);
@@ -547,10 +662,26 @@ mod tests {
     fn falha_de_transporte_nao_derruba_o_commit() {
         let scope = ScopeId::new(1, 1, 1);
         let mut ledger = SgdbLedger::new(MockTransport::new(), SgdbConfig::default(), scope);
+        ledger.client_mut().config_mut().retries = 0;
         ledger.client_mut().transport_mut().set_offline(true);
         ledger.stage(record(scope, 1));
         assert_eq!(ledger.commit_run(), 1);
         assert!(ledger.last_error().is_some());
         assert_eq!(ledger.metrics().errors, 1);
+
+        // Backoff: o próximo commit não martela o servidor.
+        let calls = ledger.client_mut().transport().calls();
+        ledger.stage(record(scope, 2));
+        ledger.commit_run();
+        assert_eq!(
+            ledger.client_mut().transport().calls(),
+            calls,
+            "commit ignorou o backoff"
+        );
+        // `retry_now` libera a tentativa; com a rede de volta, entrega o pendente.
+        ledger.client_mut().transport_mut().set_offline(false);
+        ledger.retry_now();
+        assert!(ledger.flush() >= 1);
+        assert!(ledger.client_mut().transport().calls() > calls);
     }
 }
