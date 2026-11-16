@@ -38,6 +38,10 @@ pub mod active_inference;
 #[cfg(feature = "m1")]
 pub mod self_field;
 
+// F2/F3 — consolidação T1, gist L4 e fusão 2D com cue_into escopado.
+#[cfg(feature = "m1")]
+pub mod knowledge_fusion;
+
 #[cfg(feature = "m1")]
 pub mod koopman_sindy;
 
@@ -74,9 +78,9 @@ pub mod affinity;
 #[cfg(feature = "m5")]
 pub mod fhrr_bam;
 // E1 — Phase-Language Head (sharded + ressonador ACF + acoplamento RG).
-#[cfg(feature = "m5")]
-pub mod phase_language;
 pub mod gpu_gate;
 pub mod noise;
+#[cfg(feature = "m5")]
+pub mod phase_language;
 
 pub use crate::error::{AetherError, Result};

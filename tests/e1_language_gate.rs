@@ -26,7 +26,7 @@ use std::time::Instant;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
-use aether_engine::core::bam_phase::{BamHolographicVector, BamPhase};
+use aether_engine::core::bam_phase::BamHolographicVector;
 use aether_engine::core::phase_language::*;
 
 const SEED: u64 = 0xE1_2026;
@@ -230,7 +230,10 @@ fn g2_order_matters_a_to_b_vs_b_to_a() {
     }
     let sep = separated as f64 / pairs as f64;
     assert_eq!(separated, pairs, "separação {sep:.3} < 1.0");
-    assert!(sim_acc / (pairs as f64) < 0.75, "códigos deveriam ser distintos");
+    assert!(
+        sim_acc / (pairs as f64) < 0.75,
+        "códigos deveriam ser distintos"
+    );
     println!(
         "E1.G2 separacao={sep:.3} sim_media={:.3}",
         sim_acc / pairs as f64
@@ -306,7 +309,10 @@ fn g3_snr_depth_and_rg_topdown() {
     }
     let depth_err = wrong as f64 / depth_n as f64;
     let residual = residual_acc / depth_n as f64;
-    assert!(depth_err < 0.05, "erro de profundidade {depth_err:.3} >= 0.05");
+    assert!(
+        depth_err < 0.05,
+        "erro de profundidade {depth_err:.3} >= 0.05"
+    );
 
     // RG: o objetivo macro (4) reduz o erro do campo micro (64).
     let clean: [f32; 64] = std::array::from_fn(|i| 0.8 + 0.01 * i as f32);

@@ -31,7 +31,7 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use aether_engine::core::fhrr::FhrrStore;
-use aether_engine::core::knowledge_bridge::{SpscKnowledgeBridge, SourceTag};
+use aether_engine::core::knowledge_bridge::{SourceTag, SpscKnowledgeBridge};
 use aether_engine::core::transplant::{
     gaussian_vec_into, hamming, normalize_in_place, phase_analogy, phase_similarity, spearman,
     BinaryBam, FactRecord, JlProjector, PhaseEncoder, StructuralVerifier,
@@ -374,7 +374,9 @@ fn analogy_recall(
                             sims[j] = phase_similarity(&rec, p);
                         }
                         order.sort_by(|&x, &y| {
-                            sims[y].partial_cmp(&sims[x]).unwrap_or(std::cmp::Ordering::Equal)
+                            sims[y]
+                                .partial_cmp(&sims[x])
+                                .unwrap_or(std::cmp::Ordering::Equal)
                         });
                         total += 1;
                         if order[0] == d {
@@ -433,7 +435,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bam_bytes = bam.memory_bytes();
 
     println!("JL (Johnson–Lindenstrauss)");
-    println!("  átomos                         : {n} × {} B = {:.2} MB", bam.bytes_per_atom(), bam_bytes as f64 / 1e6);
+    println!(
+        "  átomos                         : {n} × {} B = {:.2} MB",
+        bam.bytes_per_atom(),
+        bam_bytes as f64 / 1e6
+    );
     println!(
         "  bloco materializado            : {:.0} KB (matriz inteira nunca existe)",
         proj.scratch_bytes() as f64 / 1e3
@@ -525,9 +531,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("FHRR shards (≤ {SHARD_CAP} fatos/acumulador)");
-    println!(
-        "  shards={shards} · maior={max_shard} · D={FHRR_DIM} · K={TRACES}"
-    );
+    println!("  shards={shards} · maior={max_shard} · D={FHRR_DIM} · K={TRACES}");
     for (si, sigma) in sigmas.iter().enumerate() {
         println!(
             "  Recall@1 (ruído de pista {sigma:>3.1} rad) : {:.4}",
@@ -575,9 +579,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (an1_noise2, an5_noise2, _) = analogy_recall(&bank_emb, &enc, 1.0, 0xE3_A2);
     println!("analogia a ⊗ b⁻¹ ⊗ c (48 entidades, {an_total} consultas)");
     println!("  Recall@1 (sem ruído)           : {an1_clean:.4}  · Recall@5: {an5_clean:.4}");
-    println!(
-        "  Recall@1 (ruído de átomo 0,5rad): {an1_noise:.4}  · Recall@5: {an5_noise:.4}"
-    );
+    println!("  Recall@1 (ruído de átomo 0,5rad): {an1_noise:.4}  · Recall@5: {an5_noise:.4}");
     println!(
         "  Recall@1 (ruído de átomo 1,0rad): {an1_noise2:.4}  · Recall@5: {an5_noise2:.4}  [não-linearidade dos dados {:.2}]",
         args.nonlin
@@ -669,7 +671,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let verdict = verifier.verify_into(&facts, threshold, Some(&mut bridge));
     // medição limpa (alocador armado só na janela)
-    let (measured, allocs) = count_allocs(|| verifier.verify_into(&facts, threshold, None::<&mut SpscKnowledgeBridge<2048>>));
+    let (measured, allocs) = count_allocs(|| {
+        verifier.verify_into(&facts, threshold, None::<&mut SpscKnowledgeBridge<2048>>)
+    });
     let t0 = Instant::now();
     let _ = verifier.verify_into(&facts, threshold, None::<&mut SpscKnowledgeBridge<2048>>);
     let verifier_ms = t0.elapsed().as_secs_f64() * 1e3;
@@ -698,7 +702,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let g3c = verifier_ms <= 20.0 && allocs == 0;
 
     println!("gates");
-    println!("  G1 Spearman ρ ≥ 0,95           : {}  (ρ={rho:.4})", pass(g1));
+    println!(
+        "  G1 Spearman ρ ≥ 0,95           : {}  (ρ={rho:.4})",
+        pass(g1)
+    );
     println!(
         "  G2 recuperação de relação > 0,60: {}  ({rel_recall:.4})· Recall@5 medido {:.4}",
         pass(g2),

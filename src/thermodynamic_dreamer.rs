@@ -190,7 +190,11 @@ impl ProgressCurriculum {
     /// o peso; surpresa alta sem progresso é descontada — o oposto do *surprise
     /// sampling* que o baseline `T03` usa.
     pub fn select_weight(&self, surprise: f32) -> f32 {
-        let s = if surprise.is_finite() { surprise.max(0.0) } else { 0.0 };
+        let s = if surprise.is_finite() {
+            surprise.max(0.0)
+        } else {
+            0.0
+        };
         let g = (self.progress_gain * self.progress_ema).clamp(-4.0, 4.0);
         g.exp() / (1.0 + self.surprise_penalty * s)
     }

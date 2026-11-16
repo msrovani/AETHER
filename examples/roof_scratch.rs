@@ -87,19 +87,19 @@ fn glass(n: usize, k: usize, delta: f64, seed: u64) -> (Vec<f64>, Vec<f64>) {
 
 fn main() {
     report("ferro J=+1", 2, vec![0.0, 1.0, 1.0, 0.0], vec![0.0, 0.0]);
-    report("antiferro J=-1", 2, vec![0.0, -1.0, -1.0, 0.0], vec![0.0, 0.0]);
+    report(
+        "antiferro J=-1",
+        2,
+        vec![0.0, -1.0, -1.0, 0.0],
+        vec![0.0, 0.0],
+    );
     report(
         "antiferro J=-1 + h0=2",
         2,
         vec![0.0, -1.0, -1.0, 0.0],
         vec![2.0, 0.0],
     );
-    report(
-        "viés h0=+2",
-        2,
-        vec![0.0, 1.0, 1.0, 0.0],
-        vec![2.0, 0.0],
-    );
+    report("viés h0=+2", 2, vec![0.0, 1.0, 1.0, 0.0], vec![2.0, 0.0]);
 
     // resumo por regime
     for plant in [0.0f64, 0.25, 0.45] {
@@ -108,13 +108,18 @@ fn main() {
         let mut roof_sum = 0.0;
         let mut dom_sum = 0.0;
         let instances = 60usize;
-        let mut unsound = 0usize;
+        let mut unsound = 0usize;`n        let mut roof_only_sum = 0.0f64;
         for inst in 0..instances {
             let (j, h) = glass(n, k, 0.6, 0xE2C_0001 + inst as u64);
             let roof = roof_dual_qumo(n, &j, &h);
             let dom = persistency_qumo(n, &j, &h);
             roof_sum += roof.reduction(n);
             dom_sum += dom.reduction(n);
+            // roof puro (sem a pré-passada de dominância)
+            let mut ws = RoofDualWorkspace::new();
+            let mut rf = vec![None::<i8>; n];
+            let nfix = ws.solve_into(n, &j, &h, &mut rf);
+            roof_only_sum += nfix as f64 / n as f64;
             // soundness
             let (e_star, _) = bf(n, &j, &h);
             let mut s2 = vec![0i8; n];
@@ -143,7 +148,7 @@ fn main() {
             "\nplant={:.0}%  dominância={:.1}%  roof={:.1}%  unsound={}",
             100.0 * plant,
             100.0 * dom_sum / instances as f64,
-            100.0 * roof_sum / instances as f64,
+            100.0 * roof_sum / instances as f64,`n            100.0 * roof_only_sum / instances as f64,
             unsound
         );
     }

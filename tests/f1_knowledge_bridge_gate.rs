@@ -81,7 +81,9 @@ fn phase_payload(seed: u64) -> Vec<u8> {
     let mut x = seed | 1;
     for _ in 0..MAX_PHASE_BYTES / 8 {
         for lane in 0..2 {
-            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             let f = ((x >> 33) as u32 as f32 / u32::MAX as f32) * 2.0 - 1.0;
             let val = if lane == 0 { f } else { -f };
             v.extend_from_slice(&val.to_le_bytes());
@@ -110,10 +112,16 @@ fn gate1_zero_alloc_no_t0_em_10k_ciclos() {
     // de qualquer forma a partir do primeiro ciclo, como manda o gate.
     let ((), allocs, bytes) = count_allocs(|| {
         for cycle in 0..10_000u64 {
-            let ev = KnowledgeEvent::new(u128::from(cycle), Layer::L4Semantic, scope, cycle, cycle * 16)
-                .with_certificate(cert)
-                .with_authority(200)
-                .with_payload(&payload);
+            let ev = KnowledgeEvent::new(
+                u128::from(cycle),
+                Layer::L4Semantic,
+                scope,
+                cycle,
+                cycle * 16,
+            )
+            .with_certificate(cert)
+            .with_authority(200)
+            .with_payload(&payload);
             // O anel satura; `record` deve devolver Err e **não** alocar.
             let _ = tx.record(&ev);
         }
@@ -144,14 +152,20 @@ fn gate2_zero_chamadas_ao_ledger_no_t0() {
     // "Ciclo do organismo": 1.000 ticks a 60 Hz, com drenagem periódica no T1.
     let mut drained: Vec<DraftRecord> = Vec::new();
     for cycle in 0..1_000u64 {
-        let ev = KnowledgeEvent::new(u128::from(cycle), Layer::L4Semantic, ScopeId::new(3, 1, 1), cycle, cycle * 16)
-            .with_certificate(Certificate {
-                energy: -(cycle as f32),
-                gap: 0.5,
-                violations: 0,
-            })
-            .with_authority(255)
-            .with_payload(&payload);
+        let ev = KnowledgeEvent::new(
+            u128::from(cycle),
+            Layer::L4Semantic,
+            ScopeId::new(3, 1, 1),
+            cycle,
+            cycle * 16,
+        )
+        .with_certificate(Certificate {
+            energy: -(cycle as f32),
+            gap: 0.5,
+            violations: 0,
+        })
+        .with_authority(255)
+        .with_payload(&payload);
         let _ = tx.record(&ev);
 
         if cycle % 16 == 0 {
@@ -166,7 +180,10 @@ fn gate2_zero_chamadas_ao_ledger_no_t0() {
         "R7 violado: o T0 falou com o ledger"
     );
     // O contador do T1 funciona (prova que a telemetria não é decorativa).
-    assert!(rx.metrics().ledger_calls() > 0, "o T1 deveria registrar chamadas");
+    assert!(
+        rx.metrics().ledger_calls() > 0,
+        "o T1 deveria registrar chamadas"
+    );
     assert_eq!(rx.metrics().drained(), drained.len() as u64);
 }
 
@@ -187,7 +204,7 @@ fn gate3_integridade_e_duplo_carimbo() {
             0x0102_0304_0506_0708_090A_0B0C_0D0E_0000u128 + u128::from(k),
             Layer::L6Graph,
             scope,
-            k,            // tick: relógio interno (60 Hz)
+            k,                          // tick: relógio interno (60 Hz)
             1_700_000_000_000 + k * 16, // wall_ms: relógio externo
         )
         .with_certificate(Certificate {
@@ -224,7 +241,10 @@ fn gate3_integridade_e_duplo_carimbo() {
         assert_eq!(rec.created_tick(), rec.wall_ms, "TTL usa wall_ms, não tick");
         assert_eq!(rec.payload, phase_payload(k64), "payload corrompido");
     }
-    assert!(rx.drain_batch(&mut out, RING) == 0, "anel deveria estar vazio");
+    assert!(
+        rx.drain_batch(&mut out, RING) == 0,
+        "anel deveria estar vazio"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -241,8 +261,16 @@ fn gate4_isolamento_de_escopo_entre_organismos() {
         let mut payload = Vec::new();
         for j in 0..16u64 {
             // organismo 1: (1.0, 0.0) ; organismo 2: (0.0, 1.0)
-            let (re, im) = if k % 2 == 0 { (1.0f32, 0.0f32) } else { (0.0, 1.0) };
-            let s = if k < 8 && j == 0 { k as f32 * 1e-6 } else { 0.0 };
+            let (re, im) = if k % 2 == 0 {
+                (1.0f32, 0.0f32)
+            } else {
+                (0.0, 1.0)
+            };
+            let s = if k < 8 && j == 0 {
+                k as f32 * 1e-6
+            } else {
+                0.0
+            };
             payload.extend_from_slice(&(re + s).to_le_bytes());
             payload.extend_from_slice(&im.to_le_bytes());
         }

@@ -330,10 +330,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             (false, true) => "harm",
             (false, false) => "-",
         };
-        println!(
-            "{:>5} {:>9} {:>12.3} {:>12.3} {:>8}",
-            n, k, er, eh, gate
-        );
+        println!("{:>5} {:>9} {:>12.3} {:>12.3} {:>8}", n, k, er, eh, gate);
     }
     let cap_of = |random: bool| -> usize {
         phase_errs

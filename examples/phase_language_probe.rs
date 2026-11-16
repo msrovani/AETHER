@@ -428,13 +428,37 @@ fn jitter_codebook(base: &[BVec], rng: &mut ChaCha8Rng, frac: f32) -> Vec<BVec> 
         .collect()
 }
 
+/// Uma âncora de papel com `cos/sin` pré-computados: o unbinding quente não
+/// toca a LUT, só multiplica fasores.
+#[derive(Debug)]
+struct Anchor {
+    phases: BVec,
+    cos: [f32; D],
+    sin: [f32; D],
+}
+
+impl Anchor {
+    fn new(phases: BVec) -> Self {
+        let p = unit_phasor(phases.as_slice());
+        Self {
+            phases,
+            cos: p.re,
+            sin: p.im,
+        }
+    }
+
+    fn phases(&self) -> &Phases {
+        self.phases.as_slice()
+    }
+}
+
 /// Âncoras fixas de papel.
 #[derive(Debug)]
 struct Anchors {
-    s: BVec,
-    v: BVec,
-    o: BVec,
-    m: BVec,
+    s: Anchor,
+    v: Anchor,
+    o: Anchor,
+    m: Anchor,
 }
 
 impl Anchors {
@@ -442,14 +466,14 @@ impl Anchors {
         let mut rng = ChaCha8Rng::seed_from_u64(seed ^ 0xA0C_4000);
         let a = random_codebook(4, &mut rng);
         Self {
-            s: a[0],
-            v: a[1],
-            o: a[2],
-            m: a[3],
+            s: Anchor::new(a[0]),
+            v: Anchor::new(a[1]),
+            o: Anchor::new(a[2]),
+            m: Anchor::new(a[3]),
         }
     }
 
-    fn of(&self, role: usize) -> &BVec {
+    fn of(&self, role: usize) -> &Anchor {
         match role {
             ROLE_S => &self.s,
             ROLE_V => &self.v,
@@ -459,7 +483,7 @@ impl Anchors {
     }
 
     fn memory_bytes(&self) -> usize {
-        4 * std::mem::size_of::<BVec>()
+        4 * (std::mem::size_of::<BVec>() + 2 * std::mem::size_of::<[f32; D]>())
     }
 }
 

@@ -141,6 +141,19 @@ Medições (protótipo fora do repo, 600 instâncias contra força bruta):
 | frustrado denso (`n=12`, 200 inst.) | **2259** casos “constante em todos os ótimos e não dominada” ⇒ roof fixa **0** |
 | persistência BHT completo, `n=14`, `plant ∈ {0; 0,25; 0,45}` | **0,0%** de redução, 0 conflitos, bound sempre válido |
 
+**Medição da implementação landada** (`RoofDualWorkspace::solve_into`, rota QPBO
+dobrada; harness exato do `E2c`, `n=14`, 200 instâncias por braço, caixa-preta):
+
+| `plant` | dominância (`persistency_qumo`) | roof landado | roof > dominância | unsound |
+|---|---|---|---|---|
+| 0,00 | 0,000 | **0,000** | 0/200 | 0 |
+| 0,25 | 0,286 | **0,289** | 1/200 | 0 |
+| 0,45 | 0,429 | **0,520** | 32/200 | 0 |
+
+Leitura: a extensão é **real onde há viés** (+9,1 pp no `0,45`) e **sound** em 600
+instâncias; em vidro puro (`plant = 0`) as duas dão zero. O protótipo BHT
+(acima) é mais fraco que a rota QPBO landada — não use os dois como sinônimos.
+
 **Duas armadilhas medidas:**
 
 1. rede sem aresta para `T` (só `s→ū`) ⇒ fluxo 0 e bound trivial (`a0`);
@@ -150,9 +163,12 @@ Medições (protótipo fora do repo, 600 instâncias contra força bruta):
 **Consequência para o gate de alcance:** o controle positivo **passa** — a
 construção está certa e o roof vê além da dominância (o centro da estrela não é
 dominado). O **0,0%** no vidro denso é propriedade do **LP** (gap do bound 61–176
-nessas instâncias), não bug de implementação. Portanto “roof > dominância no
-`plant = 0`” é **falsificável** nessa família: reporte o número, não relaxe o
-gate — e use o roof onde o LP é tenso (CNF/circuito estruturado, não vidro denso).
+nessas instâncias), não bug de implementação. O gate correto, portanto, **não é**
+“roof > dominância no `plant = 0`” (isso é falso e deve ser registrado como
+falsificação); é “roof ≥ dominância em todos os braços **e** estritamente maior
+onde há viés” — o que a implementação landada cumpre (`0,520` vs `0,429` no
+`plant = 0,45`). Use o roof onde o LP é tenso (CNF/circuito estruturado), não em
+vidro denso.
 
 > Em aberto: a implementação `RoofDualWorkspace` de MSG 0110 usa a rede
 > **dobrada do QPBO** (outra rota, com `roof_weights`); o protótipo acima não a
@@ -409,8 +425,29 @@ pub const RING_CAPACITY: usize = 64;
 pub trait KnowledgeSink {
     fn record(&mut self, ev: &KnowledgeEvent) -> Result<()>;
 }
+
+/// Resultado de um `cue` — proveniência junto do vetor (K6), sem alocar.
+#[derive(Clone, Copy, Debug)]
+pub struct CueHit {
+    /// Hash endereçável por conteúdo do fato que casou (0 = nenhum).
+    pub key: u128,
+    /// Escopo do fato que casou.
+    pub scope: ScopeId,
+    /// Autoridade do fato que casou (0..=255).
+    pub authority: u8,
+    /// Quantos candidatos entraram em `out`.
+    pub hits: usize,
+}
+
 pub trait KnowledgeSource {
-    fn cue_into(&mut self, query: &[f32], out: &mut [f32]) -> Result<usize>;
+    /// `scope` é **argumento**, não comentário: o filtro de escopo vive na
+    /// borda (R8), e a chave volta junto (K6). `CueHit` é `Copy`.
+    fn cue_into(
+        &mut self,
+        scope: ScopeId,
+        query: &[f32],
+        out: &mut [f32],
+    ) -> Result<CueHit>;
 }
 
 pub struct RingSink { /* SpscProducer<KnowledgeEvent, RING_CAPACITY> + drops */ }
@@ -451,13 +488,15 @@ rede no crate: zero; a feature `knowledge` não puxa dependência nova).
 ler o contador:
 
 ```text
-1. cue_into(scope=A, query=B)  -> retorno 0 hits  E cross_scope_hits == 0
-2. cue_into(scope=A, query=A)  -> retorno 3 hits  E cross_scope_hits segue 0
+1. cue_into(scope=A, query=B)  -> hits 0, key 0  E cross_scope_hits == 0
+2. cue_into(scope=A, query=A)  -> hits 3, key != 0  E cross_scope_hits segue 0
 3. injetar um fato com scope=B no store de A (se o store permitir)
    -> cue_into(A, B) -> cross_scope_hits == 1 (caso positivo do contador)
 ```
 
-Sem o passo 3 o contador nunca incrementa e o gate é vacuidade (`R9`).
+Sem o passo 3 o contador nunca incrementa e o gate é vacuidade (`R9`). Sem o
+`key != 0` no passo 2, o vetor volta sem proveniência (`K6`) — e a resposta não
+é citável.
 
 **`ScopeId` — colisão e estabilidade.** `hash("orgA/run1/app") !=
 hash("orgA/run2/app")`; `hash(x) == hash(x)` entre execuções (FNV-1a é estável);

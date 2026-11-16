@@ -174,14 +174,23 @@ fn invariante_alocacao_zero_na_ponte_de_conhecimento() {
     let (_, allocs) = count_allocs(|| {
         for cycle in 0..10_000u64 {
             let _ = tx.record(
-                &KnowledgeEvent::new(u128::from(cycle), Layer::L2Episodic, scope, cycle, cycle * 16)
-                    .with_certificate(cert)
-                    .with_payload(&payload),
+                &KnowledgeEvent::new(
+                    u128::from(cycle),
+                    Layer::L2Episodic,
+                    scope,
+                    cycle,
+                    cycle * 16,
+                )
+                .with_certificate(cert)
+                .with_payload(&payload),
             );
         }
     });
 
-    assert_eq!(allocs, 0, "record() alocou {allocs} vezes no T0 (deve ser 0)");
+    assert_eq!(
+        allocs, 0,
+        "record() alocou {allocs} vezes no T0 (deve ser 0)"
+    );
     assert_eq!(
         tx.metrics().t0_ledger_calls(),
         0,

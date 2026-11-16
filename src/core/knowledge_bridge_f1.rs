@@ -239,6 +239,7 @@ pub struct PhaseSlot {
     len: u32,
     layer: u8,
     authority: u8,
+    #[allow(dead_code)]
     reserved: u16,
     bytes: [u8; MAX_PHASE_BYTES],
 }
@@ -424,9 +425,7 @@ impl<const N: usize> KnowledgeSink for SpscKnowledgePhaseBridge<N> {
 
         match self.tx.try_push(slot) {
             Ok(()) => {
-                self.metrics
-                    .recorded_events
-                    .fetch_add(1, Ordering::Relaxed);
+                self.metrics.recorded_events.fetch_add(1, Ordering::Relaxed);
                 Ok(())
             }
             Err(_) => {
@@ -528,9 +527,7 @@ impl<const N: usize> KnowledgePhaseConsumer<N> {
                 wall_ms: ev.wall_ms,
                 payload: ev.payload.to_vec(),
             });
-            self.metrics
-                .drained_events
-                .fetch_add(1, Ordering::Relaxed);
+            self.metrics.drained_events.fetch_add(1, Ordering::Relaxed);
             self.metrics.ledger_calls.fetch_add(1, Ordering::Relaxed);
             n += 1;
         }

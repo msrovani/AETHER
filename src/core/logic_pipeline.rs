@@ -669,7 +669,11 @@ impl LogicPipeline {
             n_exp_max,
             rounds: rounds.max(1),
             restarts: restarts.max(1),
-            eta: if eta.is_finite() && eta > 0.0 { eta } else { 0.5 },
+            eta: if eta.is_finite() && eta > 0.0 {
+                eta
+            } else {
+                0.5
+            },
             lambda0: 1.0,
             fixed3: vec![None; n_max],
             probe: vec![None; n_max],
@@ -1062,13 +1066,7 @@ impl LogicPipeline {
         };
 
         out[..n].copy_from_slice(&self.best_orig[..n]);
-        *cert = Certificate::new(
-            best_energy,
-            gap,
-            best_viol,
-            consensus,
-            Provenance::Inferred,
-        );
+        *cert = Certificate::new(best_energy, gap, best_viol, consensus, Provenance::Inferred);
         self.last.components = comps_last;
         self.last.largest_component = largest_last;
         self.last.lagrange_rounds = rounds_run;

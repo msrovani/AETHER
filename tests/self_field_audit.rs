@@ -1,4 +1,4 @@
-﻿//! E4 — auditoria do *self-field* de 16 canais (Vol. I §4).
+//! E4 — auditoria do *self-field* de 16 canais (Vol. I §4).
 //!
 //! Três braços, mesma memória e mesmas consultas:
 //!
@@ -342,7 +342,10 @@ fn e4_self_field_melhora_calibracao_sem_melhorar_t01() {
     }
     boot.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
     let hi = boot[(boot.len() as f32 * 0.975) as usize];
-    println!("[E4] bootstrap ECE(b)-ECE(a): mediana={:.4} p97.5={hi:.4}", boot[boot.len() / 2]);
+    println!(
+        "[E4] bootstrap ECE(b)-ECE(a): mediana={:.4} p97.5={hi:.4}",
+        boot[boot.len() / 2]
+    );
     assert!(hi < 0.0, "IC97.5 do ganho de ECE inclui zero: {hi:.4}");
 
     // Gate 2: T01 (desempenho sensorial puro) não melhora com o self-field.
@@ -352,10 +355,7 @@ fn e4_self_field_melhora_calibracao_sem_melhorar_t01() {
     assert!(t01 > 0.85, "T01 baixo demais: {t01:.4}");
     // A abstenção do self-field não pode aumentar os acertos do recall puro:
     // o conjunto respondido difere, mas o recall subjacente é o mesmo.
-    assert!(
-        t01 <= 1.0,
-        "T01 não é uma métrica de abstenção"
-    );
+    assert!(t01 <= 1.0, "T01 não é uma métrica de abstenção");
 
     // ------------------------------------------------------------------
     // Gate 3: erro de auto-predição pós-plasticidade < campo congelado
@@ -448,7 +448,10 @@ fn e4_self_field_melhora_calibracao_sem_melhorar_t01() {
         "[E4] topologia erro inicial={early:.4} final={late:.4} ema={:.4}",
         sf_struct.topology_error()
     );
-    assert!(late < early, "erro estrutural não caiu: {early:.4} -> {late:.4}");
+    assert!(
+        late < early,
+        "erro estrutural não caiu: {early:.4} -> {late:.4}"
+    );
     assert!(
         sf_struct.topology_forecast().synapses.is_finite(),
         "previsão estrutural não finita"

@@ -215,8 +215,14 @@ impl AtomBook {
     }
 
     fn from_pair(clean: Vec<BVec>, acf: Vec<BVec>) -> Self {
-        let clean_q = clean.iter().map(|v| Q15Atom::from_phases(v.as_slice())).collect();
-        let acf_q = acf.iter().map(|v| Q15Atom::from_phases(v.as_slice())).collect();
+        let clean_q = clean
+            .iter()
+            .map(|v| Q15Atom::from_phases(v.as_slice()))
+            .collect();
+        let acf_q = acf
+            .iter()
+            .map(|v| Q15Atom::from_phases(v.as_slice()))
+            .collect();
         Self {
             clean,
             acf,
@@ -228,7 +234,10 @@ impl AtomBook {
     fn memory_bytes(&self) -> usize {
         let one = std::mem::size_of::<BVec>();
         let q = std::mem::size_of::<Q15Atom>();
-        self.clean.len() * one + self.acf.len() * one + self.clean_q.len() * q + self.acf_q.len() * q
+        self.clean.len() * one
+            + self.acf.len() * one
+            + self.clean_q.len() * q
+            + self.acf_q.len() * q
     }
 }
 
@@ -614,9 +623,7 @@ impl PlhMemory {
     pub fn new(traces: usize, seed: u64) -> Self {
         Self {
             shards: (0..SHARDS)
-                .map(|i| {
-                    Shard::new(traces, seed ^ (i as u64 + 1).wrapping_mul(0x9E37_79B9))
-                })
+                .map(|i| Shard::new(traces, seed ^ (i as u64 + 1).wrapping_mul(0x9E37_79B9)))
                 .collect(),
         }
     }
@@ -741,17 +748,29 @@ fn role_cue_into(
 /// Cada passo subtrai do predicado o **átomo limpo** do outro fator
 /// (`re-encode`), desvincula o papel próprio e faz cleanup na **cópia ACF**;
 /// no fim valida o vencedor na **cópia limpa**.
-pub fn resonate_pair(
-    sc: &mut QueryScratch,
-    cb: &Codebooks,
-    a: &Anchors,
-) -> PairFactors {
+pub fn resonate_pair(sc: &mut QueryScratch, cb: &Codebooks, a: &Anchors) -> PairFactors {
     let ao = a.o.as_slice();
     let am = a.m.as_slice();
 
-    role_cue_into(&sc.z_re, &sc.z_im, &a.o, ROLE_O, None, &mut sc.cue_re, &mut sc.cue_im);
+    role_cue_into(
+        &sc.z_re,
+        &sc.z_im,
+        &a.o,
+        ROLE_O,
+        None,
+        &mut sc.cue_re,
+        &mut sc.cue_im,
+    );
     let co = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.acf_q(ROLE_O), &mut sc.sims);
-    role_cue_into(&sc.z_re, &sc.z_im, &a.m, ROLE_M, None, &mut sc.cue_re, &mut sc.cue_im);
+    role_cue_into(
+        &sc.z_re,
+        &sc.z_im,
+        &a.m,
+        ROLE_M,
+        None,
+        &mut sc.cue_re,
+        &mut sc.cue_im,
+    );
     let cm = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.acf_q(ROLE_M), &mut sc.sims);
     let mut o = co.index;
     let mut m = cm.index;
@@ -841,7 +860,10 @@ pub fn evidence_sims(
     obj_sims: &mut [f32; N_ENT],
     mod_sims: &mut [f32; N_MOD],
 ) {
-    let re_m = bind(a.m.as_slice(), &rho(cb.modu.clean[p.modu].as_slice(), ROLE_M));
+    let re_m = bind(
+        a.m.as_slice(),
+        &rho(cb.modu.clean[p.modu].as_slice(), ROLE_M),
+    );
     role_cue_into(
         &sc.z_re,
         &sc.z_im,
@@ -851,7 +873,12 @@ pub fn evidence_sims(
         &mut sc.cue_re,
         &mut sc.cue_im,
     );
-    let co = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.ent.clean_q.as_slice(), &mut sc.sims);
+    let co = cleanup_complex(
+        &sc.cue_re,
+        &sc.cue_im,
+        cb.ent.clean_q.as_slice(),
+        &mut sc.sims,
+    );
     obj_sims[..N_ENT].copy_from_slice(&sc.sims[..N_ENT]);
     let _ = co;
 
@@ -865,7 +892,12 @@ pub fn evidence_sims(
         &mut sc.cue_re,
         &mut sc.cue_im,
     );
-    let cm = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.modu.clean_q.as_slice(), &mut sc.sims);
+    let cm = cleanup_complex(
+        &sc.cue_re,
+        &sc.cue_im,
+        cb.modu.clean_q.as_slice(),
+        &mut sc.sims,
+    );
     mod_sims[..N_MOD].copy_from_slice(&sc.sims[..N_MOD]);
     let _ = cm;
 }

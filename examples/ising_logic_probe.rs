@@ -288,7 +288,13 @@ fn arm_static(
     let mut best = u32::MAX;
     let mut best_state = vec![0i8; n];
     for r in 0..restarts {
-        bsb.relax_into(&j, &h, n, seed ^ (r as u64).wrapping_mul(0x9E37_79B9), states);
+        bsb.relax_into(
+            &j,
+            &h,
+            n,
+            seed ^ (r as u64).wrapping_mul(0x9E37_79B9),
+            states,
+        );
         let v = violations_3(clauses, states);
         if v < best {
             best = v;
@@ -350,14 +356,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let m = (args.ratio * n as f64).round() as usize;
     let half = args.instances / 2;
 
-    let mut pipe = LogicPipeline::new(
-        n,
-        m + 4,
-        args.steps,
-        args.restarts,
-        args.rounds,
-        args.eta,
-    );
+    let mut pipe = LogicPipeline::new(n, m + 4, args.steps, args.restarts, args.rounds, args.eta);
     let mut arm1_bsb = BsbCore::new(n, args.steps, 0.05);
 
     let mut s1 = ArmStats::default();
@@ -399,7 +398,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for inst in 0..args.instances {
         let (clauses, planted) = if inst < half {
-            (random_3sat(n, m, args.seed.wrapping_add(inst as u64)), false)
+            (
+                random_3sat(n, m, args.seed.wrapping_add(inst as u64)),
+                false,
+            )
         } else {
             let (c, _) = planted_3sat(n, m, args.seed.wrapping_add(inst as u64));
             (c, true)
@@ -480,7 +482,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     solve_us.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     total_us.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
-    println!("braço                              resolvidas sat   decisivas   falsas-decisivas/UNSAT");
+    println!(
+        "braço                              resolvidas sat   decisivas   falsas-decisivas/UNSAT"
+    );
     println!("{}", "-".repeat(86));
     println!(
         "1 BSB puro (pares, estático)       {:>10} ({:>5.1}%)  {:>8}   {}",
@@ -538,8 +542,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  alocações por resolução (máx)     : {allocs_max}");
     println!();
 
-    let g1 = s2.sat_total > 0
-        && (s2.solved_sat as f64 / s2.sat_total as f64) >= 0.95;
+    let g1 = s2.sat_total > 0 && (s2.solved_sat as f64 / s2.sat_total as f64) >= 0.95;
     let g2a = s2.decisive == 0 || s2.decisive_valid == s2.decisive;
     let g2b = s2.false_decisive_unsat == 0;
     let g3a = allocs_max == 0;

@@ -29,12 +29,42 @@ fn main() {
     // Similaridade do z normalizado com o valor esperado (2 termos unitários).
     let val = f.value(&cb, &a);
     let lut = BamLut::global();
-    let mut dot = 0f32;
+    let cdot = |zr: &[f32; D], zi: &[f32; D], ph: &[u16; D]| {
+        let mut dot = 0f32;
+        for j in 0..D {
+            let (s, c) = lut.sin_cos(BamPhase(ph[j]));
+            dot += zr[j] * c + zi[j] * s;
+        }
+        dot / D as f32
+    };
+    let term_o = role_term(a.of(ROLE_O), &cb.ent.clean[f.ids[2] as usize], ROLE_O);
+    let term_m0 = role_term(a.of(ROLE_M), &cb.modu.clean[f.ids[3] as usize], ROLE_M);
+    let mut to_re = [0f32; D];
+    let mut to_im = [0f32; D];
     for j in 0..D {
-        let (s, c) = lut.sin_cos(BamPhase(val[j]));
-        dot += sc.z_re[j] * c + sc.z_im[j] * s;
+        let (s, c) = lut.sin_cos(BamPhase(term_o[j]));
+        to_re[j] = c;
+        to_im[j] = s;
     }
-    println!("dot(z, value)/D = {:.3}", dot / D as f32);
+    println!(
+        "dot(z,value)={:.3} dot(z,termO)={:.3} dot(z,termM)={:.3} dot(termO,termM)={:.3}",
+        cdot(&sc.z_re, &sc.z_im, &val),
+        cdot(&sc.z_re, &sc.z_im, &term_o),
+        cdot(&sc.z_re, &sc.z_im, &term_m0),
+        cdot(&to_re, &to_im, &term_m0)
+    );
+    let mut rr = sc.z_re;
+    let mut ri = sc.z_im;
+    for j in 0..D {
+        let (s, c) = lut.sin_cos(BamPhase(term_m0[j]));
+        rr[j] -= c;
+        ri[j] -= s;
+    }
+    println!(
+        "resid norm={:.2} dot(res,termO)={:.3}",
+        (rr.iter().map(|x| x * x).sum::<f32>() + ri.iter().map(|x| x * x).sum::<f32>()).sqrt(),
+        cdot(&rr, &ri, &term_o)
+    );
 
     // Cue OBJ independente: z − termM, desvincula A_O, unrho.
     let term_m = bind(

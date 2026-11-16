@@ -246,7 +246,13 @@ impl ChannelBank {
 
     /// Atualiza os pesos por entropia exponencial (multiplicativos), saturando
     /// o passo e renormalizando para soma 1. Devolve `0.5·Σ|Δw|`.
-    fn update_weights(&mut self, frame: &[f32; FEATURES], scale: &[f32; FEATURES], lr: f32, min_w: f32) -> f32 {
+    fn update_weights(
+        &mut self,
+        frame: &[f32; FEATURES],
+        scale: &[f32; FEATURES],
+        lr: f32,
+        min_w: f32,
+    ) -> f32 {
         let mut delta = 0.0f32;
         for f in 0..FEATURES {
             let mut new = [0.0f32; PREDICTORS];
@@ -497,9 +503,13 @@ impl SelfField {
     pub fn observe(&mut self, frame: SelfFrame, dt_ms: f32) -> SelfReading {
         let alpha = Self::alpha(dt_ms, self.cfg.ema_tau_ms);
         let arr = frame.to_array();
-        let reading = self
-            .bank
-            .observe(arr, &mut self.scale, alpha, self.cfg.learning_rate, self.cfg.min_weight);
+        let reading = self.bank.observe(
+            arr,
+            &mut self.scale,
+            alpha,
+            self.cfg.learning_rate,
+            self.cfg.min_weight,
+        );
 
         let e = reading.error;
         let delta = e - self.err_ema;
@@ -529,7 +539,10 @@ impl SelfField {
         dt_ms: f32,
     ) -> SelfReading {
         let coherence = (hierarchy.macro_order() * hierarchy.alignment()).clamp(0.0, 1.0);
-        self.observe(SelfFrame::new(action, surprise, coherence, plasticity), dt_ms)
+        self.observe(
+            SelfFrame::new(action, surprise, coherence, plasticity),
+            dt_ms,
+        )
     }
 
     /// Sonda um quadro **sem** aprender (para abstenção por consulta).
@@ -652,7 +665,10 @@ mod tests {
     #[test]
     fn tem_16_canais_e_nao_aloca_no_tipo() {
         assert_eq!(CHANNELS, 16);
-        assert_eq!(std::mem::size_of::<ChannelBank>(), std::mem::size_of::<ChannelBank>());
+        assert_eq!(
+            std::mem::size_of::<ChannelBank>(),
+            std::mem::size_of::<ChannelBank>()
+        );
         assert!(!std::mem::needs_drop::<SelfField>());
     }
 

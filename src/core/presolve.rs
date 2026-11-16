@@ -314,8 +314,7 @@ pub fn persistency_qumo(n: usize, j: &[f64], h: &[f64]) -> QuboPresolve {
     let mut fixed: Vec<Option<i8>> = vec![None; n];
     let mut h_eff: Vec<f64> = vec![0.0; n];
     let mut residual: Vec<usize> = Vec::with_capacity(n);
-    let rounds =
-        persistency_qumo_into(n, j, h, &mut fixed, &mut h_eff, &mut residual);
+    let rounds = persistency_qumo_into(n, j, h, &mut fixed, &mut h_eff, &mut residual);
     QuboPresolve {
         fixed,
         residual,
@@ -842,9 +841,7 @@ impl RoofDualWorkspace {
         self.residual_from_source();
 
         // Rótulo por segmento (persistência forte do roof dual).
-        for i in 0..ROOF_NODES {
-            self.alive[i] = false;
-        }
+        self.alive[..ROOF_NODES].fill(false);
         let mut ambig = [false; ROOF_MAX_N];
         for i in 0..n {
             // `what_segment`: 0 = lado da fonte, 1 = lado do sumidouro; o rótulo
@@ -888,7 +885,13 @@ impl RoofDualWorkspace {
     /// Todas as fixações vêm de uma única sequência de reduções: cada rodada é
     /// um roof dual da instância já reduzida, então a persistência continua
     /// valendo para o ótimo **original**.
-    pub fn solve_into(&mut self, n: usize, j: &[f64], h: &[f64], fixed: &mut [Option<i8>]) -> usize {
+    pub fn solve_into(
+        &mut self,
+        n: usize,
+        j: &[f64],
+        h: &[f64],
+        fixed: &mut [Option<i8>],
+    ) -> usize {
         for f in fixed.iter_mut() {
             *f = None;
         }

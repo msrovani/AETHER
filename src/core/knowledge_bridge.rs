@@ -195,7 +195,7 @@ impl KnowledgeEvent {
     /// Preenche a margem em Q30 (`f32` em `[-1, 1]`).
     pub fn with_score(mut self, score: f32) -> Self {
         let s = if score.is_finite() { score } else { 0.0 };
-        self.score_q30 = (f64::from(s) * f64::from(1u32 << 30) as f64) as i32;
+        self.score_q30 = (f64::from(s) * f64::from(1u32 << 30)) as i32;
         self
     }
 
@@ -210,7 +210,7 @@ impl KnowledgeEvent {
         if self.score_q30 == i32::MIN {
             f32::NAN
         } else {
-            (f64::from(self.score_q30) / f64::from(1u32 << 30) as f64) as f32
+            (f64::from(self.score_q30) / f64::from(1u32 << 30)) as f32
         }
     }
 }
@@ -264,7 +264,10 @@ pub struct SpscKnowledgeBridge<const N: usize> {
 
 impl<const N: usize> SpscKnowledgeBridge<N> {
     /// Cria a ponte e devolve também o consumidor.
-    pub fn new() -> (Self, crate::core::spsc_ring::SpscConsumer<KnowledgeEvent, N>) {
+    pub fn new() -> (
+        Self,
+        crate::core::spsc_ring::SpscConsumer<KnowledgeEvent, N>,
+    ) {
         let (tx, rx) = SpscRingBuffer::<KnowledgeEvent, N>::new().split();
         (
             Self {
@@ -345,7 +348,15 @@ mod tests {
     #[test]
     fn bridge_emite_em_ordem_e_conta_descarte() {
         let (mut bridge, mut rx) = SpscKnowledgeBridge::<4>::new();
-        let ev = KnowledgeEvent::new(0, EventKind::Fact, SourceTag::Transplanted, Verdict::Ok, 1, 2, 3);
+        let ev = KnowledgeEvent::new(
+            0,
+            EventKind::Fact,
+            SourceTag::Transplanted,
+            Verdict::Ok,
+            1,
+            2,
+            3,
+        );
         for _ in 0..4 {
             assert!(bridge.try_emit(ev));
         }
@@ -364,10 +375,26 @@ mod tests {
 
     #[test]
     fn score_q30_ida_e_volta() {
-        let ev = KnowledgeEvent::new(0, EventKind::Retrieval, SourceTag::Observed, Verdict::Ok, 0, 0, 0)
-            .with_score(0.25);
+        let ev = KnowledgeEvent::new(
+            0,
+            EventKind::Retrieval,
+            SourceTag::Observed,
+            Verdict::Ok,
+            0,
+            0,
+            0,
+        )
+        .with_score(0.25);
         assert!((ev.score() - 0.25).abs() < 1e-9);
-        let nan = KnowledgeEvent::new(1, EventKind::Retrieval, SourceTag::Observed, Verdict::Ok, 0, 0, 0);
+        let nan = KnowledgeEvent::new(
+            1,
+            EventKind::Retrieval,
+            SourceTag::Observed,
+            Verdict::Ok,
+            0,
+            0,
+            0,
+        );
         assert!(nan.score().is_nan());
     }
 }

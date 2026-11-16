@@ -36,9 +36,7 @@
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
-use crate::core::knowledge_bridge::{
-    EventKind, KnowledgeEvent, KnowledgeSink, SourceTag, Verdict,
-};
+use crate::core::knowledge_bridge::{EventKind, KnowledgeEvent, KnowledgeSink, SourceTag, Verdict};
 
 /// Bloco default de bits materializado por vez (`512 × 384 f32` = 786 KB).
 pub const DEFAULT_BLOCK: usize = 512;
@@ -498,7 +496,8 @@ impl StructuralVerifier {
 
     /// Bytes das tabelas.
     pub fn memory_bytes(&self) -> usize {
-        (self.slot.len() + self.slot_stamp.len() + self.support.len() + self.support_stamp.len()) * 4
+        (self.slot.len() + self.slot_stamp.len() + self.support.len() + self.support_stamp.len())
+            * 4
     }
 
     fn next_stamp(&mut self) -> u32 {
@@ -563,9 +562,7 @@ impl StructuralVerifier {
             let provenance_ok = match f.tag {
                 SourceTag::Transplanted => f.source != 0,
                 SourceTag::Inferred => {
-                    e < self.entities
-                        && self.support_stamp[e] == stamp
-                        && self.support[e] > 0
+                    e < self.entities && self.support_stamp[e] == stamp && self.support[e] > 0
                 }
                 SourceTag::Observed | SourceTag::Axiomatic | SourceTag::Human => true,
             };
@@ -587,8 +584,9 @@ impl StructuralVerifier {
                 } else {
                     EventKind::Verification
                 };
-                let ev = KnowledgeEvent::new(0, kind, f.tag, verdict, f.entity, f.relation, f.value)
-                    .with_score(f.margin);
+                let ev =
+                    KnowledgeEvent::new(0, kind, f.tag, verdict, f.entity, f.relation, f.value)
+                        .with_score(f.margin);
                 if s.try_emit(ev) {
                     out.emitted += 1;
                 } else {
@@ -627,7 +625,10 @@ mod tests {
         let w = proj.words();
         let dab = hamming(&out[0..w], &out[w..2 * w], w, bits);
         let dac = hamming(&out[0..w], &out[2 * w..3 * w], w, bits);
-        assert!(dab < dac, "vizinho deveria estar mais perto: {dab} vs {dac}");
+        assert!(
+            dab < dac,
+            "vizinho deveria estar mais perto: {dab} vs {dac}"
+        );
         assert_eq!(proj.bytes_per_atom(), bits / 8);
     }
 
@@ -699,7 +700,11 @@ mod tests {
                 margin: 0.4,
             },
         ];
-        let out = v.verify_into(&facts, 0.1, None::<&mut crate::core::knowledge_bridge::NullSink>);
+        let out = v.verify_into(
+            &facts,
+            0.1,
+            None::<&mut crate::core::knowledge_bridge::NullSink>,
+        );
         assert_eq!(out.value_conflicts, 1);
         assert_eq!(out.provenance_violations, 1);
         assert!(!out.is_valid());
