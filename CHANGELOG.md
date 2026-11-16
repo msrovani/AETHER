@@ -3,6 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.131] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 4 arquivo(s) (.:1, src:3).
+- Gate: ok (7s).
+
+- `Cargo.lock`
+- `src/bin/aether_daemon.rs`
+- `src/knowledge/sgdb/mod.rs`
+- `src/knowledge/sgdb/transport.rs`
+
 ## [0.0.130] - 2026-11-16
 
 ### Changed

@@ -616,6 +616,16 @@ impl AetherDaemon {
     pub fn shutdown(&mut self) {
         if let Some(mut t2) = self.t2.take() {
             t2.shutdown();
+            let rt = t2.runtime();
+            println!(
+                "  sgdb: drenados={} gravados={} spooled={} replay={} erros={} (T0 ao ledger: {})",
+                rt.drained.load(std::sync::atomic::Ordering::Relaxed),
+                rt.remembered.load(std::sync::atomic::Ordering::Relaxed),
+                rt.spooled.load(std::sync::atomic::Ordering::Relaxed),
+                rt.replayed.load(std::sync::atomic::Ordering::Relaxed),
+                rt.errors.load(std::sync::atomic::Ordering::Relaxed),
+                t2.bridge_metrics().t0_ledger_calls(),
+            );
         }
         if let Some(node) = self.node.take() {
             let _ = node.stop();

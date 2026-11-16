@@ -234,12 +234,13 @@ impl MockTransport {
                     key
                 }
                 (Some(pos), "reject") => self.entries[pos].storage_key.clone(),
-                (Some(pos), _) => {
-                    // `supersede`/`add` com mesma chave: o antigo sai (o
-                    // histórico fica no audit do banco real).
+                (Some(pos), "supersede") => {
+                    // O antigo sai (no banco real, o histórico fica no audit).
                     self.entries.remove(pos);
                     self.insert(doc, scope_app, scope_run, entities)
                 }
+                // `add`: doutrina ADD-only — o novo entra ao lado do antigo.
+                (Some(_), _) => self.insert(doc, scope_app, scope_run, entities),
                 (None, _) => self.insert(doc, scope_app, scope_run, entities),
             };
             keys.push(storage_key);
@@ -604,77 +605,111 @@ impl HttpTransport {
             .write_all(headers.as_bytes())
             .and_then(|_| stream.write_all(body.as_bytes()))
             .map_err(|_| SgdbError::Offline)?;
-        let mut raw = Vec::new();
-        stream
-            .take(MAX_RESPONSE as u64)
-            .read_to_end(&mut raw)
-            .map_err(|_| SgdbError::Timeout)?;
-        let text = String::from_utf8_lossy(&raw).to_string();
-        let (head, content) = text
-            .split_once("\r\n\r\n")
-            .or_else(|| text.split_once("\n\n"))
-            .ok_or_else(|| SgdbError::Protocol("resposta HTTP sem cabeçalho".into()))?;
-        let mut session = None;
-        for line in head.lines() {
-            if let Some((name, value)) = line.split_once(':') {
-                if name.eq_ignore_ascii_case("mcp-session-id") {
-                    session = Some(value.trim().to_string());
+        let mut reader = BufReader::new(stream);
+        let mut head = String::new();
+        loop {
+            let mut line = String::new();
+            match reader.read_line(&mut line) {
+                Ok(0) => break,
+                Ok(_) => {
+                    head.push_str(&line);
+                    if line == "\r\n" || line == "\n" {
+                        break;
+                    }
                 }
+                Err(_) => return Err(SgdbError::Timeout),
             }
+        }
+        if head.is_empty() {
+            return Err(SgdbError::Offline);
         }
         if !head.starts_with("HTTP/1.1 2") && !head.starts_with("HTTP/1.0 2") {
             let status = head.lines().next().unwrap_or("HTTP ?");
             return Err(SgdbError::Protocol(format!("HTTP {status}")));
         }
-        if let Some(value) = session {
+        if let Some(value) = header_value(&head, "mcp-session-id") {
             self.session = Some(value);
         }
-        // Chunked: decodifica; SSE: pega as linhas `data:`.
-        let content = if head
-            .to_ascii_lowercase()
-            .contains("transfer-encoding: chunked")
-        {
-            decode_chunked(content.as_bytes())
+        let lower = head.to_ascii_lowercase();
+        let length = header_value(&head, "content-length").and_then(|v| v.parse::<usize>().ok());
+        let mut bytes = Vec::new();
+        if lower.contains("transfer-encoding: chunked") {
+            loop {
+                let mut size_line = String::new();
+                if reader
+                    .read_line(&mut size_line)
+                    .map_err(|_| SgdbError::Timeout)?
+                    == 0
+                {
+                    break;
+                }
+                let size_text = size_line.split(';').next().unwrap_or("").trim();
+                let size = usize::from_str_radix(size_text, 16).unwrap_or(0);
+                if size == 0 {
+                    break;
+                }
+                let mut chunk = vec![0u8; size];
+                reader
+                    .read_exact(&mut chunk)
+                    .map_err(|_| SgdbError::Timeout)?;
+                bytes.extend_from_slice(&chunk);
+                let mut crlf = [0u8; 2];
+                let _ = reader.read_exact(&mut crlf);
+                if bytes.len() > MAX_RESPONSE {
+                    return Err(SgdbError::Protocol("resposta acima de MAX_RESPONSE".into()));
+                }
+            }
+        } else if let Some(length) = length {
+            if length > MAX_RESPONSE {
+                return Err(SgdbError::Protocol("resposta acima de MAX_RESPONSE".into()));
+            }
+            bytes.resize(length, 0);
+            reader
+                .read_exact(&mut bytes)
+                .map_err(|_| SgdbError::Timeout)?;
         } else {
-            content.to_string()
-        };
+            // SSE/streaming sem `Content-Length`: aceita o que chegar até o
+            // timeout (o MCP manda o evento e mantém a conexão aberta).
+            let mut buf = [0u8; 4096];
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        bytes.extend_from_slice(&buf[..n]);
+                        if bytes.len() >= MAX_RESPONSE {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        }
+        let content = String::from_utf8_lossy(&bytes).to_string();
+        // SSE: pega a última linha `data:` com JSON.
         let content = if content.trim_start().starts_with("data:") {
             content
                 .lines()
-                .filter_map(|l| l.strip_prefix("data:"))
-                .map(str::trim)
-                .filter(|l| l.starts_with('{'))
-                .last()
+                .rev()
+                .find_map(|line| {
+                    let payload = line.strip_prefix("data:")?.trim();
+                    payload.starts_with('{').then_some(payload)
+                })
                 .unwrap_or("")
                 .to_string()
         } else {
             content
         };
-        Ok((content, head.to_string()))
+        Ok((content, head))
     }
 }
 
-fn decode_chunked(raw: &[u8]) -> String {
-    let mut out = Vec::new();
-    let mut rest = raw;
-    loop {
-        let Some(pos) = rest.windows(2).position(|w| w == b"\r\n") else {
-            break;
-        };
-        let size_text = String::from_utf8_lossy(&rest[..pos]);
-        let size = usize::from_str_radix(size_text.split(';').next().unwrap_or("").trim(), 16)
-            .unwrap_or(0);
-        rest = &rest[pos + 2..];
-        if size == 0 || rest.len() < size {
-            break;
-        }
-        out.extend_from_slice(&rest[..size]);
-        rest = &rest[size..];
-        if rest.starts_with(b"\r\n") {
-            rest = &rest[2..];
-        }
-    }
-    String::from_utf8_lossy(&out).to_string()
+/// Valor de um cabeçalho HTTP (case-insensitive).
+fn header_value(head: &str, name: &str) -> Option<String> {
+    head.lines().find_map(|line| {
+        let (key, value) = line.split_once(':')?;
+        key.eq_ignore_ascii_case(name)
+            .then(|| value.trim().to_string())
+    })
 }
 
 impl Transport for HttpTransport {
@@ -846,11 +881,7 @@ impl Outbox {
     /// Lê os documentos pendentes (linhas inválidas são descartadas).
     pub fn read(&self) -> Vec<PhaseDoc> {
         std::fs::read_to_string(&self.path)
-            .map(|text| {
-                text.lines()
-                    .filter_map(|line| PhaseDoc::parse(line))
-                    .collect()
-            })
+            .map(|text| text.lines().filter_map(PhaseDoc::parse).collect())
             .unwrap_or_default()
     }
 
@@ -884,9 +915,49 @@ mod tests {
     }
 
     #[test]
-    fn chunked_decodifica() {
-        let raw = b"5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n";
-        assert_eq!(decode_chunked(raw), "hello world");
+    fn http_transport_le_chunked() {
+        use std::net::TcpListener;
+        use std::thread;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener");
+        let addr = listener.local_addr().expect("addr");
+        let server = thread::spawn(move || {
+            let (stream, _) = listener.accept().expect("accept");
+            let mut reader = BufReader::new(stream.try_clone().expect("clone"));
+            let mut content_length = 0usize;
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+                    break;
+                }
+                if let Some((name, value)) = line.split_once(':') {
+                    if name.eq_ignore_ascii_case("content-length") {
+                        content_length = value.trim().parse().unwrap_or(0);
+                    }
+                }
+            }
+            let mut body = vec![0u8; content_length];
+            reader.read_exact(&mut body).expect("body");
+            let payload = br#"{"jsonrpc":"2.0","id":1,"result":{"status":"chunked"}}"#;
+            let mut stream = stream;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n{:x}\r\n",
+                payload.len()
+            )
+            .expect("head");
+            stream.write_all(payload).expect("chunk");
+            stream.write_all(b"\r\n0\r\n\r\n").expect("end");
+        });
+        let mut transport = HttpTransport::new(&format!("http://{addr}/mcp")).expect("transporte");
+        let result = transport
+            .call(&tool_request(1, "health", Json::obj([])))
+            .expect("result");
+        assert_eq!(
+            result.get("status").and_then(|v| v.as_str()),
+            Some("chunked")
+        );
+        server.join().expect("join");
     }
 
     #[test]
