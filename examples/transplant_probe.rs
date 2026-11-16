@@ -487,14 +487,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while start < n {
         let end = (start + SHARD_CAP).min(n);
         let mut store = FhrrStore::with_traces(FHRR_DIM, TRACES)?;
-        for i in start..end {
-            let (e, r, v) = ds.triples[i];
+        for (e, r, v) in ds.triples[start..end].iter().copied() {
             store.add_fact(&entity_phase[e], &relation_phase[r], &value_phase[v])?;
         }
         shards += 1;
         max_shard = max_shard.max(end - start);
-        for i in start..end {
-            let (e, r, _) = ds.triples[i];
+        for (i, (e, r, _)) in ds.triples.iter().enumerate().take(end).skip(start) {
             let local = i - start;
             for (si, sigma) in sigmas.iter().enumerate() {
                 let mut cue = entity_phase[e].clone();
@@ -551,7 +549,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for s in 0..N_SLOTS {
             for v in 0..active {
                 let mut x = attr[s][v].clone();
-                for t in 0..N_SLOTS {
+                for (t, _) in attr.iter().enumerate().take(N_SLOTS) {
                     if t != s {
                         let w = (g * 3 + t) % VALUES_PER_SLOT;
                         add_assign(&mut x, &attr[t][w]);
@@ -600,11 +598,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while shard_off < n && start < n {
         let end = (shard_off + SHARD_CAP).min(n);
         let mut store = FhrrStore::with_traces(FHRR_DIM, TRACES)?;
-        for i in shard_off..end {
-            let (e, r, v) = ds.triples[i];
+        for (e, r, v) in ds.triples[shard_off..end].iter().copied() {
             store.add_fact(&entity_phase[e], &relation_phase[r], &value_phase[v])?;
         }
-        for i in shard_off.max(start)..end {
+        for (i, (e, r, _)) in ds.triples.iter().enumerate().take(end).skip(shard_off.max(start)) {
             let (e, r, _) = ds.triples[i];
             let local = i - shard_off;
             let hit = store.query_match(&entity_phase[e], &relation_phase[r], &mask)?;
@@ -620,8 +617,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     // fora do domínio: pistas aleatórias
     let mut ood_store = FhrrStore::with_traces(FHRR_DIM, TRACES)?;
-    for i in 0..SHARD_CAP.min(n) {
-        let (e, r, v) = ds.triples[i];
+    for (e, r, v) in ds.triples[..SHARD_CAP.min(n)].iter().copied() {
         ood_store.add_fact(&entity_phase[e], &relation_phase[r], &value_phase[v])?;
     }
     for _ in 0..200 {

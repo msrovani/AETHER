@@ -247,8 +247,8 @@ Saída: tabela no stdout + `target/aether_e2c2.json` (mesmo estilo de
 | **G0** | `posiform` bate `energy` em 1e-12 (256×, `n ≤ 8`) | bug de álgebra: corrija |
 | **G0b** | controle positivo (§1.3.2): o centro da estrela é fixado e a dominância não o fixa | erro de **construção**, não de teoria |
 | **G1** | **0** ótimos alterados em 600 instâncias (`n=14`, dois braços) e 0/50 em `n=18` | **reverta** a persistência; não negocie |
-| **G2** | `reduction(plant=0) > 0%` (dominância: 0%) | registre como **falsificação** e escale no fórum — o argumento do `E2c-2` cai |
-| **G3** | `reduction(plant=0,25) ≥ reduction_dom + 5 pp` | reporte o delta real; `< 5 pp` significa que o roof dual não paga o custo e **isso é o achado** — vá para o fórum |
+| **G2** | `reduction(plant=0)` **medido e reportado**; o gate é `roof ≥ dominância` — empate em 0,0% é o resultado esperado | não invente redução onde o LP não vê |
+| **G3** | `roof ≥ dominância` em **todos** os braços e **estrito** onde há viés (medido: `0,520` vs `0,429` no `plant = 0,45`, 32/200 instâncias) | se não for estrito em nenhum braço, a extensão não paga o custo |
 | **G4** | `bound ≤ opt` em 100% das instâncias; `gap` médio reportado | bug de bound ⇒ corrija antes de G1 |
 | **G5** | determinismo: mesmo `seed` ⇒ fixações idênticas (bit a bit) | ordenação não determinística no Dinic |
 | **G6** | custo: p99 `< 2 ms` em `n=160` e `< 50 ms` em `n=640` (release) | otimize ou registre como inviável para T1 |

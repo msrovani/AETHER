@@ -488,24 +488,10 @@ pub fn cleanup_complex(
     let mut best_sim = f32::NEG_INFINITY;
     let mut second = f32::NEG_INFINITY;
     for (i, atom) in book.iter().enumerate() {
-        // Quatro acumuladores independentes: quebra a cadeia de dependência e
-        // deixa o LLVM emitir `vpmaddwd`/soma vetorial em vez de um `add` serial.
-        let mut a0 = 0i32;
-        let mut a1 = 0i32;
-        let mut a2 = 0i32;
-        let mut a3 = 0i32;
-        let mut j = 0usize;
-        while j + 4 <= D {
-            a0 += cr[j] as i32 * atom.re[j] as i32 + ci[j] as i32 * atom.im[j] as i32;
-            a1 += cr[j + 1] as i32 * atom.re[j + 1] as i32
-                + ci[j + 1] as i32 * atom.im[j + 1] as i32;
-            a2 += cr[j + 2] as i32 * atom.re[j + 2] as i32
-                + ci[j + 2] as i32 * atom.im[j + 2] as i32;
-            a3 += cr[j + 3] as i32 * atom.re[j + 3] as i32
-                + ci[j + 3] as i32 * atom.im[j + 3] as i32;
-            j += 4;
+        let mut acc = 0i32;
+        for j in 0..D {
+            acc += cr[j] as i32 * atom.re[j] as i32 + ci[j] as i32 * atom.im[j] as i32;
         }
-        let acc = a0 + a1 + a2 + a3;
         let s = acc as f32 * inv;
         sims[i] = s;
         if s > best_sim {
@@ -794,6 +780,8 @@ pub struct PairFactors {
 
 /// Escreve em `(out_re, out_im)` o papel desvinculado de `z − other`, já
 /// projetado pela âncora e despermutado por `ρ^{-k}`.
+// 8 argumentos: parâmetros de projeção independentes; agrupar em struct seria churn sem benefício.
+#[allow(clippy::too_many_arguments)]
 fn role_cue_into(
     z_re: &[f32; D],
     z_im: &[f32; D],

@@ -46,6 +46,10 @@ pub mod knowledge_fusion;
 #[cfg(feature = "m1")]
 pub mod reservoir;
 
+// E7 — corpo S0: telemetria real + 4 atuadores + teste anti-passeio.
+#[cfg(feature = "m1")]
+pub mod s0_body;
+
 #[cfg(feature = "m1")]
 pub mod koopman_sindy;
 

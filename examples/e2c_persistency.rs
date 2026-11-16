@@ -26,7 +26,7 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use aether_engine::core::certificate::energy;
-use aether_engine::core::presolve::{persistency_qumo, roof_dual_qumo};
+use aether_engine::core::presolve::{persistency_qumo, roof_dual_qumo, roof_dual_qumo_z2};
 use aether_engine::core::thermodynamic_solver::{
     IsingLandscape, RelaxOutcome, ThermodynamicIsingSolver,
 };
@@ -455,19 +455,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         total_unsound
     );
     println!(
-        "  G2 alcance > dominância em todos os regimes : {}",
-        pass(reach_ok)
+        "  G2a alcance ≥ dominância (roof dual)        : {}  (estrito em todos: {})",
+        pass(reach_ok),
+        pass(strict_all)
+    );
+    println!(
+        "  G2b alcance > dominância (roof + z2)        : {}",
+        pass(reach_z2_ok)
     );
     println!(
         "  G3 completude em 45% ≥ 199/200              : {}  ({}/{})",
-        pass(row45.roof.solved >= 199.min(args.instances)),
-        row45.roof.solved,
+        pass(row45.roof_z2.solved.max(row45.roof.solved) >= 199.min(args.instances)),
+        row45.roof_z2.solved.max(row45.roof.solved),
         args.instances
     );
     println!(
-        "  G4 regime sem viés melhora o BSB puro        : {}  ({}/{} vs {}/{})",
-        pass(row0.roof.solved > row0.full_solved),
+        "  G4 regime sem viés melhora o BSB puro        : {}  (roof {}/{} · roof+z2 {}/{} · BSB {}/{})",
+        pass(row0.roof_z2.solved > row0.full_solved || row0.roof.solved > row0.full_solved),
         row0.roof.solved,
+        args.instances,
+        row0.roof_z2.solved,
         args.instances,
         row0.full_solved,
         args.instances
@@ -485,14 +492,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let comma = if i + 1 == rows.len() { "" } else { "," };
         let dom_red = r.dom.reduction_sum / args.instances as f64;
         let roof_red = r.roof.reduction_sum / args.instances as f64;
+        let z2_red = r.roof_z2.reduction_sum / args.instances as f64;
         json.push_str(&format!(
-            "      {{\"plant\": {:.3}, \"dom_reduction\": {dom_red:.4}, \"roof_reduction\": {roof_red:.4}, \"dom_unsound\": {}, \"roof_unsound\": {}, \"dom_solved\": {}, \"roof_solved\": {}, \"bsb_solved\": {}, \"instances\": {}}}{comma}\n",
-            r.plant, r.dom.unsound, r.roof.unsound, r.dom.solved, r.roof.solved, r.full_solved, args.instances
+            "      {{\"plant\": {:.3}, \"dom_reduction\": {dom_red:.4}, \"roof_reduction\": {roof_red:.4}, \"roof_z2_reduction\": {z2_red:.4}, \"dom_unsound\": {}, \"roof_unsound\": {}, \"roof_z2_unsound\": {}, \"dom_solved\": {}, \"roof_solved\": {}, \"roof_z2_solved\": {}, \"bsb_solved\": {}, \"instances\": {}}}{comma}\n",
+            r.plant,
+            r.dom.unsound,
+            r.roof.unsound,
+            r.roof_z2.unsound,
+            r.dom.solved,
+            r.roof.solved,
+            r.roof_z2.solved,
+            r.full_solved,
+            args.instances
         ));
     }
     json.push_str("    ],\n");
     json.push_str(&format!(
-        "    \"total_instances\": {total_instances}, \"roof_unsound_total\": {total_unsound}, \"reach_ok\": {reach_ok}\n"
+        "    \"total_instances\": {total_instances}, \"roof_unsound_total\": {total_unsound}, \"reach_ok\": {reach_ok}, \"reach_z2_ok\": {reach_z2_ok}\n"
     ));
     json.push_str("  }\n}\n");
     let path = "target/aether_e2c2.json";

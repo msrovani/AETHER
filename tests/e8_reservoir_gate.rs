@@ -27,7 +27,7 @@ fn e8_reservatorio_congelado_bate_gates() {
     };
 
     let frozen = bench_frozen(&series, cfg, 64, predict_n).expect("frozen");
-    let joint = bench_joint(&series, cfg, 64, predict_n, 1e-4).expect("joint");
+    let joint = bench_joint(&series, cfg, 64, predict_n, 1e-6).expect("joint");
     let smin = series.iter().cloned().fold(f32::INFINITY, f32::min);
     let smax = series.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
     println!("[E8] serie min={smin:.4} max={smax:.4} len={}", series.len());

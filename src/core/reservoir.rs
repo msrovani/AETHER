@@ -491,7 +491,7 @@ pub fn bench_frozen(
     predict_n: usize,
 ) -> Result<BenchResult> {
     let start = Instant::now();
-    let mut model = FrozenModel::new(cfg, 0.001, 1.0)?;
+    let mut model = FrozenModel::new(cfg, 0.03, 1.0)?;
     let train_end = series.len().saturating_sub(predict_n + 1);
     for t in warmup..train_end {
         model.observe(series[t], series[t + 1])?;
@@ -514,7 +514,7 @@ pub fn bench_joint(
     eta: f32,
 ) -> Result<BenchResult> {
     let start = Instant::now();
-    let mut model = JointModel::new(cfg, 0.001, 1.0, eta)?;
+    let mut model = JointModel::new(cfg, 0.03, 1.0, eta)?;
     let train_end = series.len().saturating_sub(predict_n + 1);
     for t in warmup..train_end {
         model.observe(series[t], series[t + 1])?;
@@ -527,7 +527,7 @@ pub fn bench_joint(
     for t in train_end..(train_end + predict_n) {
         model.observe(series[t], series[t + 1])?;
         let state = model.state();
-        model.predict_into(&state, &mut pred)?;
+        model.predict_into(state, &mut pred)?;
         let d = f64::from(pred[0] - series[t + 1]);
         se += d * d;
         count += 1;
@@ -556,7 +556,7 @@ fn evaluate_frozen(
     for t in start..(start + predict_n) {
         model.observe(series[t], series[t + 1])?;
         let state = model.state();
-        model.predict_into(&state, &mut pred)?;
+        model.predict_into(state, &mut pred)?;
         let d = f64::from(pred[0] - series[t + 1]);
         se += d * d;
         count += 1;

@@ -21,6 +21,7 @@
 
 use std::f32::consts::TAU;
 use std::hint::black_box;
+use std::sync::Mutex;
 use std::time::Instant;
 
 use rand::{Rng, SeedableRng};
@@ -30,6 +31,13 @@ use aether_engine::core::bam_phase::BamHolographicVector;
 use aether_engine::core::phase_language::*;
 
 const SEED: u64 = 0xE1_2026;
+
+/// Os gates compartilham CPU; a latência do G5 só é honesta sem contenção.
+static GATE_LOCK: Mutex<()> = Mutex::new(());
+
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    GATE_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 // ---------------------------------------------------------------------------
 // Instrumentação de alocação (única `unsafe` do arquivo, e é do medidor)
@@ -175,6 +183,7 @@ fn snr(signal: &[f32], noise: &[f32]) -> f64 {
 
 #[test]
 fn g1_sharding_holds_1000_facts_and_flat_collapses() {
+    let _guard = serial();
     let (cb, a, facts, mem) = build(SEED);
     assert!(
         mem.max_load() <= SHARD_CAP,
@@ -199,6 +208,7 @@ fn g1_sharding_holds_1000_facts_and_flat_collapses() {
 
 #[test]
 fn g2_order_matters_a_to_b_vs_b_to_a() {
+    let _guard = serial();
     let cb = Codebooks::build(SEED ^ 2);
     let a = Anchors::build(SEED ^ 2);
     let mut rng = ChaCha8Rng::seed_from_u64(SEED ^ 0xC0_0042);
@@ -246,6 +256,7 @@ fn g2_order_matters_a_to_b_vs_b_to_a() {
 
 #[test]
 fn g3_snr_depth_and_rg_topdown() {
+    let _guard = serial();
     let (cb, a, facts, mem) = build(SEED ^ 3);
     let mut sc = QueryScratch::new();
     let n = 120usize;
@@ -341,6 +352,7 @@ fn g3_snr_depth_and_rg_topdown() {
 
 #[test]
 fn g4_abstains_on_oov_noise_and_depth() {
+    let _guard = serial();
     let cb = Codebooks::build(SEED ^ 4);
     let a = Anchors::build(SEED ^ 4);
     let mut rng = ChaCha8Rng::seed_from_u64(SEED ^ 0xAB_57);
@@ -438,6 +450,7 @@ fn g4_abstains_on_oov_noise_and_depth() {
 
 #[test]
 fn g5_zero_alloc_and_latency() {
+    let _guard = serial();
     let (cb, a, facts, mem) = build(SEED ^ 5);
     let mut sc = QueryScratch::new();
     let n = 240usize;

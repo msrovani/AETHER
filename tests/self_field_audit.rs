@@ -86,7 +86,7 @@ fn eval_query(mem: &mut ComplexPhaseMemory, q: &Query, m: &[bool]) -> (bool, f32
     // diferença medida (nenhum resíduo carregado entre consultas).
     mem.phases.fill(0.0);
     mem.rotation = 0.0;
-    let (phases, energy) = mem.recall(&q.cue, m, STEPS, DT);
+    let (phases, _energy) = mem.recall(&q.cue, m, STEPS, DT);
     let conf = mem.confidence_from_phases(&phases);
     let frame = SelfFrame::new(
         0.0,
