@@ -490,6 +490,13 @@ pub struct RoofDualWorkspace {
     iter: [i32; ROOF_NODES],
     queue: [u16; ROOF_NODES],
     reach: [bool; ROOF_NODES],
+    // Kosaraju (persistência fraca): ordem de término, componentes e visita.
+    iter2: [i32; ROOF_NODES],
+    order: [u16; ROOF_NODES],
+    stack: [u16; ROOF_NODES],
+    region: [i32; ROOF_NODES],
+    alive: [bool; ROOF_NODES],
+    visited: [bool; ROOF_NODES],
 }
 
 impl RoofDualWorkspace {
@@ -510,6 +517,12 @@ impl RoofDualWorkspace {
             iter: [0; ROOF_NODES],
             queue: [0; ROOF_NODES],
             reach: [false; ROOF_NODES],
+            iter2: [0; ROOF_NODES],
+            order: [0; ROOF_NODES],
+            stack: [0; ROOF_NODES],
+            region: [0; ROOF_NODES],
+            alive: [false; ROOF_NODES],
+            visited: [false; ROOF_NODES],
         })
     }
 
@@ -655,6 +668,94 @@ impl RoofDualWorkspace {
         }
     }
 
+    /// Componentes fortemente conexas do grafo residual (Kosaraju).
+    ///
+    /// Participam apenas os nós de variáveis **ambíguas** (`alive`). Duas
+    /// passadas: ordem de término no grafo residual, depois DFS no grafo
+    /// reverso na ordem inversa. Numera as componentes em ordem topológica.
+    fn scc_regions(&mut self, n: usize) {
+        let nodes = 2 * n;
+        for r in self.region.iter_mut() {
+            *r = 0;
+        }
+        for v in self.visited.iter_mut() {
+            *v = false;
+        }
+
+        // --- 1ª passada: ordem de término sobre o residual -------------------
+        let mut m = 0usize;
+        for s in 0..nodes {
+            if !self.alive[s] || self.visited[s] {
+                continue;
+            }
+            self.visited[s] = true;
+            self.iter2[s] = self.first[s];
+            self.stack[0] = s as u16;
+            let mut sp = 1usize;
+            while sp > 0 {
+                let v = self.stack[sp - 1] as usize;
+                let mut a = self.iter2[v];
+                while a >= 0 {
+                    let ia = a as usize;
+                    let to = self.arcs[ia].to as usize;
+                    if self.arcs[ia].cap > ROOF_EPS && self.alive[to] && !self.visited[to] {
+                        break;
+                    }
+                    a = self.arcs[ia].next;
+                }
+                self.iter2[v] = a;
+                if a < 0 {
+                    self.order[m] = v as u16;
+                    m += 1;
+                    sp -= 1;
+                } else {
+                    let to = self.arcs[a as usize].to as usize;
+                    self.visited[to] = true;
+                    self.iter2[to] = self.first[to];
+                    self.stack[sp] = to as u16;
+                    sp += 1;
+                }
+            }
+        }
+
+        // --- 2ª passada: grafo reverso, ordem inversa ------------------------
+        let mut comp = 0i32;
+        for idx in (0..m).rev() {
+            let s = self.order[idx] as usize;
+            if !self.alive[s] || self.region[s] > 0 {
+                continue;
+            }
+            comp += 1;
+            self.region[s] = comp;
+            self.iter2[s] = self.first[s];
+            self.stack[0] = s as u16;
+            let mut sp = 1usize;
+            while sp > 0 {
+                let v = self.stack[sp - 1] as usize;
+                let mut a = self.iter2[v];
+                while a >= 0 {
+                    let ia = a as usize;
+                    let to = self.arcs[ia].to as usize;
+                    // aresta reversa residual (to → v) ⇒ v → to em Gᵀ
+                    if self.arcs[ia ^ 1].cap > ROOF_EPS && self.alive[to] && self.region[to] <= 0 {
+                        break;
+                    }
+                    a = self.arcs[ia].next;
+                }
+                self.iter2[v] = a;
+                if a < 0 {
+                    sp -= 1;
+                } else {
+                    let to = self.arcs[a as usize].to as usize;
+                    self.region[to] = comp;
+                    self.iter2[to] = self.first[to];
+                    self.stack[sp] = to as u16;
+                    sp += 1;
+                }
+            }
+        }
+    }
+
     /// Uma passada do roof dual sobre `n` variáveis (`j` plano `n×n`, `h`).
     ///
     /// `fixed` recebe `Some(0|1)` para as variáveis persistentes. Devolve o
@@ -740,6 +841,11 @@ impl RoofDualWorkspace {
         let flow = self.max_flow();
         self.residual_from_source();
 
+        // Rótulo por segmento (persistência forte do roof dual).
+        for i in 0..ROOF_NODES {
+            self.alive[i] = false;
+        }
+        let mut ambig = [false; ROOF_MAX_N];
         for i in 0..n {
             // `what_segment`: 0 = lado da fonte, 1 = lado do sumidouro; o rótulo
             // é o valor de `x_i`. Ambíguo quando os dois literais caem no mesmo
@@ -748,6 +854,29 @@ impl RoofDualWorkspace {
             let seg1: i8 = if self.reach[ROOF_MAX_N + i] { 0 } else { 1 };
             if seg0 != seg1 {
                 fixed[i] = Some(seg0);
+            } else {
+                ambig[i] = true;
+                self.alive[i] = true;
+                self.alive[ROOF_MAX_N + i] = true;
+            }
+        }
+
+        // Refinamento por SCC (persistência fraca): em QPBO é o passo
+        // `ComputeWeakPersistencies`. Só decide o que a segmentação deixou
+        // ambíguo; a comparação é entre as componentes dos dois literais.
+        if ambig.iter().any(|a| *a) {
+            self.scc_regions(n);
+            for i in 0..n {
+                if !ambig[i] {
+                    continue;
+                }
+                let r0 = self.region[i];
+                let r1 = self.region[ROOF_MAX_N + i];
+                if r0 > r1 {
+                    fixed[i] = Some(0);
+                } else if r0 < r1 {
+                    fixed[i] = Some(1);
+                }
             }
         }
         flow

@@ -36,6 +36,39 @@ fn main() {
     }
     println!("dot(z, value)/D = {:.3}", dot / D as f32);
 
+    // Cue OBJ independente: z − termM, desvincula A_O, unrho.
+    let term_m = bind(
+        a.m.as_slice(),
+        &rho(cb.modu.clean[f.ids[3] as usize].as_slice(), ROLE_M),
+    );
+    let mut ur = [0f32; D];
+    let mut ui = [0f32; D];
+    for j in 0..D {
+        let (sm, cm) = lut.sin_cos(BamPhase(term_m[j]));
+        let re = sc.z_re[j] - cm;
+        let im = sc.z_im[j] - sm;
+        let (so, co) = lut.sin_cos(BamPhase(a.o.as_slice()[j]));
+        ur[j] = re * co + im * so;
+        ui[j] = im * co - re * so;
+    }
+    let mut cr = [0f32; D];
+    let mut ci = [0f32; D];
+    for j in 0..D {
+        cr[j] = ur[(j + D - ROLE_O) % D];
+        ci[j] = ui[(j + D - ROLE_O) % D];
+    }
+    let mut csims = [0f32; N_ENT];
+    let c = cleanup_complex(&cr, &ci, cb.ent.clean_q.as_slice(), &mut csims);
+    let mut corder: Vec<(usize, f32)> = csims.iter().copied().enumerate().collect();
+    corder.sort_by(|x, y| y.1.partial_cmp(&x.1).unwrap());
+    println!(
+        "cue independente: idx={} sim={:.3} true={} top={:?}",
+        c.index,
+        c.sim,
+        f.ids[2],
+        &corder[..5]
+    );
+
     let p = resonate_pair(&mut sc, &cb, &a);
     println!("pair={p:?} true_obj={} true_mod={}", f.ids[2], f.ids[3]);
     let mut osims = [0f32; N_ENT];
