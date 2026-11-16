@@ -312,9 +312,43 @@ impl QuboPresolve {
 /// novas fixações (cascata) — daí o fixpoint.
 pub fn persistency_qumo(n: usize, j: &[f64], h: &[f64]) -> QuboPresolve {
     let mut fixed: Vec<Option<i8>> = vec![None; n];
-    let mut h_eff: Vec<f64> = h.to_vec();
-    let mut rounds = 0usize;
+    let mut h_eff: Vec<f64> = vec![0.0; n];
+    let mut residual: Vec<usize> = Vec::with_capacity(n);
+    let rounds =
+        persistency_qumo_into(n, j, h, &mut fixed, &mut h_eff, &mut residual);
+    QuboPresolve {
+        fixed,
+        residual,
+        h_eff,
+        rounds,
+    }
+}
 
+/// Versão **sem alocação** de [`persistency_qumo`]: os buffers são do chamador.
+///
+/// `fixed` e `h_eff` precisam ter pelo menos `n` posições; `residual` é limpo e
+/// reutilizado (não realoca enquanto a capacidade for `>= n`). Devolve o número
+/// de rodadas até o fixpoint. Semântica idêntica à do alocante — o wrapper
+/// acima é apenas a construção dos buffers.
+pub fn persistency_qumo_into(
+    n: usize,
+    j: &[f64],
+    h: &[f64],
+    fixed: &mut [Option<i8>],
+    h_eff: &mut [f64],
+    residual: &mut Vec<usize>,
+) -> usize {
+    assert!(j.len() >= n * n, "persistency: J menor que n*n");
+    assert!(h.len() >= n, "persistency: h menor que n");
+    assert!(fixed.len() >= n, "persistency: fixed menor que n");
+    assert!(h_eff.len() >= n, "persistency: h_eff menor que n");
+
+    for f in fixed[..n].iter_mut() {
+        *f = None;
+    }
+    h_eff[..n].copy_from_slice(&h[..n]);
+
+    let mut rounds = 0usize;
     loop {
         rounds += 1;
         let mut changed = false;
@@ -353,13 +387,13 @@ pub fn persistency_qumo(n: usize, j: &[f64], h: &[f64]) -> QuboPresolve {
         }
     }
 
-    let residual: Vec<usize> = (0..n).filter(|&i| fixed[i].is_none()).collect();
-    QuboPresolve {
-        fixed,
-        residual,
-        h_eff,
-        rounds,
+    residual.clear();
+    for (i, f) in fixed[..n].iter().enumerate() {
+        if f.is_none() {
+            residual.push(i);
+        }
     }
+    rounds
 }
 
 // ---------------------------------------------------------------------------
@@ -675,8 +709,9 @@ impl RoofDualWorkspace {
                     tr[k] += cj;
                     tr[ROOF_MAX_N + k] -= cj;
                     // cópia 0: x_i ↔ x_k ; cópia 1: x̄_i ↔ x̄_k
+                    // (na cópia 1 as capacidades trocam de lado: espelho QPBO)
                     self.add_edge(i, k, cij, cji);
-                    self.add_edge(ROOF_MAX_N + i, ROOF_MAX_N + k, cij, cji);
+                    self.add_edge(ROOF_MAX_N + i, ROOF_MAX_N + k, cji, cij);
                 } else {
                     // supermodular: usa o literal complementar de `k`
                     let (a, b, c, d) = (0.0, 0.0, q, 0.0);
@@ -821,35 +856,62 @@ fn roof_weights(a: f64, b: f64, c: f64, d: f64) -> (f64, f64, f64, f64) {
 /// workspace (uma vez, fora do caminho quente) e devolve o mesmo tipo do E2c v1
 /// para que os dois possam ser comparados lado a lado.
 ///
-/// Ordem: roof dual (max-flow, cascata) **e depois** dominância no resíduo — as
-/// duas juntas são o fixpoint do presolve; ambas preservam o valor ótimo.
+/// Ordem (fixpoint do presolve):
+/// 1. dominância (E2c v1) — garante que o roof dual **contém** o que a
+///    dominância já via (monotonicidade do alcance);
+/// 2. roof dual com cascata no resíduo (max-flow);
+/// 3. dominância de novo no resíduo (persistência fraca remanescente).
+///
+/// Cada etapa preserva o valor ótimo, então a composição também preserva.
 pub fn roof_dual_qumo(n: usize, j: &[f64], h: &[f64]) -> QuboPresolve {
-    let mut ws = RoofDualWorkspace::new();
-    let mut fixed: Vec<Option<i8>> = vec![None; n];
-    ws.solve_into(n, j, h, &mut fixed);
+    if n == 0 {
+        return QuboPresolve {
+            fixed: Vec::new(),
+            residual: Vec::new(),
+            h_eff: Vec::new(),
+            rounds: 0,
+        };
+    }
 
-    // h_eff com as fixações do roof dual aplicadas.
-    let mut h_eff: Vec<f64> = h.to_vec();
-    for i in 0..n {
-        if let Some(v) = fixed[i] {
-            for k in 0..n {
-                if fixed[k].is_none() {
-                    h_eff[k] += j[k * n + i] * f64::from(v);
-                }
+    // --- 1. dominância (E2c v1) -------------------------------------------
+    let dom = persistency_qumo(n, j, h);
+    let mut fixed = dom.fixed.clone();
+
+    // --- 2. roof dual no resíduo ------------------------------------------
+    let mut residual: Vec<usize> = (0..n).filter(|&i| fixed[i].is_none()).collect();
+    if !residual.is_empty() && residual.len() <= ROOF_MAX_N {
+        let m = residual.len();
+        let mut sub_j = vec![0.0f64; m * m];
+        let mut sub_h = vec![0.0f64; m];
+        for (a, &ia) in residual.iter().enumerate() {
+            sub_h[a] = dom.h_eff[ia];
+            for (b, &ib) in residual.iter().enumerate() {
+                sub_j[a * m + b] = j[ia * n + ib];
+            }
+        }
+        let mut ws = RoofDualWorkspace::new();
+        let mut sub_fixed = vec![None::<i8>; m];
+        ws.solve_into(m, &sub_j, &sub_h, &mut sub_fixed);
+        for (a, &ia) in residual.iter().enumerate() {
+            if let Some(v) = sub_fixed[a] {
+                fixed[ia] = Some(v);
             }
         }
     }
 
-    // Dominância no resíduo: persegue o que o roof dual não viu (persistência
-    // fraca). `persistency_qumo` recebe o campo já efetivo e as variáveis
-    // livres remapeadas.
-    let residual: Vec<usize> = (0..n).filter(|&i| fixed[i].is_none()).collect();
+    // --- 3. dominância no resíduo final -----------------------------------
+    residual = (0..n).filter(|&i| fixed[i].is_none()).collect();
     if !residual.is_empty() {
         let m = residual.len();
         let mut sub_j = vec![0.0f64; m * m];
         let mut sub_h = vec![0.0f64; m];
         for (a, &ia) in residual.iter().enumerate() {
-            sub_h[a] = h_eff[ia];
+            sub_h[a] = h[ia];
+            for &k in 0..n {
+                if let Some(v) = fixed[k] {
+                    sub_h[a] += j[ia * n + k] * f64::from(v);
+                }
+            }
             for (b, &ib) in residual.iter().enumerate() {
                 sub_j[a * m + b] = j[ia * n + ib];
             }
@@ -862,7 +924,7 @@ pub fn roof_dual_qumo(n: usize, j: &[f64], h: &[f64]) -> QuboPresolve {
         }
     }
 
-    // h_eff final, já com todas as fixações.
+    // --- h_eff final, já com todas as fixações ----------------------------
     let mut h_final: Vec<f64> = h.to_vec();
     for i in 0..n {
         if let Some(v) = fixed[i] {
@@ -879,6 +941,6 @@ pub fn roof_dual_qumo(n: usize, j: &[f64], h: &[f64]) -> QuboPresolve {
         fixed,
         residual,
         h_eff: h_final,
-        rounds: 1,
+        rounds: 1 + dom.rounds,
     }
 }

@@ -296,6 +296,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // ---------------- Arm B ----------------
+    // E1b-2: varredura M ∈ {4,8,16,24,32,40,48} a 20% de pista oculta, nos dois
+    // braços (aleatório = adversarial, harmônico = estruturado). O limite
+    // operacional do M5 é o maior M com erro < 0,15 rad em cada braço.
     println!(
         "Arm B — memória de fase (M5): erro angular, {:.0}% da pista oculto",
         100.0 * args.hidden
@@ -304,21 +307,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mem_ref = ComplexPhaseMemory::new(n);
     let hidden = ((n as f64) * args.hidden).round() as usize;
     println!(
-        "{:>5} {:>9} {:>12} {:>12}",
-        "n", "padrões", "aleatório", "harmônico"
+        "{:>5} {:>9} {:>12} {:>12} {:>8}",
+        "n", "padrões", "aleatório", "harmônico", "gate<0.15"
     );
-    println!("{}", "-".repeat(42));
+    println!("{}", "-".repeat(52));
     let pattern_counts: &[usize] = if args.quick {
         &[4, 8, 16]
     } else {
-        &[4, 8, 16, 32, 64]
+        &[4, 8, 16, 24, 32, 40, 48]
     };
     let mut phase_errs: Vec<(usize, f32, f32)> = Vec::new();
     for &k in pattern_counts {
         let er = phase_memory_error(n, k, args.seed, PatternClass::Random, hidden);
         let eh = phase_memory_error(n, k, args.seed, PatternClass::Harmonic, hidden);
         phase_errs.push((k, er, eh));
-        println!("{:>5} {:>9} {:>12.3} {:>12.3}", n, k, er, eh);
+        let gate = match (er < 0.15, eh < 0.15) {
+            (true, true) => "ambos",
+            (true, false) => "random",
+            (false, true) => "harm",
+            (false, false) => "-",
+        };
+        println!(
+            "{:>5} {:>9} {:>12.3} {:>12.3} {:>8}",
+            n, k, er, eh, gate
+        );
     }
     let cap_of = |random: bool| -> usize {
         phase_errs
@@ -331,14 +343,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .max()
             .unwrap_or(0)
     };
+    let m_random = cap_of(true);
+    let m_harm = cap_of(false);
     println!(
         "  capacidade a erro < 0,15 rad: aleatório ~{} · harmônico ~{}",
-        cap_of(true),
-        cap_of(false)
+        m_random, m_harm
     );
     println!(
         "  (*) `pattern_capacity()` declarado = {}",
         mem_ref.pattern_capacity()
+    );
+    println!(
+        "  fronteira operacional segura do M5: harmônico M_harm = {} · aleatório M_rand = {}",
+        m_harm, m_random
     );
     println!();
 
@@ -367,6 +384,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     json.push_str("  ],\n");
     json.push_str(&format!("  \"slope_loglog\": {slope:.4},\n"));
+    json.push_str(&format!(
+        "  \"phase_capacity_error_0_15\": {{\"random\": {m_random}, \"harmonic\": {m_harm}}},\n"
+    ));
     json.push_str("  \"phase_memory\": [\n");
     for (i, (k, er, eh)) in phase_errs.iter().enumerate() {
         let comma = if i + 1 == phase_errs.len() { "" } else { "," };

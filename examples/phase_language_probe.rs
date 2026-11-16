@@ -220,8 +220,8 @@ fn rho(v: &Phases, k: usize) -> Phases {
     out
 }
 
-/// A inversa `ρ^{-k}` não tem versão em fase pura depois do unbinding: ela é
-/// aplicada sobre o vetor complexo dentro de [`unbind_role`].
+// A inversa `ρ^{-k}` não tem versão em fase pura depois do unbinding: ela é
+// aplicada sobre o vetor complexo dentro de `unbind_role`.
 
 /// Binding FHRR: produto de Hadamard = soma de fases (`|z| = 1` preservado).
 #[inline]

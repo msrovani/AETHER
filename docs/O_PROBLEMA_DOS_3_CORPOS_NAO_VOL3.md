@@ -379,7 +379,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 |---|---|---|---|---|
 | **E6** ✅ | II | perfil por estágio — **executado** | cobertura **99,98%**; solver **84,4%** · 7,5 GFLOP/s | bloqueio transversal **removido** |
 | **E6b** ✅ | II | kernel do solver (16 acumuladores, Rust safe) | **17,10 GFLOP/s (2,30×)** · ACQ 100 · 24 suítes verdes | R1, R5 |
-| **E1** ⚠️ | I | PLH sharded + ACF (implementação em curso por outro agente) | p50 **9,90 µs** · NC **100%** · OOV **100%** · **recall 0,1675** · SNR 0,84σ · **25 allocs** | R2 |
+| **E1** ✅ | I/II | PLH *sharded* + ressonador ACF (`phase_language_probe.rs`) — **executado** | **1.000 fatos · recall@1 1,0000** (plano 0,0725) · **SNR 5,88σ** · **p50 6,80 µs** · **0 alloc** · NC **100%** · abstenção **100%** | R2 |
 | **E1-2** ✅ | I | `FhrrStore::query_phasor_into` (fasor de papel pré-computado) | API + teste de equivalência bit-a-bit; remove `sin_cos` por consulta | R2 |
 | **E1b** ✅ | II | capacidade do store e da memória de fase — **executado** | **D=160: 64 fatos (K=6)** · lei **linear ~0,4·D** (não D²) · fase: ~4 padrões aleatórios | R2 |
 | **E2** | I | lógica como Ising + certificado | 3-SAT n≤20 = força bruta | R1 |
@@ -400,7 +400,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 
 | Código | Vol. | Sev. | Remediação |
 |---|---|---|---|
-| `NO_BINDING_HEAD` | I | crítico | E1 |
+| `NO_BINDING_HEAD` | I | ✅ **resolvido (E1)** | 1.000 fatos sharded · recall@1 **1,0000** · p50 **6,80 µs** · **0 alloc** | — |
 | `NO_ENERGY_CERT` | I | crítico | E2 → E3b |
 | `NO_ISING_CONSTRAINTS` | I | alto | E2b |
 | `NO_SELF_FIELD` | I | alto | E4 |
@@ -414,7 +414,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | `NO_ROOF_DUAL` | II | alto | E2b |
 | `NO_LIMIT_CYCLE_GUARD` | II | alto | E1b |
 | `NO_PROVENANCE` | II | alto | F1 → E3b |
-| `D_CAPACITY_UNMEASURED` | II | médio | E1 |
+| `D_CAPACITY_UNMEASURED` | II | ✅ **resolvido (E1b → E1)** | lei linear **0,4·D** medida; 1.000 fatos via 24 shards | — |
 | `NO_ACTUATOR_LOOP` | II | alto | E7 |
 | `CERT_SEMANTICS` | II | médio | §6 (vocabulário) |
 | `KB_TAXONOMY_UNDOC` | III | alto | este volume |
@@ -480,6 +480,49 @@ kernel do solver**: há ~5× de headroom até o pico f64.
 
 Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 
+**`NO_BINDING_HEAD` / `D_CAPACITY_UNMEASURED` (E1) — ✅ RESOLVIDO em 2026-11-15.**
+
+A lei do E1b (`0,4·D` fatos por acumulador) não se combate com mais dimensão: combate-se
+com **endereçamento**. 24 shards de `≤ 48` fatos (75% do teto de 64), roteados pelo par
+`(sujeito, verbo)`; âncoras de papel com permutação cíclica `ρ^k` (não-comutatividade
+estrita); e um ressonador ACF — *cleanup* iterativo com projeção *re-encode*, decisões na
+cópia **perturbada** do codebook (`±4% de π`) e validação na cópia **limpa**.
+
+| Medida | Valor |
+|---|---|
+| recall@1 — 1.000 fatos, 24 shards, D=160 | **1,0000** |
+| recall@1 — 1.000 fatos em superposição plana | **0,0725** |
+| fatos/acumulador (máximo) | **43** (≤ 48 = 75% de 64) |
+| termos/acumulador (2 por fato) | 86 — teto equivalente em K=10 ≈ 107 (**80%**) |
+| não-comutatividade A→B vs B→A | **100%** (150 pares) · sim Ψ_AB·Ψ_BA **0,501** |
+| controle comutativo (mesmo papel, sem ρ) | **1,000** — é o que a construção evita |
+| SNR do cleanup (OBJ / MOD) | **5,88σ / 5,89σ** |
+| latência por consulta (p50 / p99) | **6,80 / 12,70 µs** |
+| alocações no caminho quente | **0** |
+| abstenção OOV (vocabulário / memória) | **100% / 100%** |
+| abstenção com ruído de fase σ = 1,6 rad | **100%** (falso-abster no limpo: **0%**) |
+| validação ACF / convergência do ressonador | **100% / 100%** |
+| working set (acumuladores + codebooks + scratch) | **431 KB** (< 500 KB) |
+
+Artefatos: `examples/phase_language_probe.rs`, `target/aether_e1_plh.json`, fórum
+**MSG 0106** (claim) e **MSG 0107** (relatório). Uma implementação irmã e independente
+(**MSG 0105**) mediu o mesmo recall com **17,35 µs** de p50 e falhou só no gate de
+latência (`sin_cos` por consulta); aqui a diferença é o cleanup **complexo** (nunca
+projetado) com `cos/sin` do codebook pré-computados.
+
+**Nota de modelagem (o que o ressonador resolve — e o que não resolve).** Com o papel
+de endereço dado, o fator de *endereço* não precisa de ressonador (**MSG 0105** tem
+razão nisso). O ressonador é necessário nos **fatores do predicado**: o valor guardado é
+um bundle `A_O⊗ρ²(o) ⊕ A_M⊗ρ³(m)` e o cleanup só separa os dois quando um deles é
+descontado por *re-encode*. Guardar o predicado como **produto** de fases (soma de
+fases) falha por construção: o interferente **rotaciona** a pista em vez de somar ruído
+ortogonal, e o cleanup deixa de ver o átomo (medido: recall 0,008).
+
+**O que isso muda:** o gargalo da "linguagem em fase" não era a dimensão nem a
+capacidade do acumulador — era *endereçamento*. Com sharding por papel e um ressonador
+que separa os fatores do predicado, 1.000 fatos cabem em `D=160` a 6,8 µs e zero
+alocação, sem violar a lei do E1b em nenhum acumulador.
+
 ### 12.3 O que nasceu no Vol. III
 
 - **R7 (drift para RAG)** é o risco **mais provável da série** — porque é o caminho de
@@ -497,8 +540,8 @@ Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 4º ✅ E2b  presolve simbólico          ← FEITO: 64,8% redução, 0 insound, 200/200
 5º ✅ E2c  persistência de 1ª ordem     ← FEITO: sound (0/600), míope por construção
 6º ✅ E1b  capacidade em D=160          ← FEITO: 64 fatos · lei linear ~0,4·D
-7º ✅ E1   PLH sharded                   ← FEITO: 1.000 fatos recall 1,000 · latência 17,35 µs
-8º  E1-2 fasor pré-computado + ressonador ← fecha a latência e o caso sem fator
+7º ✅ E1   PLH sharded                   ← FEITO: 1.000 fatos recall 1,000 · p50 6,80 µs · 0 alloc
+8º ✅ E1-2 fasor pré-computado + ressonador ← FEITO: latência fechada (E1)
 9º  E2c-2 roof dual (max-flow)         ← alcance além da dominância
 10º E1b-2 memória de fase estruturada  ← separar padrão aleatório de harmônico
 11º F1   ponte read-only               ← fecha K6 sem risco de drift
@@ -513,7 +556,7 @@ Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 |---|---|---|---|
 | 1 | **Onde vão os 146 µs?** | ✅ **respondida** (E6) | **84,4% no solver** (133,1 de 157,7 µs). readout 7,0% · entropy 3,0% · wave 2,5% · actuator 1,7% · ring_copy 1,1%. Cobertura 99,98%. |
 | 2 | **ΔE prevê acerto?** | ✅ **respondida** (E3b) | **Não em otimização livre** (AUC 0,46–0,55; bound 0,058 anti-preditivo). **Sim com restrições exatas**: 383 decisivas, precisão 100%. |
-| 3 | **Quantos padrões cabem em D=160?** | ✅ **respondida** (E1b) | **64 fatos** (`FhrrStore`, K=6, recall@1 ≥ 99%); 128 já cai para 89%. Lei **linear ~0,4·D** — **não** D². Memória de fase (M5): ~**4** padrões aleatórios a erro < 0,15 rad (declarado 40). |
+| 3 | **Quantos padrões cabem em D=160?** | ✅ **respondida** (E1b/E1) | **64 fatos** por acumulador (`FhrrStore`, K=6, recall@1 ≥ 99%); 128 já cai para 89%. Lei **linear ~0,4·D** — **não** D². **E1:** com 24 shards de ≤ 48 fatos, **1.000 fatos** com recall@1 **1,0000** (superposição plana: 0,0725). Memória de fase (M5): ~**4** padrões aleatórios a erro < 0,15 rad (declarado 40). |
 | 4 | **Roof dual reduz o suficiente em CNF de circuito?** | ⏳ **parcial** (E2b/E2c) | **CNF:** presolve por unidades+implicação dá **64,8%** (cascata +39,8 pp), 0 insound, 200/200. **QUBO:** dominância é sound (**0/600 ótimos alterados**) mas míope — **0% sem viés**, 42,9% com viés 45%. Falta o **roof dual completo (max-flow)**. |
 | 5 | **O self-field melhora calibração ou só replica a surpresa?** | ⏳ **aberta** (E4) | Falsificável: melhora ECE de abstenção **sem** melhorar T01. Se T01 também melhorar, a hipótese "metacognição é separada" cai. |
 | 6 | **Um atrator pode virar "gist" sem perder a habilidade?** | ⏳ **aberta** (F2) | Hoje o atrator é binário: está ou não está. Fecha consolidando no L4 (texto/energia) e medindo retenção após N consolidações. |

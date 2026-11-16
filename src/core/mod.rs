@@ -13,6 +13,19 @@ pub mod certificate;
 #[cfg(feature = "m1")]
 pub mod presolve;
 
+// E2 — pipeline lógico de 5 estágios (presolve → persistência → decomposição
+// → BSB+Lagrange → certificado). Depende do solver e do certificado.
+#[cfg(feature = "m1")]
+pub mod logic_pipeline;
+
+// F1/E3 — proveniência e ponte de eventos read-only (SPSC, zero-alloc).
+#[cfg(feature = "m1")]
+pub mod knowledge_bridge;
+
+// E3 — transplantação geométrica (JL binário + fases lineares + verificador).
+#[cfg(feature = "m1")]
+pub mod transplant;
+
 #[cfg(feature = "m1")]
 pub mod active_inference;
 
