@@ -41,6 +41,51 @@ SAT), G2 (precisão 100%, 0 decisivas falsas em UNSAT), G3 zero-alloc.
    atualização é `O(grau(v))`; a sequência de movimentos é a mesma.
 7. **Decomposição com 2–3 `union` por cláusula** (era até 10).
 
+## Lote A — executado (2026-11-16)
+
+Ferramenta: `examples/e2_pipeline_digest.rs` (48 casos, digest FNV) +
+`examples/e2_symbolic_bench.rs` (min por instância, robusto a carga).
+**Baseline do digest: `0xa3f3babd84c2c30f`.**
+
+| # | Item | Status | Medido |
+|---:|---|---|---|
+| A1 | remover `jc` morto | ✅ | −~300 KB, digest igual |
+| A2 | bitset de violadas + contagem incremental | ✅ | **reparo ~350 µs → 0,7 µs** (min, n=20) |
+| A3 | heap preguiçoso no `descend` | ❌ **rejeitado** | heap **252 µs** vs scan **216 µs** no BSB (n=20, min de 120 reps) — **+17%**, revertido |
+| A4 | paralelizar reinícios | ❌ descartado | `rayon` aloca/syscall ⇒ quebra G3 |
+| A5 | timers encadeados | ⏭️ | ganho ~0,1 µs |
+| A6 | `gather_component` sem sort | ⏳ | pendente |
+
+**O que o lote A ensinou (medido, não inferido):**
+
+1. **O reparo era o gargalo escondido, não o `descend`.** A contagem incremental
+   (`sat_count` + bitset + ocorrências) levou o reparo de ~350 µs para **0,7 µs**
+   — 500×. O número anterior de "90 µs" era média sob carga.
+2. **O heap de flips é uma regressão.** `n` é pequeno (~104) e cada descida faz
+   poucos flips; o heap paga `log n` + entradas obsoletas por flip. Revertido e
+   registrado para não ser retentado.
+3. **A estatística importa mais que o otimizador.** O mesmo binário mediu
+   `p50 = 715 µs` e `min = 234 µs` para o estágio do solver. Todo número novo
+   deste documento é **mínimo por instância**.
+
+Estado após o lote A (min, `n=20`, 120 reps × 6 instâncias):
+
+| estágio | min |
+|---|---:|
+| presolve | **0,9 µs** |
+| persistência | 3,6 µs |
+| decomposição | 1,5 µs |
+| **simbólico (1)–(3)** | **8,6 µs** |
+| **BSB** | **216 µs** |
+| reparo | **0,7 µs** |
+| **solver (4)** | **234 µs** |
+
+Ou seja: **93% do tempo está no `relax_csr_into`** (48 passos × 2 matvecs × 4
+reinícios + o laço de fuga com `n+1` descidas). É lá que os itens 1/3 do lote B
+atuam; o resto já está abaixo de 1 µs.
+
+---
+
 ## O que sobrou (ranqueado por ganho estimado)
 
 | # | Otimização | Onde | Ganho estimado | Risco |

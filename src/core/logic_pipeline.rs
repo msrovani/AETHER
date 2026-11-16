@@ -222,8 +222,6 @@ pub struct BsbCore {
     g: Vec<f64>,
     s_try: Vec<i8>,
     g_try: Vec<f64>,
-    /// Heap de flips do descend_csr (evita o O(n) por flip).
-    heap: FlipHeap,
 }
 
 impl BsbCore {
@@ -243,7 +241,6 @@ impl BsbCore {
             g: vec![0.0; n_max],
             s_try: vec![1; n_max],
             g_try: vec![0.0; n_max],
-            heap: FlipHeap::new(n_max),
         }
     }
 
@@ -475,16 +472,7 @@ impl BsbCore {
         for i in 0..n {
             self.s[i] = self.best[i];
         }
-        let e = descend_csr(
-            n,
-            ptr,
-            col,
-            val,
-            h,
-            &mut self.s[..n],
-            &mut self.g[..n],
-            &mut self.heap,
-        );
+        let e = descend_csr(n, ptr, col, val, h, &mut self.s[..n], &mut self.g[..n]);
 
         if e >= e0 {
             for i in 0..n {
@@ -502,8 +490,7 @@ impl BsbCore {
                     h,
                     &mut self.s_try[..n],
                     &mut self.g_try[..n],
-                &mut self.heap,
-            );
+                );
                 if e_try < best_e {
                     best_e = e_try;
                     self.s[..n].copy_from_slice(&self.s_try[..n]);
@@ -600,125 +587,18 @@ fn row_energy_csr(ptr: &[u32], col: &[u32], val: &[f64], hb: &[f64], n: usize, s
 }
 
 /// `Δ_i = 2·s_i·(g_i + h_i)` (o mesmo do kernel denso).
-/// Liga o heap no `descend` (A/B de desempenho; ver `docs/E2_OPTIMIZATION.md`).
-const DESCEND_USE_HEAP: bool = true;
-
 #[inline]
 fn flip_delta(s: &[i8], g: &[f64], h: &[f64], i: usize) -> f64 {
     2.0 * f64::from(s[i]) * (g[i] + h[i])
 }
 
-/// Heap mínimo de flips com desempate por **menor índice**.
-///
-/// Reproduz exatamente a regra da varredura linear do `descend`: escolher o
-/// menor `Δ` e, entre empates, o menor índice (a varredura usa `delta <
-/// pick_delta`, então o primeiro mínimo vence). Entradas obsoletas são
-/// descartadas por *stamp* por spin — só `pick` e seus vizinhos mudam de `Δ`,
-/// então o heap evita o `O(n)` por flip.
-#[derive(Debug)]
-struct FlipHeap {
-    key: Vec<f64>,
-    idx: Vec<u32>,
-    ver: Vec<u32>,
-    stamp: Vec<u32>,
-    len: usize,
-    cap: usize,
-}
-
-impl FlipHeap {
-    fn new(n_max: usize) -> Self {
-        let cap = (16 * n_max).max(16);
-        Self {
-            key: vec![0.0; cap],
-            idx: vec![0; cap],
-            ver: vec![0; cap],
-            stamp: vec![0; n_max],
-            len: 0,
-            cap,
-        }
-    }
-
-    #[inline]
-    fn less(&self, a: usize, b: usize) -> bool {
-        let (ka, kb) = (self.key[a], self.key[b]);
-        ka < kb || (ka == kb && self.idx[a] < self.idx[b])
-    }
-
-    #[inline]
-    fn swap(&mut self, a: usize, b: usize) {
-        self.key.swap(a, b);
-        self.idx.swap(a, b);
-        self.ver.swap(a, b);
-    }
-
-    fn clear(&mut self) {
-        self.len = 0;
-    }
-
-    #[inline]
-    fn full(&self) -> bool {
-        self.len >= self.cap
-    }
-
-    #[inline]
-    fn push(&mut self, k: f64, i: u32, v: u32) {
-        if self.len == self.cap {
-            return;
-        }
-        let mut at = self.len;
-        self.key[at] = k;
-        self.idx[at] = i;
-        self.ver[at] = v;
-        self.len += 1;
-        while at > 0 {
-            let p = (at - 1) / 2;
-            if self.less(at, p) {
-                self.swap(at, p);
-                at = p;
-            } else {
-                break;
-            }
-        }
-    }
-
-    #[inline]
-    fn pop(&mut self) -> Option<(f64, u32, u32)> {
-        if self.len == 0 {
-            return None;
-        }
-        let out = (self.key[0], self.idx[0], self.ver[0]);
-        self.len -= 1;
-        if self.len > 0 {
-            self.swap(0, self.len);
-            let mut i = 0;
-            loop {
-                let l = 2 * i + 1;
-                let r = l + 1;
-                let mut best = i;
-                if l < self.len && self.less(l, best) {
-                    best = l;
-                }
-                if r < self.len && self.less(r, best) {
-                    best = r;
-                }
-                if best == i {
-                    break;
-                }
-                self.swap(i, best);
-                i = best;
-            }
-        }
-        Some(out)
-    }
-}
-
 /// Descida gulosa determinística com `J` em CSR (espelha `descend`).
 ///
-/// A escolha do próximo flip usa [`FlipHeap`]: só `pick` e os vizinhos de
-/// `pick` mudam de `Δ`, então o custo por flip cai de `O(n)` para
-/// `O(grau·log n)`. A ordem dos flips é **idêntica** à da varredura linear
-/// (validado por `bsb_esparso_igual_ao_denso_bit_a_bit` e pelo digest do E2).
-#[allow(clippy::too_many_arguments)]
+/// `pick` é a varredura linear (`O(n)` por flip). Medido: um heap de flips com
+/// desempate idêntico ficou **17% mais lento** (252 vs 216 µs no BSB, `n=20`,
+/// mínimo de 120 repetições) — `n` é pequeno e o número de flips por descida é
+/// baixo, então o heap só acrescenta `log n` e entradas obsoletas. Ver
+/// `docs/E2_OPTIMIZATION.md`.
 fn descend_csr(
     n: usize,
     ptr: &[u32],
@@ -727,57 +607,20 @@ fn descend_csr(
     hb: &[f64],
     s: &mut [i8],
     g: &mut [f64],
-    heap: &mut FlipHeap,
 ) -> f64 {
-    if !DESCEND_USE_HEAP {
-        // variante B (scan linear): usada só para A/B de desempenho
-        for (i, gi) in g.iter_mut().enumerate().take(n) {
-            *gi = dot_i8_csr(ptr, col, val, i, s, n);
-        }
-        let max_flips = 8 * n;
-        for _ in 0..max_flips {
-            let mut pick = usize::MAX;
-            let mut pick_delta = -FLIP_EPS;
-            for i in 0..n {
-                let delta = flip_delta(s, g, hb, i);
-                if delta < pick_delta {
-                    pick_delta = delta;
-                    pick = i;
-                }
-            }
-            if pick == usize::MAX {
-                break;
-            }
-            let delta_s = -2.0 * f64::from(s[pick]);
-            s[pick] = -s[pick];
-            for k in ptr[pick] as usize..ptr[pick + 1] as usize {
-                g[col[k] as usize] += val[k] * delta_s;
-            }
-        }
-        return row_energy_csr(ptr, col, val, hb, n, s);
-    }
     for (i, gi) in g.iter_mut().enumerate().take(n) {
         *gi = dot_i8_csr(ptr, col, val, i, s, n);
     }
-    heap.clear();
-    for i in 0..n {
-        heap.stamp[i] = heap.stamp[i].wrapping_add(1);
-        let v = heap.stamp[i];
-        heap.push(flip_delta(s, g, hb, i), i as u32, v);
-    }
     let max_flips = 8 * n;
     for _ in 0..max_flips {
-        // descarta entradas obsoletas; o primeiro válido é o mínimo global
         let mut pick = usize::MAX;
-        while let Some((k, i, v)) = heap.pop() {
-            let i = i as usize;
-            if v != heap.stamp[i] {
-                continue;
-            }
-            if k < -FLIP_EPS {
+        let mut pick_delta = -FLIP_EPS;
+        for i in 0..n {
+            let delta = flip_delta(s, g, hb, i);
+            if delta < pick_delta {
+                pick_delta = delta;
                 pick = i;
             }
-            break;
         }
         if pick == usize::MAX {
             break;
@@ -787,28 +630,6 @@ fn descend_csr(
         // `J` é simétrica: a coluna `pick` está na linha `pick` (CSR).
         for k in ptr[pick] as usize..ptr[pick + 1] as usize {
             g[col[k] as usize] += val[k] * delta_s;
-        }
-        // `pick` (sinal) e os vizinhos (g) mudaram de Δ: versiona e reempurra
-        heap.stamp[pick] = heap.stamp[pick].wrapping_add(1);
-        let vp = heap.stamp[pick];
-        heap.push(flip_delta(s, g, hb, pick), pick as u32, vp);
-        for k in ptr[pick] as usize..ptr[pick + 1] as usize {
-            let j = col[k] as usize;
-            if j == pick {
-                continue;
-            }
-            heap.stamp[j] = heap.stamp[j].wrapping_add(1);
-            let vj = heap.stamp[j];
-            heap.push(flip_delta(s, g, hb, j), j as u32, vj);
-        }
-        if heap.full() {
-            // reconstrução: sempre correta, custo O(n)
-            heap.clear();
-            for i in 0..n {
-                heap.stamp[i] = heap.stamp[i].wrapping_add(1);
-                let v = heap.stamp[i];
-                heap.push(flip_delta(s, g, hb, i), i as u32, v);
-            }
         }
     }
     row_energy_csr(ptr, col, val, hb, n, s)

@@ -177,7 +177,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             rep.push(st.repair_us);
         }
         fixed_sum += pipeline.last.fixed_symbolic as f64;
-        for v in [&mut sym, &mut pre, &mut pers, &mut dec, &mut solve, &mut bsb, &mut rep] {
+        for v in [
+            &mut sym, &mut pre, &mut pers, &mut dec, &mut solve, &mut bsb, &mut rep,
+        ] {
             v.sort_by(|a, b| a.partial_cmp(b).unwrap());
         }
         sym_min.push(sym[0]);
