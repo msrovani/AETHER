@@ -59,8 +59,8 @@ const Q14: f32 = 16_384.0;
 const Q15: f32 = 32_767.0;
 
 /// Traços por acumulador. O bundle de 2 fasores por fato dobra os termos
-/// interferentes; `K=16` mantém o SNR > 5σ com 43 fatos (86 termos) e ainda
-/// cabe no orçamento de working set (< 500 KB).
+/// interferentes; `K=17` mantém o SNR > 5σ com 43 fatos (86 termos) e ainda
+/// cabe no orçamento de working set (485 KB < 500 KB).
 pub const K_TRACES: usize = 17;
 /// Shards (relações sintáticas endereçáveis).
 pub const SHARDS: usize = 24;

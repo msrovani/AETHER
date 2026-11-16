@@ -1,6 +1,6 @@
 //! E1 — gates do *Phase-Language Head* (PLH) sharded + ressonador ACF.
 //!
-//! Cinco gates, todos em `D=160`, `K=6`, 24 shards `≤ 48` fatos:
+//! Cinco gates, todos em `D=160`, `K=17`, 24 shards `≤ 48` fatos:
 //!
 //! 1. **Escala** — 1.000 fatos sharded com `recall@1 ≥ 0,99`; o controle de
 //!    superposição plana colapsa (`< 0,10`).
@@ -490,5 +490,6 @@ fn g5_zero_alloc_and_latency() {
     let p99 = lat[((lat.len() as f64 * 0.99) as usize).min(lat.len() - 1)];
     assert_eq!(allocs, 0, "hot-path alocou {allocs} vezes");
     assert!(p50 < 20.0, "p50 {p50:.2} µs >= 20 µs");
+    assert!(p99 < 20.0, "p99 {p99:.2} µs >= 20 µs");
     println!("E1.G5 allocs={allocs} p50={p50:.2}us p99={p99:.2}us");
 }

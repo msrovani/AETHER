@@ -214,11 +214,10 @@ fn g2_recuperacao_de_relacao_em_shards() {
     while start < n_facts {
         let end = (start + SHARD_CAP).min(n_facts);
         let mut store = FhrrStore::with_traces(FHRR_DIM, TRACES).expect("store");
-        for i in start..end {
+        for (i, vp) in value_ph.iter().enumerate().take(end).skip(start) {
             let (e, r) = (i / N_REL, i % N_REL);
-            let v = value_of(e, r);
             store
-                .add_fact(&entity_ph[e], &relation_ph[r], &value_ph[i])
+                .add_fact(&entity_ph[e], &relation_ph[r], vp)
                 .expect("add");
         }
         for i in start..end {
@@ -462,7 +461,7 @@ fn g3_abstencao_por_margem_tem_poucos_falsos_confiaveis() {
     let mut in_domain = Vec::new();
     let mut in_role = Vec::new();
     let mut region = Vec::new();
-    for i in 0..SHARD_CAP {
+    for _ in 0..SHARD_CAP {
         let mut e = vec![0.0f32; dim];
         let mut r = vec![0.0f32; dim];
         let mut v = vec![0.0f32; dim];
