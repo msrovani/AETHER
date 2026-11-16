@@ -1,29 +1,29 @@
-﻿//! E2c-3 â€” o que vem **depois** do roof dual em QUBO denso.
+//! E2c-3 �?" o que vem **depois** do roof dual em QUBO denso.
 //!
 //! O E2c-2 fechou o roof dual e mediu: no vidro puro (`h=0`) ele fixa 0, e sob
-//! viÃ©s estende a dominÃ¢ncia (+9,1 pp em plant=45%). A literatura de 2026 diz
-//! por quÃª e o que fazer:
+//! viés estende a dominância (+9,1 pp em plant=45%). A literatura de 2026 diz
+//! por quê e o que fazer:
 //!
-//! * **Naumann & Andres (arXiv:2610.20346, 2026):** todo posiforme Ã³timo de roof
-//!   dual jÃ¡ dÃ¡ o **maior domÃ­nio de autarkia possÃ­vel**. Nenhum autarky de
-//!   posiforme quadrÃ¡tico fixa mais que o roof dual â€” para ir alÃ©m Ã© preciso
+//! * **Naumann & Andres (arXiv:2610.20346, 2026):** todo posiforme ótimo de roof
+//!   dual já dá o **maior domínio de autarkia possível**. Nenhum autarky de
+//!   posiforme quadrático fixa mais que o roof dual �?" para ir além é preciso
 //!   sair de autarkias.
-//! * **Wang & Hahn (Front. Comput. Sci. 2026):** *probing* (fixar variÃ¡veis e
-//!   recomputar o roof dual) aumenta a probabilidade de atingir o Ã³timo global;
-//!   com um subconjunto pequeno, o resÃ­duo vira 2-SAT solÃºvel e o Ã³timo Ã©
-//!   **certificado**. Em QUBO aleatÃ³rio denso, ~metade das variÃ¡veis basta.
-//! * **Rother et al. (CVPR 2007):** QPBO-P, a versÃ£o prÃ¡tica do probing.
+//! * **Wang & Hahn (Front. Comput. Sci. 2026):** *probing* (fixar variáveis e
+//!   recomputar o roof dual) aumenta a probabilidade de atingir o ótimo global;
+//!   com um subconjunto pequeno, o resíduo vira 2-SAT solúvel e o ótimo é
+//!   **certificado**. Em QUBO aleatório denso, ~metade das variáveis basta.
+//! * **Rother et al. (CVPR 2007):** QPBO-P, a versão prática do probing.
 //!
-//! Este probe mede, em `n=14` (mesmo gerador do E2c): fixaÃ§Ãµes do roof dual,
-//! fixaÃ§Ãµes por **uniÃ£o de persistÃªncias dos dois ramos** (probing sem 2-SAT) e
-//! o custo de uma **busca exata guiada por roof dual** (nÃ³s/folhas) â€” com
-//! soundness contra forÃ§a bruta.
+//! Este probe mede, em `n=14` (mesmo gerador do E2c): fixações do roof dual,
+//! fixações por **união de persistências dos dois ramos** (probing sem 2-SAT) e
+//! o custo de uma **busca exata guiada por roof dual** (nós/folhas) �?" com
+//! soundness contra força bruta.
 //!
 //! ```text
 //! cargo run --release --example e2c3_probe
 //! ```
 //!
-//! SaÃ­da: tabela + `target/aether_e2c3_probe.json`.
+//! Saída: tabela + `target/aether_e2c3_probe.json`.
 
 #![allow(clippy::needless_range_loop)]
 
@@ -41,7 +41,7 @@ const DELTA: f64 = 0.6;
 const INSTANCES: usize = 200;
 const INSTANCES_DFS_PLANT0: usize = 20;
 const SEED0: u64 = 0xE2C_2026;
-/// OrÃ§amento de nÃ³s por instÃ¢ncia no modo `--scale`.
+/// Orçamento de nós por instância no modo `--scale`.
 const SCALE_BUDGET: u32 = 500_000;
 
 fn make_instance(n: usize, k: usize, delta: f64, seed: u64) -> (Vec<f64>, Vec<f64>) {
@@ -88,7 +88,7 @@ fn brute_force(n: usize, j: &[f64], h: &[f64]) -> f64 {
     best
 }
 
-/// Reduz o QUBO Ã s variÃ¡veis livres, substituindo as fixas em `h`.
+/// Reduz o QUBO às variáveis livres, substituindo as fixas em `h`.
 fn reduce(
     n: usize,
     j: &[f64],
@@ -116,13 +116,13 @@ fn reduce(
     (free, js, hs)
 }
 
-/// FixaÃ§Ãµes de uma passada de roof dual.
+/// Fixações de uma passada de roof dual.
 fn root_fixed(n: usize, j: &[f64], h: &[f64]) -> usize {
     roof_dual_qumo(n, j, h).fixed_count()
 }
 
-/// Probing por uniÃ£o de persistÃªncias: se os dois ramos de `p` fixam `q` no
-/// mesmo valor, `q` Ã© persistente no problema original. Itera atÃ© fixpoint.
+/// Probing por união de persistências: se os dois ramos de `p` fixam `q` no
+/// mesmo valor, `q` é persistente no problema original. Itera até fixpoint.
 fn probe_fixed(n: usize, j: &[f64], h: &[f64], max_rounds: usize) -> usize {
     let mut assign = vec![None::<i8>; n];
     for _ in 0..max_rounds {
@@ -197,7 +197,7 @@ fn probe_fixed(n: usize, j: &[f64], h: &[f64], max_rounds: usize) -> usize {
     assign.iter().filter(|x| x.is_some()).count()
 }
 
-/// Escala: atÃ© onde a busca exata fecha **sem** bound? (plant 45%)
+/// Escala: até onde a busca exata fecha **sem** bound? (plant 45%)
 fn scale_table() {
     println!("E2c-3 scale | plant=45% delta={DELTA} budget={SCALE_BUDGET}");
     println!(
@@ -244,7 +244,7 @@ fn scale_table() {
     println!("\nartefato: target/aether_e2c3_scale.json");
 }
 
-/// n=64 com orçamento maior: o bound é obrigatório ou é só custo?
+/// n=64 com or�amento maior: o bound � obrigat�rio ou � s� custo?
 fn deep_n64() {
     let n = 64usize;
     let k = (0.45 * n as f64).round() as usize;
@@ -267,8 +267,8 @@ fn deep_n64() {
     }
 }
 
-/// O `pass_into` público devolve o fluxo. Testa se `c0 + flow` é um lower bound
-/// válido, comparando com a força bruta.
+/// O `pass_into` p�blico devolve o fluxo. Testa se `c0 + flow` � um lower bound
+/// v�lido, comparando com a for�a bruta.
 fn bound_check() {
     let n = 14usize;
     let mut ws = RoofDualWorkspace::new();
@@ -295,7 +295,7 @@ fn bound_check() {
     }
 }
 
-/// Diagnóstico: fluxo e constantes nos casos analíticos.
+/// Diagn�stico: fluxo e constantes nos casos anal�ticos.
 fn flow_check() {
     let mut ws = RoofDualWorkspace::new();
     let mut fixed = [None::<i8>; ROOF_MAX_N];
