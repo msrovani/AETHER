@@ -611,8 +611,8 @@ impl Prop3 {
             occ_pos: vec![0; 2 * n_max],
             // Sondagens desfazem e refixam: `trail`/`pq` podem receber até
             // `(PROBE_MAX + 1)·n_max` empilhamentos sem realocar.
-            trail: Vec::with_capacity((PROBE_MAX as usize + 1) * n_max),
-            pq: Vec::with_capacity((PROBE_MAX as usize + 1) * n_max),
+            trail: Vec::with_capacity((PROBE_MAX + 1) * n_max),
+            pq: Vec::with_capacity((PROBE_MAX + 1) * n_max),
             cand: vec![false; n_max],
         }
     }
@@ -624,9 +624,7 @@ impl Prop3 {
 
     /// Constrói a CSR de ocorrências (uma passada `O(m)`), sem alocar.
     fn build(&mut self, n: usize, clauses: &[Clause3]) {
-        for k in 0..=2 * n {
-            self.occ_start[k] = 0;
-        }
+        self.occ_start[..=2 * n].fill(0);
         for c in clauses {
             for idx in 0..c.len() {
                 let (v, s) = c.lit(idx);
@@ -678,11 +676,7 @@ impl Prop3 {
                     let ci = self.occ_list[k];
                     match clause_state(&clauses[ci], fixed) {
                         CState::Conflict => return true,
-                        CState::Unit(w, sw) => {
-                            if self.fix(fixed, w, sw).is_none() {
-                                return true;
-                            }
-                        }
+                        CState::Unit(w, sw) if self.fix(fixed, w, sw).is_none() => return true,
                         _ => {}
                     }
                     k += 1;
@@ -701,11 +695,7 @@ impl Prop3 {
         for c in clauses.iter() {
             match clause_state(c, fixed) {
                 CState::Conflict => return true,
-                CState::Unit(v, s) => {
-                    if self.fix(fixed, v, s).is_none() {
-                        return true;
-                    }
-                }
+                CState::Unit(v, s) if self.fix(fixed, v, s).is_none() => return true,
                 _ => {}
             }
         }
@@ -1516,6 +1506,7 @@ fn emit_bit1(lin: &mut [f64], fixed: &[Option<i8>], a: BitRef, c: f64) {
 /// `jq`/`touched` são opcionais: sem eles a função só acumula `lin/qsum/jabs`
 /// (é o caminho do teste esparso de dominância, sem construir a matriz densa).
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::needless_option_as_deref)]
 fn emit_bit2(
     mut jq: Option<&mut [f64]>,
     lin: &mut [f64],
@@ -1620,11 +1611,11 @@ fn emit_bit2(
 /// Acrescenta `c · b_x` (se `y == None`) ou `c · b_x b_y` já em spins.
 #[allow(clippy::too_many_arguments)]
 fn add_b_monomial(
-    mut jq: Option<&mut [f64]>,
+    jq: Option<&mut [f64]>,
     lin: &mut [f64],
     qsum: &mut [f64],
     jabs: &mut [f64],
-    mut touched: Option<&mut Vec<u32>>,
+    touched: Option<&mut Vec<u32>>,
     fixed: &[Option<i8>],
     n: usize,
     x: usize,
@@ -1653,11 +1644,11 @@ fn add_b_monomial(
                 (None, Some(vy)) => lin[x] += c * vy,
                 (None, None) => {
                     let (xy, yx) = (x * n + y, y * n + x);
-                    if let Some(j) = jq.as_deref_mut() {
+                    if let Some(j) = jq {
                         j[xy] -= c * 0.25;
                         j[yx] -= c * 0.25;
                     }
-                    if let Some(t) = touched.as_deref_mut() {
+                    if let Some(t) = touched {
                         t.push(xy as u32);
                         t.push(yx as u32);
                     }

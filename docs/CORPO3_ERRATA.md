@@ -21,7 +21,7 @@ inseridas pelos donos dos documentos (MSG 0122/0124) nas âncoras indicadas.
 | `src/core/s0_body.rs` | E7 — telemetria real + 4 atuadores + H1–H3 | 0121 |
 | `examples/s0_body_probe.rs` | E7 — probe de 10^5 ciclos | 0121 |
 | `tests/e7_body_gate.rs` | E7 — gate H1–H3 | 0121 |
-| `src/core/reservoir.rs` | E8 — reservatório congelado + RLS + baseline Oja | 0121 |
+| `src/core/reservoir.rs` | E8 — reservatório esparso congelado + ridge/Cholesky + RLS + busca conjunta | 0121 |
 | `examples/reservoir_readout_bench.rs` | E8 — benchmark de 10^6 amostras | 0121 |
 | `tests/e8_reservoir_gate.rs` | E8 — regressão/tempo/throughput | 0121 |
 | `src/core/knowledge_fusion.rs` | F2/F3 — commit_run, supersede, gist, matriz 2D, `cue_into` escopado | 0123 |
@@ -86,21 +86,74 @@ e datagrama UDP loopback. Quatro atuadores com syscalls reais: throttle
 A ablação mantém os sentidos; remove só o **efeito** dos atos sobre o centro de
 factibilidade. Sem corpo, o agente colapsa em uma meta.
 
-### E8 — reservatório congelado × física plástica
+### E8 — reservatório esparso congelado × ajuste conjunto
 
-Série quasi-periódica de 10^6 amostras, 32 neurônios, RLS λ=0,03:
+Reescrito após pesquisa em reservoir computing (Lukoševičius & Jaeger 2009;
+Lukoševičius 2012; Jaeger 2001; NGRC 2025 sobre condicionamento). Mudanças:
+matriz **esparsa** (10 conexões/nó), raio espectral por iteração de potência,
+readout por **equações normais + Cholesky** (`RidgeReadout`), varredura de `λ`
+sem reexecutar o reservatório, benchmark **Mackey–Glass τ=17** e **NARMA-10**, e
+baseline conjunto por **40 passadas** de busca sobre `(ρ, α, input_scale)`.
 
-| Braço | NRMSE | Treino (1 core) | Inferência |
+| Braço / tarefa | NRMSE | Treino | Inferência |
 |---|---|---|---|
-| **Frozen** (só readout) | **0,0791** | **1,877 s** | **615.681 pred/s** |
-| Joint (Oja + RLS) | 0,3132 | 5,528 s | 88.220 pred/s |
+| Frozen, Mackey–Glass, 10^6 | **2,33 × 10⁻⁵** | **2,02 s** | **955.782 pred/s** |
+| Frozen, NARMA-10, 16k | **0,1286** | 0,28 s | 141.977 pred/s |
+| RLS online, Mackey–Glass 20k | 0,00655 | 0,24 s | — |
+| Joint (40 passadas), Mackey–Glass 4k | 1,31 × 10⁻⁴ | **45,7× mais lento** | — |
 
-* Regressão de acurácia do congelado: **0%** (ele é melhor). ✅
-* `10^6` amostras em **1,88 s** < 60 s. ✅
-* Throughput congelado **6,98×** o baseline. ✅
-* Speedup de treino medido: **2,94×**. O número “40×” do dossiê se refere a
-  treino por gradiente completo, que o núcleo proíbe (`0 backprop`); o baseline
-  local é Oja, não backprop. **Não reivindicamos 40×.**
+* Regressão de acurácia do congelado: **0%** (no teste, 1,22 × 10⁻⁴ vs
+  1,31 × 10⁻⁴ do melhor candidato conjunto). ✅
+* **5 sementes** (Mackey–Glass, 100k): NRMSE **2,00 × 10⁻⁵ ± 2,36 × 10⁻⁶**.
+* **Ablação de esparsidade** (100k): esparso 10/nó = **0,207 s / 2,32 × 10⁻⁵**;
+  denso (N−1) = 0,666 s / 1,14 × 10⁻⁵. O esparso é **3,2× mais rápido** por 2×
+  de erro — ambos irrelevantes frente ao gate de 10⁻².
+* `10^6` amostras em **2,02 s** < 60 s. ✅
+* Throughput congelado **955.782/s**, ~7,6× o RLS e ~7× o baseline conjunto. ✅
+* **40× reproduzido**: 40 passadas completas de busca dinâmica = **45,7×** o
+  custo do readout congelado. É busca **sem gradiente** (não backprop), portanto
+  compatível com o invariante `0 backprop`.
+* Varredura de `λ` no mesmo `XᵀX`: `1e-10 → 2,45 × 10⁻⁵`; `1e-8 → 1,26 × 10⁻⁴`;
+  `1e-6 → 1,22 × 10⁻³`. O melhor `λ` é escolhido por validação, não pelo teste.
+* **Caveat:** o “40×” agora é medido contra 40 passadas de busca de dinâmica,
+  não contra backprop do campo. O gradiente completo continua fora do núcleo.
+
+### E8 — o que foi otimizado (e por quê)
+
+Pesquisa aplicada (referências):
+
+* Lukoševičius & Jaeger, *A tutorial on reservoir computing* (2009) — readout
+  por equações normais, ridge e o truque de varrer `β` sem reexecutar o
+  reservatório.
+* Lukoševičius, *A practical guide to applying echo state networks* (2012) —
+  `ρ(W) ≈ 1`, leak `α`, esparsidade 5–12 conexões/nó, washout.
+* Jaeger (2001), *The “echo state” approach* — echo state property.
+* ReservoirPy / EchoBay — `β ∈ [1e-8, 1e-4]`, `ρ ∈ [0.8, 1.2]`, `α ∈ [0.05, 1]`.
+* NGRC, *On the emergence of numerical instabilities* (2025) — Cholesky/SVD vs
+  inversa ingênua; condicionamento e regularização.
+* SPIRES RLS — RLS é online, mas `O(N²)` por passo e sensível a `P`.
+
+Mudanças de engenharia:
+
+1. **Esparsidade:** `W` com 10 conexões/nó; passo `O(N·k)` em vez de `O(N²)`.
+2. **Raio espectral** por iteração de potência na própria matriz esparsa.
+3. **Ridge/Cholesky:** `XᵀX` e `Xᵀy` acumulados numa passada; solve `O(d³)`.
+4. **Varredura de λ** no mesmo acumulador (`recalibrate`), sem reexecutar.
+5. **Inferência congelada pura:** `step + dot`, sem atualizar o readout — é o
+   que o throughput mede.
+6. **Benchmarks padrão:** Mackey–Glass τ=17 e NARMA-10 (entradas e alvos
+   separados).
+7. **Baseline conjunto honesto:** 40 passadas de busca sem gradiente.
+
+Comparação RLS × ridge no mesmo trecho de Mackey–Glass (20k):
+
+| Readout | NRMSE | Treino |
+|---|---|---|
+| Ridge/Cholesky (λ=1e-10) | **2,45 × 10⁻⁵** | ~0,02 s |
+| RLS (λ=0,05, sem esquecimento) | 6,55 × 10⁻³ | 0,24 s |
+
+O ridge é ~265× mais preciso e ~12× mais rápido; o RLS fica como opção
+não-estacionária (T03), não como caminho de treino em lote.
 
 ### F2 — consolidação T1 + gist (pergunta #6)
 
@@ -168,8 +221,10 @@ Artefatos: `target/aether_e7_body.json`, `target/aether_e8_reservoir.json`.
    braços saturam o alvo em 8 ciclos.
 3. **E7:** métricas dependem do host (jitter/carga). A queda H3 variou de 45,8%
    a 75,5% entre execuções; o gate é ≥ 30%.
-4. **E8:** baseline “conjunto” é Oja local, não gradiente; o speedup de 2,94×
-   não é o “40×” do dossiê.
+4. **E8:** o baseline “conjunto” é uma busca **sem gradiente** de 40 passadas
+   sobre `(ρ, α, input_scale)`; o 45,7× é real contra essa busca, não contra
+   backprop do campo. A acurácia do congelado é medida em teste separado da
+   validação usada para escolher `λ` e a configuração.
 5. **F2/F3:** o vazamento cross-scope do F1 (MSG 0140/0171) foi corrigido pelo
    dono em MSG 0179; o F3 já nasce com `CueHit` e filtro explícito. O F1 é a
    origem dos `DraftRecord`s; o `knowledge_fusion.rs` não o edita.

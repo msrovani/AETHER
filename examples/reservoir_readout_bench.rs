@@ -58,6 +58,35 @@ fn main() {
     }
     println!("[E8] lambda sweep: [{lambda_rows}]");
 
+    // Múltiplas sementes: média ± desvio do NRMSE em 100k amostras.
+    let seed_train = train_len.min(100_000);
+    let mut mg_seed_errs = Vec::new();
+    for seed in [1u64, 2, 3, 4, 5] {
+        let cfg = ReservoirConfig { seed, ..mg_cfg };
+        let b = bench_frozen(&mg, cfg, 0, seed_train, test_len, washout, 1e-10).expect("seed mg");
+        mg_seed_errs.push(b.nrmse);
+    }
+    let (mg_mean, mg_std) = mean_std(&mg_seed_errs);
+    println!("[E8] MG seeds mean={mg_mean:.8} std={mg_std:.8}");
+
+    // Ablação de esparsidade: 10 conexões/nó vs denso (N-1).
+    let dense_cfg = ReservoirConfig {
+        degree: mg_cfg.n.saturating_sub(1).max(1),
+        ..mg_cfg
+    };
+    let dense =
+        bench_frozen(&mg, dense_cfg, 0, seed_train, test_len, washout, 1e-10).expect("dense mg");
+    let sparse =
+        bench_frozen(&mg, mg_cfg, 0, seed_train, test_len, washout, 1e-10).expect("sparse mg");
+    println!(
+        "[E8] esparsidade sparse={:.3}s/{:.8} dense={:.3}s/{:.8} speedup={:.1}x",
+        sparse.train_secs,
+        sparse.nrmse,
+        dense.train_secs,
+        dense.nrmse,
+        dense.train_secs / sparse.train_secs.max(1e-9)
+    );
+
     // RLS online vs ridge no mesmo trecho.
     let (mut rls, rls_secs) =
         RlsModel::train_supervised(mg_cfg, &mg, &mg[1..], 0, small, washout, 0.05, 1.0)
@@ -95,7 +124,7 @@ fn main() {
     );
 
     let json = format!(
-        "{{\"mg\":{{\"train_samples\":{train_len},\"train_s\":{:.6},\"nrmse\":{:.8},\"predict_per_s\":{:.1},\"n\":{},\"degree\":{},\"rho\":{},\"leak\":{},\"input\":{},\"lambda\":1e-10}},\"narma\":{{\"train_samples\":{narma_train},\"train_s\":{:.6},\"nrmse\":{:.8},\"predict_per_s\":{:.1},\"n\":{},\"degree\":{},\"rho\":{},\"leak\":{},\"input\":{},\"lambda\":1e-10}},\"lambda_sweep\":[{}],\"rls\":{{\"train_s\":{rls_secs:.6},\"nrmse\":{rls_nrmse:.8}}},\"joint\":{{\"passes\":{},\"secs\":{:.6},\"val_nrmse\":{:.8},\"speedup\":{ratio:.3}}}}}",
+        "{{\"mg\":{{\"train_samples\":{train_len},\"train_s\":{:.6},\"nrmse\":{:.8},\"predict_per_s\":{:.1},\"n\":{},\"degree\":{},\"rho\":{},\"leak\":{},\"input\":{},\"lambda\":1e-10}},\"mg_seeds\":{{\"mean\":{mg_mean:.8},\"std\":{mg_std:.8}}},\"sparsity\":{{\"sparse_s\":{:.6},\"dense_s\":{:.6},\"speedup\":{:.3},\"sparse_nrmse\":{:.8},\"dense_nrmse\":{:.8}}},\"narma\":{{\"train_samples\":{narma_train},\"train_s\":{:.6},\"nrmse\":{:.8},\"predict_per_s\":{:.1},\"n\":{},\"degree\":{},\"rho\":{},\"leak\":{},\"input\":{},\"lambda\":1e-10}},\"lambda_sweep\":[{}],\"rls\":{{\"train_s\":{rls_secs:.6},\"nrmse\":{rls_nrmse:.8}}},\"joint\":{{\"passes\":{},\"secs\":{:.6},\"val_nrmse\":{:.8},\"speedup\":{ratio:.3}}}}}",
         mg_bench.train_secs,
         mg_bench.nrmse,
         mg_bench.predict_per_sec,
@@ -104,6 +133,11 @@ fn main() {
         mg_cfg.spectral_radius,
         mg_cfg.leak,
         mg_cfg.input_scale,
+        sparse.train_secs,
+        dense.train_secs,
+        dense.train_secs / sparse.train_secs.max(1e-9),
+        sparse.nrmse,
+        dense.nrmse,
         narma_bench.train_secs,
         narma_bench.nrmse,
         narma_bench.predict_per_sec,
@@ -121,4 +155,14 @@ fn main() {
     if let Err(e) = std::fs::write("target/aether_e8_reservoir.json", json) {
         eprintln!("nao foi possivel escrever o artefato: {e}");
     }
+}
+
+fn mean_std(v: &[f32]) -> (f32, f32) {
+    if v.is_empty() {
+        return (0.0, 0.0);
+    }
+    let n = v.len() as f32;
+    let mean = v.iter().sum::<f32>() / n;
+    let var = v.iter().map(|x| (x - mean) * (x - mean)).sum::<f32>() / n;
+    (mean, var.sqrt())
 }
