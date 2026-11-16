@@ -1258,7 +1258,7 @@ mod tests {
         let c = text_to_phases("gata");
         assert_eq!(a, b);
         assert_ne!(a, c);
-        assert_eq!(a.len(), PHASE_DIMS);
+        assert_eq!(a.len(), PHASE_FLOATS);
         assert!(a.iter().all(|p| p.is_finite() && *p >= 0.0 && *p < TAU_TEST));
     }
 
@@ -1310,7 +1310,7 @@ mod tests {
             scope: ScopeId::new(1, 2, 3),
             tick: 10,
             wall_ms: 20,
-            payload: phases_to_payload(&[0.5, 1.0, 1.5]),
+            payload: phases_to_payload(&[0.5, 1.0, 1.5, 2.0]),
         };
         let text = record_to_json(&r).to_text();
         let back = Json::parse(&text).unwrap();

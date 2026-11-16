@@ -260,3 +260,22 @@ um `Certificate` cuja decisão é `violations == 0` (**testemunha de factibilida
 `ΔE` é diagnóstico, nunca decisão. `StructuralVerifier::verify_into` é 0-alloc e
 retorna `StructuralVerdict`; a abstenção usa `role_similarity` (evidência) **e**
 margem (ambiguidade), não apenas a margem.
+
+---
+
+## Apêndice B — INTAKE_TRANSPLANT (aditivo, MSG 0229)
+
+Destilação **offline** (texto → HV + fatos). O organismo / `step_into` **não** muda.
+Leitor e formato: [`docs/INTAKE_PLAN.md`](INTAKE_PLAN.md).
+
+| Peça | Feature / path | Notas |
+|---|---|---|
+| ETL | `tools/harvest_transplant.py` | fora do crate; gera `data/` |
+| Probe | `examples/transplant_hv_probe.rs` | gates → `target/aether_transplant_hv.json` |
+| Gate | `tests/transplant_hv_gate.rs` | seed fixa; 200 átomos |
+| `HvBank` | example primeiro; `src/core/hv.rs` só pós-gates | T1/T2, nunca T0 |
+| Doador | Qwen3-Embedding-0.6B (Apache) | `dim_in` no header AETHV1 |
+| Authority | ≤ 240 Transplanted; 255 = HITL | Vol. II §4 |
+
+Formato `bank.bin`: magic `AETHV1`, 128 B header, payload `count×160` u64 LE.
+Consulta: `top_k_into` zero-alloc; Hamming; `cos ≈ 1 − 2·H/D`.

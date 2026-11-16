@@ -609,8 +609,10 @@ impl Prop3 {
             occ_start: vec![0; 2 * n_max + 1],
             occ_list: vec![0; 3 * m_max],
             occ_pos: vec![0; 2 * n_max],
-            trail: Vec::with_capacity(2 * n_max),
-            pq: Vec::with_capacity(n_max),
+            // Sondagens desfazem e refixam: `trail`/`pq` podem receber até
+            // `(PROBE_MAX + 1)·n_max` empilhamentos sem realocar.
+            trail: Vec::with_capacity((PROBE_MAX as usize + 1) * n_max),
+            pq: Vec::with_capacity((PROBE_MAX as usize + 1) * n_max),
             cand: vec![false; n_max],
         }
     }
@@ -665,23 +667,8 @@ impl Prop3 {
         }
     }
 
-    /// Propaga unidades até o fixpoint, **só** pelas ocorrências afetadas.
-    ///
-    /// `true` = conflito. Precisa de uma varredura inicial `O(m)` (não há fila
-    /// na entrada), depois `O(ocorrências das variáveis fixadas)`.
-    fn propagate(&mut self, clauses: &[Clause3], fixed: &mut [Option<i8>]) -> bool {
-        self.pq.clear();
-        for c in clauses.iter() {
-            match clause_state(c, fixed) {
-                CState::Conflict => return true,
-                CState::Unit(v, s) => {
-                    if self.fix(fixed, v, s).is_none() {
-                        return true;
-                    }
-                }
-                _ => {}
-            }
-        }
+    /// Propaga a partir da fila (sem varredura inicial): `O(afetadas)`.
+    fn propagate_from(&mut self, clauses: &[Clause3], fixed: &mut [Option<i8>]) -> bool {
         while let Some(v) = self.pq.pop() {
             for s in [1i8, -1i8] {
                 let l = Self::lit_of(v, s);
@@ -703,6 +690,49 @@ impl Prop3 {
             }
         }
         false
+    }
+
+    /// Varredura **inicial** `O(m)` + propagação pela fila.
+    ///
+    /// Só é chamada no começo e depois de uma fixação feita fora do `fix`
+    /// (a sondagem usa [`Self::propagate_from`], que é `O(afetadas)`).
+    fn propagate_all(&mut self, clauses: &[Clause3], fixed: &mut [Option<i8>]) -> bool {
+        self.pq.clear();
+        for c in clauses.iter() {
+            match clause_state(c, fixed) {
+                CState::Conflict => return true,
+                CState::Unit(v, s) => {
+                    if self.fix(fixed, v, s).is_none() {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        self.propagate_from(clauses, fixed)
+    }
+
+    /// Marca como candidatas as variáveis livres de cláusulas com 2 livres.
+    fn collect_candidates(&mut self, n: usize, clauses: &[Clause3], fixed: &[Option<i8>]) {
+        self.cand[..n].fill(false);
+        for c in clauses {
+            if !matches!(clause_state(c, fixed), CState::Free) {
+                continue;
+            }
+            let mut ids = [usize::MAX; 3];
+            let mut nfree = 0usize;
+            for idx in 0..c.len() {
+                let (v, _s) = c.lit(idx);
+                if fixed[v].is_none() && !ids[..nfree].contains(&v) {
+                    ids[nfree] = v;
+                    nfree += 1;
+                }
+            }
+            if nfree == 2 {
+                self.cand[ids[0]] = true;
+                self.cand[ids[1]] = true;
+            }
+        }
     }
 
     /// Desfaz até o checkpoint (sondagem).
@@ -734,33 +764,15 @@ impl Prop3 {
 
         let mut rounds = 0usize;
         let mut probes = 0usize;
+        if self.propagate_all(clauses, fixed) {
+            return (true, 1, 0);
+        }
         loop {
             rounds += 1;
-            if self.propagate(clauses, fixed) {
-                return (true, rounds, probes);
+            if probes >= max_probes {
+                break;
             }
-            // candidatas: variáveis livres em cláusulas com exatamente 2 livres
-            self.cand[..n].fill(false);
-            for c in clauses {
-                match clause_state(c, fixed) {
-                    CState::Free => {
-                        let mut ids = [usize::MAX; 3];
-                        let mut nfree = 0usize;
-                        for idx in 0..c.len() {
-                            let (v, _s) = c.lit(idx);
-                            if fixed[v].is_none() && !ids[..nfree].contains(&v) {
-                                ids[nfree] = v;
-                                nfree += 1;
-                            }
-                        }
-                        if nfree == 2 {
-                            self.cand[ids[0]] = true;
-                            self.cand[ids[1]] = true;
-                        }
-                    }
-                    _ => {}
-                }
-            }
+            self.collect_candidates(n, clauses, fixed);
             let mut changed = false;
             for v in 0..n {
                 if fixed[v].is_some() || !self.cand[v] {
@@ -774,13 +786,18 @@ impl Prop3 {
                     let checkpoint = self.trail.len();
                     let conflict = match self.fix(fixed, v, try_val) {
                         None => true,
-                        Some(_) => self.propagate(clauses, fixed),
+                        Some(_) => self.propagate_from(clauses, fixed),
                     };
                     self.rollback(fixed, checkpoint);
                     if conflict {
                         let forced = -try_val;
                         if fixed[v] != Some(forced) {
-                            fixed[v] = Some(forced);
+                            // propaga o que a fixação nova implica
+                            if self.fix(fixed, v, forced).is_none()
+                                || self.propagate_from(clauses, fixed)
+                            {
+                                return (true, rounds, probes);
+                            }
                             changed = true;
                         }
                         break;
@@ -898,7 +915,7 @@ impl LogicPipeline {
             qsum: vec![0.0; n_exp_max],
             g: vec![0.0; n_exp_max],
             jabs: vec![0.0; n_exp_max],
-            touched: Vec::with_capacity(2 * n_exp_max),
+            touched: Vec::with_capacity(18 * m_max + 8),
             residual: Vec::with_capacity(n_exp_max),
             exp_state: vec![1; n_exp_max],
             parent: vec![0; n_exp_max],

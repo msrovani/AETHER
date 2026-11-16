@@ -1,4 +1,4 @@
-//! E8 — gate do reservatório esparso congelado (Vol. II §6/§10).
+﻿//! E8 — gate do reservatório esparso congelado (Vol. II §6/§10).
 //!
 //! Gates:
 //! 1. Mackey–Glass τ=17: NRMSE `< 0,01`, treino de `10^6` amostras `< 60 s`
@@ -94,15 +94,15 @@ fn e8_congelado_vence_ajuste_conjunto_em_tempo() {
     };
 
     let (mut frozen, frozen_secs) =
-        FrozenModel::train(cfg, &series, 0, train_len, 200, 1e-10).expect("frozen");
+        FrozenModel::train(cfg, &series, 0, train_len, 200, 1e-8).expect("frozen");
     let (frozen_test, _) =
         evaluate(&mut frozen, &series, train_len + val_len, test_len).expect("eval frozen");
 
     let joint =
-        joint_search(&series, cfg, 0, train_len, val_len, 200, 40, 1e-10).expect("joint search");
+        joint_search(&series, cfg, 0, train_len, val_len, 200, 40, 1e-8).expect("joint search");
     // Comparação no **teste**, não na validação usada para selecionar.
     let (mut joint_model, _) =
-        FrozenModel::train(joint.best, &series, 0, train_len, 200, 1e-10).expect("joint best");
+        FrozenModel::train(joint.best, &series, 0, train_len, 200, 1e-8).expect("joint best");
     let (joint_test, _) =
         evaluate(&mut joint_model, &series, train_len + val_len, test_len).expect("eval joint");
     let speedup = joint.search_secs / frozen_secs.max(1e-12);

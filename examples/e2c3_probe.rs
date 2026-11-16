@@ -34,7 +34,7 @@ use rand_chacha::ChaCha8Rng;
 
 use aether_engine::core::certificate::energy;
 use aether_engine::core::persistency_search::ExactSearch;
-use aether_engine::core::presolve::roof_dual_qumo;
+use aether_engine::core::presolve::{roof_dual_qumo, RoofDualWorkspace, ROOF_MAX_N};
 
 const N: usize = 14;
 const DELTA: f64 = 0.6;
@@ -267,6 +267,34 @@ fn deep_n64() {
     }
 }
 
+/// O `pass_into` público devolve o fluxo. Testa se `c0 + flow` é um lower bound
+/// válido, comparando com a força bruta.
+fn bound_check() {
+    let n = 14usize;
+    let mut ws = RoofDualWorkspace::new();
+    let mut fixed = [None::<i8>; ROOF_MAX_N];
+    println!("E2c-3 bound | n={n} c0+flow vs bruto");
+    for inst in 0..10u64 {
+        let k = (0.45 * n as f64).round() as usize;
+        let (j, h) = make_instance(n, k, DELTA, SEED0.wrapping_add(inst));
+        let flow = ws.pass_into(n, &j, &h, &mut fixed[..n]);
+        let mut c0 = 0.0;
+        for i in 0..n {
+            c0 += h[i];
+            for kk in (i + 1)..n {
+                c0 -= j[i * n + kk];
+            }
+        }
+        let lb = c0 + flow;
+        let opt = brute_force(n, &j, &h);
+        println!(
+            "inst={inst} flow={flow:.3} c0={c0:.3} lb={lb:.3} opt={opt:.3} gap={:.3} valid={}",
+            (opt - lb).max(0.0),
+            lb <= opt + 1e-9
+        );
+    }
+}
+
 fn main() {
     if std::env::args().any(|a| a == "--scale") {
         scale_table();
@@ -274,6 +302,10 @@ fn main() {
     }
     if std::env::args().any(|a| a == "--deep") {
         deep_n64();
+        return;
+    }
+    if std::env::args().any(|a| a == "--bound") {
+        bound_check();
         return;
     }
     println!("E2c-3 probe | n={N} inst={INSTANCES} delta={DELTA} seed={SEED0:#x}");
