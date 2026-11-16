@@ -194,9 +194,10 @@ impl ExactSearch {
         let mut applied = [0usize; ROOF_MAX_N];
         let mut ac = 0usize;
         for a in 0..m {
-            if let Some(v) = self.fixed_tmp[a] {
+            if let Some(bit) = self.fixed_tmp[a] {
                 let i = self.free_idx[a];
-                self.assign[i] = v;
+                // `pass_into` devolve bits 0/1; `assign` usa 0=livre, ±1.
+                self.assign[i] = if bit == 1 { 1 } else { -1 };
                 applied[ac] = i;
                 ac += 1;
             }

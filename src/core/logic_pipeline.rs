@@ -375,6 +375,126 @@ fn sign(v: f64) -> i8 {
     }
 }
 
+// ---------------------------------------------------------------------------
+// BSB esparso (CSR) — o QUBO expandido tem ~9 monômios por cláusula, mas a
+// matriz densa é `(5m)²`. O matvec esparso faz `O(nnz)` em vez de `O(n²)`.
+// ---------------------------------------------------------------------------
+
+/// `Σ_j J_ij·x_j` com `J` em CSR, **bit-a-bit** igual ao `dot_f64` denso.
+///
+/// O kernel denso usa 16 acumuladores (`acc[col % 16]`) e só depois soma as
+/// sobras (`col >= 16·(n/16)`). Aqui repetimos a mesma ordem: percorrer as
+/// colunas crescentes dentro de cada acumulador equivale a somar `0.0·x` para
+/// as colunas ausentes — e somar zero é exato.
+#[inline]
+fn dot_f64_csr(ptr: &[u32], col: &[u32], val: &[f64], row: usize, x: &[f64], n: usize) -> f64 {
+    let chunks = n / 16;
+    let head = chunks * 16;
+    let mut acc = [0.0f64; 16];
+    let mut tail = [0.0f64; 16];
+    for k in ptr[row] as usize..ptr[row + 1] as usize {
+        let c = col[k] as usize;
+        let v = val[k] * x[c];
+        if c < head {
+            acc[c % 16] += v;
+        } else {
+            tail[c - head] += v;
+        }
+    }
+    let mut sum = 0.0;
+    for v in acc {
+        sum += v;
+    }
+    for v in tail.iter().take(n - head) {
+        sum += *v;
+    }
+    sum
+}
+
+/// Idem para spins (`i8`), igual ao `dot_i8` denso.
+#[inline]
+fn dot_i8_csr(ptr: &[u32], col: &[u32], val: &[f64], row: usize, s: &[i8], n: usize) -> f64 {
+    let chunks = n / 16;
+    let head = chunks * 16;
+    let mut acc = [0.0f64; 16];
+    let mut tail = [0.0f64; 16];
+    for k in ptr[row] as usize..ptr[row + 1] as usize {
+        let c = col[k] as usize;
+        let v = val[k] * f64::from(s[c]);
+        if c < head {
+            acc[c % 16] += v;
+        } else {
+            tail[c - head] += v;
+        }
+    }
+    let mut sum = 0.0;
+    for v in acc {
+        sum += v;
+    }
+    for v in tail.iter().take(n - head) {
+        sum += *v;
+    }
+    sum
+}
+
+/// `H(s) = −½·sᵀJs − hᵀs` com `J` em CSR (mesma ordem do `row_energy`).
+fn row_energy_csr(
+    ptr: &[u32],
+    col: &[u32],
+    val: &[f64],
+    hb: &[f64],
+    n: usize,
+    s: &[i8],
+) -> f64 {
+    let mut acc = 0.0;
+    for i in 0..n {
+        acc -= 0.5 * f64::from(s[i]) * dot_i8_csr(ptr, col, val, i, s, n);
+    }
+    for (hi, si) in hb.iter().take(n).zip(s.iter()) {
+        acc -= *hi * f64::from(*si);
+    }
+    acc
+}
+
+/// Descida gulosa determinística com `J` em CSR (espelha `descend`).
+fn descend_csr(
+    n: usize,
+    ptr: &[u32],
+    col: &[u32],
+    val: &[f64],
+    hb: &[f64],
+    s: &mut [i8],
+    g: &mut [f64],
+) -> f64 {
+    for i in 0..n {
+        g[i] = dot_i8_csr(ptr, col, val, i, s, n);
+    }
+    let max_flips = 8 * n;
+    for _ in 0..max_flips {
+        let mut pick = usize::MAX;
+        let mut pick_delta = -FLIP_EPS;
+        for i in 0..n {
+            let delta = 2.0 * f64::from(s[i]) * (g[i] + hb[i]);
+            if delta < pick_delta {
+                pick_delta = delta;
+                pick = i;
+            }
+        }
+        if pick == usize::MAX {
+            break;
+        }
+        let delta_s = -2.0 * f64::from(s[pick]);
+        s[pick] = -s[pick];
+        // `J` é simétrica: a coluna `pick` está na linha `pick` (CSR).
+        for k in ptr[pick] as usize..ptr[pick + 1] as usize {
+            g[col[k] as usize] += val[k] * delta_s;
+        }
+    }
+    row_energy_csr(ptr, col, val, hb, n, s)
+}
+}
+
+
 #[inline]
 fn row_energy(jb: &[f64], n: usize, hb: &[f64], s: &[i8]) -> f64 {
     let mut acc = 0.0;
@@ -840,6 +960,18 @@ pub struct LogicPipeline {
     touched: Vec<u32>,
     /// Literais verdadeiros por cláusula (contagem incremental do reparo).
     sat_count: Vec<u8>,
+    /// CSR do QUBO expandido (matvec esparso do BSB).
+    csr_ptr: Vec<u32>,
+    csr_col: Vec<u32>,
+    csr_val: Vec<f64>,
+    /// CSR por componente (recortado do global).
+    loc_ptr: Vec<u32>,
+    loc_col: Vec<u32>,
+    loc_val: Vec<f64>,
+    /// Mapa variável-expandida → índice local no componente.
+    local_of: Vec<u32>,
+    /// Cursor de construção da CSR.
+    csr_fill: Vec<u32>,
     residual: Vec<usize>,
     exp_state: Vec<i8>,
 
@@ -861,8 +993,6 @@ pub struct LogicPipeline {
     cur_orig: Vec<i8>,
     /// Marcas de tabu do reparo de factibilidade (1 por variável).
     tabu: Vec<u32>,
-    /// Literais satisfeitos por cláusula (reparo incremental).
-    sat_count: Vec<u8>,
 
     /// Estatísticas do último `resolve_into`.
     pub last: StageStats,
@@ -927,7 +1057,6 @@ impl LogicPipeline {
             best_orig: vec![1; n_max],
             cur_orig: vec![1; n_max],
             tabu: vec![0; n_max],
-            sat_count: vec![0; m_max],
             last: StageStats::default(),
         }
     }
