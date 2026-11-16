@@ -730,32 +730,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     std::fs::create_dir_all("target").ok();
     let path = "target/aether_e3.json";
-    let json = format!(
-        concat!(
-            "{{\n  \"facts\": {n}, \"entities\": {n_ent}, \"relations\": {N_REL},\n",
-            "  \"d_in\": {D_IN}, \"bits\": {BITS}, \"bytes_per_atom\": {},\n",
-            "  \"bam_bytes\": {bam_bytes}, \"jl_ms\": {jl_ms:.3}, \"pairs\": {pairs},\n",
-            "  \"spearman\": {rho:.6},\n",
-            "  \"fhrr_dim\": {FHRR_DIM}, \"traces\": {TRACES}, \"shards\": {shards}, \"max_shard\": {max_shard},\n",
-            "  \"rel_recall_clean\": {:.6}, \"rel_recall_noise\": {:.6}, \"rel_recall_noise2\": {:.6},\n",
-            "  \"analogy_r1\": {an1_clean:.6}, \"analogy_r5\": {an5_clean:.6}, \"analogy_queries\": {an_total},\n",
-            "  \"analogy_r1_atom_noise\": {an1_noise:.6}, \"analogy_r1_atom_noise2\": {an1_noise2:.6},\n",
-            "  \"threshold\": {threshold:.6}, \"accepted\": {accepted}, \"false_confident\": {false_conf:.6},\n",
-            "  \"ood_abstained\": {:.6}, \"verifier_ms\": {verifier_ms:.4}, \"verifier_allocs\": {allocs},\n",
-            "  \"verifier_conflicts\": {}, \"verifier_prov_violations\": {},\n",
-            "  \"bridge_emitted\": {}, \"bridge_dropped\": {},\n",
-            "  \"gates\": {{\"g1\": {g1}, \"g2\": {g2}, \"g3a\": {g3a}, \"g3b\": {g3b}, \"g3c\": {g3c}}}\n}}\n"
-        ),
-        bam.bytes_per_atom(),
+    let mut json = String::new();
+    json.push_str("{\n");
+    json.push_str(&format!(
+        "  \"facts\": {n}, \"entities\": {n_ent}, \"relations\": {N_REL},\n"
+    ));
+    json.push_str(&format!(
+        "  \"d_in\": {D_IN}, \"bits\": {BITS}, \"bytes_per_atom\": {},\n",
+        bam.bytes_per_atom()
+    ));
+    json.push_str(&format!(
+        "  \"bam_bytes\": {}, \"jl_ms\": {jl_ms:.3}, \"pairs\": {pairs},\n  \"spearman\": {rho:.6},\n",
+        bam_bytes
+    ));
+    json.push_str(&format!(
+        "  \"fhrr_dim\": {FHRR_DIM}, \"traces\": {TRACES}, \"shards\": {shards}, \"max_shard\": {max_shard},\n"
+    ));
+    json.push_str(&format!(
+        "  \"rel_recall_clean\": {:.6}, \"rel_recall_noise\": {:.6}, \"rel_recall_noise2\": {:.6},\n",
         rel_hits[0] as f64 / rel_total.max(1) as f64,
         rel_hits[1] as f64 / rel_total.max(1) as f64,
-        rel_hits[2] as f64 / rel_total.max(1) as f64,
-        ood_abstained as f64 / ood.max(1) as f64,
-        measured.value_conflicts,
-        measured.provenance_violations,
-        verdict.emitted,
-        verdict.dropped,
-    );
+        rel_hits[2] as f64 / rel_total.max(1) as f64
+    ));
+    json.push_str(&format!(
+        "  \"analogy_r1\": {an1_clean:.6}, \"analogy_r5\": {an5_clean:.6}, \"analogy_queries\": {an_total},\n"
+    ));
+    json.push_str(&format!(
+        "  \"analogy_r1_atom_noise\": {an1_noise:.6}, \"analogy_r1_atom_noise2\": {an1_noise2:.6},\n"
+    ));
+    json.push_str(&format!(
+        "  \"threshold\": {threshold:.6}, \"accepted\": {accepted}, \"false_confident\": {false_conf:.6},\n"
+    ));
+    json.push_str(&format!(
+        "  \"ood_abstained\": {:.6}, \"verifier_ms\": {verifier_ms:.4}, \"verifier_allocs\": {allocs},\n",
+        ood_abstained as f64 / ood.max(1) as f64
+    ));
+    json.push_str(&format!(
+        "  \"verifier_conflicts\": {}, \"verifier_prov_violations\": {},\n",
+        measured.value_conflicts, measured.provenance_violations
+    ));
+    json.push_str(&format!(
+        "  \"bridge_emitted\": {}, \"bridge_dropped\": {},\n",
+        verdict.emitted, verdict.dropped
+    ));
+    json.push_str(&format!(
+        "  \"gates\": {{\"g1\": {g1}, \"g2\": {g2}, \"g3a\": {g3a}, \"g3b\": {g3b}, \"g3c\": {g3c}}}\n}}\n"
+    ));
     std::fs::write(path, json)?;
     println!("artefato: {path}");
     Ok(())

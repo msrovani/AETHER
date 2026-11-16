@@ -593,53 +593,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     std::fs::create_dir_all("target").ok();
     let path = "target/aether_e2.json";
-    let json = format!(
-        concat!(
-            "{{\n  \"instances\": {}, \"n\": {n}, \"m\": {m}, \"ratio\": {:.3},\n",
-            "  \"steps\": {}, \"restarts\": {}, \"rounds\": {}, \"eta\": {:.2},\n",
-            "  \"arm1\": {{\"solved_sat\": {}, \"sat_total\": {}, \"decisive\": {}, \"false_decisive_unsat\": {}, \"solved_tight\": {}, \"tight_total\": {}}},\n",
-            "  \"arm2\": {{\"solved_sat\": {}, \"sat_total\": {}, \"decisive\": {}, \"decisive_valid\": {}, \"false_decisive_unsat\": {}, \"solved_tight\": {}, \"tight_total\": {}}},\n",
-            "  \"precision\": {:.4},\n",
-            "  \"allocs_max\": {allocs_max},\n",
-            "  \"symbolic_us_p50\": {:.3},\n  \"solve_us_p50\": {:.3},\n  \"total_us_p50\": {:.3},\n",
-            "  \"fixed_symbolic_mean\": {:.3},\n  \"fixed_persistency_mean\": {:.3},\n",
-            "  \"n_free_mean\": {:.3},\n  \"components_mean\": {:.3},\n  \"bsb_runs_mean\": {:.3},\n",
-            "  \"gates\": {{\"g1\": {}, \"g2a\": {}, \"g2b\": {}, \"g3a\": {}, \"g3b\": {}}}\n}}\n"
-        ),
-        args.instances,
-        args.ratio,
-        args.steps,
-        args.restarts,
-        args.rounds,
-        args.eta,
-        s1.solved_sat,
-        s1.sat_total,
-        s1.decisive,
-        s1.false_decisive_unsat,
-        s1.solved_tight,
-        s1.tight_total,
-        s2.solved_sat,
-        s2.sat_total,
-        s2.decisive,
-        s2.decisive_valid,
-        s2.false_decisive_unsat,
-        s2.solved_tight,
-        s2.tight_total,
-        pct(s2.decisive_valid, s2.decisive) / 100.0,
+    let mut json = String::new();
+    json.push_str("{\n");
+    json.push_str(&format!(
+        "  \"instances\": {}, \"n\": {n}, \"m\": {m}, \"ratio\": {:.3},\n",
+        args.instances, args.ratio
+    ));
+    json.push_str(&format!(
+        "  \"steps\": {}, \"restarts\": {}, \"rounds\": {}, \"eta\": {:.2},\n",
+        args.steps, args.restarts, args.rounds, args.eta
+    ));
+    json.push_str(&format!(
+        "  \"arm1\": {{\"solved_sat\": {}, \"sat_total\": {}, \"decisive\": {}, \"false_decisive_unsat\": {}, \"solved_tight\": {}, \"tight_total\": {}}},\n",
+        s1.solved_sat, s1.sat_total, s1.decisive, s1.false_decisive_unsat, s1.solved_tight, s1.tight_total
+    ));
+    json.push_str(&format!(
+        "  \"arm2\": {{\"solved_sat\": {}, \"sat_total\": {}, \"decisive\": {}, \"decisive_valid\": {}, \"false_decisive_unsat\": {}, \"solved_tight\": {}, \"tight_total\": {}}},\n",
+        s2.solved_sat, s2.sat_total, s2.decisive, s2.decisive_valid, s2.false_decisive_unsat, s2.solved_tight, s2.tight_total
+    ));
+    json.push_str(&format!(
+        "  \"precision\": {:.4},\n  \"allocs_max\": {allocs_max},\n",
+        pct(s2.decisive_valid, s2.decisive) / 100.0
+    ));
+    json.push_str(&format!(
+        "  \"symbolic_us_p50\": {:.3},\n  \"solve_us_p50\": {:.3},\n  \"total_us_p50\": {:.3},\n",
         percentile(&sym_us, 0.5),
         percentile(&solve_us, 0.5),
-        percentile(&total_us, 0.5),
+        percentile(&total_us, 0.5)
+    ));
+    json.push_str(&format!(
+        "  \"fixed_symbolic_mean\": {:.3},\n  \"fixed_persistency_mean\": {:.3},\n",
         fixed_sym as f64 / inst,
-        fixed_pers as f64 / inst,
+        fixed_pers as f64 / inst
+    ));
+    json.push_str(&format!(
+        "  \"n_free_mean\": {:.3},\n  \"components_mean\": {:.3},\n  \"bsb_runs_mean\": {:.3},\n",
         n_free_sum as f64 / inst,
         comp_sum as f64 / inst,
-        runs_sum as f64 / inst,
-        g1,
-        g2a,
-        g2b,
-        g3a,
-        g3b,
-    );
+        runs_sum as f64 / inst
+    ));
+    json.push_str(&format!(
+        "  \"gates\": {{\"g1\": {g1}, \"g2a\": {g2a}, \"g2b\": {g2b}, \"g3a\": {g3a}, \"g3b\": {g3b}}}\n}}\n"
+    ));
     std::fs::write(path, json)?;
     println!("artefato: {path}");
     Ok(())

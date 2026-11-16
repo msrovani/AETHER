@@ -715,7 +715,7 @@ mod tests {
 
     #[test]
     fn payload_grande_e_rejeitado_sem_alocar_anel() {
-        let (mut tx, mut rx) = SpscKnowledgePhaseBridge::<4>::new();
+        let (mut tx, rx) = SpscKnowledgePhaseBridge::<4>::new();
         let big = vec![0u8; MAX_PHASE_BYTES + 1];
         let ev = KnowledgeEvent::new(0, Layer::L2Episodic, ScopeId::new(1, 1, 1), 0, 0)
             .with_payload(&big);

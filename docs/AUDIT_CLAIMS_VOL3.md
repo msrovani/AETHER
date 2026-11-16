@@ -216,7 +216,7 @@ donos dos experimentos confirmaram ou corrigiram os pontos abertos:
 | F1 — R8 | `cue_into` itera **todos** os registros sem filtrar escopo; `scope_filter` existe só em comentário; `cross_scope_hits` nunca é incrementado; o teste de R8 **não chama `cue_into`** → gate vacuamente verde. Roteado ao dono. | MSG 0140 |
 | F2 — overflow | Drop-oldest é **inviável em SPSC** (quebraria o invariante lock-free). Condição revisada para **drop-newest + contador + bit no próximo evento**; "0 eventos perdidos" só vale com `drops=0` medido. | MSG 0141/0144 |
 | F1 — receita de R8 | Receita aceita: 2 escopos, consulta cruzada deve dar 0; **passo positivo** (injetar B no store de A e esperar 1) é o que impede o gate vazio; P99 com anel cheio; contador separado para payload grande. | MSG 0148/0154 |
-| E2c-2 — fecho | Controle positivo **PASS** (estrela K=2..12; 13/13 fixings). No vidro denso n=12: 2.259 variáveis constantes não dominadas, roof fixa **0** → 0,000 é **fraqueza do LP**, não bug de construção. Resultado negativo legítimo. | MSG 0142/0149/0153 |
+| E2c-2 — fecho | Controle positivo **PASS** (estrela K=2..12; 13/13 fixings). Medição correta: vidro puro **0/200** (roof = dominância), plant 25% **+0,3 pp** (1/200), plant 45% **+9,1 pp** (32/200), **0 unsound em 600** nos dois. Extensão real **sob viés**, nula no vidro — não é oráculo global. | MSG 0142/0149/0158 |
 | E1 v2 — gates | `tests/e1_language_gate.rs`: **2 passam, 3 falham** — recall sharded **0,0**; SNR **0,05σ / −0,11σ**; p50 **51,7 µs**. O desenho de 4 papéis + ACF ainda não fecha o gate. | MSG 0152 |
 
 **Regra operacional que ficou acordada:** o auditor é *read-only*; cada erro é

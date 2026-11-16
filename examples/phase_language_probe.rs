@@ -488,8 +488,8 @@ impl Anchors {
 }
 
 /// Termo `A_role ⊗ ρ^role(filler)` (uma fase pura).
-fn role_term(anchor: &BVec, filler: &BVec, k: usize) -> Phases {
-    bind(anchor.as_slice(), &rho(filler.as_slice(), k))
+fn role_term(anchor: &Phases, filler: &BVec, k: usize) -> Phases {
+    bind(anchor, &rho(filler.as_slice(), k))
 }
 
 // ---------------------------------------------------------------------------
@@ -782,18 +782,13 @@ struct PairFactors {
     validated: bool,
 }
 
-/// Desvincula um papel de um complexo: `f = ρ^{-k}( z ⊙ conj(A ⊗ other) )`.
+/// Desvincula um papel de um complexo: `f = ρ^{-k}( z ⊙ conj(A) )`.
 ///
-/// `other` é a fase do outro fator já re-codificada (átomo **limpo**).
-fn unbind_role(z: &Cplx, anchor: &BVec, k: usize, other: Option<&Phases>, out: &mut Cplx) {
-    let amp = anchor.as_slice();
-    let lut = BamLut::global();
+/// O conjugado da âncora vem pré-computado (`cos/sin`), então o passo quente é
+/// só multiplicação complexa + a permutação inversa. Zero trigonometria.
+fn unbind_role(z: &Cplx, anchor: &Anchor, k: usize, out: &mut Cplx) {
     for j in 0..D {
-        let mut phi = amp[j];
-        if let Some(o) = other {
-            phi = phi.wrapping_add(o[j]);
-        }
-        let (s, c) = lut.sin_cos(BamPhase(phi));
+        let (c, s) = (anchor.cos[j], anchor.sin[j]);
         // z · (c − i·s)
         out.re[j] = z.re[j] * c + z.im[j] * s;
         out.im[j] = z.im[j] * c - z.re[j] * s;
@@ -815,8 +810,8 @@ fn unbind_role(z: &Cplx, anchor: &BVec, k: usize, other: Option<&Phases>, out: &
 /// no fim valida o vencedor na **cópia limpa**.
 fn resonate_pair(value: &Cplx, cb: &Codebooks, a: &Anchors, sc: &mut QueryScratch) -> PairFactors {
     // init: cada fator isolado (sem subtração).
-    unbind_role(value, &a.o, ROLE_O, None, &mut sc.f_obj);
-    unbind_role(value, &a.m, ROLE_M, None, &mut sc.f_mod);
+    unbind_role(value, a.of(ROLE_O), ROLE_O, &mut sc.f_obj);
+    unbind_role(value, a.of(ROLE_M), ROLE_M, &mut sc.f_mod);
     let mut o = cleanup(&sc.f_obj, &cb.ent_acf, &mut sc.sims).index;
     let mut m = cleanup(&sc.f_mod, &cb.modu_acf, &mut sc.sims).index;
 
@@ -828,24 +823,24 @@ fn resonate_pair(value: &Cplx, cb: &Codebooks, a: &Anchors, sc: &mut QueryScratc
 
         // OBJ: subtrai o re-encode limpo do MOD.
         let term_m = unit_phasor(&bind(
-            a.m.as_slice(),
+            a.of(ROLE_M).phases(),
             &rho(cb.modu.phases[m].as_slice(), ROLE_M),
         ));
         sc.rest = *value;
         sc.rest.sub_assign(&term_m);
         let rest = sc.rest;
-        unbind_role(&rest, &a.o, ROLE_O, None, &mut sc.f_obj);
+        unbind_role(&rest, a.of(ROLE_O), ROLE_O, &mut sc.f_obj);
         o = cleanup(&sc.f_obj, &cb.ent_acf, &mut sc.sims).index;
 
         // MOD: subtrai o re-encode limpo do OBJ (já atualizado).
         let term_o = unit_phasor(&bind(
-            a.o.as_slice(),
+            a.of(ROLE_O).phases(),
             &rho(cb.ent.phases[o].as_slice(), ROLE_O),
         ));
         sc.rest = *value;
         sc.rest.sub_assign(&term_o);
         let rest = sc.rest;
-        unbind_role(&rest, &a.m, ROLE_M, None, &mut sc.f_mod);
+        unbind_role(&rest, a.of(ROLE_M), ROLE_M, &mut sc.f_mod);
         m = cleanup(&sc.f_mod, &cb.modu_acf, &mut sc.sims).index;
 
         if (o, m) == prev {
@@ -856,13 +851,13 @@ fn resonate_pair(value: &Cplx, cb: &Codebooks, a: &Anchors, sc: &mut QueryScratc
 
     // Consistência final: OBJ recalculado com o MOD final.
     let term_m = unit_phasor(&bind(
-        a.m.as_slice(),
+        a.of(ROLE_M).phases(),
         &rho(cb.modu.phases[m].as_slice(), ROLE_M),
     ));
     sc.rest = *value;
     sc.rest.sub_assign(&term_m);
     let rest = sc.rest;
-    unbind_role(&rest, &a.o, ROLE_O, None, &mut sc.f_obj);
+    unbind_role(&rest, a.of(ROLE_O), ROLE_O, &mut sc.f_obj);
 
     // Validação na cópia limpa (o certificado do fator).
     let co = cleanup(&sc.f_obj, &cb.ent, &mut sc.sims);
@@ -889,22 +884,22 @@ fn resonate_pair(value: &Cplx, cb: &Codebooks, a: &Anchors, sc: &mut QueryScratc
 fn encode_sentence(cb: &Codebooks, a: &Anchors, ids: [usize; 4]) -> Cplx {
     let mut psi = Cplx::zero();
     psi.add_assign(&unit_phasor(&role_term(
-        a.of(ROLE_S),
+        a.of(ROLE_S).phases(),
         &cb.ent.phases[ids[0]],
         ROLE_S,
     )));
     psi.add_assign(&unit_phasor(&role_term(
-        a.of(ROLE_V),
+        a.of(ROLE_V).phases(),
         &cb.verb.phases[ids[1]],
         ROLE_V,
     )));
     psi.add_assign(&unit_phasor(&role_term(
-        a.of(ROLE_O),
+        a.of(ROLE_O).phases(),
         &cb.ent.phases[ids[2]],
         ROLE_O,
     )));
     psi.add_assign(&unit_phasor(&role_term(
-        a.of(ROLE_M),
+        a.of(ROLE_M).phases(),
         &cb.modu.phases[ids[3]],
         ROLE_M,
     )));
@@ -946,7 +941,7 @@ fn factorize_sentence(psi: &Cplx, cb: &Codebooks, a: &Anchors) -> Factors {
     let mut sims = [0.0f32; N_ENT];
 
     for r in 0..4 {
-        unbind_role(psi, a.of(r), r, None, &mut last[r]);
+        unbind_role(psi, a.of(r), r, &mut last[r]);
         let c = cleanup(&last[r], cb.acf(r), &mut sims);
         f.ids[r] = c.index;
         f.sims[r] = c.sim;
@@ -964,10 +959,14 @@ fn factorize_sentence(psi: &Cplx, cb: &Codebooks, a: &Anchors) -> Factors {
                 if r2 == r {
                     continue;
                 }
-                let term = unit_phasor(&role_term(a.of(r2), &cb.clean(r2).phases[f.ids[r2]], r2));
+                let term = unit_phasor(&role_term(
+                    a.of(r2).phases(),
+                    &cb.clean(r2).phases[f.ids[r2]],
+                    r2,
+                ));
                 res.sub_assign(&term);
             }
-            unbind_role(&res, a.of(r), r, None, &mut last[r]);
+            unbind_role(&res, a.of(r), r, &mut last[r]);
             let c = cleanup(&last[r], cb.acf(r), &mut sims);
             if c.index != f.ids[r] {
                 changed = true;
@@ -1039,14 +1038,30 @@ struct Fact {
 
 impl Fact {
     fn key(&self, cb: &Codebooks, a: &Anchors) -> Phases {
-        let ks = role_term(a.of(ROLE_S), &cb.ent.phases[self.ids[0] as usize], ROLE_S);
-        let kv = role_term(a.of(ROLE_V), &cb.verb.phases[self.ids[1] as usize], ROLE_V);
+        let ks = role_term(
+            a.of(ROLE_S).phases(),
+            &cb.ent.phases[self.ids[0] as usize],
+            ROLE_S,
+        );
+        let kv = role_term(
+            a.of(ROLE_V).phases(),
+            &cb.verb.phases[self.ids[1] as usize],
+            ROLE_V,
+        );
         bind(&ks, &kv)
     }
 
     fn value(&self, cb: &Codebooks, a: &Anchors) -> [Phases; 2] {
-        let ko = role_term(a.of(ROLE_O), &cb.ent.phases[self.ids[2] as usize], ROLE_O);
-        let km = role_term(a.of(ROLE_M), &cb.modu.phases[self.ids[3] as usize], ROLE_M);
+        let ko = role_term(
+            a.of(ROLE_O).phases(),
+            &cb.ent.phases[self.ids[2] as usize],
+            ROLE_O,
+        );
+        let km = role_term(
+            a.of(ROLE_M).phases(),
+            &cb.modu.phases[self.ids[3] as usize],
+            ROLE_M,
+        );
         [ko, km]
     }
 }
@@ -1372,7 +1387,7 @@ fn gate_non_commutativity(
         let x = k % N_ENT;
         let y = (k * 13 + 1) % N_ENT;
         let v = k % N_VERB;
-        let one = bind(a.s.as_slice(), cb.verb.phases[v].as_slice());
+        let one = bind(a.of(ROLE_S).phases(), cb.verb.phases[v].as_slice());
         let cx = bind(
             &one,
             &bind(cb.ent.phases[x].as_slice(), cb.ent.phases[y].as_slice()),
@@ -1475,7 +1490,7 @@ fn gate_abstention(cb: &Codebooks, a: &Anchors, n: usize, rng: &mut ChaCha8Rng) 
                 *x = rng.gen::<f32>() * TAU;
             }
             let atom = BVec::from_radians(&p).expect("D");
-            b.add_assign(&unit_phasor(&role_term(a.of(r), &atom, r)));
+            b.add_assign(&unit_phasor(&role_term(a.of(r).phases(), &atom, r)));
         }
         let f = factorize_sentence(&b, cb, a);
         let e = Evidence::from_factors(&f);
@@ -1528,8 +1543,16 @@ fn abstention_memory(
             k2[j] = rng.gen::<f32>() * TAU;
         }
         let oov = bind(
-            &role_term(a.of(ROLE_S), &BVec::from_radians(&k1).expect("D"), ROLE_S),
-            &role_term(a.of(ROLE_V), &BVec::from_radians(&k2).expect("D"), ROLE_V),
+            &role_term(
+                a.of(ROLE_S).phases(),
+                &BVec::from_radians(&k1).expect("D"),
+                ROLE_S,
+            ),
+            &role_term(
+                a.of(ROLE_V).phases(),
+                &BVec::from_radians(&k2).expect("D"),
+                ROLE_V,
+            ),
         );
         shard.unbind(fact, &oov, &mut sc.z);
         let z = sc.z;
@@ -1787,7 +1810,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         && comm.decoded_forward == comm.pairs
         && comm.decoded_reverse == comm.pairs;
     let g3_snr = scale.snr_obj > 5.0 && scale.snr_mod > 5.0;
-    let g3_lat = scale.p50_us < 15.0;
+    let g3_lat = scale.p50_us < 15.0 && scale.mean_us < 15.0;
     let g3_alloc = scale.allocs == 0;
     let oov = abst_rows.last().map(|r| r.abstain).unwrap_or(0.0);
     let noisy = abst_rows
@@ -1832,9 +1855,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         scale.snr_mod
     );
     println!(
-        "  G3 p50 < 15 µs por consulta            : {}  ({:.2} µs)",
+        "  G3 p50 < 15 µs por consulta            : {}  (p50 {:.2} · média {:.2} µs)",
         pass(g3_lat),
-        scale.p50_us
+        scale.p50_us,
+        scale.mean_us
     );
     println!(
         "  G3 0 bytes alocados no hot-path        : {}  ({} allocs)",

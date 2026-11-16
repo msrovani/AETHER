@@ -248,15 +248,43 @@ pub struct Codebooks {
     pub ent: AtomBook,
     pub verb: AtomBook,
     pub modu: AtomBook,
+    /// Fasores `A_O ⊗ ρ²(ent[o])` pré-computados (produto de fase = fasor).
+    pub term_o_re: Vec<[f32; D]>,
+    pub term_o_im: Vec<[f32; D]>,
+    /// Fasores `A_M ⊗ ρ³(mod[m])` pré-computados.
+    pub term_m_re: Vec<[f32; D]>,
+    pub term_m_im: Vec<[f32; D]>,
 }
 
 impl Codebooks {
     pub fn build(seed: u64) -> Self {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        let ent = AtomBook::random(N_ENT, &mut rng);
+        let verb = AtomBook::random(N_VERB, &mut rng);
+        let modu = AtomBook::random(N_MOD, &mut rng);
+        let a = Anchors::build(seed);
+        let mut term_o_re = Vec::with_capacity(N_ENT);
+        let mut term_o_im = Vec::with_capacity(N_ENT);
+        for atom in &ent.clean {
+            let (re, im) = unit_phasor(&role_term(a.of(ROLE_O), atom, ROLE_O));
+            term_o_re.push(re);
+            term_o_im.push(im);
+        }
+        let mut term_m_re = Vec::with_capacity(N_MOD);
+        let mut term_m_im = Vec::with_capacity(N_MOD);
+        for atom in &modu.clean {
+            let (re, im) = unit_phasor(&role_term(a.of(ROLE_M), atom, ROLE_M));
+            term_m_re.push(re);
+            term_m_im.push(im);
+        }
         Self {
-            ent: AtomBook::random(N_ENT, &mut rng),
-            verb: AtomBook::random(N_VERB, &mut rng),
-            modu: AtomBook::random(N_MOD, &mut rng),
+            ent,
+            verb,
+            modu,
+            term_o_re,
+            term_o_im,
+            term_m_re,
+            term_m_im,
         }
     }
 
@@ -331,17 +359,56 @@ pub struct Anchors {
     pub v: BVec,
     pub o: BVec,
     pub m: BVec,
+    /// Fasores unitários das âncoras (evita `sin_cos` no caminho quente).
+    pub s_re: [f32; D],
+    pub s_im: [f32; D],
+    pub v_re: [f32; D],
+    pub v_im: [f32; D],
+    pub o_re: [f32; D],
+    pub o_im: [f32; D],
+    pub m_re: [f32; D],
+    pub m_im: [f32; D],
 }
 
 impl Anchors {
     pub fn build(seed: u64) -> Self {
         let mut rng = ChaCha8Rng::seed_from_u64(seed ^ 0xA0C_4000);
         let a = random_codebook(4, &mut rng);
+        let (s_re, s_im) = unit_phasor(a[0].as_slice());
+        let (v_re, v_im) = unit_phasor(a[1].as_slice());
+        let (o_re, o_im) = unit_phasor(a[2].as_slice());
+        let (m_re, m_im) = unit_phasor(a[3].as_slice());
         Self {
             s: a[0],
             v: a[1],
             o: a[2],
             m: a[3],
+            s_re,
+            s_im,
+            v_re,
+            v_im,
+            o_re,
+            o_im,
+            m_re,
+            m_im,
+        }
+    }
+
+    pub fn re(&self, role: usize) -> &[f32; D] {
+        match role {
+            ROLE_S => &self.s_re,
+            ROLE_V => &self.v_re,
+            ROLE_O => &self.o_re,
+            _ => &self.m_re,
+        }
+    }
+
+    pub fn im(&self, role: usize) -> &[f32; D] {
+        match role {
+            ROLE_S => &self.s_im,
+            ROLE_V => &self.v_im,
+            ROLE_O => &self.o_im,
+            _ => &self.m_im,
         }
     }
 
@@ -707,26 +774,28 @@ pub struct PairFactors {
 fn role_cue_into(
     z_re: &[f32; D],
     z_im: &[f32; D],
-    anchor: &BVec,
+    anchor_re: &[f32; D],
+    anchor_im: &[f32; D],
     k: usize,
-    other: Option<&Phases>,
+    other: Option<(&[f32; D], &[f32; D])>,
     out_re: &mut [f32; D],
     out_im: &mut [f32; D],
 ) {
-    let lut = BamLut::global();
     let k = k % D;
     for j in 0..D {
         let mut re = z_re[j];
         let mut im = z_im[j];
-        if let Some(t) = other {
-            let (s, c) = lut.sin_cos(BamPhase(t[j]));
-            re -= c;
-            im -= s;
+        if let Some((or, oi)) = other {
+            // O valor é um **produto** de fasores (soma de fases), não uma
+            // soma: desvincular o outro fator é multiplicar pelo conjugado.
+            let nr = re * or[j] + im * oi[j];
+            let ni = im * or[j] - re * oi[j];
+            re = nr;
+            im = ni;
         }
-        let (s, c) = lut.sin_cos(BamPhase(anchor.as_slice()[j]));
         // (re + i·im)·(c − i·s)
-        let ur = re * c + im * s;
-        let ui = im * c - re * s;
+        let ur = re * anchor_re[j] + im * anchor_im[j];
+        let ui = im * anchor_re[j] - re * anchor_im[j];
         out_re[j] = ur;
         out_im[j] = ui;
     }

@@ -1309,8 +1309,8 @@ mod tests {
         p.terms.push(PoBTerm::quad(-1.0, 0, u, c));
         p.terms.push(PoBTerm::quad(-2.0, 0, u, w));
         p.terms.push(PoBTerm::quad(2.0, 0, c, w));
-        for v in 0..n_exp {
-            p.fixed_exp[v] = None;
+        for item in p.fixed_exp.iter_mut().take(n_exp) {
+            *item = None;
         }
         p.emit_qubo(n_exp);
         // O QUBO representa `P_termos − C`, onde `P_termos` omite a constante

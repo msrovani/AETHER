@@ -322,9 +322,9 @@ impl FusionLedger {
             .iter()
             .find(|e| e.key == key && e.scope == scope)
         {
-            for i in 0..dims {
+            for (i, item) in out.iter_mut().enumerate().take(dims) {
                 let (re, im) = Self::phase_at(&record.payload, i);
-                out[i] = im.atan2(re);
+                *item = im.atan2(re);
             }
         }
         Ok((consulted, key))
@@ -465,7 +465,7 @@ impl FusionLedger {
             return sig;
         }
         let per = dims.div_ceil(GIST_DIM);
-        for b in 0..GIST_DIM {
+        for (b, item) in sig.iter_mut().enumerate().take(GIST_DIM) {
             let lo = b * per;
             let hi = ((b + 1) * per).min(dims);
             let mut re = 0.0f32;
@@ -474,7 +474,7 @@ impl FusionLedger {
                 re += query[2 * i];
                 im += query[2 * i + 1];
             }
-            sig[b] = im.atan2(re);
+            *item = im.atan2(re);
         }
         sig
     }
@@ -485,7 +485,7 @@ impl FusionLedger {
             return sig;
         }
         let per = dims.div_ceil(GIST_DIM);
-        for b in 0..GIST_DIM {
+        for (b, item) in sig.iter_mut().enumerate().take(GIST_DIM) {
             let lo = b * per;
             let hi = ((b + 1) * per).min(dims);
             let mut re = 0.0f32;
@@ -495,7 +495,7 @@ impl FusionLedger {
                 re += r;
                 im += m;
             }
-            sig[b] = im.atan2(re);
+            *item = im.atan2(re);
         }
         sig
     }

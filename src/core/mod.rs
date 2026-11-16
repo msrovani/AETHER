@@ -42,6 +42,10 @@ pub mod self_field;
 #[cfg(feature = "m1")]
 pub mod knowledge_fusion;
 
+// E8 — reservatório congelado × física plástica (readout RLS).
+#[cfg(feature = "m1")]
+pub mod reservoir;
+
 #[cfg(feature = "m1")]
 pub mod koopman_sindy;
 
