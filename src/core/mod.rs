@@ -12,6 +12,8 @@ pub mod certificate;
 
 #[cfg(feature = "m1")]
 pub mod presolve;
+// E2c-3 - busca exata guiada por persistencia (roof dual como propagador).
+pub mod persistency_search;
 
 // E2 — pipeline lógico de 5 estágios (presolve → persistência → decomposição
 // → BSB+Lagrange → certificado). Depende do solver e do certificado.

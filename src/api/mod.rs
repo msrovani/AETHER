@@ -1043,13 +1043,24 @@ fn phases_from(value: Option<&Json>, max: usize) -> Option<Vec<f32>> {
     }
     let mut out = Vec::with_capacity(arr.len());
     for v in arr {
-        out.push(v.as_f64()? as f32);
+        let x = v.as_f64()?;
+        if !x.is_finite() {
+            return None;
+        }
+        out.push(x as f32);
     }
     Some(out)
 }
 
 fn flat_matrix(value: Option<&Json>, rows: usize, cols: usize) -> Option<Vec<f64>> {
     let v = value?;
+    let mut check = |x: f64| -> Option<f64> {
+        if x.is_finite() {
+            Some(x)
+        } else {
+            None
+        }
+    };
     if let Some(outer) = v.as_arr() {
         if outer.len() == rows && outer.iter().all(|r| r.as_arr().is_some()) {
             let mut out = Vec::with_capacity(rows * cols);
@@ -1059,14 +1070,14 @@ fn flat_matrix(value: Option<&Json>, rows: usize, cols: usize) -> Option<Vec<f64
                     return None;
                 }
                 for x in r {
-                    out.push(x.as_f64()?);
+                    out.push(check(x.as_f64()?)?);
                 }
             }
             return Some(out);
         }
         let mut out = Vec::with_capacity(rows * cols);
         for x in outer {
-            out.push(x.as_f64()?);
+            out.push(check(x.as_f64()?)?);
         }
         if out.len() == rows * cols {
             return Some(out);
@@ -1103,9 +1114,10 @@ fn cert_from(value: Option<&Json>) -> BridgeCertificate {
     let Some(v) = value else {
         return BridgeCertificate::default();
     };
+    let finite = |x: f64| if x.is_finite() { x } else { 0.0 };
     BridgeCertificate {
-        energy: v.get("energy").and_then(Json::as_f64).unwrap_or(0.0) as f32,
-        gap: v.get("gap").and_then(Json::as_f64).unwrap_or(0.0) as f32,
+        energy: finite(v.get("energy").and_then(Json::as_f64).unwrap_or(0.0)) as f32,
+        gap: finite(v.get("gap").and_then(Json::as_f64).unwrap_or(0.0)) as f32,
         violations: v.get("violations").and_then(Json::as_u64).unwrap_or(0) as u32,
     }
 }
