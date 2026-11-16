@@ -243,3 +243,60 @@ do PLH (recall 0 → 5/5), o gate de R8 do F1 (vácuo → controle positivo), o 
 do E2c-2 (insatisfazível → `ge` no h=0), o offset do QUBO (−2, corrigido) e a
 triagem dos 4 gates do E3. Nenhum número do núcleo (E6/E6b/E2b/E2c/E3b/E1b)
 precisou ser refeito.
+
+---
+
+## 7. Auditoria do Corpo 3 — E4/E5/E7/E8/F2/F3 (2026-11-15 23:40)
+
+Método: reexecução **isolada** (`--test-threads=1 --nocapture`), comparando com
+os números do MSG 0190. Todos os gates passam; as ressalvas estão na última
+coluna.
+
+| Gate | Publicado (0190) | Re-medido | Veredito |
+|---|---|---|---|
+| **E4** self-field | ECE 0,3567 → 0,3238; CI p97,5 = −0,0168; T01 1,000; pós-plasticidade 0,0140 vs 0,0562; topologia 0,1507 → 0,1391 | idêntico | ✅ confere |
+| **E5** currículo | readaptação 8 (T03 = 150); outliers 7 → 1; 0 alloc | idêntico | ✅ confere |
+| **E7** corpo S0 | H1 1,9725 vs 0,5539; H2 0,8808; H3 0,7192 | H1 2,0093 vs 0,7285; H2 0,8930; H3 0,637 | ✅ passa, **variância alta** (drop 63,7–71,9%; alarmes 2–13) |
+| **E8** reservoir | frozen 0,0791; joint 0,3132; speedup 2,94×; 615.681 vs 88.220 pred/s | frozen 0,0890; joint 0,2168; speedup 3,23×; 611.708 vs 81.492 | ✅ passa, **margem de 11%** até o teto 0,10 |
+| **F2** consolidação | 0 perdidos (320), 0 chamadas T0, gist 1,000, R9 = 1 | idêntico | ✅ confere |
+| **F3** fusão 2D | quadrante 100/100, ruído 300/300, perda 0, R8 = 0 | idêntico | ✅ confere |
+
+### 7.1 Três ressalvas que o número esconde
+
+1. **E8 — o baseline é Oja local, não backprop.** `bench_joint` ajusta a física
+   por regra de Oja; `regression = max(0, (frozen − joint)/joint)` é
+   **unilateral**. "Congelar não custa acurácia" vale contra esse baseline —
+   não contra um MLP treinado. O caveat do MSG 0190 está correto, mas a frase
+   do dossiê precisa carregar "vs. Oja local".
+2. **E1 g5 é flaky por carga.** Isolado: **p50 11,40 µs / p99 14,70 µs** (passa).
+   Na suíte paralela: **30,10 µs** (falha). O gate mede *wall time* dentro de um
+   `cargo test` concorrente. Ou o CI roda o alvo com `--test-threads=1`, ou a
+   latência vira um alvo dedicado — senão "5/5" depende da máquina estar ociosa.
+3. **E7 varia entre execuções** (drop 63,7–71,9%, alarmes 2–13). Passa o gate
+   (≥30%), mas o artefato de uma execução não é reprodutível; publicar seed e
+   intervalo, não um ponto.
+
+### 7.2 `pattern_capacity()` — janela ≠ recall
+
+O valor **40** em `N=160` é a **janela de armazenamento** (`min(N/4, 64)`), não
+a capacidade de recall: com pista a 20% oculta e erro < 0,15 rad, mediu-se
+**~4 aleatórios / ~8 harmônicos** (E1b-2). Não é bug de código; era docstring
+errado (`min(N−1, 64)`) e nome ambíguo. Corrigido só na documentação
+(CLAIM 0211), sem mudar comportamento — `e1b_capacity` (7) e
+`phase2_m5_hardening` (13) seguem verdes.
+
+### 7.3 Placar das sete perguntas (atualizado)
+
+| # | Pergunta | Status com a evidência de hoje |
+|---|---|---|
+| 1 | Onde vão os 146 µs? | ✅ E6 — 84,4% no solver |
+| 2 | ΔE prevê acerto? | ✅ E3b — não em otimização livre; 100% com violações = 0 |
+| 3 | Quantos padrões em D=160? | ✅ E1b — 64 fatos (K=6); M5: 4 aleatórios / 8 harmônicos |
+| 4 | Roof dual reduz o suficiente? | ⏳ **parcial** — +9,1 pp sob viés, 0 no vidro puro |
+| 5 | Self-field melhora calibração? | ✅ E4 — ECE cai 0,0322 (CI exclui 0) **sem** mexer em T01 |
+| 6 | Atrator vira gist sem perder habilidade? | ✅ F2 — retenção 1,000 no harness |
+| 7 | A ponte de fase preserva? | ✅ F3 — perda 0,000 no round-trip |
+
+**Placar: 6 respondidas, 1 parcial, 0 abertas** — com o escopo declarado: F2/F3
+são harness local (não o SGDB real) e o E4 é um único seed. A pergunta 4
+continua sendo a única científica em aberto.

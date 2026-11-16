@@ -393,11 +393,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ));
     }
     json.push_str("  ],\n");
-    json.push_str(&format!("  \"slope_loglog\": {slope:.4},\n"));
-    json.push_str(&format!(
-        "  \"arm_a_skipped\": {},\n",
-        args.phase_only
-    ));
+    // `NaN` não é JSON válido: quando o braço A é pulado, o campo vira `null`.
+    if slope.is_finite() {
+        json.push_str(&format!("  \"slope_loglog\": {slope:.4},\n"));
+    } else {
+        json.push_str("  \"slope_loglog\": null,\n");
+    }
+    json.push_str(&format!("  \"arm_a_skipped\": {},\n", args.phase_only));
     json.push_str(&format!(
         "  \"phase_capacity_error_0_15\": {{\"random\": {m_random}, \"harmonic\": {m_harm}}},\n"
     ));

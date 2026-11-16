@@ -293,6 +293,38 @@ pub fn spearman(a: &[f32], b: &[f32]) -> f32 {
 /// * A telemetria real é amostrada a cada 10k ciclos; o ambiente entre amostras
 ///   interpola o centro de factibilidade.
 pub fn run_s0(cycles: u64, actuators_enabled: bool, seed: u64) -> GoalStats {
+    run_s0_with_source(cycles, actuators_enabled, seed, 10_000, |_| sample_host())
+}
+
+/// Executa o corpo `S0` com **telemetria fixa**: a mesma amostra vale para todo
+/// o laço, então o resultado depende apenas de `cycles`, `actuators_enabled` e
+/// `seed`.
+///
+/// É o caminho dos gates: [`run_s0`] mede o host por wall-clock e, por isso,
+/// varia com a carga da máquina; aqui a telemetria é dado de entrada.
+pub fn run_s0_fixed(
+    cycles: u64,
+    actuators_enabled: bool,
+    seed: u64,
+    sample: HostSample,
+) -> GoalStats {
+    run_s0_with_source(cycles, actuators_enabled, seed, u64::MAX, |_| sample)
+}
+
+/// Núcleo do corpo `S0` com a fonte de telemetria injetada.
+///
+/// `source` é chamada no ciclo 0 e a cada `sample_every` ciclos; entre amostras
+/// o centro de factibilidade é modulado pelos atuadores.
+pub fn run_s0_with_source<F>(
+    cycles: u64,
+    actuators_enabled: bool,
+    seed: u64,
+    sample_every: u64,
+    mut source: F,
+) -> GoalStats
+where
+    F: FnMut(u64) -> HostSample,
+{
     let actuators = Actuators::new(actuators_enabled);
     let mut rng = LcgState::new(seed);
     let mut est = [0.5f32; BINS];
@@ -300,14 +332,14 @@ pub fn run_s0(cycles: u64, actuators_enabled: bool, seed: u64) -> GoalStats {
     let mut succ = [0.0f32; BINS];
     let mut counts = [0u32; BINS];
 
-    let mut telemetry = sample_host();
+    let mut telemetry = source(0);
     let mut target = 0.78f32; // corpo hostil por padrão
-    let sample_every = 10_000u64;
+    let sample_every = sample_every.max(1);
     let eps = 0.08f32;
 
     for cycle in 0..cycles {
         if cycle % sample_every == 0 {
-            telemetry = sample_host();
+            telemetry = source(cycle);
             let n = telemetry.normalized();
             // Centro de factibilidade base: quanto mais ruído, mais difícil.
             target = (0.42 + 0.45 * (n[0] * 0.5 + n[1] * 0.3 + n[2] * 0.1 + n[3] * 0.1))

@@ -529,6 +529,14 @@ Capacidade a erro < 0,15 rad: **~4** (aleatório) e **~8** (harmônico), contra
 declarado. O caso adversarial (aleatório) não tem bacia de atração estruturada;
 o harmônico dobra a capacidade, mas não chega ao número declarado.
 
+**E1b-2 — varredura densa `M ∈ {4, 8, 16, 24, 32, 40, 48}`.** O gate `< 0,15 rad`
+fecha em **`M_harm = 8`** e **`M_rand = 4`**; acima de 8 os dois braços colapsam
+juntos (0,493/0,635 em `M = 24`; 0,699/0,834 em 40; 0,873/0,962 em 48). Ou seja,
+o padrão estruturado **dobra** a fronteira, não a multiplica por 10 — a fronteira
+operacional do M5 é **8**, e `pattern_capacity() = 40` deve ser lido como **janela
+de armazenamento**, nunca como capacidade de recall. Artefato:
+`target/aether_e1b.json` → `phase_capacity_error_0_15`. Fórum **MSG 0196**.
+
 > **Errata (MSG 0111 / 0118 / 0120).** A primeira medição publicada
 > (0,126 / 0,274 / 0,518) estava **contaminada**: a memória carregava o atrator
 > anterior entre recalls. Com `reset_phases(0)` antes de cada consulta e

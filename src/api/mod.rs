@@ -1,4 +1,4 @@
-//! Borda externa **HTTP/JSON** (T2): como um app de IA (llama.cpp, Ollama,
+﻿//! Borda externa **HTTP/JSON** (T2): como um app de IA (llama.cpp, Ollama,
 //! SDK da OpenAI) consome o AETHER.
 //!
 //! # O que este módulo é — e o que não é
@@ -446,7 +446,7 @@ fn chat(state: &mut ApiState, body: &[u8]) -> (u16, Json) {
         return bad("messages ausente ou sem mensagem de usuário");
     };
     let scope = scope_from(doc.get("aether").and_then(|a| a.get("scope")))
-        .unwrap_or_else(ScopeId::default);
+        .unwrap_or_default();
     let evidence = evidence_for(state, scope, &text);
     let abstained = evidence
         .get("abstain")
@@ -502,7 +502,7 @@ fn completion(state: &mut ApiState, body: &[u8]) -> (u16, Json) {
         .unwrap_or_default()
         .to_string();
     let scope = scope_from(doc.get("aether").and_then(|a| a.get("scope")))
-        .unwrap_or_else(ScopeId::default);
+        .unwrap_or_default();
     let evidence = evidence_for(state, scope, &text);
     let abstained = evidence
         .get("abstain")
@@ -790,3 +790,4 @@ mod tests {
         assert_eq!(flat_matrix(Some(&flat), 3, 2), None);
     }
 }
+

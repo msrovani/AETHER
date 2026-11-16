@@ -3,6 +3,22 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.106] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 8 arquivo(s) (.:1, docs:3, examples:1, src:2, tests:1).
+- Gate: ok (4s).
+
+- `Cargo.lock`
+- `docs/AUDIT_CLAIMS_VOL3.md`
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL2.md`
+- `examples/e1b_capacity.rs`
+- `src/api/mod.rs`
+- `src/core/s0_body.rs`
+- `tests/e7_body_gate.rs`
+- `docs/EXTERNAL_API.md`
+
 ## [0.0.105] - 2026-11-16
 
 ### Changed
