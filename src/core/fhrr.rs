@@ -446,20 +446,74 @@ impl FhrrStore {
 
         // Papel da pista e⊙r: uma única sin_cos por posição visível; as
         // ocultas ficam em zero (não contribuem ao produto interno).
-        let mut nvis = 0usize;
         for j in 0..dim {
             if mask[j] {
                 let (s, c) = (entity_cue[j] + relation_cue[j]).sin_cos();
                 sc.cue_re[j] = c;
                 sc.cue_im[j] = s;
-                nvis += 1;
             } else {
                 sc.cue_re[j] = 0.0;
                 sc.cue_im[j] = 0.0;
             }
         }
 
-        // Cleanup memory: fato com maior Re⟨papel_cue, papel_k⟩.
+        self.finish_into(mask, sc)
+    }
+
+    /// Consulta com o **fasor de papel pré-computado** (`cue_re + i·cue_im`).
+    ///
+    /// Equivale a [`query_into`](Self::query_into) quando
+    /// `cue = exp(i·(entity + relation))`, mas **não recalcula `sin/cos`** em
+    /// `D` posições: o chamador compõe o fasor (por exemplo, multiplicando
+    /// tabelas pré-computadas de `exp(i·átomo)`). É o caminho de latência do
+    /// PLH (E1-2).
+    ///
+    /// Posições com `mask[j] == false` são zeradas na cópia, como em
+    /// `query_into`.
+    pub fn query_phasor_into(
+        &self,
+        cue_re: &[f32],
+        cue_im: &[f32],
+        mask: &[bool],
+        sc: &mut FhrrScratch,
+    ) -> Result<FhrrHit> {
+        if self.is_empty() {
+            return Err(AetherError::Config(
+                "FHRR: consulta em memoria vazia".into(),
+            ));
+        }
+        let dim = self.dim;
+        if cue_re.len() != dim || cue_im.len() != dim || mask.len() != dim {
+            return Err(AetherError::shape(
+                [dim],
+                [cue_re.len().min(cue_im.len()).min(mask.len())],
+            ));
+        }
+        if sc.cue_re.len() != dim {
+            return Err(AetherError::shape([dim], [sc.cue_re.len()]));
+        }
+        if sc.sims.len() < self.values.len() {
+            return Err(AetherError::shape([self.values.len()], [sc.sims.len()]));
+        }
+
+        for j in 0..dim {
+            if mask[j] {
+                sc.cue_re[j] = cue_re[j];
+                sc.cue_im[j] = cue_im[j];
+            } else {
+                sc.cue_re[j] = 0.0;
+                sc.cue_im[j] = 0.0;
+            }
+        }
+
+        self.finish_into(mask, sc)
+    }
+
+    /// Cleanup do papel + unbinding + similaridade, assumindo que
+    /// `sc.cue_re/cue_im` já contém o fasor da pista (mascarado).
+    fn finish_into(&self, mask: &[bool], sc: &mut FhrrScratch) -> Result<FhrrHit> {
+        let dim = self.dim;
+        let nvis = mask.iter().filter(|v| **v).count();
         let mut best_k = 0usize;
         let mut best_s = f32::NEG_INFINITY;
         for (k, role) in self.roles.iter().enumerate() {

@@ -3,6 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.94] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 4 arquivo(s) (docs:1, examples:1, src:1, tests:1).
+- Gate: ok (4s).
+
+- `examples/phase_language_probe.rs`
+- `src/core/fhrr.rs`
+- `tests/e1_plh.rs`
+- `docs/FASE1_PROMPT.md`
+
 ## [0.0.93] - 2026-11-16
 
 ### Changed

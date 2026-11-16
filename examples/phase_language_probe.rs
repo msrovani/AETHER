@@ -28,6 +28,15 @@
 //!
 //! Saída: tabelas + `target/aether_e1_plh.json`.
 //!
+//! ## Por que o cleanup é complexo (e não projetado)
+//!
+//! O unbinding de um fato devolve `z ≈ e^{i·value} + ruído` com ruído de
+//! superposição `≈ √(M/K)` **por posição**. Projetar `arg(z)` antes do cleanup
+//! jogaria fora o ganho de `√D` (a similaridade média sobre `D` posições é que
+//! separa sinal de crosstalk — o mesmo motivo pelo qual o `BamHolographicStore`
+//! compara `z` com o codebook em `(re, im)`). Aqui todo cleanup é complexo:
+//! `sim = (1/D)·Re⟨cue, e^{iθ_atom}⟩`.
+//!
 //! ## Invariantes de borda
 //!
 //! * `#![deny(unsafe_code)]` — a única exceção é o `CountingAllocator`
@@ -35,9 +44,8 @@
 //!   linguagem (`GlobalAlloc`); o caminho de inferência não tem `unsafe`.
 //! * `≤ 48` fatos por acumulador — **nunca** há superposição plana > 48.
 //! * `0 B` alocados no caminho de consulta (unbinding + ressonador + cleanup).
-//! * Fasores de magnitude unitária estrita: todo vetor guardado é fase `u16`
-//!   (`e^{iθ}`); o unbinding projeta o resultado de volta ao círculo unitário
-//!   com `arg(·)` antes de qualquer cleanup.
+//! * Todo vetor **guardado** é fase `u16` (`|z| = 1` estrito); o unbinding
+//!   produz um complexo e o ressonador o mantém em `(re, im)` até o cleanup.
 
 #![deny(unsafe_code)]
 #![allow(clippy::needless_range_loop)]
@@ -164,8 +172,39 @@ type Phases = [u16; D];
 /// Vetor holográfico BAM de `D` fasores unitários.
 type BVec = BamHolographicVector<D>;
 
+/// Superposição complexa de fasores (o `⊕` do código de sentença e o `z` do
+/// unbinding). Sinal limpo tem magnitude 1 por posição.
+#[derive(Clone, Copy, Debug)]
+struct Cplx {
+    re: [f32; D],
+    im: [f32; D],
+}
+
+impl Cplx {
+    fn zero() -> Self {
+        Self {
+            re: [0.0; D],
+            im: [0.0; D],
+        }
+    }
+
+    fn add_assign(&mut self, o: &Cplx) {
+        for j in 0..D {
+            self.re[j] += o.re[j];
+            self.im[j] += o.im[j];
+        }
+    }
+
+    fn sub_assign(&mut self, o: &Cplx) {
+        for j in 0..D {
+            self.re[j] -= o.re[j];
+            self.im[j] -= o.im[j];
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
-// Álgebra de fase: ρ (permutação), binding, similaridade, projeção unitária
+// Álgebra de fase: ρ (permutação), binding, similaridade, fasores
 // ---------------------------------------------------------------------------
 
 /// `ρ^k(v)[j] = v[(j+k) mod D]` — deslocamento cíclico **de posições**.
@@ -204,8 +243,7 @@ fn bind(a: &Phases, b: &Phases) -> Phases {
 
 /// `(1/D)·Σ tri(θ_a − θ_b)` em Q14, com `tri(x) = 1 − 2|x|/π`.
 ///
-/// Monotônica em `|Δθ|` e mais barata que o cosseno (só `sub`/`abs`/`add`);
-/// é a mesma métrica de *cleanup* do `BamHolographicStore`.
+/// Usada só onde já se tem fase pura (diagnóstico e o controle comutativo).
 #[inline]
 fn tri_sim(a: &Phases, b: &Phases) -> f32 {
     let mut acc = [0i32; LANES];
@@ -220,44 +258,94 @@ fn tri_sim(a: &Phases, b: &Phases) -> f32 {
     sum as f32 / (Q14 * D as f32)
 }
 
-/// Projeta um vetor complexo de volta ao círculo unitário: `θ = arg(z)`.
+/// Fasor unitário `e^{iθ}` em `(re, im)` — `poly_sin_q14`, vetorizado.
 #[inline]
-fn project_unit(re: &[f32; D], im: &[f32; D]) -> Phases {
-    let mut out = [0u16; D];
-    for (j, o) in out.iter_mut().enumerate() {
-        *o = BamPhase::from_radians(im[j].atan2(re[j])).0;
+fn unit_phasor(phases: &Phases) -> Cplx {
+    let mut out = Cplx::zero();
+    let inv = 1.0 / Q14;
+    for lane in 0..D / LANES {
+        let base = lane * LANES;
+        let mut sa = [0i16; LANES];
+        let mut ca = [0i16; LANES];
+        for l in 0..LANES {
+            let p = phases[base + l];
+            sa[l] = p as i16;
+            ca[l] = p.wrapping_add(QUARTER) as i16;
+        }
+        let s = poly_sin_q14(&sa);
+        let c = poly_sin_q14(&ca);
+        for l in 0..LANES {
+            out.im[base + l] = s[l] as f32 * inv;
+            out.re[base + l] = c[l] as f32 * inv;
+        }
     }
     out
 }
 
-/// Fasor unitário `e^{iθ}` em `(re, im)` a partir de fases BAM.
+/// `(1/D)·Re⟨cue, e^{iθ_atom}⟩` — similaridade no domínio complexo.
 #[inline]
-fn unit_phasor(phases: &Phases) -> ([f32; D], [f32; D]) {
-    let lut = BamLut::global();
-    let mut re = [0.0f32; D];
-    let mut im = [0.0f32; D];
-    for j in 0..D {
-        let (s, c) = lut.sin_cos(BamPhase(phases[j]));
-        re[j] = c;
-        im[j] = s;
+fn cplx_sim(cue: &Cplx, cos: &[f32; D], sin: &[f32; D]) -> f32 {
+    let mut acc = [0.0f32; LANES];
+    for lane in 0..D / LANES {
+        let base = lane * LANES;
+        for l in 0..LANES {
+            acc[l] += cue.re[base + l] * cos[base + l] + cue.im[base + l] * sin[base + l];
+        }
     }
-    (re, im)
+    let sum: f32 = acc.iter().sum();
+    sum / D as f32
 }
 
 // ---------------------------------------------------------------------------
 // Codebooks + âncoras (cópia limpa e cópia ACF perturbada)
 // ---------------------------------------------------------------------------
 
+/// Um vocabulário de papel: fases (escrita) + `cos/sin` pré-computados
+/// (cleanup quente).
+#[derive(Debug)]
+struct Book {
+    phases: Vec<BVec>,
+    cos: Vec<[f32; D]>,
+    sin: Vec<[f32; D]>,
+}
+
+impl Book {
+    fn new(phases: Vec<BVec>) -> Self {
+        let cos = phases
+            .iter()
+            .map(|v| {
+                let p = unit_phasor(v.as_slice());
+                p.re
+            })
+            .collect();
+        let sin = phases
+            .iter()
+            .map(|v| unit_phasor(v.as_slice()).im)
+            .collect();
+        Self { phases, cos, sin }
+    }
+
+    fn len(&self) -> usize {
+        self.phases.len()
+    }
+
+    fn memory_bytes(&self) -> usize {
+        self.phases.len() * std::mem::size_of::<BVec>()
+            + self.cos.len() * std::mem::size_of::<[f32; D]>()
+            + self.sin.len() * std::mem::size_of::<[f32; D]>()
+    }
+}
+
 /// Vocabulários de papel. `ent` serve sujeito **e** objeto; `verb` é a relação;
 /// `modu` é o modificador.
 #[derive(Debug)]
 struct Codebooks {
-    ent: Vec<BVec>,
-    verb: Vec<BVec>,
-    modu: Vec<BVec>,
-    ent_acf: Vec<BVec>,
-    verb_acf: Vec<BVec>,
-    modu_acf: Vec<BVec>,
+    ent: Book,
+    verb: Book,
+    modu: Book,
+    ent_acf: Book,
+    verb_acf: Book,
+    modu_acf: Book,
 }
 
 impl Codebooks {
@@ -271,16 +359,16 @@ impl Codebooks {
         let verb_acf = jitter_codebook(&verb, &mut rng, JITTER_FRAC);
         let modu_acf = jitter_codebook(&modu, &mut rng, JITTER_FRAC);
         Self {
-            ent,
-            verb,
-            modu,
-            ent_acf,
-            verb_acf,
-            modu_acf,
+            ent: Book::new(ent),
+            verb: Book::new(verb),
+            modu: Book::new(modu),
+            ent_acf: Book::new(ent_acf),
+            verb_acf: Book::new(verb_acf),
+            modu_acf: Book::new(modu_acf),
         }
     }
 
-    fn clean(&self, role: usize) -> &[BVec] {
+    fn clean(&self, role: usize) -> &Book {
         match role {
             ROLE_S | ROLE_O => &self.ent,
             ROLE_V => &self.verb,
@@ -288,7 +376,7 @@ impl Codebooks {
         }
     }
 
-    fn acf(&self, role: usize) -> &[BVec] {
+    fn acf(&self, role: usize) -> &Book {
         match role {
             ROLE_S | ROLE_O => &self.ent_acf,
             ROLE_V => &self.verb_acf,
@@ -297,8 +385,12 @@ impl Codebooks {
     }
 
     fn memory_bytes(&self) -> usize {
-        let one = std::mem::size_of::<BVec>();
-        (self.ent.len() + self.verb.len() + self.modu.len()) * one * 2
+        self.ent.memory_bytes()
+            + self.verb.memory_bytes()
+            + self.modu.memory_bytes()
+            + self.ent_acf.memory_bytes()
+            + self.verb_acf.memory_bytes()
+            + self.modu_acf.memory_bytes()
     }
 }
 
@@ -358,6 +450,10 @@ impl Anchors {
             _ => &self.m,
         }
     }
+
+    fn memory_bytes(&self) -> usize {
+        4 * std::mem::size_of::<BVec>()
+    }
 }
 
 /// Termo `A_role ⊗ ρ^role(filler)` (uma fase pura).
@@ -366,7 +462,7 @@ fn role_term(anchor: &BVec, filler: &BVec, k: usize) -> Phases {
 }
 
 // ---------------------------------------------------------------------------
-// Cleanup
+// Cleanup complexo
 // ---------------------------------------------------------------------------
 
 /// Resultado de um *cleanup memory*.
@@ -377,13 +473,13 @@ struct Cleanup {
     margin: f32,
 }
 
-/// Varre o codebook inteiro (vetorizado) e devolve o vencedor + margem.
-fn cleanup(cue: &Phases, book: &[BVec], sims: &mut [f32; N_ENT]) -> Cleanup {
+/// Varre o codebook inteiro e devolve o vencedor + margem. Zero alocação.
+fn cleanup(cue: &Cplx, book: &Book, sims: &mut [f32; N_ENT]) -> Cleanup {
     let mut best = 0usize;
     let mut best_sim = f32::NEG_INFINITY;
     let mut second = f32::NEG_INFINITY;
-    for (i, atom) in book.iter().enumerate() {
-        let s = tri_sim(cue, atom.as_slice());
+    for i in 0..book.len() {
+        let s = cplx_sim(cue, &book.cos[i], &book.sin[i]);
         sims[i] = s;
         if s > best_sim {
             second = best_sim;
@@ -504,12 +600,14 @@ impl Shard {
             .position(|(&s, &v)| s == subj && v == verb)
     }
 
-    /// Desvincula `key` do fato `fact` nos `K` traços (coerente) e devolve o
-    /// complexo `z` — ainda **não** projetado.
-    fn unbind(&self, fact: usize, key: &Phases, z_re: &mut [f32; D], z_im: &mut [f32; D]) {
-        z_re.fill(0.0);
-        z_im.fill(0.0);
-        let inv = 1.0 / Q14;
+    /// Desvincula `key` do fato `fact` nos `K` traços e devolve `z` **já
+    /// normalizado** para que o sinal limpo tenha magnitude 1 por posição.
+    fn unbind(&self, fact: usize, key: &Phases, out: &mut Cplx) {
+        out.re.fill(0.0);
+        out.im.fill(0.0);
+        // trace ≈ 32767·2^{-shift}·Σ_k cos ; poly_sin devolve Q14.
+        let denom = self.traces as f32 * 32_767.0 / ((1u32 << self.shift) as f32);
+        let inv = 1.0 / (denom * Q14);
         for t in 0..self.traces {
             let psi = self.psi[fact * self.traces + t];
             let tr = &self.tre[t];
@@ -531,8 +629,8 @@ impl Shard {
                     let mr = tr[base + l] as f32;
                     let mi = ti[base + l] as f32;
                     // (mr + i·mi)·(cc − i·ss)
-                    z_re[base + l] += mr * cc + mi * ss;
-                    z_im[base + l] += mi * cc - mr * ss;
+                    out.re[base + l] += mr * cc + mi * ss;
+                    out.im[base + l] += mi * cc - mr * ss;
                 }
             }
         }
@@ -605,39 +703,23 @@ impl PlhMemory {
 /// Scratch pré-alocado do caminho quente (nada aqui aloca depois do `new`).
 #[derive(Debug)]
 struct QueryScratch {
-    z_re: [f32; D],
-    z_im: [f32; D],
-    value: [u16; D],
-    f_obj: [u16; D],
-    f_mod: [u16; D],
+    z: Cplx,
+    f_obj: Cplx,
+    f_mod: Cplx,
+    rest: Cplx,
     sims: [f32; N_ENT],
 }
 
 impl QueryScratch {
     fn new() -> Self {
         Self {
-            z_re: [0.0; D],
-            z_im: [0.0; D],
-            value: [0u16; D],
-            f_obj: [0u16; D],
-            f_mod: [0u16; D],
+            z: Cplx::zero(),
+            f_obj: Cplx::zero(),
+            f_mod: Cplx::zero(),
+            rest: Cplx::zero(),
             sims: [0.0; N_ENT],
         }
     }
-}
-
-/// Resposta do caminho quente, sem alocação.
-#[derive(Clone, Copy, Debug)]
-struct Answer {
-    obj: usize,
-    modu: usize,
-    sim_obj: f32,
-    sim_mod: f32,
-    margin_obj: f32,
-    margin_mod: f32,
-    iters: u8,
-    converged: bool,
-    validated: bool,
 }
 
 /// Fatores do predicado (2 fatores) devolvidos pelo ressonador.
@@ -654,18 +736,30 @@ struct PairFactors {
     validated: bool,
 }
 
-/// `f[j] = ρ^{-k}( value[j] − anchor[j] − other[j] )` — desvincula um papel
-/// **subtraindo** o outro fator já re-codificado (`other` é o átomo limpo).
-fn unbind_role_sub(value: &Phases, anchor: &Phases, k: usize, other: Option<&Phases>) -> Phases {
-    let mut d = [0u16; D];
-    for (j, o) in d.iter_mut().enumerate() {
-        let mut t = value[j].wrapping_sub(anchor[j]);
-        if let Some(x) = other {
-            t = t.wrapping_sub(x[j]);
+/// Desvincula um papel de um complexo: `f = ρ^{-k}( z ⊙ conj(A ⊗ other) )`.
+///
+/// `other` é a fase do outro fator já re-codificada (átomo **limpo**).
+fn unbind_role(z: &Cplx, anchor: &BVec, k: usize, other: Option<&Phases>, out: &mut Cplx) {
+    let amp = anchor.as_slice();
+    let lut = BamLut::global();
+    for j in 0..D {
+        let mut phi = amp[j];
+        if let Some(o) = other {
+            phi = phi.wrapping_add(o[j]);
         }
-        *o = t;
+        let (s, c) = lut.sin_cos(BamPhase(phi));
+        // z · (c − i·s)
+        out.re[j] = z.re[j] * c + z.im[j] * s;
+        out.im[j] = z.im[j] * c - z.re[j] * s;
     }
-    unrho(&d, k)
+    // ρ^{-k}: desfaz a permutação do papel.
+    let k = k % D;
+    let tmp = *out;
+    for j in 0..D {
+        let src = (j + D - k) % D;
+        out.re[j] = tmp.re[src];
+        out.im[j] = tmp.im[src];
+    }
 }
 
 /// Ressonador de `(OBJ, MOD)` com projeção *re-encode* entre passos.
@@ -673,17 +767,10 @@ fn unbind_role_sub(value: &Phases, anchor: &Phases, k: usize, other: Option<&Pha
 /// Cada passo subtrai do predicado o **átomo limpo** do outro fator
 /// (`re-encode`), desvincula o papel próprio e faz cleanup na **cópia ACF**;
 /// no fim valida o vencedor na **cópia limpa**.
-fn resonate_pair(
-    value: &Phases,
-    cb: &Codebooks,
-    a: &Anchors,
-    sc: &mut QueryScratch,
-) -> PairFactors {
-    let ao = a.o.as_slice();
-    let am = a.m.as_slice();
-
-    sc.f_obj = unbind_role_sub(value, ao, ROLE_O, None);
-    sc.f_mod = unbind_role_sub(value, am, ROLE_M, None);
+fn resonate_pair(value: &Cplx, cb: &Codebooks, a: &Anchors, sc: &mut QueryScratch) -> PairFactors {
+    // init: cada fator isolado (sem subtração).
+    unbind_role(value, &a.o, ROLE_O, None, &mut sc.f_obj);
+    unbind_role(value, &a.m, ROLE_M, None, &mut sc.f_mod);
     let mut o = cleanup(&sc.f_obj, &cb.ent_acf, &mut sc.sims).index;
     let mut m = cleanup(&sc.f_mod, &cb.modu_acf, &mut sc.sims).index;
 
@@ -694,13 +781,25 @@ fn resonate_pair(
         let prev = (o, m);
 
         // OBJ: subtrai o re-encode limpo do MOD.
-        let re_m = bind(am, &rho(cb.modu[m].as_slice(), ROLE_M));
-        sc.f_obj = unbind_role_sub(value, ao, ROLE_O, Some(&re_m));
+        let term_m = unit_phasor(&bind(
+            a.m.as_slice(),
+            &rho(cb.modu.phases[m].as_slice(), ROLE_M),
+        ));
+        sc.rest = *value;
+        sc.rest.sub_assign(&term_m);
+        let rest = sc.rest;
+        unbind_role(&rest, &a.o, ROLE_O, None, &mut sc.f_obj);
         o = cleanup(&sc.f_obj, &cb.ent_acf, &mut sc.sims).index;
 
         // MOD: subtrai o re-encode limpo do OBJ (já atualizado).
-        let re_o = bind(ao, &rho(cb.ent[o].as_slice(), ROLE_O));
-        sc.f_mod = unbind_role_sub(value, am, ROLE_M, Some(&re_o));
+        let term_o = unit_phasor(&bind(
+            a.o.as_slice(),
+            &rho(cb.ent.phases[o].as_slice(), ROLE_O),
+        ));
+        sc.rest = *value;
+        sc.rest.sub_assign(&term_o);
+        let rest = sc.rest;
+        unbind_role(&rest, &a.m, ROLE_M, None, &mut sc.f_mod);
         m = cleanup(&sc.f_mod, &cb.modu_acf, &mut sc.sims).index;
 
         if (o, m) == prev {
@@ -709,9 +808,15 @@ fn resonate_pair(
         }
     }
 
-    // Recalcula o fator OBJ com o MOD final (projeção re-encode consistente).
-    let re_m = bind(am, &rho(cb.modu[m].as_slice(), ROLE_M));
-    sc.f_obj = unbind_role_sub(value, ao, ROLE_O, Some(&re_m));
+    // Consistência final: OBJ recalculado com o MOD final.
+    let term_m = unit_phasor(&bind(
+        a.m.as_slice(),
+        &rho(cb.modu.phases[m].as_slice(), ROLE_M),
+    ));
+    sc.rest = *value;
+    sc.rest.sub_assign(&term_m);
+    let rest = sc.rest;
+    unbind_role(&rest, &a.o, ROLE_O, None, &mut sc.f_obj);
 
     // Validação na cópia limpa (o certificado do fator).
     let co = cleanup(&sc.f_obj, &cb.ent, &mut sc.sims);
@@ -734,52 +839,30 @@ fn resonate_pair(
 // Codec de sentença (⊕ de 4 papéis) + ressonador ACF de 4 fatores
 // ---------------------------------------------------------------------------
 
-/// Superposição complexa de fasores unitários (o `⊕` do código de sentença).
-#[derive(Clone, Copy, Debug)]
-struct Bundle {
-    re: [f32; D],
-    im: [f32; D],
-}
-
-impl Bundle {
-    fn zero() -> Self {
-        Self {
-            re: [0.0; D],
-            im: [0.0; D],
-        }
-    }
-
-    fn add_term(&mut self, phases: &Phases) {
-        let (re, im) = unit_phasor(phases);
-        for j in 0..D {
-            self.re[j] += re[j];
-            self.im[j] += im[j];
-        }
-    }
-
-    /// `arg(Ψ ⊗ conj(anchor))` — desvincula a âncora e projeta ao círculo.
-    fn project_role(&self, anchor: &BVec) -> Phases {
-        let lut = BamLut::global();
-        let mut re = [0.0f32; D];
-        let mut im = [0.0f32; D];
-        for j in 0..D {
-            let (s, c) = lut.sin_cos(BamPhase(anchor.as_slice()[j]));
-            // (re + i·im)·(c − i·s)
-            re[j] = self.re[j] * c + self.im[j] * s;
-            im[j] = self.im[j] * c - self.re[j] * s;
-        }
-        project_unit(&re, &im)
-    }
-}
-
 /// `Ψ = A_S⊗ρ^0(s) ⊕ A_V⊗ρ^1(v) ⊕ A_O⊗ρ^2(o) ⊕ A_M⊗ρ^3(m)`.
-fn encode_sentence(cb: &Codebooks, a: &Anchors, ids: [usize; 4]) -> Bundle {
-    let mut b = Bundle::zero();
-    b.add_term(&role_term(a.of(ROLE_S), &cb.ent[ids[0]], ROLE_S));
-    b.add_term(&role_term(a.of(ROLE_V), &cb.verb[ids[1]], ROLE_V));
-    b.add_term(&role_term(a.of(ROLE_O), &cb.ent[ids[2]], ROLE_O));
-    b.add_term(&role_term(a.of(ROLE_M), &cb.modu[ids[3]], ROLE_M));
-    b
+fn encode_sentence(cb: &Codebooks, a: &Anchors, ids: [usize; 4]) -> Cplx {
+    let mut psi = Cplx::zero();
+    psi.add_assign(&unit_phasor(&role_term(
+        a.of(ROLE_S),
+        &cb.ent.phases[ids[0]],
+        ROLE_S,
+    )));
+    psi.add_assign(&unit_phasor(&role_term(
+        a.of(ROLE_V),
+        &cb.verb.phases[ids[1]],
+        ROLE_V,
+    )));
+    psi.add_assign(&unit_phasor(&role_term(
+        a.of(ROLE_O),
+        &cb.ent.phases[ids[2]],
+        ROLE_O,
+    )));
+    psi.add_assign(&unit_phasor(&role_term(
+        a.of(ROLE_M),
+        &cb.modu.phases[ids[3]],
+        ROLE_M,
+    )));
+    psi
 }
 
 /// Fatores de uma sentença decodificada.
@@ -807,19 +890,18 @@ impl Factors {
 ///
 /// * init: desvincula cada âncora e faz cleanup na cópia **ACF**;
 /// * itera: subtrai o `re-encode` (**átomo limpo**) dos outros três papéis,
-///   desvincula o papel próprio, projeta, e faz cleanup na cópia ACF —
+///   desvincula o papel próprio e faz cleanup na cópia ACF —
 ///   *re-encode projection* entre passos encadeados;
 /// * valida: o vencedor de cada papel tem que sobreviver ao cleanup na cópia
 ///   **limpa**.
-fn factorize_sentence(psi: &Bundle, cb: &Codebooks, a: &Anchors) -> Factors {
+fn factorize_sentence(psi: &Cplx, cb: &Codebooks, a: &Anchors) -> Factors {
     let mut f = Factors::default();
-    let mut last: [Phases; 4] = [[0u16; D]; 4];
+    let mut last: [Cplx; 4] = [Cplx::zero(); 4];
     let mut sims = [0.0f32; N_ENT];
 
     for r in 0..4 {
-        let cue = unrho(&psi.project_role(a.of(r)), r);
-        last[r] = cue;
-        let c = cleanup(&cue, cb.acf(r), &mut sims);
+        unbind_role(psi, a.of(r), r, None, &mut last[r]);
+        let c = cleanup(&last[r], cb.acf(r), &mut sims);
         f.ids[r] = c.index;
         f.sims[r] = c.sim;
         f.margins[r] = c.margin;
@@ -831,26 +913,20 @@ fn factorize_sentence(psi: &Bundle, cb: &Codebooks, a: &Anchors) -> Factors {
         let mut changed = false;
         for r in 0..4 {
             // residual = Ψ − Σ_{r'≠r} reencode(átomo limpo, r')
-            let mut rr = [0.0f32; D];
-            let mut ri = [0.0f32; D];
+            let mut res = *psi;
             for r2 in 0..4 {
                 if r2 == r {
                     continue;
                 }
-                let term = role_term(a.of(r2), &cb.clean(r2)[f.ids[r2]], r2);
-                let (tr, ti) = unit_phasor(&term);
-                for j in 0..D {
-                    rr[j] += tr[j];
-                    ri[j] += ti[j];
-                }
+                let term = unit_phasor(&role_term(
+                    a.of(r2),
+                    &cb.clean(r2).phases[f.ids[r2]],
+                    r2,
+                ));
+                res.sub_assign(&term);
             }
-            let res = Bundle {
-                re: std::array::from_fn(|j| psi.re[j] - rr[j]),
-                im: std::array::from_fn(|j| psi.im[j] - ri[j]),
-            };
-            let cue = unrho(&res.project_role(a.of(r)), r);
-            last[r] = cue;
-            let c = cleanup(&cue, cb.acf(r), &mut sims);
+            unbind_role(&res, a.of(r), r, None, &mut last[r]);
+            let c = cleanup(&last[r], cb.acf(r), &mut sims);
             if c.index != f.ids[r] {
                 changed = true;
                 f.ids[r] = c.index;
@@ -921,14 +997,14 @@ struct Fact {
 
 impl Fact {
     fn key(&self, cb: &Codebooks, a: &Anchors) -> Phases {
-        let ks = role_term(a.of(ROLE_S), &cb.ent[self.ids[0] as usize], ROLE_S);
-        let kv = role_term(a.of(ROLE_V), &cb.verb[self.ids[1] as usize], ROLE_V);
+        let ks = role_term(a.of(ROLE_S), &cb.ent.phases[self.ids[0] as usize], ROLE_S);
+        let kv = role_term(a.of(ROLE_V), &cb.verb.phases[self.ids[1] as usize], ROLE_V);
         bind(&ks, &kv)
     }
 
     fn value(&self, cb: &Codebooks, a: &Anchors) -> Phases {
-        let ko = role_term(a.of(ROLE_O), &cb.ent[self.ids[2] as usize], ROLE_O);
-        let km = role_term(a.of(ROLE_M), &cb.modu[self.ids[3] as usize], ROLE_M);
+        let ko = role_term(a.of(ROLE_O), &cb.ent.phases[self.ids[2] as usize], ROLE_O);
+        let km = role_term(a.of(ROLE_M), &cb.modu.phases[self.ids[3] as usize], ROLE_M);
         bind(&ko, &km)
     }
 }
@@ -949,7 +1025,13 @@ fn build_world(n: usize) -> Vec<Fact> {
 }
 
 /// Constrói a memória sharded a partir do mundo (≤ 48 fatos por acumulador).
-fn build_sharded(facts: &[Fact], cb: &Codebooks, a: &Anchors, traces: usize, seed: u64) -> PlhMemory {
+fn build_sharded(
+    facts: &[Fact],
+    cb: &Codebooks,
+    a: &Anchors,
+    traces: usize,
+    seed: u64,
+) -> PlhMemory {
     let mut mem = PlhMemory::new(traces, seed);
     for f in facts {
         mem.add(
@@ -985,7 +1067,7 @@ fn build_flat(facts: &[Fact], cb: &Codebooks, a: &Anchors, traces: usize) -> Sha
 // ---------------------------------------------------------------------------
 
 /// Caminho quente sharded: resolve o fato no shard roteado, desvincula,
-/// projeta ao círculo e roda o ressonador ACF. **Zero alocação.**
+/// roda o ressonador ACF. **Zero alocação.**
 fn hot_query(
     mem: &PlhMemory,
     cb: &Codebooks,
@@ -997,10 +1079,9 @@ fn hot_query(
     let shard = &mem.shards[idx];
     let fact = shard.find(f.ids[0], f.ids[1])?;
     let key = f.key(cb, a);
-    shard.unbind(fact, &key, &mut sc.z_re, &mut sc.z_im);
-    sc.value = project_unit(&sc.z_re, &sc.z_im);
-    let value = sc.value;
-    Some(resonate_pair(&value, cb, a, sc))
+    shard.unbind(fact, &key, &mut sc.z);
+    let z = sc.z;
+    Some(resonate_pair(&z, cb, a, sc))
 }
 
 /// Controle: a mesma pipeline sobre **uma** superposição plana.
@@ -1013,10 +1094,9 @@ fn hot_query_flat(
 ) -> Option<PairFactors> {
     let fact = flat.find(f.ids[0], f.ids[1])?;
     let key = f.key(cb, a);
-    flat.unbind(fact, &key, &mut sc.z_re, &mut sc.z_im);
-    sc.value = project_unit(&sc.z_re, &sc.z_im);
-    let value = sc.value;
-    Some(resonate_pair(&value, cb, a, sc))
+    flat.unbind(fact, &key, &mut sc.z);
+    let z = sc.z;
+    Some(resonate_pair(&z, cb, a, sc))
 }
 
 // ---------------------------------------------------------------------------
@@ -1076,11 +1156,10 @@ fn gate_scale(
     }
 
     let mut lat = Vec::with_capacity(n_queries);
-    let mut sig_obj = Vec::with_capacity(n_queries);
-    let mut sig_mod = Vec::with_capacity(n_queries);
-    let mut noise_obj: Vec<f32> = Vec::new();
-    let mut noise_mod: Vec<f32> = Vec::new();
-    let mut sims = [0.0f32; N_ENT];
+    let mut sig_obj: Vec<f32> = Vec::with_capacity(n_queries);
+    let mut sig_mod: Vec<f32> = Vec::with_capacity(n_queries);
+    let mut noise_obj: Vec<f32> = Vec::with_capacity(n_queries * N_ENT);
+    let mut noise_mod: Vec<f32> = Vec::with_capacity(n_queries * N_MOD);
     let mut hits = 0usize;
     let mut validated = 0usize;
     let mut converged = 0usize;
@@ -1115,17 +1194,16 @@ fn gate_scale(
                 if should_abstain(&Evidence::from_pair(&p)) {
                     false_abstain += 1;
                 }
-                // evidência por fator na leitura do ressonador (fora do tempo)
-                let _ = cleanup(&sc.f_obj, &cb.ent, &mut sims);
-                sig_obj.push(sims[truth_obj]);
-                for (i, s) in sims.iter().enumerate().take(N_ENT) {
+                let _ = cleanup(&sc.f_obj, &cb.ent, &mut sc.sims);
+                sig_obj.push(sc.sims[truth_obj]);
+                for (i, s) in sc.sims.iter().enumerate().take(N_ENT) {
                     if i != truth_obj {
                         noise_obj.push(*s);
                     }
                 }
-                let _ = cleanup(&sc.f_mod, &cb.modu, &mut sims);
-                sig_mod.push(sims[truth_mod]);
-                for (i, s) in sims.iter().enumerate().take(N_MOD) {
+                let _ = cleanup(&sc.f_mod, &cb.modu, &mut sc.sims);
+                sig_mod.push(sc.sims[truth_mod]);
+                for (i, s) in sc.sims.iter().enumerate().take(N_MOD) {
                     if i != truth_mod {
                         noise_mod.push(*s);
                     }
@@ -1248,9 +1326,15 @@ fn gate_non_commutativity(
         let x = k % N_ENT;
         let y = (k * 13 + 1) % N_ENT;
         let v = k % N_VERB;
-        let one = bind(a.s.as_slice(), cb.verb[v].as_slice());
-        let cx = bind(&one, &bind(cb.ent[x].as_slice(), cb.ent[y].as_slice()));
-        let cy = bind(&one, &bind(cb.ent[y].as_slice(), cb.ent[x].as_slice()));
+        let one = bind(a.s.as_slice(), cb.verb.phases[v].as_slice());
+        let cx = bind(
+            &one,
+            &bind(cb.ent.phases[x].as_slice(), cb.ent.phases[y].as_slice()),
+        );
+        let cy = bind(
+            &one,
+            &bind(cb.ent.phases[y].as_slice(), cb.ent.phases[x].as_slice()),
+        );
         ctrl += tri_sim(&cx, &cy) as f64;
     }
     out.pairs = pairs;
@@ -1338,14 +1422,14 @@ fn gate_abstention(cb: &Codebooks, a: &Anchors, n: usize, rng: &mut ChaCha8Rng) 
     let mut sim_acc = 0.0f64;
     let mut mar_acc = 0.0f64;
     for _ in 0..n {
-        let mut b = Bundle::zero();
+        let mut b = Cplx::zero();
         for r in 0..4 {
             let mut p = [0.0f32; D];
             for x in p.iter_mut() {
                 *x = rng.gen::<f32>() * TAU;
             }
             let atom = BVec::from_radians(&p).expect("D");
-            b.add_term(&role_term(a.of(r), &atom, r));
+            b.add_assign(&unit_phasor(&role_term(a.of(r), &atom, r)));
         }
         let f = factorize_sentence(&b, cb, a);
         let e = Evidence::from_factors(&f);
@@ -1401,10 +1485,9 @@ fn abstention_memory(
             &role_term(a.of(ROLE_S), &BVec::from_radians(&k1).expect("D"), ROLE_S),
             &role_term(a.of(ROLE_V), &BVec::from_radians(&k2).expect("D"), ROLE_V),
         );
-        shard.unbind(fact, &oov, &mut sc.z_re, &mut sc.z_im);
-        sc.value = project_unit(&sc.z_re, &sc.z_im);
-        let value = sc.value;
-        let p = resonate_pair(&value, cb, a, &mut sc);
+        shard.unbind(fact, &oov, &mut sc.z);
+        let z = sc.z;
+        let p = resonate_pair(&z, cb, a, &mut sc);
         let e = Evidence::from_pair(&p);
         sim_acc += e.min_sim as f64;
         if should_abstain(&e) {
@@ -1516,7 +1599,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "{:<38} {:>12} {:>12}",
-        "fatos por acumulador (máximo)", mem.max_load(), facts.len()
+        "fatos por acumulador (máximo)",
+        mem.max_load(),
+        facts.len()
     );
     println!(
         "{:<38} {:>12} {:>12}",
@@ -1612,7 +1697,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ---------------- memória ----------------
     let accum_bytes = mem.memory_bytes();
-    let codebook_bytes = cb.memory_bytes();
+    let codebook_bytes = cb.memory_bytes() + a.memory_bytes();
     let scratch_bytes = std::mem::size_of::<QueryScratch>();
     let total = accum_bytes + codebook_bytes + scratch_bytes;
     println!("pegada de memória (working set)");
@@ -1623,10 +1708,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "{:<32} {:>10}",
-        "codebooks limpo + ACF",
+        "codebooks limpo + ACF + âncoras",
         format!("{} KB", codebook_bytes / 1024)
     );
-    println!("{:<32} {:>10}", "scratch de consulta", format!("{scratch_bytes} B"));
+    println!(
+        "{:<32} {:>10}",
+        "scratch de consulta",
+        format!("{scratch_bytes} B")
+    );
     println!("{:<32} {:>10}", "total", format!("{} KB", total / 1024));
     println!();
 
@@ -1717,7 +1806,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         pass(g_mem),
         total / 1024
     );
-    let all = g1 && g1_contrast && g1_cap && g2 && g3_snr && g3_lat && g3_alloc && g4_oov
+    let all = g1
+        && g1_contrast
+        && g1_cap
+        && g2
+        && g3_snr
+        && g3_lat
+        && g3_alloc
+        && g4_oov
         && g4_noise
         && g4_clean
         && g_mem;
@@ -1750,9 +1846,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         scale.converged,
         scale.false_abstain
     ));
-    json.push_str(&format!(
-        "  \"flat\": {{\"recall\": {flat:.4}}},\n"
-    ));
+    json.push_str(&format!("  \"flat\": {{\"recall\": {flat:.4}}},\n"));
     json.push_str(&format!(
         "  \"noncommutative\": {{\"pairs\": {}, \"separated\": {}, \"forward\": {}, \"reverse\": {}, \"mean_sim\": {:.4}, \"control_sim\": {:.4}}},\n",
         comm.pairs,

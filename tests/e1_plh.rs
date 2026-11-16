@@ -50,6 +50,47 @@ fn build_fact(
 }
 
 #[test]
+fn phasor_cue_matches_phase_cue() {
+    // `query_phasor_into` tem de devolver exatamente o mesmo que `query_into`.
+    let seed = 0xE1_0004u64;
+    let anchor = vec![atom(seed ^ 0xA1), atom(seed ^ 0xA2), atom(seed ^ 0xA3)];
+    let subj = atom(seed ^ 0x11);
+    let rel = atom(seed ^ 0x22);
+    let obj = atom(seed ^ 0x33);
+
+    let mut store = FhrrStore::with_traces(D, TRACES).expect("store");
+    let (e, r, v) = build_fact(&subj, &rel, &obj, &anchor);
+    store.add_fact(&e, &r, &v).expect("add");
+    let (e2, r2, v2) = build_fact(&subj, &rel, &atom(seed ^ 0x44), &anchor);
+    store.add_fact(&e2, &r2, &v2).expect("add2");
+
+    let mask = vec![true; D];
+    let mut sc = store.scratch(4);
+    let by_phase = store.query_into(&e, &r, &mask, &mut sc).expect("q1");
+
+    // cue = exp(i·(entity + relation)), sem `sin_cos` por consulta
+    let mut cue_re = vec![0.0f32; D];
+    let mut cue_im = vec![0.0f32; D];
+    for j in 0..D {
+        let (s, c) = (e[j] + r[j]).sin_cos();
+        cue_re[j] = c;
+        cue_im[j] = s;
+    }
+    let by_phasor = store
+        .query_phasor_into(&cue_re, &cue_im, &mask, &mut sc)
+        .expect("q2");
+
+    assert_eq!(by_phase.value_index, by_phasor.value_index);
+    assert_eq!(by_phase.fact_index, by_phasor.fact_index);
+    assert!(
+        (by_phase.similarity - by_phasor.similarity).abs() < 1e-5,
+        "similaridade divergiu: {} vs {}",
+        by_phase.similarity,
+        by_phasor.similarity
+    );
+}
+
+#[test]
 fn sharding_holds_480_facts_and_flat_collapses() {
     let seed = 0xE1_0001u64;
     let anchor = vec![atom(seed ^ 0xA1), atom(seed ^ 0xA2), atom(seed ^ 0xA3)];
