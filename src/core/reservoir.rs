@@ -713,6 +713,7 @@ impl RlsModel {
     }
 
     /// Treina o RLS numa passada supervisionada.
+    #[allow(clippy::too_many_arguments)]
     pub fn train_supervised(
         cfg: ReservoirConfig,
         inputs: &[f32],

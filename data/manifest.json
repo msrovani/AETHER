@@ -5,13 +5,13 @@
   "dim_hv": 10240,
   "words": 160,
   "seed": 3735928559,
-  "count": 369,
-  "labels": 369,
-  "facts": 200,
+  "count": 372,
+  "labels": 372,
+  "facts": 205,
   "whitened": true,
-  "sha256_whitening": "ff4561511e188086ccfcc0258322e6ca6465a7d5556ed56aff5381e5e1f57d60",
-  "sha256_embeds": "1ff05d6551ae7b5313b2f596669e3a41fa8fda5b92f220026eadc66bed3c662d",
-  "sha256_bank": "c7c939355e042e161a3ea253d6fca67aca284785225bdc5dfe9c97917d0fbd0e",
+  "sha256_whitening": "79a5cc5d141ca73ffc67612ee40717e2aec9e577bdc1bdb8340adca009dc4037",
+  "sha256_embeds": "b6e75547804f89a6c45b6845ca424cfc131ff4ef3efb1d27e570f9092e86a8be",
+  "sha256_bank": "83ff127f310675dc28f98869703d02efda6a7f060cb211e5c61a730147aeb60e",
   "shards": [
     {
       "relation": "capital",
@@ -21,7 +21,7 @@
     {
       "relation": "é_um",
       "offset": 0,
-      "count": 40
+      "count": 41
     },
     {
       "relation": "é",
@@ -36,17 +36,17 @@
     {
       "relation": "é_uma",
       "offset": 48,
-      "count": 12
+      "count": 14
     },
     {
       "relation": "orbita",
       "offset": 0,
-      "count": 20
+      "count": 21
     },
     {
       "relation": "usa",
       "offset": 0,
-      "count": 20
+      "count": 21
     },
     {
       "relation": "minimiza",
@@ -55,7 +55,7 @@
     }
   ],
   "conflicts_planted": 5,
-  "conflicts_detected": 0,
+  "conflicts_detected": 5,
   "authority_max_transplant": 240,
   "created": "2026-11-16",
   "claim": "MSG 0229 INTAKE_TRANSPLANT"

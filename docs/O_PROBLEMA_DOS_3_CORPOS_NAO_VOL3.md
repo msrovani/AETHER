@@ -401,7 +401,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | **E1-2** ✅ | I | `FhrrStore::query_phasor_into` (fasor de papel pré-computado) | API + teste de equivalência bit-a-bit; remove `sin_cos` por consulta | R2 |
 | **E1b** ✅ | II | capacidade do store e da memória de fase — **executado** | **D=160: 64 fatos (K=6)** · lei **linear ~0,4·D** (não D²) · fase: ~4 padrões aleatórios | R2 |
 | **E1b-2** ✅ | II | memória de fase estruturada (harmônica) — **executado** | **M_harm = 8** vs 4 aleatório a erro < 0,15 rad · fronteira real **5× abaixo** do declarado (40) | R2 |
-| **E2** ✅ | I | lógica como Ising + certificado — **executado** | **3-SAT n=20: 169/169 satisfatíveis (100%)** vs BSB puro 9/169 (5,3%) · decisivas **100% precisas** · **0 decisivas em 31 UNSAT** · **0 alloc** · simbólico p50 **94,1 µs** · G3b **FAIL declarado** (23× o teto de 4,07 µs) | R1, R3, R10 |
+| **E2** ✅ | I | lógica como Ising + certificado — **executado** | **3-SAT n=20: 169/169 satisfatíveis (100%)** vs BSB puro 9/169 (5,3%) · decisivas **100% precisas** · **0 decisivas em 31 UNSAT** · **0 alloc** · simbólico p50 **23,7 µs** · G3b **FAIL declarado** (6× o teto de 4,07 µs; envelope medido: `n ≥ 8` fora, `n = 6` na fronteira) | R1, R3, R10 |
 | **E2b** ✅ | II | presolve simbólico antes do BSB — **executado** | **0 insound** · **64,8% redução** (+39,8 pp de cascata) · **200/200** resolvidas vs 183/200 | R1, R3 |
 | **E2c** ✅ | II | persistência de 1ª ordem (dominância) — **executado** | **0/600 ótimos alterados** · 0% sem viés (controle) · 42,9% com viés 45% | R1, R3 |
 | **E2c-2** ✅ | II | roof dual completo (max-flow) — **executado** | **0/600 ótimos alterados** · **52,0%** em 45% (vs 42,9%) · 28,9% em 25% · **0% no controle = teto ℤ₂** · 199/200 | R1 |
@@ -428,11 +428,11 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | `CACHE_METRIC_ABSENT` | I | ✅ **resolvido por proxy (HW_TARGET §9)** | bytes tocados/ciclo por aritmética; PMU indisponível sem driver | — |
 | `CAPACITY_CLIFF_UNDOC` | I | ✅ **resolvido (HW_TARGET §9)** | penhasco documentado: `J` em N=512 = 2,1 MB > L2 (1,25 MB) | — |
 | `TRANSPLANT_UNVALIDATED` | I | ✅ **resolvido (E3)** | JL ρ=0,9528 · 1,28 KB/átomo · relação 0,9990 · analogia R@1 0,9549 | — |
-| `PREPRINT_RISK` | I/II | info | protocolo §7 Vol. II |
+| `PREPRINT_RISK` | I/II | ℹ️ **processo (não-gate)** | evidência triangulada com selos [A]/[B]/[C] (protocolo §7 Vol. II); disciplina contínua | — |
 | `NO_PROFILE_BREAKDOWN` | II | ✅ **resolvido (E6)** | medido 2026-11-15: solver 84,4% | — |
 | `SOLVER_KERNEL_SCALAR` | II | ✅ **resolvido (E6b)** | 16 acumuladores safe: 7,44 → 17,10 GFLOP/s | — |
 | `NO_ROOF_DUAL` | II | ✅ **resolvido (E2c-2)** | max-flow Dinic + SCC: 42,9% → **52,0%** em 45%, 0/600 insound | — |
-| `NO_LIMIT_CYCLE_GUARD` | II | alto | E1b |
+| `NO_LIMIT_CYCLE_GUARD` | II | alto | **aberto**: falta guarda de ciclo-limite (detecção de 2-ciclo na dinâmica de fase) + gate; o E1b mediu capacidade, não a taxa de ciclo | — |
 | `NO_PROVENANCE` | II | ✅ **resolvido (F1 + E3)** | evento F1 carrega `Certificate`+`authority`+`ScopeId`; E3 carimba 100% das respostas e abstém 100% fora do domínio | — |
 | `D_CAPACITY_UNMEASURED` | II | ✅ **resolvido (E1b → E1)** | lei linear **0,4·D** medida; 1.000 fatos via 24 shards | — |
 | `NO_ACTUATOR_LOOP` | II | ✅ **resolvido (E7)** | entropia −71,9% com 4 atuadores; 100k ciclos | — |
@@ -440,9 +440,9 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | `KB_TAXONOMY_UNDOC` | III | ✅ **resolvido (§1)** | taxonomia dos seis tipos + onde cada um vive | — |
 | `NO_LEDGER_BRIDGE` | III | ✅ **resolvido (F1)** | `knowledge_bridge_f1.rs`: `record` 0 alloc, `drain_batch` T1, telemetria | — |
 | `TIMEBASE_MIX` | III | ✅ **resolvido (F1)** | `tick` e `wall_ms` viajam separados; `created_tick = wall_ms` | — |
-| `NO_REVISION_PATH` | III | alto | F2 (supersede) |
+| `NO_REVISION_PATH` | III | ✅ **resolvido (F2)** | supersede no `FusionLedger`; `commit_run` por ciclo | — |
+| `SCOPE_UNDEFINED` | III | ✅ **resolvido (F3)** | `ScopeId`/`ScopeLedger`: 0 hits cruzados em 2 escopos | — |
 | `NO_DEGRADATION_LADDER` | III | ✅ **resolvido (F2)** | `prune_to_gist` com retenção **1,000** (40/40); supersede no `FusionLedger` | — |
-| `SCOPE_UNDEFINED` | III | alto | F3 |
 
 ### 11.3 Riscos
 

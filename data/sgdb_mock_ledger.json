@@ -569,6 +569,10 @@
       "label": "sol_7"
     },
     {
+      "key": "0x1584074a6f7f021afc633ebe2e4c2257",
+      "label": "estrela_7"
+    },
+    {
       "key": "0x347a835b10d02739d0aa9bd19d92f1f7",
       "label": "NÃO_estrela_7"
     },
@@ -837,16 +841,16 @@
       "label": "São Paulo_11"
     },
     {
+      "key": "0x5340ecba98b39b34c2edfec68c83374b",
+      "label": "estado_11"
+    },
+    {
       "key": "0x2772a38734968333de08f4a14660fb63",
       "label": "NÃO_estado_11"
     },
     {
       "key": "0x5ed13918ba9dc387c1f7fb7e7d357058",
       "label": "Rio de Janeiro_11"
-    },
-    {
-      "key": "0x5340ecba98b39b34c2edfec68c83374b",
-      "label": "estado_11"
     },
     {
       "key": "0x889ba14865eead8e64fb47f585e68464",
@@ -1103,6 +1107,10 @@
     {
       "key": "0x29a241c2ddf6b11b332a7ca12ab2357f",
       "label": "AETHER_14"
+    },
+    {
+      "key": "0xae4bb9be425f122847279ec9b108be5b",
+      "label": "fase_14"
     },
     {
       "key": "0x262ee3fe48e1b60c4afe3bbeb1539dd0",
@@ -1371,6 +1379,10 @@
     {
       "key": "0x771411512ba1820f09e7358b8d7943c4",
       "label": "Lua_18"
+    },
+    {
+      "key": "0x8c33d3ea6f299e81fad429a19e09c086",
+      "label": "Terra_18"
     },
     {
       "key": "0x71436e5b56b36227bb2a59ddefac85d4",
@@ -1925,14 +1937,26 @@
     {
       "subject": "Rust_3",
       "relation": "é_uma",
-      "object": "NÃO_linguagem_3",
+      "object": "linguagem_3",
       "confidence": 0.85,
       "citation": "synth://doc/37",
       "authority": 100,
       "lang": "pt",
       "kind": 1,
-      "conflict_seed": true,
+      "conflict_seed": false,
       "wall_ms": 1700000000037
+    },
+    {
+      "subject": "Rust_3",
+      "relation": "é_uma",
+      "object": "NÃO_linguagem_3",
+      "confidence": 0.5,
+      "citation": "synth://doc/37/conflict",
+      "authority": 80,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": true,
+      "wall_ms": 1700000000038
     },
     {
       "subject": "AETHER_3",
@@ -2369,14 +2393,26 @@
     {
       "subject": "sol_7",
       "relation": "é_uma",
-      "object": "NÃO_estrela_7",
+      "object": "estrela_7",
       "confidence": 0.85,
       "citation": "synth://doc/74",
       "authority": 100,
       "lang": "pt",
       "kind": 1,
-      "conflict_seed": true,
+      "conflict_seed": false,
       "wall_ms": 1700000000074
+    },
+    {
+      "subject": "sol_7",
+      "relation": "é_uma",
+      "object": "NÃO_estrela_7",
+      "confidence": 0.5,
+      "citation": "synth://doc/74/conflict",
+      "authority": 80,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": true,
+      "wall_ms": 1700000000075
     },
     {
       "subject": "Lua_7",
@@ -2813,14 +2849,26 @@
     {
       "subject": "São Paulo_11",
       "relation": "é_um",
-      "object": "NÃO_estado_11",
+      "object": "estado_11",
       "confidence": 0.85,
       "citation": "synth://doc/111",
       "authority": 100,
       "lang": "pt",
       "kind": 1,
-      "conflict_seed": true,
+      "conflict_seed": false,
       "wall_ms": 1700000000111
+    },
+    {
+      "subject": "São Paulo_11",
+      "relation": "é_um",
+      "object": "NÃO_estado_11",
+      "confidence": 0.5,
+      "citation": "synth://doc/111/conflict",
+      "authority": 80,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": true,
+      "wall_ms": 1700000000112
     },
     {
       "subject": "Rio de Janeiro_11",
@@ -3257,14 +3305,26 @@
     {
       "subject": "AETHER_14",
       "relation": "usa",
-      "object": "NÃO_fase_14",
+      "object": "fase_14",
       "confidence": 0.85,
       "citation": "synth://doc/148",
       "authority": 100,
       "lang": "pt",
       "kind": 1,
-      "conflict_seed": true,
+      "conflict_seed": false,
       "wall_ms": 1700000000148
+    },
+    {
+      "subject": "AETHER_14",
+      "relation": "usa",
+      "object": "NÃO_fase_14",
+      "confidence": 0.5,
+      "citation": "synth://doc/148/conflict",
+      "authority": 80,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": true,
+      "wall_ms": 1700000000149
     },
     {
       "subject": "Ising_14",
@@ -3701,14 +3761,26 @@
     {
       "subject": "Lua_18",
       "relation": "orbita",
-      "object": "NÃO_Terra_18",
+      "object": "Terra_18",
       "confidence": 0.85,
       "citation": "synth://doc/185",
       "authority": 100,
       "lang": "pt",
       "kind": 1,
-      "conflict_seed": true,
+      "conflict_seed": false,
       "wall_ms": 1700000000185
+    },
+    {
+      "subject": "Lua_18",
+      "relation": "orbita",
+      "object": "NÃO_Terra_18",
+      "confidence": 0.5,
+      "citation": "synth://doc/185/conflict",
+      "authority": 80,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": true,
+      "wall_ms": 1700000000186
     },
     {
       "subject": "Python_18",
@@ -3888,7 +3960,7 @@
     {
       "relation": "é_um",
       "offset": 0,
-      "count": 40
+      "count": 41
     },
     {
       "relation": "é",
@@ -3903,17 +3975,17 @@
     {
       "relation": "é_uma",
       "offset": 48,
-      "count": 12
+      "count": 14
     },
     {
       "relation": "orbita",
       "offset": 0,
-      "count": 20
+      "count": 21
     },
     {
       "relation": "usa",
       "offset": 0,
-      "count": 20
+      "count": 21
     },
     {
       "relation": "minimiza",

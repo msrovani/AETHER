@@ -79,9 +79,6 @@ def synthetic_corpus(n: int) -> list[dict]:
         s, r, o = bases[i % len(bases)]
         subj = f"{s}_{i // len(bases)}" if i >= len(bases) else s
         obj = f"{o}_{i // len(bases)}" if i >= len(bases) else o
-        conflict = i % 37 == 0 and i > 0
-        if conflict:
-            obj = f"NÃO_{obj}"
         rows.append(
             {
                 "subject": subj,
@@ -92,10 +89,26 @@ def synthetic_corpus(n: int) -> list[dict]:
                 "authority": 100,
                 "lang": "pt",
                 "kind": 1,
-                "conflict_seed": conflict,
+                "conflict_seed": False,
                 "wall_ms": 1_700_000_000_000 + i,
             }
         )
+        # Planta contradição: mesmo (s,r), objeto diferente
+        if i % 37 == 0 and i > 0:
+            rows.append(
+                {
+                    "subject": subj,
+                    "relation": r,
+                    "object": f"NÃO_{obj}",
+                    "confidence": 0.5,
+                    "citation": f"synth://doc/{i}/conflict",
+                    "authority": 80,
+                    "lang": "pt",
+                    "kind": 1,
+                    "conflict_seed": True,
+                    "wall_ms": 1_700_000_000_000 + i + 1,
+                }
+            )
     return rows
 
 

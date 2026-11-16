@@ -269,13 +269,26 @@ o mesmo regime, uma década abaixo do penhasco de `J`.
 ## 10. Envelope do passe lógico (E2, 2026-11-16)
 
 O gate `G3b` pedia "passe simbólico + Lagrange ≤ 5% do ciclo" (4,07 µs de 81,3 µs).
-Medido em `n=20`: **48,2 µs** (presolve 15,6 · persistência 13,2 · decomposição
-3,1 · montagem 16,3). O envelope mostra que o teto é **inatingível por
-construção**: mesmo `n=6` custa **5,9 µs** (26 cláusulas; ~1,5 µs por variável).
+Medido em `n=20`: **23,7 µs** p50 (presolve 11,1 · persistência 5,3 · decomposição
+3,7 · montagem ~3,6; 7,5 sondagens por consulta, teto `PROBE_MAX=24`). O envelope
+mostra que o teto é **inatingível por construção** para `n ≥ 8`:
+
+| n | símbolo p50 | veredito (teto 4,07 µs) |
+|---:|---:|---|
+| 6 | 4,0–5,6 µs | **fronteira** (ruído de µs entre execuções) |
+| 8 | 4,8 µs | acima |
+| 12 | 10,6 µs | acima |
+| 16 | 17,6 µs | acima |
+| 20 | 19,3–23,7 µs | acima (5–6×) |
 
 Decisão registrada: a consulta lógica é **batch, fora do hot path** — a mesma
 classe do verificador estrutural do E3 (`0,007 ms`, 0 alloc). O orçamento de
 4,07 µs continua valendo para o **laço do organismo**, não para uma consulta SAT.
 O que o E2 garante no caminho quente é **0 alocação** (medido: 0).
+
+> **Nota de concorrência:** o presolve foi refatorado por outro agente para CSR de
+> ocorrências + *trail* (de 94,1 → 23,7 µs). A refatoração introduziu 2 alocações
+> em `trail`/`pq`; a capacidade foi redimensionada para
+> `(PROBE_MAX+1)·n_max` e o invariante de 0 alocação voltou a passar.
 
 

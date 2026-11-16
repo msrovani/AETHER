@@ -1,6 +1,6 @@
 ﻿[package]
 name = "aether_engine"
-version = "0.0.113"
+version = "0.0.114"
 edition = "2021"
 rust-version = "1.78"
 description = "AETHER ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
@@ -132,6 +132,10 @@ required-features = ["m4", "m5", "affinity"]
 name = "cram_logos_probe"
 path = "examples/cram_logos_probe.rs"
 required-features = ["m1"]
+
+[[example]]
+name = "transplant_hv_probe"
+path = "examples/transplant_hv_probe.rs"
 
 [[bench]]
 name = "organism"

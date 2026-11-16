@@ -1249,8 +1249,6 @@ pub type ApiResult<T> = std::result::Result<T, AetherError>;
 mod tests {
     use super::*;
 
-    const TAU_TEST: f32 = std::f32::consts::TAU;
-
     #[test]
     fn fases_sao_deterministicas_e_distintas() {
         let a = text_to_phases("gato");
@@ -1259,7 +1257,12 @@ mod tests {
         assert_eq!(a, b);
         assert_ne!(a, c);
         assert_eq!(a.len(), PHASE_FLOATS);
-        assert!(a.iter().all(|p| p.is_finite() && *p >= 0.0 && *p < TAU_TEST));
+        // fasores unitários: |re|,|im| <= 1 e o par tem norma ~1
+        assert!(a.iter().all(|p| p.is_finite() && p.abs() <= 1.0));
+        for pair in a.chunks_exact(2) {
+            let n = (pair[0] * pair[0] + pair[1] * pair[1]).sqrt();
+            assert!((n - 1.0).abs() < 1e-5, "fasor fora do círculo: {n}");
+        }
     }
 
     #[test]
@@ -1329,4 +1332,5 @@ mod tests {
         assert!(!token_eq("abc", "ab"));
     }
 }
+
 

@@ -514,7 +514,7 @@ Todos com: `--release`, seed fixa (`ChaCha8Rng`), `alloc_invariants` verde,
 | # | Entrega | Arquivo sugerido | Gate |
 |---|---|---|---|
 | **E1** | probe de linguagem em fase | `examples/phase_language_probe.rs` | recuperação papel–filler com SNR > 5σ, 0 alloc |
-| **E2** ✅ | lógica como Ising + certificado | `examples/ising_logic_probe.rs` | **169/169** satisfatíveis `n = 20` (100%) · decisivas **100%** · **0 alloc** · G3b **FAIL declarado** (23× o teto) |
+| **E2** ✅ | lógica como Ising + certificado | `examples/ising_logic_probe.rs` | **169/169** satisfatíveis `n = 20` (100%) · decisivas **100%** · **0 alloc** · G3b **FAIL declarado** (6× o teto; envelope `n ≥ 8` fora) |
 | **E2d** ✅ | aquisição CRAM→Logos (custos pairwise) | `examples/cram_logos_probe.rs` · `docs/CRAM_LOGOS.md` | Shidoku 4×4: hand-set **100%** · PL **100%** · fit ~**3,7 ms** · G1–G3 PASS · 52 params |
 | **E3** ✅ | transplantação de embeddings | `examples/transplant_probe.rs` | **ρ = 0,9528** · relação **0,9990** · analogia R@1 **0,9549** · proveniência **100%** |
 | **E4** | self-field + ablação | `tests/self_field_audit.rs` | ECE melhora; T01 **não** regride |

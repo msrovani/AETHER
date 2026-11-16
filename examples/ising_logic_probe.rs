@@ -618,9 +618,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut envelope_rows: Vec<(usize, f64)> = Vec::new();
     if args.envelope {
         println!();
-        println!(
-            "envelope de custo do passe simbólico (32 instâncias/n; teto {budget:.2} µs)"
-        );
+        println!("envelope de custo do passe simbólico (32 instâncias/n; teto {budget:.2} µs)");
         for nn in [6usize, 8, 10, 12, 14, 16, 18, 20] {
             let mm = (args.ratio * nn as f64).round() as usize;
             let ku = (0.2 * nn as f64).round() as usize;
@@ -709,7 +707,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         dec_sum / inst,
         probes_sum as f64 / inst
     ));
-    json.push_str(&format!("  \"envelope_n\": {envelope_n},\n  \"envelope\": ["));
+    json.push_str(&format!(
+        "  \"envelope_n\": {envelope_n},\n  \"envelope\": ["
+    ));
     for (k, (nn, p50)) in envelope_rows.iter().enumerate() {
         if k > 0 {
             json.push(',');

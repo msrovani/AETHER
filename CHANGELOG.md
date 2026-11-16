@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.114] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 19 arquivo(s) (.:3, data:7, docs:3, examples:3, src:2, tools:1).
+- Gate: ok (8s).
+
+- `Cargo.lock`
+- `Cargo.toml`
+- `FORUM_PROTOCOL.md`
+- `data/emb/bank.f32`
+- `data/emb/whitening.bin`
+- `data/facts.jsonl`
+- `data/hv/bank.bin`
+- `data/hv/bank.idx`
+- `data/manifest.json`
+- `data/sgdb_mock_ledger.json`
+- `docs/HW_TARGET.md`
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO.md`
+
 ## [0.0.113] - 2026-11-16
 
 ### Changed
