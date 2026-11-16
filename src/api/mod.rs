@@ -40,8 +40,7 @@ use ndarray::{Array2, Array3};
 
 use crate::core::certificate::{self, Decision, Provenance};
 use crate::core::knowledge_bridge_f1::{
-    BridgeError, Certificate as BridgeCertificate, DraftRecord, KnowledgeSource, Layer, ScopeId,
-    ScopeLedger,
+    BridgeError, Certificate as BridgeCertificate, DraftRecord, Layer, ScopeId, ScopeLedger,
 };
 use crate::core::presolve::roof_dual_qumo;
 use crate::core::thermodynamic_solver::{IsingLandscape, ThermodynamicIsingSolver};
@@ -54,6 +53,12 @@ pub const PHASE_DIMS: usize = 160;
 
 /// Corpo máximo aceito (1 MiB) — acima disso a conexão é fechada com 413.
 pub const MAX_BODY: usize = 1 << 20;
+
+/// Score mínimo de correlação para responder em vez de abster.
+///
+/// Duas fases aleatórias dão correlação ~0; o mesmo vetor dá 1. Abaixo de 0,5
+/// o fato não é "parecido" — é ruído, e responder seria inventar.
+pub const MIN_SCORE: f32 = 0.5;
 
 /// Modelo sintético anunciado em `/v1/models`.
 pub const MODEL_ID: &str = "aether-phase-160";
@@ -328,7 +333,20 @@ fn read_request(stream: &mut TcpStream) -> std::io::Result<Option<Request>> {
     }
     let too_large = content_length > MAX_BODY;
     let mut body = Vec::new();
-    if !too_large && content_length > 0 {
+    if too_large {
+        // Drena até 4× o limite para o cliente conseguir ler o 413 em vez de
+        // receber reset no meio do `write_all`. Acima disso, fecha.
+        let mut scratch = [0u8; 8192];
+        let mut left = content_length.min(MAX_BODY * 4);
+        while left > 0 {
+            let want = left.min(scratch.len());
+            match reader.read(&mut scratch[..want]) {
+                Ok(0) => break,
+                Ok(n) => left -= n,
+                Err(_) => break,
+            }
+        }
+    } else if content_length > 0 {
         body = vec![0u8; content_length];
         reader.read_exact(&mut body)?;
     }
@@ -613,14 +631,15 @@ fn cue(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
         return bad("query ausente (fases [f32])");
     };
     let mut out = vec![0.0f32; query.len()];
-    match state.ledger.cue_into(scope, &query, &mut out) {
-        Ok(hit) => Reply::Json(
+    match state.ledger.cue_scored(scope, &query, &mut out) {
+        Ok((hit, score)) if score >= MIN_SCORE => Reply::Json(
             200,
             Json::obj([
                 ("abstain", Json::Bool(false)),
                 ("hits", Json::num(hit.hits as f64)),
                 ("key", Json::str(hit.key.to_string())),
                 ("authority", Json::num(f64::from(hit.authority))),
+                ("score", Json::num(f64::from(score))),
                 (
                     "phases",
                     Json::Arr(out.iter().map(|p| Json::num(f64::from(*p))).collect()),
@@ -640,6 +659,7 @@ fn cue(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
                 ),
             ]),
         ),
+        Ok((_, score)) => Reply::Json(200, abstain_scored("low_similarity", score)),
         Err(BridgeError::EmptyScope) => Reply::Json(200, abstain("empty_scope")),
         Err(e) => Reply::Json(400, error_json("cue_failed", &e.to_string())),
     }
@@ -886,8 +906,8 @@ fn completion(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
 fn evidence_for(state: &mut ApiState, scope: ScopeId, text: &str) -> Json {
     let query = text_to_phases(text);
     let mut out = vec![0.0f32; query.len()];
-    match state.ledger.cue_into(scope, &query, &mut out) {
-        Ok(hit) => {
+    match state.ledger.cue_scored(scope, &query, &mut out) {
+        Ok((hit, score)) if score >= MIN_SCORE => {
             let (energy, gap, violations) =
                 record_cert(&state.ledger, scope, hit.key).unwrap_or((0.0, 0.0, 0));
             let cert =
@@ -912,9 +932,11 @@ fn evidence_for(state: &mut ApiState, scope: ScopeId, text: &str) -> Json {
                     Json::Arr(out.iter().map(|p| Json::num(f64::from(*p))).collect()),
                 ),
                 ("hits", Json::num(hit.hits as f64)),
+                ("score", Json::num(f64::from(score))),
                 ("edge", Json::str("text-phase-hash-lossy")),
             ])
         }
+        Ok((_, score)) => abstain_scored("low_similarity", score),
         Err(BridgeError::EmptyScope) => abstain("empty_scope"),
         Err(e) => abstain(&format!("cue_failed:{e}")),
     }
@@ -934,6 +956,16 @@ fn abstain(reason: &str) -> Json {
     Json::obj([
         ("abstain", Json::Bool(true)),
         ("reason", Json::str(reason)),
+        ("edge", Json::str("text-phase-hash-lossy")),
+    ])
+}
+
+fn abstain_scored(reason: &str, score: f32) -> Json {
+    Json::obj([
+        ("abstain", Json::Bool(true)),
+        ("reason", Json::str(reason)),
+        ("score", Json::num(f64::from(score))),
+        ("min_score", Json::num(f64::from(MIN_SCORE))),
         ("edge", Json::str("text-phase-hash-lossy")),
     ])
 }
@@ -1054,7 +1086,7 @@ fn phases_from(value: Option<&Json>, max: usize) -> Option<Vec<f32>> {
 
 fn flat_matrix(value: Option<&Json>, rows: usize, cols: usize) -> Option<Vec<f64>> {
     let v = value?;
-    let mut check = |x: f64| -> Option<f64> {
+    let check = |x: f64| -> Option<f64> {
         if x.is_finite() {
             Some(x)
         } else {
@@ -1286,3 +1318,4 @@ mod tests {
         assert!(!token_eq("abc", "ab"));
     }
 }
+

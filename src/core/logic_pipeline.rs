@@ -174,6 +174,14 @@ pub struct StageStats {
     pub repair_moves: usize,
     /// Tempo dos estágios (1)–(3).
     pub symbolic_us: f64,
+    /// Tempo do estágio (1) isolado (presolve).
+    pub presolve_us: f64,
+    /// Tempo do estágio (2) isolado (persistência).
+    pub persistency_us: f64,
+    /// Tempo do estágio (3) isolado (decomposição).
+    pub decompose_us: f64,
+    /// Sondagens de literal falho efetivamente executadas.
+    pub probes: usize,
     /// Tempo do estágio (4).
     pub solve_us: f64,
     /// `H(s*)` na convenção do solver (offset do gadget omitido).
@@ -569,31 +577,74 @@ fn propagate3(n: usize, clauses: &[Clause3], fixed: &mut [Option<i8>]) -> bool {
     false
 }
 
+/// Orçamento de sondagens de literal falho por consulta.
+///
+/// A sondagem completa custa `2n` propagações e dominava o passe simbólico
+/// (94 µs em n=20). Só sondamos variáveis em cláusulas **quase-unitárias**
+/// (exatamente 2 variáveis livres) e com teto fixo: em 3-SAT aleatório no
+/// limiar não há candidatas, então o custo cai para a propagação de unidades.
+pub const PROBE_MAX: usize = 24;
+
 /// Presolve de 3-SAT: unidades + **literais falhos** (`l ⇒ conflito` ⇒ `¬l`).
 ///
 /// Toda fixação é consequência lógica, logo é *sound* por construção. Retorna
-/// `(conflito, rodadas)`.
+/// `(conflito, rodadas, sondagens)`.
 fn presolve3_into(
     n: usize,
     clauses: &[Clause3],
     fixed: &mut [Option<i8>],
     probe: &mut [Option<i8>],
-) -> (bool, usize) {
+    cand: &mut [bool],
+    max_probes: usize,
+) -> (bool, usize, usize) {
     for f in fixed[..n].iter_mut() {
         *f = None;
     }
     let mut rounds = 0usize;
+    let mut probes = 0usize;
     loop {
         rounds += 1;
         if propagate3(n, clauses, fixed) {
-            return (true, rounds);
+            return (true, rounds, probes);
+        }
+        // candidatas: variáveis livres em cláusulas com exatamente 2 livres
+        cand[..n].fill(false);
+        for c in clauses {
+            let mut nfree = 0usize;
+            let mut ids = [usize::MAX; 3];
+            let mut sat = false;
+            for idx in 0..c.len() {
+                let (v, s) = c.lit(idx);
+                match fixed[v] {
+                    Some(val) => {
+                        if val == s {
+                            sat = true;
+                            break;
+                        }
+                    }
+                    None => {
+                        if !ids[..nfree].contains(&v) {
+                            ids[nfree] = v;
+                            nfree += 1;
+                        }
+                    }
+                }
+            }
+            if !sat && nfree == 2 {
+                cand[ids[0]] = true;
+                cand[ids[1]] = true;
+            }
         }
         let mut changed = false;
         for v in 0..n {
-            if fixed[v].is_some() {
+            if fixed[v].is_some() || !cand[v] {
                 continue;
             }
             for try_val in [1i8, -1i8] {
+                if probes >= max_probes {
+                    break;
+                }
+                probes += 1;
                 probe[..n].copy_from_slice(&fixed[..n]);
                 probe[v] = Some(try_val);
                 if propagate3(n, clauses, probe) {
@@ -610,7 +661,7 @@ fn presolve3_into(
             break;
         }
     }
-    (false, rounds)
+    (false, rounds, probes)
 }
 
 // ---------------------------------------------------------------------------
@@ -630,6 +681,7 @@ pub struct LogicPipeline {
 
     fixed3: Vec<Option<i8>>,
     probe: Vec<Option<i8>>,
+    cand: Vec<bool>,
     res_of: Vec<usize>,
     res_var: Vec<usize>,
     res_clauses: Vec<Clause3>,
@@ -699,6 +751,7 @@ impl LogicPipeline {
             lambda0: 1.0,
             fixed3: vec![None; n_max],
             probe: vec![None; n_max],
+            cand: vec![false; n_max],
             res_of: vec![usize::MAX; n_max],
             res_var: vec![0; n_max],
             res_clauses: vec![Clause3::new3(0, 1, 0, 1, 0, 1); m_max],
@@ -777,7 +830,17 @@ impl LogicPipeline {
         let t_symbolic = Instant::now();
 
         // ---------- (1) presolve simbólico ----------
-        let (conflict, _) = presolve3_into(n, clauses, &mut self.fixed3, &mut self.probe);
+        let t_pre = Instant::now();
+        let (conflict, _, probes) = presolve3_into(
+            n,
+            clauses,
+            &mut self.fixed3,
+            &mut self.probe,
+            &mut self.cand,
+            PROBE_MAX,
+        );
+        self.last.presolve_us = t_pre.elapsed().as_secs_f64() * 1e6;
+        self.last.probes = probes;
         if conflict {
             for (i, o) in out[..n].iter_mut().enumerate() {
                 *o = self.fixed3[i].unwrap_or(1);
@@ -909,6 +972,7 @@ impl LogicPipeline {
         // ---------- (2) persistência de 1ª ordem (λ = 1) ----------
         self.lambda[..m].fill(self.lambda0);
         self.emit_qubo(n_exp);
+        let t_pers = Instant::now();
         let _ = persistency_qumo_into(
             n_exp,
             &self.jq[..n_exp * n_exp],
@@ -917,6 +981,7 @@ impl LogicPipeline {
             &mut self.lin,
             &mut self.residual,
         );
+        self.last.persistency_us = t_pers.elapsed().as_secs_f64() * 1e6;
         for v in 0..n_exp {
             self.free[v] = self.fixed_exp[v].is_none();
             self.exp_state[v] = self.fixed_exp[v].unwrap_or(1);
@@ -926,6 +991,7 @@ impl LogicPipeline {
         self.last.n_free = n_free;
 
         // ---------- (3) decomposição em componentes conexos ----------
+        let t_dec = Instant::now();
         for (i, p) in self.parent[..n_exp].iter_mut().enumerate() {
             *p = i;
         }
@@ -973,6 +1039,7 @@ impl LogicPipeline {
         }
 
         // ---------- (4)+(5) BSB + Lagrange + certificado ----------
+        self.last.decompose_us = t_dec.elapsed().as_secs_f64() * 1e6;
         let t_solve = Instant::now();
         self.last.symbolic_us = t_symbolic.elapsed().as_secs_f64() * 1e6;
 
@@ -1512,7 +1579,9 @@ mod tests {
         ];
         let mut fixed = vec![None; 2];
         let mut probe = vec![None; 2];
-        let (conflict, _) = presolve3_into(2, &clauses, &mut fixed, &mut probe);
+        let mut cand = vec![false; 2];
+        let (conflict, _, _) =
+            presolve3_into(2, &clauses, &mut fixed, &mut probe, &mut cand, PROBE_MAX);
         assert!(conflict);
     }
 

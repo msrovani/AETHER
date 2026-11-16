@@ -89,6 +89,7 @@ struct Args {
     rounds: usize,
     eta: f64,
     seed: u64,
+    envelope: bool,
 }
 
 impl Default for Args {
@@ -102,6 +103,7 @@ impl Default for Args {
             rounds: 5,
             eta: 0.5,
             seed: 0xE2_0001,
+            envelope: false,
         }
     }
 }
@@ -129,6 +131,7 @@ fn parse_args() -> Args {
                 a.n = 14;
                 a.steps = 48;
             }
+            "--envelope" => a.envelope = true,
             "--ratio" => {
                 if let Some(v) = raw.and_then(|v| v.parse::<f64>().ok()) {
                     a.ratio = v;
@@ -384,6 +387,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut sym_us: Vec<f64> = Vec::with_capacity(args.instances);
     let mut solve_us: Vec<f64> = Vec::with_capacity(args.instances);
     let mut total_us: Vec<f64> = Vec::with_capacity(args.instances);
+    let mut pre_sum = 0.0f64;
+    let mut pers_sum = 0.0f64;
+    let mut dec_sum = 0.0f64;
+    let mut probes_sum = 0usize;
     let mut fixed_sym = 0usize;
     let mut fixed_pers = 0usize;
     let mut n_free_sum = 0usize;
@@ -467,6 +474,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sym_us.push(st.symbolic_us);
         solve_us.push(st.solve_us);
         total_us.push(st.symbolic_us + st.solve_us);
+        pre_sum += st.presolve_us;
+        pers_sum += st.persistency_us;
+        dec_sum += st.decompose_us;
+        probes_sum += st.probes;
         fixed_sym += st.fixed_symbolic;
         fixed_pers += st.fixed_persistency;
         n_free_sum += st.n_free;
@@ -557,6 +568,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         percentile(&total_us, 0.95)
     );
     println!("  alocações por resolução (máx)     : {allocs_max}");
+    println!(
+        "  · presolve {:.1} µs · persistência {:.1} µs · decomposição {:.1} µs · sondagens {:.1}/consulta",
+        pre_sum / inst,
+        pers_sum / inst,
+        dec_sum / inst,
+        probes_sum as f64 / inst
+    );
     println!();
 
     let g1 = s2.sat_total > 0 && (s2.solved_sat as f64 / s2.sat_total as f64) >= 0.95;
@@ -594,6 +612,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sym_p50,
         sym_p50 / budget
     );
+
+    // ---------- envelope de custo (estágios 1–3) ----------
+    let mut envelope_n = 0usize;
+    let mut envelope_rows: Vec<(usize, f64)> = Vec::new();
+    if args.envelope {
+        println!();
+        println!(
+            "envelope de custo do passe simbólico (32 instâncias/n; teto {budget:.2} µs)"
+        );
+        for nn in [6usize, 8, 10, 12, 14, 16, 18, 20] {
+            let mm = (args.ratio * nn as f64).round() as usize;
+            let ku = (0.2 * nn as f64).round() as usize;
+            let mut p = LogicPipeline::new(nn, mm + ku + 4, 8, 1, 1, args.eta);
+            let mut o = vec![0i8; nn];
+            let mut cc = Certificate::new(0.0, 0.0, 0, 0.0, Provenance::Inferred);
+            let mut v: Vec<f64> = Vec::with_capacity(32);
+            for k in 0..32usize {
+                let cl = if k % 2 == 0 {
+                    random_3sat(nn, mm, 0xE2_500 + (nn as u64) * 100 + k as u64)
+                } else {
+                    planted_3sat(nn, mm, ku, 0xE2_600 + (nn as u64) * 100 + k as u64).0
+                };
+                p.resolve_into(nn, &cl, 0xE2_700 + k as u64, &mut o, &mut cc)
+                    .expect("envelope");
+                v.push(p.last.symbolic_us);
+            }
+            v.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let p50 = v[v.len() / 2];
+            envelope_rows.push((nn, p50));
+            if p50 <= budget {
+                envelope_n = nn;
+            }
+            println!(
+                "  n={nn:>2}  simbólico p50 {p50:>7.2} µs  {}",
+                if p50 <= budget { "DENTRO" } else { "ACIMA" }
+            );
+        }
+        println!("  maior n dentro do orçamento: {envelope_n}");
+    }
     println!();
 
     // ---------- amostra de certificado ----------
@@ -645,6 +702,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         percentile(&solve_us, 0.5),
         percentile(&total_us, 0.5)
     ));
+    json.push_str(&format!(
+        "  \"presolve_us_mean\": {:.3},\n  \"persistency_us_mean\": {:.3},\n  \"decompose_us_mean\": {:.3},\n  \"probes_mean\": {:.2},\n",
+        pre_sum / inst,
+        pers_sum / inst,
+        dec_sum / inst,
+        probes_sum as f64 / inst
+    ));
+    json.push_str(&format!("  \"envelope_n\": {envelope_n},\n  \"envelope\": ["));
+    for (k, (nn, p50)) in envelope_rows.iter().enumerate() {
+        if k > 0 {
+            json.push(',');
+        }
+        json.push_str(&format!("{{\"n\": {nn}, \"symbolic_us_p50\": {p50:.3}}}"));
+    }
+    json.push_str("],\n");
     json.push_str(&format!(
         "  \"fixed_symbolic_mean\": {:.3},\n  \"fixed_persistency_mean\": {:.3},\n",
         fixed_sym as f64 / inst,

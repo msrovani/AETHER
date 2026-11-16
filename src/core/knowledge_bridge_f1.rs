@@ -665,6 +665,22 @@ impl KnowledgeSource for ScopeLedger {
         query: &[f32],
         out: &mut [f32],
     ) -> Result<CueHit, BridgeError> {
+        self.cue_scored(scope, query, out).map(|(hit, _)| hit)
+    }
+}
+
+impl ScopeLedger {
+    /// Como [`KnowledgeSource::cue_into`], mas devolve também o **score** do
+    /// melhor casamento (`cosseno` complexo em `[-1, 1]`).
+    ///
+    /// O score é o que permite **abster**: sem ele, todo `cue` devolve o
+    /// `argmax` e uma pergunta sem resposta vira uma resposta errada com selo.
+    pub fn cue_scored(
+        &mut self,
+        scope: ScopeId,
+        query: &[f32],
+        out: &mut [f32],
+    ) -> Result<(CueHit, f32), BridgeError> {
         self.queries += 1;
         if self.entries.is_empty() {
             return Err(BridgeError::EmptyScope);
@@ -705,7 +721,7 @@ impl KnowledgeSource for ScopeLedger {
         }
         // O filtro rodou: registros de fora do escopo foram descartados.
         self.cross_scope_skipped += skipped;
-        let Some((_, idx)) = best else {
+        let Some((score, idx)) = best else {
             return Err(BridgeError::EmptyScope);
         };
         let record = &self.entries[idx];
@@ -714,12 +730,15 @@ impl KnowledgeSource for ScopeLedger {
             return Err(BridgeError::BufTooSmall);
         }
         out[..phases.len()].copy_from_slice(&phases);
-        Ok(CueHit {
-            key: record.key,
-            scope: record.scope,
-            authority: record.authority,
-            hits: consulted,
-        })
+        Ok((
+            CueHit {
+                key: record.key,
+                scope: record.scope,
+                authority: record.authority,
+                hits: consulted,
+            },
+            score,
+        ))
     }
 }
 

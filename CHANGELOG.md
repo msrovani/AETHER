@@ -3,6 +3,24 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.110] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 10 arquivo(s) (.:1, examples:2, src:4, tests:3).
+- Gate: ok (5s).
+
+- `Cargo.lock`
+- `examples/e2c3_probe.rs`
+- `examples/ising_logic_probe.rs`
+- `src/api/mod.rs`
+- `src/core/knowledge_bridge_f1.rs`
+- `src/core/logic_pipeline.rs`
+- `src/core/persistency_search.rs`
+- `tests/api_eval.rs`
+- `tests/api_integrity.rs`
+- `tests/e2c3_exact_search.rs`
+
 ## [0.0.109] - 2026-11-16
 
 ### Changed

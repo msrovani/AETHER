@@ -33,6 +33,7 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use aether_engine::core::certificate::energy;
+use aether_engine::core::persistency_search::ExactSearch;
 use aether_engine::core::presolve::roof_dual_qumo;
 
 const N: usize = 14;
@@ -111,11 +112,6 @@ fn reduce(
         }
     }
     (free, js, hs)
-}
-
-fn full_energy(n: usize, j: &[f64], h: &[f64], assign: &[Option<i8>]) -> f64 {
-    let s: Vec<i8> = assign.iter().map(|x| x.expect("completo")).collect();
-    energy(j, h, n, &s)
 }
 
 /// Fixações de uma passada de roof dual.
@@ -199,62 +195,6 @@ fn probe_fixed(n: usize, j: &[f64], h: &[f64], max_rounds: usize) -> usize {
     assign.iter().filter(|x| x.is_some()).count()
 }
 
-#[derive(Default)]
-struct SearchStats {
-    nodes: usize,
-    leaves: usize,
-    root_fixed: usize,
-}
-
-/// Busca exata: em cada nó, o roof dual propaga fixações; quando não há mais
-/// nada a fixar, ramifica numa variável. A folha é uma atribuição completa.
-///
-/// Cada nó trabalha numa **cópia local** da atribuição: as fixações de um ramo
-/// não vazam para o irmão (bug clássico de backtracking).
-fn dfs(
-    n: usize,
-    j: &[f64],
-    h: &[f64],
-    assign: &[Option<i8>],
-    st: &mut SearchStats,
-    is_root: bool,
-) -> f64 {
-    st.nodes += 1;
-    let mut a = assign.to_vec();
-    let free: Vec<usize> = (0..n).filter(|&i| a[i].is_none()).collect();
-    if free.is_empty() {
-        st.leaves += 1;
-        return full_energy(n, j, h, &a);
-    }
-    let (_, js, hs) = reduce(n, j, h, &a);
-    let p = roof_dual_qumo(free.len(), &js, &hs);
-    if is_root {
-        st.root_fixed = p.fixed_count();
-    }
-    let mut applied = false;
-    for (k, &i) in free.iter().enumerate() {
-        if let Some(v) = p.fixed[k] {
-            a[i] = Some(v);
-            applied = true;
-        }
-    }
-    if applied {
-        return dfs(n, j, h, &a, st, false);
-    }
-
-    let pv = free[0];
-    let mut best = f64::INFINITY;
-    for v in [-1i8, 1] {
-        a[pv] = Some(v);
-        let e = dfs(n, j, h, &a, st, false);
-        if e < best {
-            best = e;
-        }
-        a[pv] = None;
-    }
-    best
-}
-
 fn main() {
     println!("E2c-3 probe | n={N} inst={INSTANCES} delta={DELTA} seed={SEED0:#x}");
     println!(
@@ -271,6 +211,7 @@ fn main() {
     );
 
     let mut json = String::from("[\n");
+    let mut search = ExactSearch::new(u32::MAX);
     let regimes = [0.0f64, 0.25, 0.45];
 
     for (ri, &plant) in regimes.iter().enumerate() {
@@ -297,15 +238,13 @@ fn main() {
             probe_sum += probe_fixed(N, &j, &h, 8);
 
             if inst < dfs_n {
-                let assign = vec![None::<i8>; N];
-                let mut st = SearchStats::default();
-                let e_dfs = dfs(N, &j, &h, &assign, &mut st, true);
+                let rep = search.solve(N, &j, &h);
                 let e_bf = brute_force(N, &j, &h);
-                if (e_dfs - e_bf).abs() < 1e-9 {
+                if rep.energy.is_finite() && (rep.energy - e_bf).abs() < 1e-9 {
                     sound += 1;
                 }
-                nodes_sum += st.nodes;
-                leaves_sum += st.leaves;
+                nodes_sum += rep.nodes as usize;
+                leaves_sum += rep.leaves as usize;
                 dfs_runs += 1;
             }
         }

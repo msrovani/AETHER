@@ -146,14 +146,15 @@ impl ExactSearch {
             }
         }
 
-        self.roof
-            .solve_into(m, &self.sub_j[..m * m], &self.sub_h[..m], &mut self.fixed_tmp[..m]);
+        self.roof.solve_into(
+            m,
+            &self.sub_j[..m * m],
+            &self.sub_h[..m],
+            &mut self.fixed_tmp[..m],
+        );
 
         if is_root {
-            self.root_fixed = self.fixed_tmp[..m]
-                .iter()
-                .filter(|f| f.is_some())
-                .count() as u32;
+            self.root_fixed = self.fixed_tmp[..m].iter().filter(|f| f.is_some()).count() as u32;
         }
 
         // Aplica as persistências e desfaz ao voltar (sem vazar para o irmão).
