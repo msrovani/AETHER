@@ -1,29 +1,32 @@
-//! E2c — persistência de primeira ordem preserva o ótimo?
+//! E2c / E2c-2 — persistência preserva o ótimo? Até onde ela alcança?
 //!
-//! Metodologia:
+//! Metodologia (idêntica à do E2c v1, para comparação direta):
 //! 1. instâncias de Ising `n=14`, `J` ±1 simétrica, `h` com **viés plantado**
-//!    em `--plant` das variáveis (emula bits dirigidos de um circuito);
+//!    em `plant·n` variáveis (emula bits dirigidos de um circuito);
 //! 2. ótimo global por **força bruta** (ground truth exato);
-//! 3. `persistency_qumo` fixa variáveis por dominância (`max Δ_i < 0`);
+//! 3. três braços por instância:
+//!    * **dominância** (`persistency_qumo`, E2c v1): `max Δ_i < 0`;
+//!    * **roof dual** (`roof_dual_qumo`, E2c-2): posiform quadrática + max-flow
+//!      (Dinic) + alcançabilidade residual, com cascata;
+//!    * **BSB puro** (sem presolve), como referência de completude;
 //! 4. **soundness**: o ótimo do sistema reduzido tem de ser **igual** ao original;
 //! 5. resolve o resíduo com BSB, reconstrói e confere a energia.
 //!
-//! Dois braços: `--plant 0.25` (estruturado) e `--plant 0` (vidro de spin puro),
-//! para mostrar onde a regra **não** dispara.
+//! Regimes padrão: `plant ∈ {0%, 25%, 45%}` × 200 instâncias = **600**.
 //!
 //! ```text
 //! cargo run --release --example e2c_persistency
-//! cargo run --release --example e2c_persistency -- --plant 0.0
+//! cargo run --release --example e2c_persistency -- --plant 0.0     # um regime
 //! ```
 //!
-//! Saída: tabela + `target/aether_e2c.json`.
+//! Saída: tabela + `target/aether_e2c.json` (e2c v1) e `target/aether_e2c2.json`.
 
 use ndarray::{Array2, Array3};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use aether_engine::core::certificate::energy;
-use aether_engine::core::presolve::persistency_qumo;
+use aether_engine::core::presolve::{persistency_qumo, roof_dual_qumo};
 use aether_engine::core::thermodynamic_solver::{
     IsingLandscape, RelaxOutcome, ThermodynamicIsingSolver,
 };
@@ -31,7 +34,8 @@ use aether_engine::core::thermodynamic_solver::{
 struct Args {
     instances: usize,
     n: usize,
-    plant: f64,
+    /// Regimes de viés plantado (fração de variáveis com `h` forte).
+    plants: Vec<f64>,
     delta: f64,
     steps: usize,
     restarts: usize,
@@ -43,7 +47,7 @@ impl Default for Args {
         Self {
             instances: 200,
             n: 14,
-            plant: 0.25,
+            plants: vec![0.0, 0.25, 0.45],
             delta: 0.6,
             steps: 20,
             restarts: 4,
@@ -69,7 +73,17 @@ fn parse_args() -> Args {
                 i += 1;
             }
             ("--plant", Some(v)) => {
-                a.plant = v.parse().unwrap_or(a.plant);
+                a.plants = vec![v.parse().unwrap_or(0.25)];
+                i += 1;
+            }
+            ("--plants", Some(v)) => {
+                a.plants = v
+                    .split(',')
+                    .filter_map(|s| s.trim().parse().ok())
+                    .collect::<Vec<f64>>();
+                if a.plants.is_empty() {
+                    a.plants = Args::default().plants;
+                }
                 i += 1;
             }
             ("--delta", Some(v)) => {
@@ -149,12 +163,15 @@ fn optimum_with_fixed(
     fixed: &[Option<i8>],
     residual: &[usize],
 ) -> f64 {
-    let rn = residual.len();
     let mut s = vec![0i8; n];
     for (i, f) in fixed.iter().enumerate() {
         if let Some(v) = f {
             s[i] = *v;
         }
+    }
+    let rn = residual.len();
+    if rn == 0 {
+        return energy(j, h, n, &s);
     }
     let mut best = f64::INFINITY;
     for mask in 0..(1u64 << rn) {
@@ -165,9 +182,6 @@ fn optimum_with_fixed(
         if e < best {
             best = e;
         }
-    }
-    if rn == 0 {
-        best = energy(j, h, n, &s);
     }
     best
 }
@@ -226,127 +240,239 @@ fn solve_residual(
     best
 }
 
+/// Resultado acumulado de um braço de presolve.
+#[derive(Default, Clone, Copy)]
+struct Arm {
+    reduction_sum: f64,
+    fixed_sum: usize,
+    unsound: usize,
+    solved: usize,
+    deficit: f64,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = parse_args();
     let n = args.n;
-    let k = (args.plant * n as f64).round() as usize;
 
-    let mut reduction_sum = 0.0;
-    let mut unsound = 0usize;
-    let mut solved = 0usize;
-    let mut full_solved = 0usize;
-    let mut deficit = 0.0f64;
+    println!();
+    println!("AETHER · E2c-2 — persistência (dominância × roof dual max-flow)");
+    println!("===============================================================");
+    println!(
+        "instâncias={}/regime n={} regimes={:?} delta={} steps={} restarts={}",
+        args.instances, n, args.plants, args.delta, args.steps, args.restarts
+    );
+    println!();
+    println!(
+        "{:>7} {:>11} {:>9} {:>9} {:>11} {:>12} {:>10}",
+        "regime", "método", "redução", "fixadas", "ótimo mudou", "presolve+BSB", "BSB puro"
+    );
+    println!("{}", "-".repeat(74));
 
-    for inst in 0..args.instances {
-        let seed = args.seed.wrapping_add(inst as u64);
-        let (j, h) = make_instance(n, k, args.delta, seed);
-        let e_star = brute_force(n, &j, &h);
+    struct RegimeRow {
+        plant: f64,
+        dom: Arm,
+        roof: Arm,
+        full_solved: usize,
+    }
+    let mut rows: Vec<RegimeRow> = Vec::new();
+    let total_instances = args.instances * args.plants.len();
 
-        let pre = persistency_qumo(n, &j, &h);
-        reduction_sum += pre.reduction(n);
+    for &plant in &args.plants {
+        let k = (plant * n as f64).round() as usize;
+        let mut dom = Arm::default();
+        let mut roof = Arm::default();
+        let mut full_solved = 0usize;
 
-        let e_red = optimum_with_fixed(n, &j, &h, &pre.fixed, &pre.residual);
-        if (e_red - e_star).abs() > 1e-9 {
-            unsound += 1;
-            deficit += e_red - e_star;
-        }
+        for inst in 0..args.instances {
+            let seed = args.seed.wrapping_add(inst as u64);
+            let (j, h) = make_instance(n, k, args.delta, seed);
+            let e_star = brute_force(n, &j, &h);
 
-        // reconstrói com BSB no resíduo
-        let sol = solve_residual(
-            &pre.residual,
-            &j,
-            &pre.h_eff,
-            n,
-            args.steps,
-            args.restarts,
-            seed,
-        );
-        let mut s = vec![0i8; n];
-        for (i, f) in pre.fixed.iter().enumerate() {
-            if let Some(v) = f {
-                s[i] = *v;
+            // --- braço 1: dominância (E2c v1) ---
+            let pre = persistency_qumo(n, &j, &h);
+            dom.reduction_sum += pre.reduction(n);
+            dom.fixed_sum += pre.fixed_count();
+            let e_red = optimum_with_fixed(n, &j, &h, &pre.fixed, &pre.residual);
+            if (e_red - e_star).abs() > 1e-9 {
+                dom.unsound += 1;
+                dom.deficit += e_red - e_star;
+            }
+            let sol = solve_residual(
+                &pre.residual,
+                &j,
+                &pre.h_eff,
+                n,
+                args.steps,
+                args.restarts,
+                seed,
+            );
+            let mut s = vec![0i8; n];
+            for (i, f) in pre.fixed.iter().enumerate() {
+                if let Some(v) = f {
+                    s[i] = *v;
+                }
+            }
+            for (new, &old) in pre.residual.iter().enumerate() {
+                s[old] = sol[new];
+            }
+            if (energy(&j, &h, n, &s) - e_star).abs() <= 1e-9 {
+                dom.solved += 1;
+            }
+
+            // --- braço 2: roof dual (E2c-2) ---
+            let pre2 = roof_dual_qumo(n, &j, &h);
+            roof.reduction_sum += pre2.reduction(n);
+            roof.fixed_sum += pre2.fixed_count();
+            let e_red2 = optimum_with_fixed(n, &j, &h, &pre2.fixed, &pre2.residual);
+            if (e_red2 - e_star).abs() > 1e-9 {
+                roof.unsound += 1;
+                roof.deficit += e_red2 - e_star;
+            }
+            let sol2 = solve_residual(
+                &pre2.residual,
+                &j,
+                &pre2.h_eff,
+                n,
+                args.steps,
+                args.restarts,
+                seed,
+            );
+            let mut s2 = vec![0i8; n];
+            for (i, f) in pre2.fixed.iter().enumerate() {
+                if let Some(v) = f {
+                    s2[i] = *v;
+                }
+            }
+            for (new, &old) in pre2.residual.iter().enumerate() {
+                s2[old] = sol2[new];
+            }
+            if (energy(&j, &h, n, &s2) - e_star).abs() <= 1e-9 {
+                roof.solved += 1;
+            }
+
+            // --- braço 3: BSB puro ---
+            let full = solve_residual(
+                &(0..n).collect::<Vec<_>>(),
+                &j,
+                &h,
+                n,
+                args.steps,
+                args.restarts,
+                seed,
+            );
+            let mut s_full = vec![0i8; n];
+            s_full.copy_from_slice(&full);
+            if (energy(&j, &h, n, &s_full) - e_star).abs() <= 1e-9 {
+                full_solved += 1;
             }
         }
-        for (new, &old) in pre.residual.iter().enumerate() {
-            s[old] = sol[new];
-        }
-        let e_rec = energy(&j, &h, n, &s);
-        if (e_rec - e_star).abs() <= 1e-9 {
-            solved += 1;
-        }
 
-        // BSB puro (sem presolve), para comparação de completude
-        let full = solve_residual(
-            &(0..n).collect::<Vec<_>>(),
-            &j,
-            &h,
-            n,
-            args.steps,
-            args.restarts,
-            seed,
-        );
-        let mut s_full = vec![0i8; n];
-        s_full.copy_from_slice(&full);
-        if (energy(&j, &h, n, &s_full) - e_star).abs() <= 1e-9 {
-            full_solved += 1;
-        }
+        let show = |label: &str, a: &Arm| {
+            println!(
+                "{:>6.0}% {:>11} {:>8.1}% {:>9.1} {:>11} {:>7}/{:<4} {:>4}/{:<5}",
+                plant * 100.0,
+                label,
+                100.0 * a.reduction_sum / args.instances as f64,
+                a.fixed_sum as f64 / args.instances as f64,
+                a.unsound,
+                a.solved,
+                args.instances,
+                full_solved,
+                args.instances
+            );
+        };
+        show("dominância", &dom);
+        show("roof dual", &roof);
+        println!("{}", "-".repeat(74));
+
+        rows.push(RegimeRow {
+            plant,
+            dom,
+            roof,
+            full_solved,
+        });
     }
 
-    let reduction = reduction_sum / args.instances as f64;
+    // ---------------- gates ----------------
+    let total_unsound: usize = rows.iter().map(|r| r.roof.unsound).sum();
+    let mut reach_ok = true;
+    for r in &rows {
+        let rd = r.dom.reduction_sum / args.instances as f64;
+        let rr = r.roof.reduction_sum / args.instances as f64;
+        if rr <= rd + 1e-12 {
+            reach_ok = false;
+        }
+    }
+    let row45 = rows
+        .iter()
+        .min_by(|a, b| {
+            (a.plant - 0.45)
+                .abs()
+                .partial_cmp(&(b.plant - 0.45).abs())
+                .unwrap()
+        })
+        .expect("ao menos um regime");
+    let row0 = rows
+        .iter()
+        .min_by(|a, b| {
+            (a.plant - 0.0)
+                .abs()
+                .partial_cmp(&(b.plant - 0.0).abs())
+                .unwrap()
+        })
+        .expect("ao menos um regime");
 
     println!();
-    println!("AETHER · E2c — persistência de primeira ordem (QUBO/Ising)");
-    println!("=====================================================");
+    println!("gates E2c-2");
     println!(
-        "instâncias={} n={} plant={:.0}% ({} vieses) delta={} steps={} restarts={}",
+        "  G1 soundness ({} regimes × {} instâncias) : {}  ({} ótimos alterados)",
+        args.plants.len(),
         args.instances,
-        n,
-        100.0 * args.plant,
-        k,
-        args.delta,
-        args.steps,
-        args.restarts
+        pass(total_unsound == 0),
+        total_unsound
     );
-    println!();
     println!(
-        "redução média de variáveis       : {:.1}%",
-        100.0 * reduction
+        "  G2 alcance > dominância em todos os regimes : {}",
+        pass(reach_ok)
     );
-    println!("fixações que mudaram o ótimo     : {unsound}");
-    if unsound > 0 {
-        println!("déficit acumulado no ótimo       : {deficit:.6}");
-    }
     println!(
-        "reconstruções no ótimo           : {solved}/{}",
+        "  G3 completude em 45% ≥ 199/200              : {}  ({}/{})",
+        pass(row45.roof.solved >= 199.min(args.instances)),
+        row45.roof.solved,
         args.instances
     );
     println!(
-        "BSB puro no ótimo                : {full_solved}/{}",
+        "  G4 regime sem viés melhora o BSB puro        : {}  ({}/{} vs {}/{})",
+        pass(row0.roof.solved > row0.full_solved),
+        row0.roof.solved,
+        args.instances,
+        row0.full_solved,
         args.instances
-    );
-    println!();
-
-    println!(
-        "  G1 soundness (ótimo preservado)   : {}",
-        pass(unsound == 0)
-    );
-    println!(
-        "  G2 redução ≥ 40%                  : {}  ({:.1}%)",
-        pass(reduction >= 0.40),
-        100.0 * reduction
-    );
-    println!(
-        "  G3 reconstrução no ótimo = 100%   : {}",
-        pass(solved == args.instances)
     );
     println!();
 
     std::fs::create_dir_all("target").ok();
-    let path = "target/aether_e2c.json";
-    let json = format!(
-        "{{\n  \"instances\": {},\n  \"n\": {n}, \"plant\": {:.3}, \"delta\": {:.3},\n  \"reduction\": {reduction:.4},\n  \"unsound\": {unsound},\n  \"solved\": {solved},\n  \"full_bsb_solved\": {full_solved}\n}}\n",
-        args.instances, args.plant, args.delta
-    );
+    let mut json = String::new();
+    json.push_str("{\n  \"e2c2\": {\n");
+    json.push_str(&format!(
+        "    \"instances_per_regime\": {}, \"n\": {n}, \"delta\": {},\n    \"regimes\": [\n",
+        args.instances, args.delta
+    ));
+    for (i, r) in rows.iter().enumerate() {
+        let comma = if i + 1 == rows.len() { "" } else { "," };
+        let dom_red = r.dom.reduction_sum / args.instances as f64;
+        let roof_red = r.roof.reduction_sum / args.instances as f64;
+        json.push_str(&format!(
+            "      {{\"plant\": {:.3}, \"dom_reduction\": {dom_red:.4}, \"roof_reduction\": {roof_red:.4}, \"dom_unsound\": {}, \"roof_unsound\": {}, \"dom_solved\": {}, \"roof_solved\": {}, \"bsb_solved\": {}, \"instances\": {}}}{comma}\n",
+            r.plant, r.dom.unsound, r.roof.unsound, r.dom.solved, r.roof.solved, r.full_solved, args.instances
+        ));
+    }
+    json.push_str("    ],\n");
+    json.push_str(&format!(
+        "    \"total_instances\": {total_instances}, \"roof_unsound_total\": {total_unsound}, \"reach_ok\": {reach_ok}\n"
+    ));
+    json.push_str("  }\n}\n");
+    let path = "target/aether_e2c2.json";
     std::fs::write(path, json)?;
     println!("artefato: {path}");
     Ok(())

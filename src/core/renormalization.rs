@@ -87,6 +87,14 @@ impl RenormalizationHierarchy {
         (self.micro, self.meso, self.macro_dim)
     }
 
+    /// Fases micro da última passagem de [`forward`](Self::forward).
+    ///
+    /// É a leitura usada pelos gates do E1 que medem o desvio angular
+    /// micro antes/depois do torque top-down. Não aloca.
+    pub fn micro_phases(&self) -> &[f32] {
+        &self.micro_phase
+    }
+
     /// Fixa o objetivo persistente da camada Macro (fase em radianos).
     pub fn set_goal(&mut self, phase: f32) {
         self.goal = Some(wrap(phase));

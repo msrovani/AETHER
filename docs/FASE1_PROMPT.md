@@ -10,7 +10,7 @@
 |---|---|
 | `0` tokens / `0` `String` no sinal | revisão de tipos: `KnowledgeEvent`, `KnowledgeSink`, `KnowledgeSource` só transportam POD/`[f32]`; nenhum `String`/`&str` atravessa o sinal (a borda texto↔onda é `TransducerIo`, `tests/transducer_invariants.rs`) |
 | `0` backprop | nenhum `grad`/optimizer no caminho; `E8` congela o campo |
-| `0 B` alocados no *hot-path* | `tests/alloc_invariants.rs` (allocador contador por thread) estendido em `tests/knowledge_bridge.rs` |
+| `0 B` alocados no *hot-path* | `tests/alloc_invariants.rs` (allocador contador por thread) estendido em `tests/f1_knowledge_bridge_gate.rs` |
 | Residência L2 (1,25 MB) | `docs/HW_TARGET.md`; a ponte `F1` adiciona **≤ 45 KB** (ring de 64 eventos) |
 | Orçamento de ciclo | margem medida `81,3 µs`/ciclo (`0,49%` de 60 Hz) — `E6` |
 
@@ -18,6 +18,14 @@
 alterar `src/core/spsc_ring.rs` (congelado, tem dono); adicionar dependências
 (`Cargo.toml` só ganha a feature `knowledge`); tunar limiar depois de ver o
 resultado (ver §6, regra anti-*overfit*).
+
+**Alinhamento com o fórum (MSGs 0106–0131):** a divisão de trabalho é a da
+MSG 0122 — `E2c-2`, `E1b-2` e `F1` ficam com `OPENCODE_A`; `E2`/`E3` com a
+MSG 0107 (`logic_pipeline.rs`, `transplant.rs`, `knowledge_bridge.rs`,
+`presolve.rs` região `persistency_qumo_into`); `E1` com a MSG 0106; auditoria
+read-only com `DEEPSEEK`. Por isso `F1` nasce em
+`src/core/knowledge_bridge_f1.rs` (arquivo próprio), e **nada** aqui autoriza
+editar arquivo de outro claim.
 
 ---
 
@@ -28,7 +36,7 @@ resultado (ver §6, regra anti-*overfit*).
 | `E2c` | `examples/e2c_persistency.rs`, `target/aether_e2c.json` | `n=14`, 200 instâncias, `plant=0,25`: redução **28,57%**, **0** unsound, 190/200 resolvidas (BSB cheio: 188/200) |
 | `E2c` braço vidro | `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md` §11.1 (e `--plant 0.0` para reproduzir) | redução **0%** — a dominância é míope por construção (`src/core/presolve.rs`, doc de `persistency_qumo`). O artefato atual só tem o braço `plant=0,25` |
 | `E1b` braço A | `target/aether_e1b.json` | `D=160,K=6`: **64** fatos (recall@1 ≥ 99%); lei `D^0,90` |
-| `E1b` braço B | idem | erro angular (40% oculto, `n=160`): aleatório **0,034 / 0,190 / 0,448** em 4/8/16 padrões; harmônico **0,062 / 0,142 / 0,362** |
+| `E1b` braço B | idem + MSG 0129 | erro angular (`n=160`, **hidden = 0,20**, `seed = 0xE1B0001`, `audit_config`, `reset_phases(0)` antes de cada recall): aleatório **0,0344 / 0,1896 / 0,448** em 4/8/16 padrões; harmônico **0,062 / 0,1416 / 0,362**. Os números `0,126 / 0,274` (MSG 0111) eram **carryover** (recall sem reset), fator 3,7× — não usar |
 | `E6` | `target/aether_profile_e6.json` | solver 84,4% do ciclo; margem 81,3 µs |
 
 **Dois defeitos encontrados na leitura do código (corrigir nesta fase):**
@@ -109,6 +117,40 @@ Não confie na memória: ancore em dois testes, nesta ordem:
   ambos do mesmo lado ⇒ livre (conte em `unresolved`).
   Toda fixação persistente **preserva o valor ótimo** — se alguma alterar o
   ótimo no gate G1, é bug de construção, **reverta**, não relaxe o gate.
+
+#### 1.3.1 O que o protótipo já mediu (não re-descobrir)
+
+Rede canônica do `implication_network.hpp` (dwave-preprocessing), **simétrica
+sob complementação**:
+
+```text
+termo a·u·v  →  u → comp(v)   E   v → comp(u)
+termo a·u    →  S → comp(u)   E   u → T          [comp(S) = T]
+bound        =  a0 + fluxo_máximo / 2            ← o /2 é obrigatório
+```
+
+Medições (protótipo fora do repo, 600 instâncias contra força bruta):
+
+| Medida | Resultado |
+|---|---|
+| âncora posiform × energia | erro máx **8,9e-15** |
+| exatidão submodular (`J ≥ 0`), `n=10`, 30 inst. | `|a0 + fluxo/2 − ótimo|` máx **7,1e-15** |
+| `a0 + fluxo` (sem o `/2`) | erro **51,8** — “parece bound”, está errado |
+| persistência BHT completo, `n=14`, `plant ∈ {0; 0,25; 0,45}` | **0,0%** de redução, 0 conflitos, bound sempre válido |
+
+**Duas armadilhas medidas:**
+
+1. rede sem aresta para `T` (só `s→ū`) ⇒ fluxo 0 e bound trivial (`a0`);
+2. alcançabilidade **sem** simetrizar o residual ⇒ **46/200 fixações unsound**
+   com redução aparente de **14%**. Redução alta não é sinal de acerto.
+
+**Consequência para o gate de alcance:** “roof > dominância no `plant = 0`” pode
+ser **falsificado** em vidro de spin denso (`J = ±1`). Nesse caso o resultado é
+“o roof dual não vê o vidro” — reporte; não relaxe o gate.
+
+> Em aberto: a implementação `RoofDualWorkspace` de MSG 0110 usa a rede
+> **dobrada do QPBO** (outra rota, com `roof_weights`); o protótipo acima não a
+> exercita porque a `lib` estava vermelha (`E0583`) na hora da medição.
 
 ### 1.4 API (sem alocação no caminho de aplicação)
 
@@ -227,7 +269,12 @@ correção do docstring de `pattern_capacity`.
 | # | Gate | Falha ⇒ |
 |---|---|---|
 | **G1** | calibração: rodar `k ∈ {4,8}` com `hidden ∈ {0,2; 0,4}` e descobrir qual reproduz o artefato (`random@4 = 0,034`, `random@8 = 0,190`, `harmonic@8 = 0,142`, tolerância `±0,02`); gravar `hidden` e `seed` no JSON | divergiu nos dois ⇒ o braço B não é reprodutível; pare e reporte |
-| **G2** | a *cliff* fica resolvida: `capacity_at(0.15)` harmônico determinado com IC (esperado 8–10) | se ficar ambíguo, aumente seeds, não a tolerância |
+| **G2** | a *cliff* fica resolvida: `capacity_at(0.15)` harmônico determinado com IC (esperado **8**, teto 15) | se ficar ambíguo, aumente seeds, não a tolerância |
+
+> **O gate não é “todos os M abaixo de 0,15”.** O artefato já mostra harmônico
+> `M=16 → 0,362`; exigir `err < 0,15` em `M=16` falha **por construção**.
+> `capacity_at(0.15)` é o **maior** `M` que passa — e a curva acima dele é o
+> resultado, não um erro.
 | **G3** | ressonador: `capacity ≥ 1,5× harmônico` **ou** falsificação com números | resultado negativo é entrega válida |
 | **G4** | docstring de `pattern_capacity` corrigido para `min(n/4, 64)` e um doc novo `capacity_at_err` documentado | é bug de documentação: corrija |
 | **G5** | `safe_patterns_160 = floor(0,9 × capacity_harmônico_robusto)` gravado no artefato | é o número que a Fase 2 consome |
@@ -310,11 +357,19 @@ T2 (host/MCP)     escreve as linhas no neural-sgdb (fora do crate)
 * **Backpressure:** política *drop-newest* + contador + bit `flags` no próximo
   evento. Gate: 0 drops em 10 000 ciclos simulados a 60 Hz com drenagem de 32
   por ciclo.
+  **Por que não *drop-oldest*:** o SPSC lock-free tem **um escritor por índice**
+  (o produtor escreve `tail`, o consumidor escreve `head`). “Descartar o mais
+  antigo” obriga o produtor a avançar `head` — ou a sobrescrever slots ainda não
+  lidos — e quebra o invariante. Alternativa segura: *drop-newest* no T0 +
+  fila sem perda no T2 (host), onde bloqueio é permitido. A perda no T0 é
+  **registrada** (contador + bit), nunca silenciosa.
 
 ### 3.4 API
 
 ```rust
-// src/core/knowledge_bridge.rs  (novo; feature `knowledge = ["m1"]`)
+// src/core/knowledge_bridge_f1.rs  (novo; feature `knowledge = ["m1"]`)
+// NOTA: `knowledge_bridge.rs` está sob claim da MSG 0107 em escrita ativa;
+// o F1 vive em arquivo próprio (divisão da MSG 0122) e reexporta o contrato.
 pub const EVENT_PAYLOAD_DIMS: usize = 160;
 pub const RING_CAPACITY: usize = 64;
 
@@ -358,8 +413,8 @@ rede no crate: zero; a feature `knowledge` não puxa dependência nova).
 
 ### 3.6 Entregáveis
 
-`src/core/knowledge_bridge.rs` · `src/core/mod.rs` (`#[cfg(feature = "knowledge")]`)
-· `Cargo.toml` (feature `knowledge`) · `tests/knowledge_bridge.rs` ·
+`src/core/knowledge_bridge_f1.rs` · `src/core/mod.rs` (1 linha, `#[cfg(feature = "knowledge")]`)
+· `Cargo.toml` (feature `knowledge`) · `tests/f1_knowledge_bridge_gate.rs` ·
 `docs/KNOWLEDGE_BRIDGE.md` (layout do evento + T0/T1/T2 + decisões D1–D3) ·
 post `RELATORIO` com `drops=0`, `allocs=0`, `p99=…`.
 
@@ -405,7 +460,7 @@ powershell -NoProfile -File scripts/cargo.ps1 run --release --features m1 --exam
 powershell -NoProfile -File scripts/cargo.ps1 run --release --features m5 --example e1b2_structured
 powershell -NoProfile -File scripts/cargo.ps1 test --release --features m1 --test e2c2_roof_dual
 powershell -NoProfile -File scripts/cargo.ps1 test --release --features m5 --test e1b2_capacity
-powershell -NoProfile -File scripts/cargo.ps1 test --release --features knowledge --test knowledge_bridge
+powershell -NoProfile -File scripts/cargo.ps1 test --release --features knowledge --test f1_knowledge_bridge_gate
 powershell -NoProfile -File scripts/cargo.ps1 test --release --no-default-features --features "m1,knowledge"
 powershell -NoProfile -File scripts/cargo.ps1 test --release
 ```
@@ -437,7 +492,7 @@ E1b-2  examples/e1b2_structured.rs + tests/e1b2_capacity.rs
              ressonador >= 1,5x ou falsificado; grava safe_patterns_160 no artefato.
        Corrigir docstring de pattern_capacity (código é min(n/4,64) = 40 em n=160).
 
-F1     Proposta D1 (payload inline [f32;160]), D2 (Layer 2/4/6 + ScopeId hash u64),
+F1     (novo: src/core/knowledge_bridge_f1.rs) Proposta D1 (payload inline [f32;160]), D2 (Layer 2/4/6 + ScopeId hash u64),
        D3 (Certificate intocado; from_certificate converte f64->f32 + consensus_q).
        Gate: evento 704 B/align 64 · 0 allocs em record · 0 drops em 10k ciclos ·
              R7=0 estrutural · JSONL round-trip · record p99 < 1 us.

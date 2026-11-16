@@ -907,7 +907,7 @@ pub fn roof_dual_qumo(n: usize, j: &[f64], h: &[f64]) -> QuboPresolve {
         let mut sub_h = vec![0.0f64; m];
         for (a, &ia) in residual.iter().enumerate() {
             sub_h[a] = h[ia];
-            for &k in 0..n {
+            for k in 0..n {
                 if let Some(v) = fixed[k] {
                     sub_h[a] += j[ia * n + k] * f64::from(v);
                 }

@@ -1,0 +1,1413 @@
+//! E2 — lógica como Ising com **certificado de factibilidade** (5 estágios).
+//!
+//! O E3b mostrou o limite honesto: `ΔE` sozinho **não** prediz acerto em
+//! otimização livre, mas onde existe restrição **contável** (`violações == 0`)
+//! a precisão é 100%. O E2 constrói o caminho que produz essa contagem.
+//!
+//! # Pipeline (determinístico, zero-alocação no caminho quente)
+//!
+//! ```text
+//! (1) presolve simbólico CNF        unidades + literais falhos (consequência lógica)
+//! (2) persistência (roof dual)      dominância 1ª ordem sobre o QUBO (preserva o ótimo)
+//! (3) decomposição                  componentes conexos do grafo de cláusulas
+//! (4) BSB + Lagrange                multiplicadores por cláusula violada
+//! (5) certificado                   (E, ΔE, violações, proveniência)
+//! ```
+//!
+//! # Por que o gadget exato (e não a penalidade por pares)
+//!
+//! A "penalidade quadrática" usual de 3-SAT pune pares de literais falsos: uma
+//! cláusula com **um** literal verdadeiro já recebe penalidade 1 (de 3). Isso
+//! distorce a paisagem exatamente nas instâncias apertadas — o efeito medido em
+//! arXiv:2511.21046. Aqui cada cláusula de 3 literais vira um gadget **exato**
+//! com dois spins auxiliares (`u = ¬a ∧ ¬b`, `w = u ∧ ¬c`, penalidade `= w`),
+//! todos quadráticos:
+//!
+//! ```text
+//! P(a,b,c,u,w) = 1 − a − b + ab + 2au + 2bu − uc − 2uw + 2w + 2cw
+//! ```
+//!
+//! `min P = 0` sse a cláusula é satisfeita, `1` sse é violada — verificado por
+//! enumeração exaustiva em teste. Cláusulas de 2 e 1 literais (após o presolve)
+//! usam `(1−a)(1−b)` e `(1−a)`, que já são quadráticas/lineares.
+//!
+//! # O que o certificado garante
+//!
+//! **Factibilidade**, não verdade: `violations == 0` significa que a atribuição
+//! avalia todas as cláusulas originais como verdadeiras. Não significa que o
+//! mundo seja assim. A convenção de energia é a do solver
+//! (`H = −½·sᵀJs − hᵀs`), com o offset constante do gadget omitido — o offset
+//! não muda argmin nem gap.
+//!
+//! # Zero alocação
+//!
+//! [`LogicPipeline::new`] aloca todos os buffers; [`LogicPipeline::resolve_into`]
+//! não aloca (os `Vec` de trabalho têm capacidade fixada e são indexados por
+//! comprimento, nunca `push`ados no caminho quente). O teste `e2_logic_gate`
+//! conta as alocações da thread com um alocador instrumentado.
+
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
+use std::time::Instant;
+
+use crate::core::certificate::{energy, Certificate, Provenance};
+use crate::core::presolve::persistency_qumo_into;
+use crate::error::{AetherError, Result};
+
+/// Aceleração inicial da dinâmica bSB (mesma de `thermodynamic_solver`).
+const A0: f64 = 1.0;
+/// Abaixo deste desvio-padrão de `J`, `c0` cai no *clamp* documentado.
+const STD_MIN: f64 = 1e-12;
+/// Tolerância estrita para aceitar um flip como redutor de energia.
+const FLIP_EPS: f64 = 1e-12;
+
+/// Cláusula de até três literais: `(si·x_i) ∨ (sj·x_j) ∨ (sk·x_k)`.
+///
+/// `k == usize::MAX` significa "sem terceiro literal" (cláusula de 2 ou 1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Clause3 {
+    /// Primeira variável.
+    pub i: usize,
+    /// Sinal do primeiro literal (`+1` positivo, `-1` negativo).
+    pub si: i8,
+    /// Segunda variável.
+    pub j: usize,
+    /// Sinal do segundo literal.
+    pub sj: i8,
+    /// Terceira variável (`usize::MAX` = ausente).
+    pub k: usize,
+    /// Sinal do terceiro literal.
+    pub sk: i8,
+}
+
+impl Clause3 {
+    /// Cláusula de três literais.
+    pub const fn new3(i: usize, si: i8, j: usize, sj: i8, k: usize, sk: i8) -> Self {
+        Self {
+            i,
+            si,
+            j,
+            sj,
+            k,
+            sk,
+        }
+    }
+
+    /// Cláusula de dois literais.
+    pub const fn new2(i: usize, si: i8, j: usize, sj: i8) -> Self {
+        Self {
+            i,
+            si,
+            j,
+            sj,
+            k: usize::MAX,
+            sk: 0,
+        }
+    }
+
+    /// Literal `idx` (`0..len()`).
+    #[inline]
+    pub fn lit(&self, idx: usize) -> (usize, i8) {
+        match idx {
+            0 => (self.i, self.si),
+            1 => (self.j, self.sj),
+            _ => (self.k, self.sk),
+        }
+    }
+
+    /// Número de literais (1, 2 ou 3).
+    #[inline]
+    pub fn len(&self) -> usize {
+        if self.k == usize::MAX {
+            2
+        } else {
+            3
+        }
+    }
+
+    /// `true` se não há literais (nunca ocorre em uso normal).
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        false
+    }
+
+    /// `true` se a atribuição `s` satisfaz a cláusula.
+    #[inline]
+    pub fn satisfied(&self, s: &[i8]) -> bool {
+        s[self.i] == self.si
+            || s[self.j] == self.sj
+            || (self.k != usize::MAX && s[self.k] == self.sk)
+    }
+
+    /// `true` se algum literal já está **fixado como verdadeiro**.
+    #[inline]
+    pub fn satisfied_by_fixed(&self, fixed: &[Option<i8>]) -> bool {
+        fixed[self.i] == Some(self.si)
+            || fixed[self.j] == Some(self.sj)
+            || (self.k != usize::MAX && fixed[self.k] == Some(self.sk))
+    }
+}
+
+/// Cláusulas de 3-SAT violadas por `s` (contagem **exata**).
+pub fn violations_3(clauses: &[Clause3], s: &[i8]) -> u32 {
+    clauses.iter().filter(|c| !c.satisfied(s)).count() as u32
+}
+
+/// Estatísticas do último [`LogicPipeline::resolve_into`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct StageStats {
+    /// Variáveis fixadas no estágio simbólico.
+    pub fixed_symbolic: usize,
+    /// Variáveis fixadas pela persistência.
+    pub fixed_persistency: usize,
+    /// Variáveis residuais após (1)+(2).
+    pub n_free: usize,
+    /// Componentes conexos resolvidos.
+    pub components: usize,
+    /// Maior componente.
+    pub largest_component: usize,
+    /// Rodadas de Lagrange executadas.
+    pub lagrange_rounds: usize,
+    /// Execuções do kernel BSB (componentes × reinícios × rodadas).
+    pub bsb_runs: usize,
+    /// Tempo dos estágios (1)–(3).
+    pub symbolic_us: f64,
+    /// Tempo do estágio (4).
+    pub solve_us: f64,
+    /// `H(s*)` na convenção do solver (offset do gadget omitido).
+    pub energy: f64,
+    /// `min_i ΔH_i` sobre as variáveis livres (`∞` se não há nenhuma).
+    pub gap: f64,
+    /// Cláusulas originais violadas.
+    pub violations: u32,
+    /// Resposta decisiva (`violations == 0`).
+    pub decisive: bool,
+}
+
+/// Kernel bSB compacto (sub-QUBOs de tamanho variável, sem realocar).
+///
+/// Replica **exatamente** a dinâmica de
+/// [`crate::core::thermodynamic_solver::ThermodynamicIsingSolver`]: mesmas
+/// condições iniciais (`U(−0.1, 0.1)`), mesmo `c0 = 0.5/(√N·std(J))`, Euler
+/// simplético com paredes inelásticas, elitismo e polimento guloso. A diferença
+/// é só o dimensionamento: os buffers são `n_max` e cada componente usa o
+/// prefixo `0..n`. Um teste compara os dois kernels bit-a-bit na instância
+/// completa. A duplicação existe para resolver **sub-QUBOs** (estágio 3) sem um
+/// pool de solvers nem padding que dilua `c0`.
+#[derive(Debug)]
+pub struct BsbCore {
+    n_max: usize,
+    steps: usize,
+    dt: f64,
+    a0: f64,
+    x: Vec<f64>,
+    y: Vec<f64>,
+    hx: Vec<f64>,
+    s: Vec<i8>,
+    best: Vec<i8>,
+    g: Vec<f64>,
+    s_try: Vec<i8>,
+    g_try: Vec<f64>,
+}
+
+impl BsbCore {
+    /// Aloca os buffers para até `n_max` spins.
+    pub fn new(n_max: usize, steps: usize, dt: f64) -> Self {
+        let dt = if dt.is_finite() && dt > 0.0 { dt } else { 0.05 };
+        Self {
+            n_max,
+            steps,
+            dt,
+            a0: A0,
+            x: vec![0.0; n_max],
+            y: vec![0.0; n_max],
+            hx: vec![0.0; n_max],
+            s: vec![1; n_max],
+            best: vec![1; n_max],
+            g: vec![0.0; n_max],
+            s_try: vec![1; n_max],
+            g_try: vec![0.0; n_max],
+        }
+    }
+
+    /// Relaxa `n` spins (prefixo dos buffers) e escreve o argmin em `states`.
+    ///
+    /// `j` é `n × n` row-major; `h` tem `n`. Devolve `H(states)`.
+    pub fn relax_into(
+        &mut self,
+        j: &[f64],
+        h: &[f64],
+        n: usize,
+        seed: u64,
+        states: &mut [i8],
+    ) -> f64 {
+        assert!(n <= self.n_max, "BsbCore: n > n_max");
+        assert!(j.len() >= n * n && h.len() >= n && states.len() >= n);
+        if n == 0 {
+            return 0.0;
+        }
+        let steps = self.steps;
+        let dt = self.dt;
+        let a0 = self.a0;
+
+        // --- estado inicial (mesma ordem de sorteio do solver auditado) ---
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        for i in 0..n {
+            self.x[i] = (rng.gen::<f64>() - 0.5) * 0.2;
+            self.y[i] = (rng.gen::<f64>() - 0.5) * 0.2;
+        }
+        for i in 0..n {
+            let s = sign(self.x[i]);
+            states[i] = s;
+            self.best[i] = s;
+        }
+        let e0 = row_energy(j, n, h, states);
+        let mut e_best = e0;
+
+        // --- c0 por instância ---
+        let mut sum = 0.0;
+        let mut sumsq = 0.0;
+        for v in &j[..n * n] {
+            sum += *v;
+            sumsq += *v * *v;
+        }
+        let count = (n * n) as f64;
+        let mean = sum / count;
+        let var = (sumsq / count - mean * mean).max(0.0);
+        let std = var.sqrt();
+        let inv_sqrt_n = 1.0 / (n as f64).sqrt();
+        let c0 = if std < STD_MIN {
+            0.5 * inv_sqrt_n
+        } else {
+            0.5 * inv_sqrt_n / std
+        };
+
+        // --- integração ---
+        for k in 0..steps {
+            let a = a0 * ((k + 1) as f64) / (steps as f64);
+            let drift = a0 - a;
+            for i in 0..n {
+                let row = &j[i * n..(i + 1) * n];
+                self.hx[i] = dot_f64(row, &self.x[..n]) + h[i];
+            }
+            for i in 0..n {
+                self.y[i] += dt * (-drift * self.x[i] + c0 * self.hx[i]);
+                let xn = self.x[i] + dt * a0 * self.y[i];
+                if xn > 1.0 {
+                    self.x[i] = 1.0;
+                    self.y[i] = 0.0;
+                } else if xn < -1.0 {
+                    self.x[i] = -1.0;
+                    self.y[i] = 0.0;
+                } else {
+                    self.x[i] = xn;
+                }
+            }
+            for i in 0..n {
+                self.s[i] = sign(self.x[i]);
+            }
+            {
+                let sf = &mut self.g[..n];
+                for i in 0..n {
+                    sf[i] = f64::from(self.s[i]);
+                }
+                let mut e = 0.0;
+                for i in 0..n {
+                    let row = &j[i * n..(i + 1) * n];
+                    e -= 0.5 * sf[i] * dot_f64(row, sf);
+                }
+                for i in 0..n {
+                    e -= h[i] * sf[i];
+                }
+                if e < e_best {
+                    e_best = e;
+                    for i in 0..n {
+                        self.best[i] = self.s[i];
+                    }
+                }
+            }
+        }
+
+        // --- polimento guloso determinístico ---
+        for i in 0..n {
+            self.s[i] = self.best[i];
+        }
+        let e = descend(n, j, h, &mut self.s[..n], &mut self.g[..n]);
+
+        // --- fuga determinística (só se o polimento não bateu H(s_0)) ---
+        if e >= e0 {
+            for i in 0..n {
+                self.best[i] = self.s[i];
+            }
+            let mut best_e = e;
+            for i in 0..n {
+                self.s_try[..n].copy_from_slice(&self.best[..n]);
+                self.s_try[i] = -self.s_try[i];
+                let e_try = descend(n, j, h, &mut self.s_try[..n], &mut self.g_try[..n]);
+                if e_try < best_e {
+                    best_e = e_try;
+                    self.s[..n].copy_from_slice(&self.s_try[..n]);
+                }
+            }
+        }
+
+        states[..n].copy_from_slice(&self.s[..n]);
+        row_energy(j, n, h, states)
+    }
+}
+
+#[inline]
+fn sign(v: f64) -> i8 {
+    if v >= 0.0 {
+        1
+    } else {
+        -1
+    }
+}
+
+#[inline]
+fn row_energy(jb: &[f64], n: usize, hb: &[f64], s: &[i8]) -> f64 {
+    let mut acc = 0.0;
+    for i in 0..n {
+        let row = &jb[i * n..(i + 1) * n];
+        acc -= 0.5 * f64::from(s[i]) * dot_i8(row, s);
+    }
+    for (hi, si) in hb.iter().zip(s.iter()) {
+        acc -= *hi * f64::from(*si);
+    }
+    acc
+}
+
+/// Produto interno com 16 acumuladores (idêntico ao kernel auditado, para
+/// garantir bit-a-bit o mesmo resultado).
+#[inline]
+fn dot_f64(a: &[f64], b: &[f64]) -> f64 {
+    let n = a.len().min(b.len());
+    let mut acc = [0.0f64; 16];
+    let chunks = n / 16;
+    for c in 0..chunks {
+        let x = &a[c * 16..c * 16 + 16];
+        let y = &b[c * 16..c * 16 + 16];
+        for k in 0..16 {
+            acc[k] += x[k] * y[k];
+        }
+    }
+    let mut sum = 0.0;
+    for v in acc {
+        sum += v;
+    }
+    for i in chunks * 16..n {
+        sum += a[i] * b[i];
+    }
+    sum
+}
+
+#[inline]
+fn dot_i8(a: &[f64], s: &[i8]) -> f64 {
+    let n = a.len().min(s.len());
+    let mut acc = [0.0f64; 16];
+    let chunks = n / 16;
+    for c in 0..chunks {
+        let x = &a[c * 16..c * 16 + 16];
+        let y = &s[c * 16..c * 16 + 16];
+        for k in 0..16 {
+            acc[k] += x[k] * f64::from(y[k]);
+        }
+    }
+    let mut sum = 0.0;
+    for v in acc {
+        sum += v;
+    }
+    for i in chunks * 16..n {
+        sum += a[i] * f64::from(s[i]);
+    }
+    sum
+}
+
+#[inline]
+fn fill_g(jb: &[f64], n: usize, s: &[i8], g: &mut [f64]) {
+    for i in 0..n {
+        let row = &jb[i * n..(i + 1) * n];
+        g[i] = dot_i8(row, s);
+    }
+}
+
+fn descend(n: usize, jb: &[f64], hb: &[f64], s: &mut [i8], g: &mut [f64]) -> f64 {
+    fill_g(jb, n, s, g);
+    let max_flips = 8 * n;
+    for _ in 0..max_flips {
+        let mut pick = usize::MAX;
+        let mut pick_delta = -FLIP_EPS;
+        for i in 0..n {
+            let delta = 2.0 * f64::from(s[i]) * (g[i] + hb[i]);
+            if delta < pick_delta {
+                pick_delta = delta;
+                pick = i;
+            }
+        }
+        if pick == usize::MAX {
+            break;
+        }
+        let delta_s = -2.0 * f64::from(s[pick]);
+        s[pick] = -s[pick];
+        for k in 0..n {
+            g[k] += jb[k * n + pick] * delta_s;
+        }
+    }
+    row_energy(jb, n, hb, s)
+}
+
+// ---------------------------------------------------------------------------
+// PoB (pseudo-Boolean) em bits literais
+// ---------------------------------------------------------------------------
+
+/// Bit literal: `neg == false` ⇒ `x_var`; `neg == true` ⇒ `1 − x_var`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct BitRef {
+    var: u32,
+    neg: bool,
+}
+
+/// Termo de grau ≤ 2 em bits literais, escalado por `lambda[clause]`.
+#[derive(Clone, Copy, Debug)]
+struct PoBTerm {
+    coeff: f64,
+    clause: u32,
+    deg: u8,
+    a: BitRef,
+    b: BitRef,
+}
+
+impl PoBTerm {
+    fn linear(coeff: f64, clause: u32, a: BitRef) -> Self {
+        Self {
+            coeff,
+            clause,
+            deg: 1,
+            a,
+            b: BitRef::default(),
+        }
+    }
+    fn quad(coeff: f64, clause: u32, a: BitRef, b: BitRef) -> Self {
+        Self {
+            coeff,
+            clause,
+            deg: 2,
+            a,
+            b,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Presolve simbólico de 3-SAT (unidades + literais falhos)
+// ---------------------------------------------------------------------------
+
+/// Propaga unidades até o fixpoint. `true` = conflito.
+fn propagate3(n: usize, clauses: &[Clause3], fixed: &mut [Option<i8>]) -> bool {
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for c in clauses {
+            let mut n_free = 0usize;
+            let mut free_v = 0usize;
+            let mut free_s = 0i8;
+            let mut sat = false;
+            for idx in 0..c.len() {
+                let (v, s) = c.lit(idx);
+                debug_assert!(v < n);
+                match fixed[v] {
+                    Some(val) => {
+                        if val == s {
+                            sat = true;
+                            break;
+                        }
+                    }
+                    None => {
+                        n_free += 1;
+                        free_v = v;
+                        free_s = s;
+                    }
+                }
+            }
+            if sat {
+                continue;
+            }
+            if n_free == 0 {
+                return true;
+            }
+            if n_free == 1 {
+                match fixed[free_v] {
+                    Some(v) if v != free_s => return true,
+                    Some(_) => {}
+                    None => {
+                        fixed[free_v] = Some(free_s);
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Presolve de 3-SAT: unidades + **literais falhos** (`l ⇒ conflito` ⇒ `¬l`).
+///
+/// Toda fixação é consequência lógica, logo é *sound* por construção. Retorna
+/// `(conflito, rodadas)`.
+fn presolve3_into(
+    n: usize,
+    clauses: &[Clause3],
+    fixed: &mut [Option<i8>],
+    probe: &mut [Option<i8>],
+) -> (bool, usize) {
+    for f in fixed[..n].iter_mut() {
+        *f = None;
+    }
+    let mut rounds = 0usize;
+    loop {
+        rounds += 1;
+        if propagate3(n, clauses, fixed) {
+            return (true, rounds);
+        }
+        let mut changed = false;
+        for v in 0..n {
+            if fixed[v].is_some() {
+                continue;
+            }
+            for try_val in [1i8, -1i8] {
+                probe[..n].copy_from_slice(&fixed[..n]);
+                probe[v] = Some(try_val);
+                if propagate3(n, clauses, probe) {
+                    let forced = -try_val;
+                    if fixed[v] != Some(forced) {
+                        fixed[v] = Some(forced);
+                        changed = true;
+                    }
+                    break;
+                }
+            }
+        }
+        if !changed || rounds > 64 {
+            break;
+        }
+    }
+    (false, rounds)
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline
+// ---------------------------------------------------------------------------
+
+/// Pipeline lógico E2 — buffers fixos, resolução sem alocação.
+#[derive(Debug)]
+pub struct LogicPipeline {
+    n_max: usize,
+    m_max: usize,
+    n_exp_max: usize,
+    rounds: usize,
+    restarts: usize,
+    eta: f64,
+    lambda0: f64,
+
+    fixed3: Vec<Option<i8>>,
+    probe: Vec<Option<i8>>,
+    res_of: Vec<usize>,
+    res_var: Vec<usize>,
+    res_clauses: Vec<Clause3>,
+    terms: Vec<PoBTerm>,
+
+    n_exp: usize,
+    fixed_exp: Vec<Option<i8>>,
+    free: Vec<bool>,
+    jq: Vec<f64>,
+    hq: Vec<f64>,
+    lin: Vec<f64>,
+    qsum: Vec<f64>,
+    g: Vec<f64>,
+    residual: Vec<usize>,
+    exp_state: Vec<i8>,
+
+    parent: Vec<usize>,
+    counts: Vec<usize>,
+    offsets: Vec<usize>,
+    cursor: Vec<usize>,
+    comp_vars: Vec<usize>,
+
+    jc: Vec<f64>,
+    hc: Vec<f64>,
+    sub_state: Vec<i8>,
+    sub_best: Vec<i8>,
+
+    lambda: Vec<f64>,
+    bsb: BsbCore,
+
+    best_orig: Vec<i8>,
+    cur_orig: Vec<i8>,
+
+    /// Estatísticas do último `resolve_into`.
+    pub last: StageStats,
+}
+
+impl LogicPipeline {
+    /// Aloca tudo. `n_max` e `m_max` limitam as instâncias aceitas.
+    ///
+    /// `rounds` é o número de rodadas de Lagrange; `eta` o fator multiplicativo
+    /// aplicado ao peso de cada cláusula violada.
+    pub fn new(
+        n_max: usize,
+        m_max: usize,
+        steps: usize,
+        restarts: usize,
+        rounds: usize,
+        eta: f64,
+    ) -> Self {
+        let n_exp_max = n_max + 2 * m_max;
+        Self {
+            n_max,
+            m_max,
+            n_exp_max,
+            rounds: rounds.max(1),
+            restarts: restarts.max(1),
+            eta: if eta.is_finite() && eta > 0.0 { eta } else { 0.5 },
+            lambda0: 1.0,
+            fixed3: vec![None; n_max],
+            probe: vec![None; n_max],
+            res_of: vec![usize::MAX; n_max],
+            res_var: vec![0; n_max],
+            res_clauses: vec![Clause3::new3(0, 1, 0, 1, 0, 1); m_max],
+            terms: Vec::with_capacity(9 * m_max + 4),
+            n_exp: 0,
+            fixed_exp: vec![None; n_exp_max],
+            free: vec![false; n_exp_max],
+            jq: vec![0.0; n_exp_max * n_exp_max],
+            hq: vec![0.0; n_exp_max],
+            lin: vec![0.0; n_exp_max],
+            qsum: vec![0.0; n_exp_max],
+            g: vec![0.0; n_exp_max],
+            residual: Vec::with_capacity(n_exp_max),
+            exp_state: vec![1; n_exp_max],
+            parent: vec![0; n_exp_max],
+            counts: vec![0; n_exp_max],
+            offsets: vec![0; n_exp_max + 1],
+            cursor: vec![0; n_exp_max],
+            comp_vars: vec![0; n_exp_max],
+            jc: vec![0.0; n_exp_max * n_exp_max],
+            hc: vec![0.0; n_exp_max],
+            sub_state: vec![1; n_exp_max],
+            sub_best: vec![1; n_exp_max],
+            lambda: vec![1.0; m_max],
+            bsb: BsbCore::new(n_exp_max, steps, 0.05),
+            best_orig: vec![1; n_max],
+            cur_orig: vec![1; n_max],
+            last: StageStats::default(),
+        }
+    }
+
+    /// Limite de variáveis originais.
+    pub fn n_max(&self) -> usize {
+        self.n_max
+    }
+    /// Limite de cláusulas.
+    pub fn m_max(&self) -> usize {
+        self.m_max
+    }
+    /// Maior número de spins do QUBO expandido (`n_max + 2·m_max`).
+    pub fn n_exp_max(&self) -> usize {
+        self.n_exp_max
+    }
+    /// Bytes dos buffers grandes (diagnóstico de pegada).
+    pub fn memory_bytes(&self) -> usize {
+        (self.jq.len() + self.jc.len() + self.hq.len() + self.hc.len()) * 8
+            + self.terms.capacity() * std::mem::size_of::<PoBTerm>()
+            + (self.fixed3.len() + self.probe.len()) * std::mem::size_of::<Option<i8>>()
+    }
+
+    /// Resolve `clauses` (sobre `n` variáveis) e emite `(resposta, certificado)`.
+    ///
+    /// `out` recebe a atribuição em `{-1,+1}` (`out[..n]`); `cert` recebe o
+    /// atestado. Zero alocação de heap.
+    pub fn resolve_into(
+        &mut self,
+        n: usize,
+        clauses: &[Clause3],
+        seed: u64,
+        out: &mut [i8],
+        cert: &mut Certificate,
+    ) -> Result<()> {
+        if n > self.n_max {
+            return Err(AetherError::Config("logic: n > n_max".into()));
+        }
+        if clauses.len() > self.m_max {
+            return Err(AetherError::Config("logic: clausulas > m_max".into()));
+        }
+        if out.len() < n {
+            return Err(AetherError::shape([n], [out.len()]));
+        }
+        let m = clauses.len();
+        self.last = StageStats::default();
+        let t_symbolic = Instant::now();
+
+        // ---------- (1) presolve simbólico ----------
+        let (conflict, _) = presolve3_into(n, clauses, &mut self.fixed3, &mut self.probe);
+        if conflict {
+            for (i, o) in out[..n].iter_mut().enumerate() {
+                *o = self.fixed3[i].unwrap_or(1);
+            }
+            *cert = Certificate::new(
+                f64::NAN,
+                0.0,
+                u32::try_from(m.max(1)).unwrap_or(u32::MAX),
+                0.0,
+                Provenance::Inferred,
+            );
+            self.last.violations = cert.violations;
+            self.last.decisive = false;
+            self.last.symbolic_us = t_symbolic.elapsed().as_secs_f64() * 1e6;
+            return Ok(());
+        }
+
+        // remapeia variáveis livres para ids residuais
+        for r in self.res_of[..n].iter_mut() {
+            *r = usize::MAX;
+        }
+        let mut n_res = 0usize;
+        for v in 0..n {
+            if self.fixed3[v].is_none() {
+                self.res_of[v] = n_res;
+                self.res_var[n_res] = v;
+                n_res += 1;
+            }
+        }
+        self.last.fixed_symbolic = n - n_res;
+
+        // cláusulas residuais (satisfeitas saem; literais fixos-falsos saem)
+        let mut n_res_clauses = 0usize;
+        for c in clauses.iter() {
+            if c.satisfied_by_fixed(&self.fixed3[..n]) {
+                continue;
+            }
+            let mut kept = [0usize; 3];
+            let mut signs = [0i8; 3];
+            let mut nk = 0usize;
+            for idx in 0..c.len() {
+                let (v, s) = c.lit(idx);
+                if self.fixed3[v].is_none() {
+                    kept[nk] = self.res_of[v];
+                    signs[nk] = s;
+                    nk += 1;
+                }
+            }
+            if nk == 0 {
+                // contradição que o presolve deveria ter visto
+                for (i, o) in out[..n].iter_mut().enumerate() {
+                    *o = self.fixed3[i].unwrap_or(1);
+                }
+                *cert = Certificate::new(
+                    f64::NAN,
+                    0.0,
+                    u32::try_from(m.max(1)).unwrap_or(u32::MAX),
+                    0.0,
+                    Provenance::Inferred,
+                );
+                self.last.violations = cert.violations;
+                self.last.decisive = false;
+                self.last.symbolic_us = t_symbolic.elapsed().as_secs_f64() * 1e6;
+                return Ok(());
+            }
+            self.res_clauses[n_res_clauses] = match nk {
+                1 => Clause3::new2(kept[0], signs[0], kept[0], signs[0]),
+                2 => Clause3::new2(kept[0], signs[0], kept[1], signs[1]),
+                _ => Clause3::new3(kept[0], signs[0], kept[1], signs[1], kept[2], signs[2]),
+            };
+            n_res_clauses += 1;
+        }
+
+        // ---------- constrói termos PoB (gadgets exatos) ----------
+        self.terms.clear();
+        let mut aux_next = n_res;
+        for r in 0..n_res_clauses {
+            let c = self.res_clauses[r];
+            let ci = u32::try_from(r).unwrap_or(u32::MAX);
+            let a = BitRef {
+                var: u32::try_from(c.i).unwrap_or(u32::MAX),
+                neg: c.si < 0,
+            };
+            let b = BitRef {
+                var: u32::try_from(c.j).unwrap_or(u32::MAX),
+                neg: c.sj < 0,
+            };
+            if c.len() == 1 {
+                // (1 − a)
+                self.terms.push(PoBTerm::linear(-1.0, ci, a));
+                continue;
+            }
+            if c.len() == 2 {
+                // (1 − a)(1 − b) = 1 − a − b + ab
+                self.terms.push(PoBTerm::linear(-1.0, ci, a));
+                self.terms.push(PoBTerm::linear(-1.0, ci, b));
+                self.terms.push(PoBTerm::quad(1.0, ci, a, b));
+                continue;
+            }
+            // Gadget exato de 3 literais.
+            let d = BitRef {
+                var: u32::try_from(c.k).unwrap_or(u32::MAX),
+                neg: c.sk < 0,
+            };
+            let u = BitRef {
+                var: u32::try_from(aux_next).unwrap_or(u32::MAX),
+                neg: false,
+            };
+            let w = BitRef {
+                var: u32::try_from(aux_next + 1).unwrap_or(u32::MAX),
+                neg: false,
+            };
+            aux_next += 2;
+            // P = 1 − a − b + ab + 2au + 2bu − ud + 2w − 2uw + 2dw
+            self.terms.push(PoBTerm::linear(-1.0, ci, a));
+            self.terms.push(PoBTerm::linear(-1.0, ci, b));
+            self.terms.push(PoBTerm::linear(2.0, ci, w));
+            self.terms.push(PoBTerm::quad(1.0, ci, a, b));
+            self.terms.push(PoBTerm::quad(2.0, ci, a, u));
+            self.terms.push(PoBTerm::quad(2.0, ci, b, u));
+            self.terms.push(PoBTerm::quad(-1.0, ci, u, d));
+            self.terms.push(PoBTerm::quad(-2.0, ci, u, w));
+            self.terms.push(PoBTerm::quad(2.0, ci, d, w));
+        }
+        let n_exp = aux_next;
+        self.n_exp = n_exp;
+
+        // ---------- (2) persistência de 1ª ordem (λ = 1) ----------
+        self.lambda[..m].fill(self.lambda0);
+        self.emit_qubo(n_exp);
+        let _ = persistency_qumo_into(
+            n_exp,
+            &self.jq[..n_exp * n_exp],
+            &self.hq[..n_exp],
+            &mut self.fixed_exp,
+            &mut self.lin,
+            &mut self.residual,
+        );
+        for v in 0..n_exp {
+            self.free[v] = self.fixed_exp[v].is_none();
+            self.exp_state[v] = self.fixed_exp[v].unwrap_or(1);
+        }
+        let n_free = self.free[..n_exp].iter().filter(|f| **f).count();
+        self.last.fixed_persistency = n_exp - n_free;
+        self.last.n_free = n_free;
+
+        // ---------- (3) decomposição em componentes conexos ----------
+        for (i, p) in self.parent[..n_exp].iter_mut().enumerate() {
+            *p = i;
+        }
+        let mut aux = n_res;
+        for r in 0..n_res_clauses {
+            let c = self.res_clauses[r];
+            let mut ids = [c.i, c.j, c.i, c.i, c.i];
+            let mut cnt = 2usize;
+            if c.len() >= 3 && c.k != usize::MAX {
+                ids[2] = c.k;
+                ids[3] = aux;
+                ids[4] = aux + 1;
+                aux += 2;
+                cnt = 5;
+            }
+            for a in 0..cnt {
+                for b in (a + 1)..cnt {
+                    union(&mut self.parent, ids[a], ids[b]);
+                }
+            }
+        }
+
+        // agrupa variáveis livres por raiz (counting sort, sem alocar)
+        self.counts[..n_exp].fill(0);
+        for v in 0..n_exp {
+            if self.free[v] {
+                let r = find(&mut self.parent, v);
+                self.counts[r] += 1;
+            }
+        }
+        let mut acc = 0usize;
+        for v in 0..n_exp {
+            self.offsets[v] = acc;
+            acc += self.counts[v];
+        }
+        self.offsets[n_exp] = acc;
+        self.cursor[..n_exp].copy_from_slice(&self.offsets[..n_exp]);
+        for v in 0..n_exp {
+            if self.free[v] {
+                let r = find(&mut self.parent, v);
+                let at = self.cursor[r];
+                self.comp_vars[at] = v;
+                self.cursor[r] = at + 1;
+            }
+        }
+
+        // ---------- (4)+(5) BSB + Lagrange + certificado ----------
+        let t_solve = Instant::now();
+        self.last.symbolic_us = t_symbolic.elapsed().as_secs_f64() * 1e6;
+
+        let mut best_viol = u32::MAX;
+        let mut best_energy = f64::INFINITY;
+        let mut rounds_run = 0usize;
+        let mut decisive_rounds = 0usize;
+        let mut comps_last = 0usize;
+        let mut largest_last = 0usize;
+        let mut bsb_runs = 0usize;
+
+        for round in 0..self.rounds {
+            rounds_run += 1;
+            self.emit_qubo(n_exp);
+
+            // --- resolve cada componente ---
+            let mut comps = 0usize;
+            let mut largest = 0usize;
+            for r in 0..n_exp {
+                let s = self.counts[r];
+                if s == 0 {
+                    continue;
+                }
+                comps += 1;
+                largest = largest.max(s);
+                let start = self.offsets[r];
+                if s == 1 {
+                    let v = self.comp_vars[start];
+                    // mínimo exato de −h·s com um spin
+                    self.exp_state[v] = if self.hq[v] > 0.0 { 1 } else { -1 };
+                    continue;
+                }
+                for a in 0..s {
+                    let va = self.comp_vars[start + a];
+                    self.hc[a] = self.hq[va];
+                    for b in 0..s {
+                        let vb = self.comp_vars[start + b];
+                        self.jc[a * s + b] = self.jq[va * n_exp + vb];
+                    }
+                }
+                let mut local_best = f64::INFINITY;
+                for restart in 0..self.restarts {
+                    let sd = seed
+                        ^ (round as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                        ^ (restart as u64).wrapping_mul(0x85EB_CA77_C2B2_AE63)
+                        ^ (start as u64).wrapping_mul(0xC2B2_AE3D_27D4_EB4F);
+                    let e = self.bsb.relax_into(
+                        &self.jc[..s * s],
+                        &self.hc[..s],
+                        s,
+                        sd,
+                        &mut self.sub_state[..s],
+                    );
+                    bsb_runs += 1;
+                    if e < local_best {
+                        local_best = e;
+                        self.sub_best[..s].copy_from_slice(&self.sub_state[..s]);
+                    }
+                }
+                for a in 0..s {
+                    let v = self.comp_vars[start + a];
+                    self.exp_state[v] = self.sub_best[a];
+                }
+            }
+            comps_last = comps;
+            largest_last = largest;
+
+            // --- monta a atribuição original ---
+            for v in 0..n {
+                self.cur_orig[v] = match self.fixed3[v] {
+                    Some(s) => s,
+                    None => self.exp_state[self.res_of[v]],
+                };
+            }
+            let viol = violations_3(clauses, &self.cur_orig[..n]);
+            let e = qubo_energy(
+                &self.jq[..n_exp * n_exp],
+                &self.hq[..n_exp],
+                n_exp,
+                &self.exp_state[..n_exp],
+            );
+            if viol < best_viol || (viol == best_viol && e < best_energy) {
+                best_viol = viol;
+                best_energy = e;
+                self.best_orig[..n].copy_from_slice(&self.cur_orig[..n]);
+            }
+            if viol == 0 {
+                decisive_rounds += 1;
+                // já decidido: mais rodadas só gastariam tempo
+                break;
+            }
+            // --- osciladores de Lagrange: sobe o peso das cláusulas violadas ---
+            for (ci, c) in clauses.iter().enumerate() {
+                if !c.satisfied(&self.cur_orig[..n]) {
+                    let l = &mut self.lambda[ci];
+                    *l = (*l * (1.0 + self.eta)).min(1e9);
+                }
+            }
+        }
+
+        // ---------- (5) certificado ----------
+        let free_gap = gap_free(
+            &self.jq[..n_exp * n_exp],
+            &self.hq[..n_exp],
+            n_exp,
+            &self.exp_state[..n_exp],
+            &self.free[..n_exp],
+            &mut self.g[..n_exp],
+        );
+        // sem variáveis livres não há flip possível: o gap é vacuamente positivo.
+        let gap = if free_gap.is_finite() { free_gap } else { 1.0 };
+        let consensus = if rounds_run > 0 {
+            decisive_rounds as f64 / rounds_run as f64
+        } else {
+            0.0
+        };
+
+        out[..n].copy_from_slice(&self.best_orig[..n]);
+        *cert = Certificate::new(
+            best_energy,
+            gap,
+            best_viol,
+            consensus,
+            Provenance::Inferred,
+        );
+        self.last.components = comps_last;
+        self.last.largest_component = largest_last;
+        self.last.lagrange_rounds = rounds_run;
+        self.last.bsb_runs = bsb_runs;
+        self.last.solve_us = t_solve.elapsed().as_secs_f64() * 1e6;
+        self.last.energy = best_energy;
+        self.last.gap = gap;
+        self.last.violations = best_viol;
+        self.last.decisive = best_viol == 0;
+        Ok(())
+    }
+
+    /// Emite o QUBO expandido (spin) com os pesos correntes de `lambda`.
+    fn emit_qubo(&mut self, n_exp: usize) {
+        let nn = n_exp * n_exp;
+        self.jq[..nn].fill(0.0);
+        self.hq[..n_exp].fill(0.0);
+        self.lin[..n_exp].fill(0.0);
+        self.qsum[..n_exp].fill(0.0);
+
+        for t in &self.terms {
+            let w = self.lambda[t.clause as usize];
+            let c = t.coeff * w;
+            if t.deg == 1 {
+                emit_bit1(&mut self.lin[..n_exp], &self.fixed_exp[..n_exp], t.a, c);
+            } else {
+                emit_bit2(
+                    &mut self.jq[..nn],
+                    &mut self.lin[..n_exp],
+                    &mut self.qsum[..n_exp],
+                    &self.fixed_exp[..n_exp],
+                    n_exp,
+                    t.a,
+                    t.b,
+                    c,
+                );
+            }
+        }
+        for v in 0..n_exp {
+            self.hq[v] = -(self.lin[v] * 0.5 + self.qsum[v] * 0.25);
+        }
+    }
+}
+
+/// Soma um termo linear em bit literal, expandindo a negação.
+fn emit_bit1(lin: &mut [f64], fixed: &[Option<i8>], a: BitRef, c: f64) {
+    let idx = a.var as usize;
+    if fixed[idx].is_none() {
+        if a.neg {
+            lin[idx] -= c;
+        } else {
+            lin[idx] += c;
+        }
+    }
+}
+
+/// Soma um termo quadrático em bits literais, expandindo negações.
+///
+/// `(1−b_i)·b_j` etc. são distribuídos; o resultado são monômios de grau ≤ 2
+/// em bits **positivos**, convertidos para spin em [`LogicPipeline::emit_qubo`].
+#[allow(clippy::too_many_arguments)]
+fn emit_bit2(
+    jq: &mut [f64],
+    lin: &mut [f64],
+    qsum: &mut [f64],
+    fixed: &[Option<i8>],
+    n: usize,
+    a: BitRef,
+    b: BitRef,
+    c: f64,
+) {
+    match (a.neg, b.neg) {
+        (false, false) => add_b_monomial(
+            jq,
+            lin,
+            qsum,
+            fixed,
+            n,
+            a.var as usize,
+            Some(b.var as usize),
+            c,
+        ),
+        (true, false) | (false, true) => {
+            // c·(1−x)·y = c·y − c·x·y
+            let (neg_var, pos_var) = if a.neg {
+                (a.var as usize, b.var as usize)
+            } else {
+                (b.var as usize, a.var as usize)
+            };
+            add_b_monomial(jq, lin, qsum, fixed, n, pos_var, None, c);
+            add_b_monomial(jq, lin, qsum, fixed, n, neg_var, Some(pos_var), -c);
+        }
+        (true, true) => {
+            // c·(1−x)(1−y) = c − c·x − c·y + c·x·y  (constante descartada)
+            let x = a.var as usize;
+            let y = b.var as usize;
+            add_b_monomial(jq, lin, qsum, fixed, n, x, None, -c);
+            add_b_monomial(jq, lin, qsum, fixed, n, y, None, -c);
+            add_b_monomial(jq, lin, qsum, fixed, n, x, Some(y), c);
+        }
+    }
+}
+
+/// Acrescenta `c · b_x` (se `y == None`) ou `c · b_x b_y` já em spins.
+#[allow(clippy::too_many_arguments)]
+fn add_b_monomial(
+    jq: &mut [f64],
+    lin: &mut [f64],
+    qsum: &mut [f64],
+    fixed: &[Option<i8>],
+    n: usize,
+    x: usize,
+    y: Option<usize>,
+    c: f64,
+) {
+    let bx = fixed[x].map(|s| if s == 1 { 1.0 } else { 0.0 });
+    match y {
+        None => {
+            if bx.is_none() {
+                lin[x] += c;
+            }
+        }
+        Some(y) => {
+            if x == y {
+                // b² = b
+                if bx.is_none() {
+                    lin[x] += c;
+                }
+                return;
+            }
+            let by = fixed[y].map(|s| if s == 1 { 1.0 } else { 0.0 });
+            match (bx, by) {
+                (Some(_), Some(_)) => {}
+                (Some(vx), None) => lin[y] += c * vx,
+                (None, Some(vy)) => lin[x] += c * vy,
+                (None, None) => {
+                    jq[x * n + y] -= c * 0.25;
+                    jq[y * n + x] -= c * 0.25;
+                    qsum[x] += c;
+                    qsum[y] += c;
+                }
+            }
+        }
+    }
+}
+
+#[inline]
+fn find(parent: &mut [usize], mut v: usize) -> usize {
+    while parent[v] != v {
+        let g = parent[parent[v]];
+        parent[v] = g;
+        v = g;
+    }
+    v
+}
+
+#[inline]
+fn union(parent: &mut [usize], a: usize, b: usize) {
+    let ra = find(parent, a);
+    let rb = find(parent, b);
+    if ra != rb {
+        parent[rb] = ra;
+    }
+}
+
+/// Gap local sobre um subconjunto de variáveis (`∞` se não houver nenhuma).
+fn gap_free(j: &[f64], h: &[f64], n: usize, s: &[i8], free: &[bool], g: &mut [f64]) -> f64 {
+    fill_g(j, n, s, g);
+    let mut best = f64::INFINITY;
+    for i in 0..n {
+        if free[i] {
+            let d = 2.0 * f64::from(s[i]) * (g[i] + h[i]);
+            if d < best {
+                best = d;
+            }
+        }
+    }
+    best
+}
+
+/// Energia `H = −½ sᵀJs − hᵀs` usada pelo certificado.
+pub fn qubo_energy(j: &[f64], h: &[f64], n: usize, s: &[i8]) -> f64 {
+    energy(j, h, n, s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Enumera todas as atribuições de (a,b,c,u,w) e confirma que o gadget é
+    /// exato: penalidade 0 sse a cláusula é satisfeita, 1 sse violada.
+    #[test]
+    fn gadget_de_tres_literais_e_exato() {
+        // P em bits, avaliado diretamente pela fórmula do módulo.
+        fn p(a: i32, b: i32, c: i32, u: i32, w: i32) -> i32 {
+            1 - a - b + a * b + 2 * a * u + 2 * b * u - u * c - 2 * u * w + 2 * w + 2 * c * w
+        }
+        let mut worst_sat = 0;
+        let mut worst_viol = 0;
+        for a in 0..=1 {
+            for b in 0..=1 {
+                for c in 0..=1 {
+                    let sat = a + b + c > 0;
+                    let best = (0..=1)
+                        .flat_map(|u| (0..=1).map(move |w| (u, w)))
+                        .map(|(u, w)| p(a, b, c, u, w))
+                        .min()
+                        .expect("min");
+                    if sat {
+                        worst_sat = worst_sat.max(best);
+                    } else {
+                        worst_viol = worst_viol.max(best.min(1));
+                    }
+                    assert_eq!(best, i32::from(!sat), "a={a} b={b} c={c}");
+                }
+            }
+        }
+        assert_eq!(worst_sat, 0);
+        assert_eq!(worst_viol, 1);
+    }
+
+    /// A conversão bit→spin + a emissão de termos preserva a penalidade.
+    #[test]
+    fn emissao_de_termos_preserva_penalidade() {
+        let n_exp = 5usize; // a,b,c,u,w
+        let mut p = LogicPipeline::new(3, 1, 4, 1, 1, 0.5);
+        p.terms.clear();
+        // uma cláusula (a ∨ b ∨ c) com literais positivos, clause 0
+        let a = BitRef { var: 0, neg: false };
+        let b = BitRef { var: 1, neg: false };
+        let c = BitRef { var: 2, neg: false };
+        let u = BitRef { var: 3, neg: false };
+        let w = BitRef { var: 4, neg: false };
+        p.terms.push(PoBTerm::linear(-1.0, 0, a));
+        p.terms.push(PoBTerm::linear(-1.0, 0, b));
+        p.terms.push(PoBTerm::linear(2.0, 0, w));
+        p.terms.push(PoBTerm::quad(1.0, 0, a, b));
+        p.terms.push(PoBTerm::quad(2.0, 0, a, u));
+        p.terms.push(PoBTerm::quad(2.0, 0, b, u));
+        p.terms.push(PoBTerm::quad(-1.0, 0, u, c));
+        p.terms.push(PoBTerm::quad(-2.0, 0, u, w));
+        p.terms.push(PoBTerm::quad(2.0, 0, c, w));
+        for v in 0..n_exp {
+            p.fixed_exp[v] = None;
+        }
+        p.emit_qubo(n_exp);
+        // energia do QUBO == penalidade − 1 (offset do termo constante)
+        for mask in 0..(1u32 << n_exp) {
+            let mut s = [0i8; 5];
+            let mut bits = [0i32; 5];
+            for v in 0..n_exp {
+                let bit = ((mask >> v) & 1) as i32;
+                bits[v] = bit;
+                s[v] = if bit == 1 { 1 } else { -1 };
+            }
+            let e = qubo_energy(&p.jq[..n_exp * n_exp], &p.hq[..n_exp], n_exp, &s);
+            let want = f64::from(
+                1 - bits[0] - bits[1] + bits[0] * bits[1] + 2 * bits[0] * bits[3]
+                    + 2 * bits[1] * bits[3]
+                    - bits[3] * bits[2]
+                    - 2 * bits[3] * bits[4]
+                    + 2 * bits[4]
+                    + 2 * bits[2] * bits[4],
+            );
+            assert!((e - want).abs() < 1e-9, "mask={mask} e={e} want={want}");
+        }
+    }
+
+    /// O kernel compacto reproduz o solver auditado bit-a-bit.
+    #[test]
+    fn bsb_compacto_igual_ao_solver_auditado() {
+        use crate::core::thermodynamic_solver::{
+            IsingLandscape, RelaxOutcome, ThermodynamicIsingSolver,
+        };
+        use ndarray::{Array2, Array3};
+
+        let n = 24usize;
+        let steps = 20usize;
+        let mut j = vec![0.0f64; n * n];
+        let mut h = vec![0.0f64; n];
+        let mut s = 0xA37Eu64;
+        for i in 0..n {
+            for k in (i + 1)..n {
+                s ^= s << 13;
+                s ^= s >> 7;
+                s ^= s << 17;
+                let v = ((s >> 40) as f64 / (1u64 << 24) as f64) * 2.0 - 1.0;
+                j[i * n + k] = v;
+                j[k * n + i] = v;
+            }
+            h[i] = ((s & 0xFF) as f64 / 255.0) - 0.5;
+        }
+
+        let mut core = BsbCore::new(n, steps, 0.05);
+        let mut mine = vec![0i8; n];
+        let e_mine = core.relax_into(&j, &h, n, 42, &mut mine);
+
+        let j3 = Array3::from_shape_vec((1, n, n), j).expect("j");
+        let h2 = Array2::from_shape_vec((1, n), h).expect("h");
+        let mut solver = ThermodynamicIsingSolver::new(1, n, steps, 0.05);
+        let mut out = RelaxOutcome::with_capacity(1, n, steps);
+        solver.reset(42);
+        solver
+            .relax_into(IsingLandscape::new(j3.view(), h2.view()), &mut out)
+            .expect("relax");
+        let theirs: Vec<i8> = (0..n).map(|i| out.states[[0, i]]).collect();
+        assert_eq!(mine, theirs, "estados divergiram");
+        assert!((e_mine - out.best_energy[0]).abs() < 1e-9);
+    }
+
+    #[test]
+    fn presolve_nao_e_insound() {
+        // (x) ∧ (¬x ∨ y) ∧ (¬y) é insatisfatível e o presolve tem de ver isso.
+        let clauses = [
+            Clause3::new3(0, 1, 0, 1, 0, 1),
+            Clause3::new3(0, -1, 1, 1, 1, 1),
+            Clause3::new3(1, -1, 1, -1, 1, -1),
+        ];
+        let mut fixed = vec![None; 2];
+        let mut probe = vec![None; 2];
+        let (conflict, _) = presolve3_into(2, &clauses, &mut fixed, &mut probe);
+        assert!(conflict);
+    }
+
+    #[test]
+    fn resolve_acha_solucao_de_tres_sat() {
+        // (x0 ∨ x1 ∨ x2) ∧ (¬x0 ∨ ¬x1) ∧ (¬x2)
+        let clauses = [
+            Clause3::new3(0, 1, 1, 1, 2, 1),
+            Clause3::new3(0, -1, 1, -1, 1, -1),
+            Clause3::new3(2, -1, 2, -1, 2, -1),
+        ];
+        let mut p = LogicPipeline::new(3, 3, 40, 4, 4, 0.5);
+        let mut out = vec![0i8; 3];
+        let mut cert = Certificate::new(0.0, 0.0, 0, 0.0, Provenance::Inferred);
+        p.resolve_into(3, &clauses, 7, &mut out, &mut cert)
+            .expect("resolve");
+        assert_eq!(violations_3(&clauses, &out), 0, "out={out:?}");
+        assert!(cert.is_coherent(), "cert={cert:?}");
+        assert!(p.last.decisive);
+    }
+}

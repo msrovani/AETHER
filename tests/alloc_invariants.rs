@@ -143,6 +143,52 @@ fn invariante_codec_pacote_40_bytes() {
     assert!(PhasePacket::decode(&[]).is_err());
 }
 
+/// F1 (Vol. III §7): a ponte de conhecimento não aloca no `T0`.
+///
+/// 10.000 `record()` com o anel saturado: nenhuma alocação e **zero** chamadas
+/// ao ledger a partir do caminho quente (R7).
+#[cfg(feature = "m1")]
+#[test]
+fn invariante_alocacao_zero_na_ponte_de_conhecimento() {
+    use aether_engine::core::knowledge_bridge_f1::{
+        Certificate, KnowledgeEvent, KnowledgeSink, Layer, ScopeId, SpscKnowledgePhaseBridge,
+    };
+
+    let (mut tx, _rx) = SpscKnowledgePhaseBridge::<64>::new();
+    let payload = vec![0u8; 1280]; // D=160 complexo f32
+    let scope = ScopeId::new(1, 1, 1);
+    let cert = Certificate {
+        energy: -1.0,
+        gap: 0.5,
+        violations: 0,
+    };
+
+    // warmup (o anel já está alocado em `new`; aqui garantimos que nada lazy
+    // do runtime entra na contagem).
+    let _ = tx.record(
+        &KnowledgeEvent::new(0, Layer::L2Episodic, scope, 0, 0)
+            .with_certificate(cert)
+            .with_payload(&payload),
+    );
+
+    let (_, allocs) = count_allocs(|| {
+        for cycle in 0..10_000u64 {
+            let _ = tx.record(
+                &KnowledgeEvent::new(u128::from(cycle), Layer::L2Episodic, scope, cycle, cycle * 16)
+                    .with_certificate(cert)
+                    .with_payload(&payload),
+            );
+        }
+    });
+
+    assert_eq!(allocs, 0, "record() alocou {allocs} vezes no T0 (deve ser 0)");
+    assert_eq!(
+        tx.metrics().t0_ledger_calls(),
+        0,
+        "R7: o T0 nunca pode falar com o ledger"
+    );
+}
+
 #[test]
 fn invariante_determinismo_do_solver() {
     const N: usize = 32;

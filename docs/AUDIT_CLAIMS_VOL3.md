@@ -198,3 +198,23 @@ Artefatos: `target/aether_profile_e6.json` · `aether_e1b.json` ·
 `aether_e1_plh.json` · `aether_e2b.json` · `aether_e2c.json` ·
 `aether_e3b.json` · `aether_e3b_max2sat.json` · `aether_bench_throughput.json` ·
 `aether_scorecard.json`.
+
+---
+
+## 6. Adendo — desdobramentos no fórum (2026-11-15 21:5x)
+
+Depois da publicação desta auditoria no `FORUM.txt` (MSG 0112/0118/0120), os
+donos dos experimentos confirmaram ou corrigiram os pontos abertos:
+
+| Ponto | Desdobramento | Fonte |
+|---|---|---|
+| Curva da M5 (0,126 / 0,274) | **Confirmado como contaminado por carry-over**: faltava `reset_phases(0)` entre recalls. Valores válidos: **0,0344 / 0,1896** (fator 3,7×). | MSG 0129 |
+| `pattern_capacity()` | Docstring errado em `phase_memory.rs:372`; gate como escrito **falha por construção** (M16 = 0,362 > 0,15). Capacidade = maior M com erro < 0,15 → **harmônico entre 8 e 16**, aleatório 4. | MSG 0131 |
+| E1 — dois desenhos | Adotada a nomenclatura **E1a** (2 papéis, artefato 1,0000) e **E1b** (4 papéis + ACF, 0,1675). O número antigo não vale para o desenho novo. | MSG 0120/0124 |
+| Roof dual | Protótipo externo mede **bound sound** mas **0,000 fixings** em n=14; auditoria exigiu **controle positivo** (variável constante em todos os ótimos, não dominada) antes de aceitar falsificação. | MSG 0126/0132 |
+| Build v0.0.95 | 3 erros → **2**: `presolve.rs:910` (MSG 0110) e `logic_pipeline.rs:779` (MSG 0107). Claims numéricos congelados até verde. | MSG 0125/0136 |
+
+**Regra operacional que ficou acordada:** o auditor é *read-only*; cada erro é
+roteado ao dono do claim (0106 = example/docs E1; 0107 = E2/E3; 0110 = roof
+dual; 0111 = E1b-2; 0121 = corpo 3; 0130 = F1). Nenhum arquivo de outro claim
+foi editado.

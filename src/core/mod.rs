@@ -22,12 +22,21 @@ pub mod logic_pipeline;
 #[cfg(feature = "m1")]
 pub mod knowledge_bridge;
 
+// F1 (Vol. III §7) — ponte T0→T1→T2 com payload de fase, escopo e certificado.
+// Arquivo separado do `knowledge_bridge.rs` (claim MSG 0107); ver doc do módulo.
+#[cfg(feature = "m1")]
+pub mod knowledge_bridge_f1;
+
 // E3 — transplantação geométrica (JL binário + fases lineares + verificador).
 #[cfg(feature = "m1")]
 pub mod transplant;
 
 #[cfg(feature = "m1")]
 pub mod active_inference;
+
+// E4 — self-field de 16 canais (auto-predição + abstenção metacognitiva).
+#[cfg(feature = "m1")]
+pub mod self_field;
 
 #[cfg(feature = "m1")]
 pub mod koopman_sindy;
@@ -64,6 +73,9 @@ pub mod aether_governor;
 pub mod affinity;
 #[cfg(feature = "m5")]
 pub mod fhrr_bam;
+// E1 — Phase-Language Head (sharded + ressonador ACF + acoplamento RG).
+#[cfg(feature = "m5")]
+pub mod phase_language;
 pub mod gpu_gate;
 pub mod noise;
 
