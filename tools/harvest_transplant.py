@@ -125,16 +125,23 @@ def unique_labels(facts: list[dict]) -> list[str]:
 
 
 def embed_synthetic(labels: list[str], dim: int, seed: int) -> list[list[float]]:
-    """Embeddings com eixos de cluster ortogonais + ruído fraco (Spearman JL)."""
-    n_clusters = max(8, min(64, dim // 4, len(labels) // 3 or 1))
+    """Embeddings estilo E3: combinação linear de átomos + ruído (Spearman JL)."""
+    n_base = min(64, max(16, len(labels) // 5 or 16))
+    _, g0 = make_prng(seed ^ 0xC1A55E)
+    bases = []
+    for _ in range(n_base):
+        c = [g0() for _ in range(dim)]
+        nrm = math.sqrt(sum(x * x for x in c)) or 1.0
+        bases.append([x / nrm for x in c])
     mats: list[list[float]] = []
     for lab in labels:
         h = int.from_bytes(hashlib.sha256(lab.encode("utf-8")).digest()[:8], "little")
-        cid = h % n_clusters
         _, g = make_prng(seed ^ h ^ 0xE11B)
-        noise_scale = 0.05 / math.sqrt(dim)
-        v = [g() * noise_scale for _ in range(dim)]
-        v[cid] += 1.0  # eixo do cluster
+        i0, i1, i2 = h % n_base, (h >> 8) % n_base, (h >> 16) % n_base
+        v = [
+            0.55 * bases[i0][j] + 0.35 * bases[i1][j] + 0.25 * bases[i2][j] + g() * 0.2
+            for j in range(dim)
+        ]
         nrm = math.sqrt(sum(x * x for x in v)) or 1.0
         mats.append([x / nrm for x in v])
     return mats

@@ -349,11 +349,11 @@ fn main() {
             }
             let ei = &embeds[i * d_emb..(i + 1) * d_emb];
             let ej = &embeds[j * d_emb..(j + 1) * d_emb];
+            // Mesma convenção do E3: distância angular (1−cos) ↔ Hamming bruto
             let c = cosine(ei, ej);
             let h = bank.hamming(bank.atom_words(i), bank.atom_words(j));
-            let sim = 1.0 - 2.0 * (h as f64) / (bank.dim as f64);
-            cos_v.push(c);
-            ham_sim.push(sim);
+            cos_v.push(1.0 - c);
+            ham_sim.push(f64::from(h));
             pairs += 1;
         }
     }

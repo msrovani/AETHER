@@ -74,6 +74,9 @@ fn main() -> std::io::Result<()> {
             }
             "--addr" => cfg.addr = parse_addr(&value(&mut i)?)?,
             "--ledger" => cfg.ledger_path = Some(PathBuf::from(value(&mut i)?)),
+            "--ledger-max-bytes" => {
+                cfg.max_ledger_bytes = parse_u64(&value(&mut i)?, "--ledger-max-bytes")?;
+            }
             "--token" => cfg.token = Some(value(&mut i)?),
             "--organism" => cfg.organism = Some(parse_u64(&value(&mut i)?, "--organism")?),
             "--threads" => {
@@ -95,6 +98,13 @@ fn main() -> std::io::Result<()> {
     println!("aether-api {} em http://{local}", api::VERSION);
     if let Some(p) = &cfg.ledger_path {
         println!("  ledger: {}", p.display());
+        if cfg.max_ledger_bytes > 0 && cfg.max_ledger_bytes < 16_384 {
+            println!(
+                "  aviso: --ledger-max-bytes={} é menor que ~3 registros (~6 KB cada); \
+                 a compactação vai rodar a cada escrita",
+                cfg.max_ledger_bytes
+            );
+        }
     }
     if cfg.token.is_some() {
         println!(

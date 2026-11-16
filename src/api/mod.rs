@@ -517,7 +517,11 @@ fn route(state: &mut ApiState, req: &Request) -> Reply {
         (req.method.as_str(), req.path.as_str()),
         (
             "POST",
-            "/v1/aether/remember" | "/v1/aether/cue" | "/v1/aether/solve" | "/v1/chat/completions"
+            "/v1/aether/remember"
+                | "/v1/aether/cue"
+                | "/v1/aether/solve"
+                | "/v1/aether/forget"
+                | "/v1/chat/completions"
                 | "/completion"
         )
     );
@@ -537,6 +541,7 @@ fn route(state: &mut ApiState, req: &Request) -> Reply {
         ("POST", "/v1/aether/remember") => remember(state, &req.body, bound),
         ("POST", "/v1/aether/cue") => cue(state, &req.body, bound),
         ("POST", "/v1/aether/solve") => solve(&req.body),
+        ("POST", "/v1/aether/forget") => forget(state, &req.body, bound),
         ("POST", "/v1/chat/completions") => chat(state, &req.body, bound),
         ("POST", "/completion") => completion(state, &req.body, bound),
         ("OPTIONS", _) => Reply::Json(204, Json::Null),
@@ -601,6 +606,14 @@ fn health(state: &ApiState) -> Json {
         ("requests", Json::num(state.requests as f64)),
         ("ledger_entries", Json::num(state.ledger_len() as f64)),
         ("persisted", Json::Bool(state.store.is_some())),
+        (
+            "ledger_bytes",
+            Json::num(state.store.as_ref().map_or(0, LedgerStore::size) as f64),
+        ),
+        (
+            "ledger_max_bytes",
+            Json::num(state.store.as_ref().map_or(0, LedgerStore::max_bytes) as f64),
+        ),
         ("auth", Json::Bool(state.auth.is_some())),
         ("bad_lines", Json::num(state.bad_lines as f64)),
     ])
@@ -686,7 +699,7 @@ fn remember(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
     };
     let scope_key = record.scope_key();
     let mut persisted = false;
-    if let Some(store) = &state.store {
+    if let Some(store) = state.store.as_mut() {
         match store.append(&record) {
             Ok(()) => persisted = true,
             Err(e) => {
@@ -698,14 +711,90 @@ fn remember(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
         }
     }
     state.ledger.append(record);
+
+    // Compactação: reescreve só os vivos quando o arquivo passa do teto.
+    let mut compacted = false;
+    let mut compact_error: Option<String> = None;
+    if state.store.as_ref().map(LedgerStore::should_compact) == Some(true) {
+        let all: Vec<DraftRecord> = state.ledger.records().cloned().collect();
+        match state.store.as_mut() {
+            Some(store) => match store.compact(&all) {
+                Ok(()) => compacted = true,
+                Err(e) => compact_error = Some(e.to_string()),
+            },
+            None => {}
+        }
+    }
+
+    let mut fields: Vec<(String, Json)> = vec![
+        ("stored".into(), Json::Bool(true)),
+        ("persisted".into(), Json::Bool(persisted)),
+        ("compacted".into(), Json::Bool(compacted)),
+        ("scope".into(), scope_json(scope)),
+        ("scope_key".into(), Json::str(scope_key)),
+        ("total".into(), Json::num(state.ledger.len() as f64)),
+    ];
+    if let Some(e) = compact_error {
+        fields.push(("compact_error".into(), Json::str(e)));
+    }
+    Reply::Json(200, Json::Obj(fields))
+}
+
+/// Remove um fato do escopo e grava o túmulo (para não ressuscitar no boot).
+///
+/// Exige `authority >= 128` (HITL): apagar memória é ato com mandato, não
+/// efeito colateral de uma requisição qualquer.
+fn forget(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
+    let doc = match parse_json(body) {
+        Ok(v) => v,
+        Err(e) => return Reply::Json(e.0, e.1),
+    };
+    let Some(scope) = scope_or_bound(doc.get("scope"), bound) else {
+        return bad("scope ausente: use {organism,run,app}");
+    };
+    if !scope_allowed(scope, bound) {
+        return forbidden(scope, bound);
+    }
+    let Some(key) = key_from(doc.get("key")) else {
+        return bad("key ausente (número ou string decimal)");
+    };
+    let authority = doc
+        .get("authority")
+        .and_then(Json::as_u64)
+        .unwrap_or(0)
+        .min(255) as u8;
+    if authority < 128 {
+        return Reply::Json(
+            403,
+            error_json(
+                "authority_required",
+                "forget exige authority >= 128 (mandato explícito)",
+            ),
+        );
+    }
+    let reason = doc.get("reason").and_then(Json::as_str).unwrap_or("manual");
+
+    let removed = state.ledger.forget(scope, key);
+    let mut tombstoned = false;
+    if removed {
+        if let Some(store) = state.store.as_mut() {
+            if let Err(e) = store.tombstone(scope, key, reason, now_ms()) {
+                return Reply::Json(
+                    500,
+                    error_json("ledger_io", &format!("falha ao gravar túmulo: {e}")),
+                );
+            }
+            tombstoned = true;
+        }
+    }
     Reply::Json(
         200,
         Json::obj([
-            ("stored", Json::Bool(true)),
-            ("persisted", Json::Bool(persisted)),
+            ("forgot", Json::Bool(removed)),
+            ("tombstoned", Json::Bool(tombstoned)),
+            ("key", Json::str(key.to_string())),
             ("scope", scope_json(scope)),
-            ("scope_key", Json::str(scope_key)),
-            ("total", Json::num(state.ledger.len() as f64)),
+            ("remaining", Json::num(state.ledger.len() as f64)),
         ]),
     )
 }
@@ -1122,6 +1211,7 @@ fn payload_to_phases(payload: &[u8]) -> Vec<f32> {
 
 fn record_to_json(r: &DraftRecord) -> Json {
     Json::obj([
+        ("op", Json::str("remember")),
         ("key", Json::str(r.key.to_string())),
         ("layer", Json::num(f64::from(r.layer.code()))),
         (
@@ -1427,5 +1517,6 @@ mod tests {
         assert!(!token_eq("abc", "ab"));
     }
 }
+
 
 

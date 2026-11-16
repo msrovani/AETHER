@@ -992,6 +992,38 @@ impl RoofDualWorkspace {
         }
         count
     }
+
+    /// Roof dual **bound** `C + ν` — lower bound sobre o ótimo — em uma passada.
+    ///
+    /// `fixed` recebe as persistências da mesma passada (uma única chamada de
+    /// max-flow). `n = 0` devolve `0`; `n > ROOF_MAX_N` devolve `−∞`.
+    ///
+    /// O sinal é o desta implementação: a rede é construída para o máximo de
+    /// `−H`, então o fluxo entra subtraindo a constante do QUBO. O gate
+    /// `tests/e2c3_bound_gate.rs` valida `bound ≤ ótimo` contra força bruta.
+    pub fn bound_into(
+        &mut self,
+        n: usize,
+        j: &[f64],
+        h: &[f64],
+        fixed: &mut [Option<i8>],
+    ) -> f64 {
+        let flow = self.pass_into(n, j, h, fixed);
+        if n == 0 {
+            return 0.0;
+        }
+        if n > ROOF_MAX_N {
+            return f64::NEG_INFINITY;
+        }
+        let mut c0 = 0.0;
+        for i in 0..n {
+            c0 += h[i];
+            for k in (i + 1)..n {
+                c0 -= j[i * n + k];
+            }
+        }
+        c0 - flow
+    }
 }
 
 /// Rodadas da cascata do roof dual.
