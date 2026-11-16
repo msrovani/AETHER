@@ -361,3 +361,524 @@ pub fn persistency_qumo(n: usize, j: &[f64], h: &[f64]) -> QuboPresolve {
         rounds,
     }
 }
+
+// ---------------------------------------------------------------------------
+// E2c-2 — roof dual completo (max-flow sobre a posiform quadrática)
+// ---------------------------------------------------------------------------
+//
+// # Por que existe
+//
+// `persistency_qumo` (E2c v1) só enxerga viés **explícito** em `h`: no controle
+// `plant = 0%` ela reduz `0,0%` das variáveis. O roof dual de Boros–Hammer vê
+// mais longe porque não raciocina sobre uma variável isolada, e sim sobre a
+// **posiform** inteira:
+//
+// ```text
+// H(x) = c₀ + Σ_i l_i x_i + Σ_{i<j} Q_ij x_i x_j        (x ∈ {0,1}ⁿ)
+// ```
+//
+// Cada coeficiente negativo é reescrito com literais (`1 − x = x̄`, e
+// `(1 − x_u x_v) = x_u x̄_v + x̄_u x_v + x̄_u x̄_v`) até sobrar apenas
+// coeficientes **não negativos** — a posiform quadrática. Sobre ela:
+//
+// * termo `β·u·v` (β > 0) = "pague β se os dois literais forem verdadeiros"
+//   ⇒ arestas de implicação `u → v̄` e `v → ū`, de capacidade β (rede
+//   simétrica de implicação);
+// * termo `β·u` (β > 0) = "pague β se `u` for verdadeiro" ⇒ aresta `u → ū`.
+//
+// O fluxo máximo nessa rede é o **roof dual**: o corte mínimo é o maior
+// `c₀` que se consegue extrair por reparametrização (`β_∅` máximo). A
+// alcançabilidade residual a partir da fonte `S` rotula cada literal e, pela
+// comparação dos dois lados da variável (`x_i` e `x̄_i`), decide persistência:
+//
+// * `x_i` alcançável e `x̄_i` não ⇒ `x_i = 1` em **algum** ótimo;
+// * o caso simétrico ⇒ `x_i = 0`;
+// * os dois do mesmo lado ⇒ variável **não rotulada** (não se fixa nada).
+//
+// # Garantia
+//
+// A persistência é do tipo "existe ótimo com `x_i = v`" — mais fraca que a
+// consequência lógica do E2b (que vale em **toda** solução), mas de alcance
+// maior. O valor ótimo é preservado; o experimento verifica isso por força
+// bruta em 600 instâncias.
+//
+// # Custo e alocação
+//
+// Toda a rede (nós, arestas, níveis, filas) vive em [`RoofDualWorkspace`], com
+// capacidade fixa (`ROOF_MAX_N = 64`) e **zero alocação** durante a resolução.
+// A única alocação acontece em [`RoofDualWorkspace::new`].
+
+/// Maior instância que o roof dual resolve (nós fixos ⇒ buffers fixos).
+pub const ROOF_MAX_N: usize = 64;
+
+/// Nós totais da rede: `x_i`, `x̄_i`, `S`, `T`.
+const ROOF_NODES: usize = 2 * ROOF_MAX_N + 2;
+
+/// Índice da fonte.
+const ROOF_S: usize = 2 * ROOF_MAX_N;
+
+/// Índice do sumidouro.
+const ROOF_T: usize = ROOF_S + 1;
+
+/// Arestas residuais: 8 por par (2 cópias × 2 sentidos × reverso) + folga.
+const ROOF_ARCS: usize = 8 * (ROOF_MAX_N * (ROOF_MAX_N - 1) / 2) + 4 * ROOF_MAX_N + 64;
+
+/// Tolerância do fluxo (capacidades são `f64` com ordem de grandeza ~10²).
+const ROOF_EPS: f64 = 1e-9;
+
+/// Aresta residual da rede de fluxo.
+#[derive(Clone, Copy, Debug)]
+struct RoofArc {
+    to: u16,
+    next: i32,
+    cap: f64,
+}
+
+/// Resultado de uma passada do roof dual.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct RoofDualStats {
+    /// Variáveis fixadas nesta passada.
+    pub fixed: usize,
+    /// Valor do fluxo máximo (corte mínimo) — diagnóstico do bound.
+    pub flow: f64,
+}
+
+/// Buffers pré-alocados da rede de fluxo (roof dual / max-flow).
+///
+/// Construa **uma vez** com [`RoofDualWorkspace::new`] e reutilize: a partir daí
+/// [`RoofDualWorkspace::solve_into`] não aloca nem faz *syscall*.
+#[derive(Debug)]
+pub struct RoofDualWorkspace {
+    first: [i32; ROOF_NODES],
+    arcs: [RoofArc; ROOF_ARCS],
+    arc_count: usize,
+    level: [i32; ROOF_NODES],
+    iter: [i32; ROOF_NODES],
+    queue: [u16; ROOF_NODES],
+    reach: [bool; ROOF_NODES],
+}
+
+impl RoofDualWorkspace {
+    /// Aloca a rede **uma única vez** (fora do caminho quente).
+    ///
+    /// A estrutura é grande (~300 KB), então vai para o heap de propósito: um
+    /// `RoofDualWorkspace` na pilha arriscaria estourar a pilha de teste.
+    pub fn new() -> Box<Self> {
+        Box::new(Self {
+            first: [-1; ROOF_NODES],
+            arcs: [RoofArc {
+                to: 0,
+                next: -1,
+                cap: 0.0,
+            }; ROOF_ARCS],
+            arc_count: 0,
+            level: [0; ROOF_NODES],
+            iter: [0; ROOF_NODES],
+            queue: [0; ROOF_NODES],
+            reach: [false; ROOF_NODES],
+        })
+    }
+
+    /// Limpa a rede (mantém a memória).
+    fn reset(&mut self) {
+        for f in self.first.iter_mut() {
+            *f = -1;
+        }
+        self.arc_count = 0;
+    }
+
+    #[inline]
+    fn add_arc(&mut self, from: usize, to: usize, cap: f64) {
+        if cap <= 0.0 || self.arc_count + 2 > ROOF_ARCS {
+            return;
+        }
+        let idx = self.arc_count;
+        self.arcs[idx] = RoofArc {
+            to: to as u16,
+            next: self.first[from],
+            cap,
+        };
+        self.first[from] = idx as i32;
+        self.arcs[idx + 1] = RoofArc {
+            to: from as u16,
+            next: self.first[to],
+            cap: 0.0,
+        };
+        self.first[to] = (idx + 1) as i32;
+        self.arc_count = idx + 2;
+    }
+
+    /// Aresta com capacidade nos dois sentidos (como na rede de implicação).
+    #[inline]
+    fn add_edge(&mut self, from: usize, to: usize, fwd: f64, rev: f64) {
+        self.add_arc(from, to, fwd);
+        self.add_arc(to, from, rev);
+    }
+
+    /// `tr_cap` de QPBO: positivo ⇒ `S → nó`; negativo ⇒ `nó → T`.
+    #[inline]
+    fn add_terminal(&mut self, node: usize, tr: f64) {
+        if tr > 0.0 {
+            self.add_arc(ROOF_S, node, tr);
+        } else if tr < 0.0 {
+            self.add_arc(node, ROOF_T, -tr);
+        }
+    }
+
+    fn bfs(&mut self, s: usize, t: usize) -> bool {
+        for l in self.level.iter_mut() {
+            *l = -1;
+        }
+        let mut head = 0usize;
+        let mut tail = 0usize;
+        self.level[s] = 0;
+        self.queue[tail] = s as u16;
+        tail += 1;
+        while head < tail {
+            let v = self.queue[head] as usize;
+            head += 1;
+            let mut i = self.first[v];
+            while i >= 0 {
+                let a = self.arcs[i as usize];
+                let to = a.to as usize;
+                if a.cap > ROOF_EPS && self.level[to] < 0 {
+                    self.level[to] = self.level[v] + 1;
+                    self.queue[tail] = a.to;
+                    tail += 1;
+                }
+                i = a.next;
+            }
+        }
+        self.level[t] >= 0
+    }
+
+    fn dfs(&mut self, v: usize, t: usize, limit: f64) -> f64 {
+        if v == t {
+            return limit;
+        }
+        let mut i = self.iter[v];
+        while i >= 0 {
+            let idx = i as usize;
+            let a = self.arcs[idx];
+            let to = a.to as usize;
+            if a.cap > ROOF_EPS && self.level[to] == self.level[v] + 1 {
+                let pushed = self.dfs(to, t, if limit < a.cap { limit } else { a.cap });
+                if pushed > ROOF_EPS {
+                    self.arcs[idx].cap -= pushed;
+                    self.arcs[idx ^ 1].cap += pushed;
+                    return pushed;
+                }
+            }
+            i = a.next;
+            self.iter[v] = i;
+        }
+        self.level[v] = -1;
+        0.0
+    }
+
+    /// Fluxo máximo (Dinic determinístico) na rede corrente.
+    fn max_flow(&mut self) -> f64 {
+        let mut flow = 0.0f64;
+        while self.bfs(ROOF_S, ROOF_T) {
+            for (i, f) in self.first.iter().enumerate() {
+                self.iter[i] = *f;
+            }
+            loop {
+                let pushed = self.dfs(ROOF_S, ROOF_T, f64::INFINITY);
+                if pushed <= ROOF_EPS {
+                    break;
+                }
+                flow += pushed;
+            }
+        }
+        flow
+    }
+
+    /// Alcançabilidade residual a partir de `S`.
+    fn residual_from_source(&mut self) {
+        for r in self.reach.iter_mut() {
+            *r = false;
+        }
+        let mut head = 0usize;
+        let mut tail = 0usize;
+        self.reach[ROOF_S] = true;
+        self.queue[tail] = ROOF_S as u16;
+        tail += 1;
+        while head < tail {
+            let v = self.queue[head] as usize;
+            head += 1;
+            let mut i = self.first[v];
+            while i >= 0 {
+                let a = self.arcs[i as usize];
+                let to = a.to as usize;
+                if a.cap > ROOF_EPS && !self.reach[to] {
+                    self.reach[to] = true;
+                    self.queue[tail] = a.to;
+                    tail += 1;
+                }
+                i = a.next;
+            }
+        }
+    }
+
+    /// Uma passada do roof dual sobre `n` variáveis (`j` plano `n×n`, `h`).
+    ///
+    /// `fixed` recebe `Some(0|1)` para as variáveis persistentes. Devolve o
+    /// fluxo máximo (corte mínimo) da rede.
+    pub fn pass_into(&mut self, n: usize, j: &[f64], h: &[f64], fixed: &mut [Option<i8>]) -> f64 {
+        self.reset();
+        for f in fixed.iter_mut() {
+            *f = None;
+        }
+        if n == 0 || n > ROOF_MAX_N {
+            return 0.0;
+        }
+
+        // --- 1. Ising → QUBO (`H = c₀ + Σ l_i x_i + Σ Q_ij x_i x_j`) --------
+        // H(s) = −½·sᵀJs − hᵀs com s = 2x−1:
+        //   c₀ = −Σ_{i<j} J_ij + Σ_i h_i
+        //   l_i = 2·(Σ_{j≠i} J_ij − h_i)
+        //   Q_ij = −4·J_ij
+        let mut tr = [0.0f64; 2 * ROOF_MAX_N];
+        for i in 0..n {
+            let mut row = 0.0f64;
+            for k in 0..n {
+                if k != i {
+                    row += j[i * n + k];
+                }
+            }
+            tr[i] += 2.0 * (row - h[i]); // termo linear `l_i·x_i`
+        }
+        // mate recebe o simétrico (rede dobrada, QPBO §"second stage").
+        for i in 0..n {
+            tr[ROOF_MAX_N + i] = -tr[i];
+        }
+
+        for i in 0..n {
+            for k in (i + 1)..n {
+                let q = -4.0 * j[i * n + k];
+                if q == 0.0 {
+                    continue;
+                }
+                // Tabela do termo: E00 = E01 = E10 = 0, E11 = q.
+                let (ci, cj, cij, cji): (f64, f64, f64, f64);
+                if 0.0 >= q {
+                    // submodular: E01 + E10 ≥ E00 + E11
+                    let (a, b, c, d) = (0.0, 0.0, 0.0, q);
+                    let w = roof_weights(a, b, c, d);
+                    ci = w.0;
+                    cj = w.1;
+                    cij = w.2;
+                    cji = w.3;
+                    tr[i] += ci;
+                    tr[ROOF_MAX_N + i] -= ci;
+                    tr[k] += cj;
+                    tr[ROOF_MAX_N + k] -= cj;
+                    // cópia 0: x_i ↔ x_k ; cópia 1: x̄_i ↔ x̄_k
+                    self.add_edge(i, k, cij, cji);
+                    self.add_edge(ROOF_MAX_N + i, ROOF_MAX_N + k, cij, cji);
+                } else {
+                    // supermodular: usa o literal complementar de `k`
+                    let (a, b, c, d) = (0.0, 0.0, q, 0.0);
+                    let w = roof_weights(a, b, c, d);
+                    ci = w.0;
+                    cj = w.1;
+                    cij = w.2;
+                    cji = w.3;
+                    tr[i] += ci;
+                    tr[ROOF_MAX_N + i] -= ci;
+                    tr[ROOF_MAX_N + k] += cj;
+                    tr[k] -= cj;
+                    // cópia 0: x_i ↔ x̄_k ; cópia 1: x_k ↔ x̄_i
+                    self.add_edge(i, ROOF_MAX_N + k, cij, cji);
+                    self.add_edge(k, ROOF_MAX_N + i, cij, cji);
+                }
+            }
+        }
+
+        for i in 0..n {
+            self.add_terminal(i, tr[i]);
+            self.add_terminal(ROOF_MAX_N + i, tr[ROOF_MAX_N + i]);
+        }
+
+        // --- 2. Fluxo máximo e rótulos pela alcançabilidade residual ---------
+        let flow = self.max_flow();
+        self.residual_from_source();
+
+        for i in 0..n {
+            // `what_segment`: 0 = lado da fonte, 1 = lado do sumidouro; o rótulo
+            // é o valor de `x_i`. Ambíguo quando os dois literais caem no mesmo
+            // lado (é o "unknown" do QPBO).
+            let seg0: i8 = if self.reach[i] { 0 } else { 1 };
+            let seg1: i8 = if self.reach[ROOF_MAX_N + i] { 0 } else { 1 };
+            if seg0 != seg1 {
+                fixed[i] = Some(seg0);
+            }
+        }
+        flow
+    }
+
+    /// Roof dual **com cascata**: fixa, repara o Hamiltoniano e repete no
+    /// resíduo até o fixpoint (ou `ROOF_MAX_ROUNDS`).
+    ///
+    /// Todas as fixações vêm de uma única sequência de reduções: cada rodada é
+    /// um roof dual da instância já reduzida, então a persistência continua
+    /// valendo para o ótimo **original**.
+    pub fn solve_into(&mut self, n: usize, j: &[f64], h: &[f64], fixed: &mut [Option<i8>]) -> usize {
+        for f in fixed.iter_mut() {
+            *f = None;
+        }
+        if n == 0 || n > ROOF_MAX_N {
+            return 0;
+        }
+
+        let mut count = 0usize;
+        let mut tmp = [None::<i8>; ROOF_MAX_N];
+        let mut red_orig = [0usize; ROOF_MAX_N];
+        let mut red_j = [0.0f64; ROOF_MAX_N * ROOF_MAX_N];
+        let mut red_h = [0.0f64; ROOF_MAX_N];
+
+        for _round in 0..ROOF_MAX_ROUNDS {
+            // Lista de variáveis livres e campo efetivo (as fixações viram
+            // `h_j += J_ji·s_i`, exatamente como em `persistency_qumo`).
+            let mut m = 0usize;
+            for i in 0..n {
+                if fixed[i].is_none() {
+                    red_orig[m] = i;
+                    red_h[m] = h[i];
+                    m += 1;
+                }
+            }
+            if m == 0 {
+                break;
+            }
+            for a in 0..m {
+                let ia = red_orig[a];
+                for i in 0..n {
+                    if let Some(v) = fixed[i] {
+                        red_h[a] += j[ia * n + i] * f64::from(v);
+                    }
+                }
+                for b in 0..m {
+                    red_j[a * m + b] = j[ia * n + red_orig[b]];
+                }
+            }
+
+            let flow = self.pass_into(m, &red_j[..m * m], &red_h[..m], &mut tmp[..m]);
+            let _ = flow;
+
+            let mut changed = 0usize;
+            for a in 0..m {
+                if let Some(x) = tmp[a] {
+                    let v: i8 = if x == 1 { 1 } else { -1 };
+                    fixed[red_orig[a]] = Some(v);
+                    changed += 1;
+                }
+            }
+            if changed == 0 {
+                break;
+            }
+            count += changed;
+        }
+        count
+    }
+}
+
+/// Rodadas da cascata do roof dual.
+const ROOF_MAX_ROUNDS: usize = 8;
+
+/// Reparametrização de um termo par (QPBO `ComputeWeights`).
+///
+/// Decompõe `E = [[A,B],[C,D]]` como `unária_i + unária_j + aresta dupla` com
+/// coeficientes **não negativos** — é a posiform quadrática do termo. Devolve
+/// `(ci, cj, cij, cji)`.
+fn roof_weights(a: f64, b: f64, c: f64, d: f64) -> (f64, f64, f64, f64) {
+    let mut ci = d - a;
+    let b2 = b - a;
+    let c2 = c - d;
+    let (cj, cij, cji);
+    if b2 < 0.0 {
+        ci += -b2;
+        cj = b2;
+        cji = b2 + c2;
+        cij = 0.0;
+    } else if c2 < 0.0 {
+        ci += c2;
+        cj = -c2;
+        cij = b2 + c2;
+        cji = 0.0;
+    } else {
+        cj = 0.0;
+        cij = b2;
+        cji = c2;
+    }
+    (ci, cj, cij.max(0.0), cji.max(0.0))
+}
+
+/// **Roof dual completo** para `H(s) = −½·sᵀJs − hᵀs`.
+///
+/// Versão de conveniência de [`RoofDualWorkspace::solve_into`]: aloca o
+/// workspace (uma vez, fora do caminho quente) e devolve o mesmo tipo do E2c v1
+/// para que os dois possam ser comparados lado a lado.
+///
+/// Ordem: roof dual (max-flow, cascata) **e depois** dominância no resíduo — as
+/// duas juntas são o fixpoint do presolve; ambas preservam o valor ótimo.
+pub fn roof_dual_qumo(n: usize, j: &[f64], h: &[f64]) -> QuboPresolve {
+    let mut ws = RoofDualWorkspace::new();
+    let mut fixed: Vec<Option<i8>> = vec![None; n];
+    ws.solve_into(n, j, h, &mut fixed);
+
+    // h_eff com as fixações do roof dual aplicadas.
+    let mut h_eff: Vec<f64> = h.to_vec();
+    for i in 0..n {
+        if let Some(v) = fixed[i] {
+            for k in 0..n {
+                if fixed[k].is_none() {
+                    h_eff[k] += j[k * n + i] * f64::from(v);
+                }
+            }
+        }
+    }
+
+    // Dominância no resíduo: persegue o que o roof dual não viu (persistência
+    // fraca). `persistency_qumo` recebe o campo já efetivo e as variáveis
+    // livres remapeadas.
+    let residual: Vec<usize> = (0..n).filter(|&i| fixed[i].is_none()).collect();
+    if !residual.is_empty() {
+        let m = residual.len();
+        let mut sub_j = vec![0.0f64; m * m];
+        let mut sub_h = vec![0.0f64; m];
+        for (a, &ia) in residual.iter().enumerate() {
+            sub_h[a] = h_eff[ia];
+            for (b, &ib) in residual.iter().enumerate() {
+                sub_j[a * m + b] = j[ia * n + ib];
+            }
+        }
+        let weak = persistency_qumo(m, &sub_j, &sub_h);
+        for (a, &ia) in residual.iter().enumerate() {
+            if let Some(v) = weak.fixed[a] {
+                fixed[ia] = Some(v);
+            }
+        }
+    }
+
+    // h_eff final, já com todas as fixações.
+    let mut h_final: Vec<f64> = h.to_vec();
+    for i in 0..n {
+        if let Some(v) = fixed[i] {
+            for k in 0..n {
+                if fixed[k].is_none() {
+                    h_final[k] += j[k * n + i] * f64::from(v);
+                }
+            }
+        }
+    }
+
+    let residual: Vec<usize> = (0..n).filter(|&i| fixed[i].is_none()).collect();
+    QuboPresolve {
+        fixed,
+        residual,
+        h_eff: h_final,
+        rounds: 1,
+    }
+}

@@ -134,7 +134,7 @@ const QUARTER: u16 = 0x4000;
 const Q14: f32 = 16_384.0;
 
 /// Traços por acumulador (`K` do E1b).
-const K_TRACES: usize = 6;
+const K_TRACES: usize = 10;
 /// Shards (relações sintáticas endereçáveis).
 const SHARDS: usize = 24;
 /// Teto absoluto de fatos por acumulador (75% de `0,4·D = 64`).
@@ -220,16 +220,8 @@ fn rho(v: &Phases, k: usize) -> Phases {
     out
 }
 
-/// `ρ^{-k}` — a inversa exata da permutação acima.
-#[inline]
-fn unrho(v: &Phases, k: usize) -> Phases {
-    let k = k % D;
-    let mut out = [0u16; D];
-    for (j, o) in out.iter_mut().enumerate() {
-        *o = v[(j + D - k) % D];
-    }
-    out
-}
+/// A inversa `ρ^{-k}` não tem versão em fase pura depois do unbinding: ela é
+/// aplicada sobre o vetor complexo dentro de [`unbind_role`].
 
 /// Binding FHRR: produto de Hadamard = soma de fases (`|z| = 1` preservado).
 #[inline]
@@ -313,10 +305,7 @@ impl Book {
     fn new(phases: Vec<BVec>) -> Self {
         let cos = phases
             .iter()
-            .map(|v| {
-                let p = unit_phasor(v.as_slice());
-                p.re
-            })
+            .map(|v| unit_phasor(v.as_slice()).re)
             .collect();
         let sin = phases
             .iter()
@@ -325,8 +314,26 @@ impl Book {
         Self { phases, cos, sin }
     }
 
+    /// Cópia _cache-only_: a ACF só decide (cos/sin), nunca escreve — as fases
+    /// ficam de fora e economizam 1/5 da pegada.
+    fn cache_only(phases: &[BVec]) -> Self {
+        let cos = phases
+            .iter()
+            .map(|v| unit_phasor(v.as_slice()).re)
+            .collect();
+        let sin = phases
+            .iter()
+            .map(|v| unit_phasor(v.as_slice()).im)
+            .collect();
+        Self {
+            phases: Vec::new(),
+            cos,
+            sin,
+        }
+    }
+
     fn len(&self) -> usize {
-        self.phases.len()
+        self.cos.len()
     }
 
     fn memory_bytes(&self) -> usize {
@@ -362,9 +369,9 @@ impl Codebooks {
             ent: Book::new(ent),
             verb: Book::new(verb),
             modu: Book::new(modu),
-            ent_acf: Book::new(ent_acf),
-            verb_acf: Book::new(verb_acf),
-            modu_acf: Book::new(modu_acf),
+            ent_acf: Book::cache_only(&ent_acf),
+            verb_acf: Book::cache_only(&verb_acf),
+            modu_acf: Book::cache_only(&modu_acf),
         }
     }
 
@@ -435,10 +442,10 @@ impl Anchors {
         let mut rng = ChaCha8Rng::seed_from_u64(seed ^ 0xA0C_4000);
         let a = random_codebook(4, &mut rng);
         Self {
-            s: a[0].clone(),
-            v: a[1].clone(),
-            o: a[2].clone(),
-            m: a[3].clone(),
+            s: a[0],
+            v: a[1],
+            o: a[2],
+            m: a[3],
         }
     }
 
@@ -500,10 +507,14 @@ fn cleanup(cue: &Cplx, book: &Book, sims: &mut [f32; N_ENT]) -> Cleanup {
 // Shard holográfico (acumulador de `K` traços, 1 termo por fato)
 // ---------------------------------------------------------------------------
 
-/// Um acumulador: `≤ 48` fatos `key ⊗ value`, `K` traços com fase por
-/// `(fato, traço)`. Guarda-se a fase `key ⊗ value` (produto, 1 termo por fato)
-/// — é exatamente o regime que o E1b mediu; a forma em superposição
-/// (`⊕` de papéis) é reconstruída pelo ressonador na leitura.
+/// Um acumulador: `≤ 48` fatos, `K` traços com fase `ψ` por `(fato, traço)`.
+///
+/// Cada fato contribui com **os dois termos do predicado** (`A_O⊗ρ^2(o)` e
+/// `A_M⊗ρ^3(m)`), não com o produto deles. A diferença é decisiva: no produto a
+/// fase do termo é a *soma* das fases e o interferente **rotaciona** a pista
+/// (o cleanup não vê o átomo); no bundle os dois fasores somam-se como vetores
+/// e o interferente é ruído ortogonal (σ ≈ 1/√D), exatamente como no
+/// `⊕` do código de sentença — e é isso que o ressonador consegue separar.
 #[derive(Debug)]
 struct Shard {
     traces: usize,
@@ -542,7 +553,7 @@ impl Shard {
         self.subj.len()
     }
 
-    fn add(&mut self, key: &Phases, value: &Phases, ids: (u16, u16, u16, u16)) {
+    fn add(&mut self, key: &Phases, terms: [&Phases; 2], ids: (u16, u16, u16, u16)) {
         let lut = BamLut::global();
         for t in 0..self.traces {
             let psi = if t == 0 {
@@ -551,11 +562,13 @@ impl Shard {
                 (splitmix64(&mut self.rng) >> 48) as u16
             };
             self.psi.push(psi);
-            for j in 0..D {
-                let th = key[j].wrapping_add(value[j]).wrapping_add(psi);
-                let (s, c) = lut.sin_cos_q15(BamPhase(th));
-                self.acc_re[t][j] += c as i32;
-                self.acc_im[t][j] += s as i32;
+            for term in terms {
+                for j in 0..D {
+                    let th = key[j].wrapping_add(term[j]).wrapping_add(psi);
+                    let (s, c) = lut.sin_cos_q15(BamPhase(th));
+                    self.acc_re[t][j] += c as i32;
+                    self.acc_im[t][j] += s as i32;
+                }
             }
         }
         self.subj.push(ids.0);
@@ -676,9 +689,17 @@ impl PlhMemory {
     }
 
     /// Grava um fato no shard endereçado por `(subj, verb)`.
-    fn add(&mut self, subj: u16, verb: u16, obj: u16, modu: u16, key: &Phases, value: &Phases) {
+    fn add(
+        &mut self,
+        subj: u16,
+        verb: u16,
+        obj: u16,
+        modu: u16,
+        key: &Phases,
+        terms: [&Phases; 2],
+    ) {
         let idx = shard_of(subj as usize, verb as usize);
-        self.shards[idx].add(key, value, (subj, verb, obj, modu));
+        self.shards[idx].add(key, terms, (subj, verb, obj, modu));
     }
 
     fn finalize(&mut self) {
@@ -731,6 +752,7 @@ struct PairFactors {
     sim_mod: f32,
     margin_obj: f32,
     margin_mod: f32,
+    #[allow(dead_code)]
     iters: u8,
     converged: bool,
     validated: bool,
@@ -918,11 +940,7 @@ fn factorize_sentence(psi: &Cplx, cb: &Codebooks, a: &Anchors) -> Factors {
                 if r2 == r {
                     continue;
                 }
-                let term = unit_phasor(&role_term(
-                    a.of(r2),
-                    &cb.clean(r2).phases[f.ids[r2]],
-                    r2,
-                ));
+                let term = unit_phasor(&role_term(a.of(r2), &cb.clean(r2).phases[f.ids[r2]], r2));
                 res.sub_assign(&term);
             }
             unbind_role(&res, a.of(r), r, None, &mut last[r]);
@@ -1002,10 +1020,10 @@ impl Fact {
         bind(&ks, &kv)
     }
 
-    fn value(&self, cb: &Codebooks, a: &Anchors) -> Phases {
+    fn value(&self, cb: &Codebooks, a: &Anchors) -> [Phases; 2] {
         let ko = role_term(a.of(ROLE_O), &cb.ent.phases[self.ids[2] as usize], ROLE_O);
         let km = role_term(a.of(ROLE_M), &cb.modu.phases[self.ids[3] as usize], ROLE_M);
-        bind(&ko, &km)
+        [ko, km]
     }
 }
 
@@ -1034,13 +1052,15 @@ fn build_sharded(
 ) -> PlhMemory {
     let mut mem = PlhMemory::new(traces, seed);
     for f in facts {
+        let key = f.key(cb, a);
+        let terms = f.value(cb, a);
         mem.add(
             f.ids[0],
             f.ids[1],
             f.ids[2],
             f.ids[3],
-            &f.key(cb, a),
-            &f.value(cb, a),
+            &key,
+            [&terms[0], &terms[1]],
         );
     }
     mem.finalize();
@@ -1052,9 +1072,11 @@ fn build_sharded(
 fn build_flat(facts: &[Fact], cb: &Codebooks, a: &Anchors, traces: usize) -> Shard {
     let mut s = Shard::new(traces, 0xF1A7_0001);
     for f in facts {
+        let key = f.key(cb, a);
+        let terms = f.value(cb, a);
         s.add(
-            &f.key(cb, a),
-            &f.value(cb, a),
+            &key,
+            [&terms[0], &terms[1]],
             (f.ids[0], f.ids[1], f.ids[2], f.ids[3]),
         );
     }
@@ -1584,11 +1606,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         (0.4 * D as f64).round() as usize,
         mem.max_load()
     );
+    // Cada fato contribui com 2 termos (OBJ e MOD). O teto do E1b escala com K
+    // (o ruído cai com √K): 64 fatos × K/6 termos.
+    let terms_max = 2 * mem.max_load();
+    let ceiling_terms = (0.4 * D as f64 * K_TRACES as f64 / 6.0).round() as usize;
+    println!(
+        "termos/acumulador = {terms_max} (2 por fato) · teto equivalente em K={K_TRACES}: ~{ceiling_terms} termos ({:.0}% usado)",
+        100.0 * terms_max as f64 / ceiling_terms as f64
+    );
     println!();
 
     // ---------------- Gate 1 + 3 ----------------
     let scale = gate_scale(&mem, &facts, &cb, &a, n_q);
-    let flat = flat_recall(&flat, &facts, &cb, &a, n_q.min(200));
+    let flat = flat_recall(&flat, &facts, &cb, &a, n_q);
 
     println!("G1 — escala sharded (D={D}, {K_TRACES} traços)");
     println!("{:<38} {:>12} {:>12}", "", "sharded", "plano");
@@ -1625,6 +1655,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         100.0 * scale.acf_validation,
         100.0 * scale.false_abstain
     );
+    println!("  iterações do ressonador: ≤ {PAIR_ITERS} por consulta");
     println!();
 
     // ---------------- Gate 2 ----------------
@@ -1691,7 +1722,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (mem_abst, mem_sim) = abstention_memory(&mem, &facts, &cb, &a, 120, &mut rng);
     println!(
         "{:<22} {:>6} {:>9.1}% {:>10} {:>10.3} {:>10.3}",
-        "chave OOV (memória)", 120, 100.0 * mem_abst, "-", mem_sim, 0.0
+        "chave OOV (memória)",
+        120,
+        100.0 * mem_abst,
+        "-",
+        mem_sim,
+        0.0
     );
     println!();
 
@@ -1764,10 +1800,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         pass(g1_cap),
         mem.max_load()
     );
-    println!(
-        "  G2 não-comutatividade = 100%           : {}",
-        pass(g2)
-    );
+    println!("  G2 não-comutatividade = 100%           : {}", pass(g2));
     println!(
         "  G3 SNR > 5,0 σ (OBJ e MOD)             : {}  ({:.2} / {:.2})",
         pass(g3_snr),
@@ -1829,9 +1862,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "  \"dim\": {D}, \"traces\": {K_TRACES}, \"shards\": {SHARDS}, \"shard_cap\": {SHARD_CAP},\n"
     ));
     json.push_str(&format!(
-        "  \"facts\": {}, \"max_load\": {}, \"n_ent\": {N_ENT}, \"n_verb\": {N_VERB}, \"n_mod\": {N_MOD},\n",
+        "  \"facts\": {}, \"max_load\": {}, \"terms_per_accumulator\": {}, \"n_ent\": {N_ENT}, \"n_verb\": {N_VERB}, \"n_mod\": {N_MOD},\n",
         facts.len(),
-        mem.max_load()
+        mem.max_load(),
+        2 * mem.max_load()
     ));
     json.push_str(&format!(
         "  \"sharded\": {{\"recall\": {:.4}, \"snr_obj\": {:.3}, \"snr_mod\": {:.3}, \"p50_us\": {:.3}, \"p99_us\": {:.3}, \"mean_us\": {:.3}, \"allocs\": {}, \"acf_validation\": {:.4}, \"converged\": {:.4}, \"false_abstain\": {:.4}}},\n",
