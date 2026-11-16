@@ -30,11 +30,20 @@ Por isso o placar é publicado **por rodada**, com timestamp, e não em tempo re
 | 3 | 83 | 0 | `e1` **5/5** · `e2c2` **4/4** · `phase5` **10/10** |
 | 4 | 83 | 1 | só `e3_transplant_gate`: **analogia Recall@1 = 0,0208** |
 | 5 | 83 | 1 | idem; `g3_abstencao` oscila (flaky) |
+| 6 | **83** | **0** | `e3_transplant_gate` **6/6** · clippy `-D warnings` limpo · `fmt --check` limpo |
 
-**Conclusão do funil:** de 3 alvos + 1 exemplo quebrado para **1 teste** em ~4
-rodadas. O que resta é científico, não mecânico.
+**Conclusão do funil:** de 3 alvos + 1 exemplo quebrado para **zero falhas** em ~6
+rodadas. O último item era científico e foi resolvido pelo dono (ver §3).
 
-## 3. Falha aberta — E3, analogia em fase
+## 3. Falha fechada — E3, analogia em fase
+
+> **Resolvida em 2026-11-16.** `e3_transplant_gate` passou **6/6** e o repo fechou
+> verde. Diagnóstico correto: das três hipóteses vivas, a **3 (ruído)** era a
+> causa — mas no **banco**, não no vetor de analogia. O ruído era
+> `0,25` **por coordenada** (`‖n‖ ≈ 0,25·√384 ≈ 4,9`) contra sinal de norma ~2,
+> ou seja **SNR < 1**. O dono normalizou para `0,25/√D_IN` (norma 0,25) e o
+> recall voltou. Fórmula e encoder estavam corretos desde o início — o que os
+> testes de §3 já tinham descartado.
 
 ```
 test g2_analogia_em_fase_e_medida_sem_alvo ... FAILED
@@ -90,11 +99,19 @@ Até a reconciliação, **não entra no dossiê como resultado** — entra como
 * não aceita número de *flake* como regressão sem reexecução;
 * não publica resultado antes de reconciliar com o artefato (`target/*.json`).
 
-## 6. Próxima rodada
+## 6. Estado final do ciclo
 
-Disparar quando o dono do E3 publicar o fix:
+Gate completo, medido em 2026-11-16:
 
-1. `cargo test --release --tests --no-fail-fast` → esperado **0 falhas**;
-2. `cargo clippy --all-targets -- -D warnings`;
-3. `cargo check --release --examples` (todos);
-4. publicar o placar no fórum antes de fechar o ciclo.
+```text
+cargo test --release --tests --no-fail-fast   -> 0 falhas (83 unit + 30 alvos)
+clippy --all-targets --release -D warnings    -> limpo
+cargo fmt --all -- --check                    -> limpo
+```
+
+**Nenhum arquivo de claim alheio foi editado pelo auditor em todo o ciclo.**
+As falhas foram fechadas pelos donos: `phase5` (flake), `e1_language_gate` (0106),
+`e2c2_roof_dual_gate` (0126), `transplant_probe` + `e3_transplant_gate` (0107).
+
+Próximo ciclo: repetir o placar a cada aterrissagem de claim e **só** reabrir o
+log quando um alvo voltar a falhar.
