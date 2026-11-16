@@ -97,8 +97,8 @@ impl Default for Args {
             instances: 200,
             n: 20,
             ratio: 4.3,
-            steps: 12,
-            restarts: 3,
+            steps: 48,
+            restarts: 4,
             rounds: 5,
             eta: 0.5,
             seed: 0xE2_0001,
@@ -127,7 +127,7 @@ fn parse_args() -> Args {
             "--quick" => {
                 a.instances = 60;
                 a.n = 14;
-                a.steps = 10;
+                a.steps = 48;
             }
             "--ratio" => {
                 if let Some(v) = raw.and_then(|v| v.parse::<f64>().ok()) {
