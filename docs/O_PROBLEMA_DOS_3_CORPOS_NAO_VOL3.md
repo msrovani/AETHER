@@ -640,7 +640,8 @@ Regra de ouro das três: **o motor nunca espera o ledger.**
 | `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL2.md` | Vol. II — hardware e riscos |
 | `docs/COGNITIVE_AUDIT_FINAL.md` | fonte dos números `[M]` |
 | `docs/REPO_SYNC.md` | primeira menção ao SGDB no repo |
-| `docs/API_CONTRACT.md` | contrato normativo (não alterado) |
+| `docs/API_CONTRACT.md` | contrato normativo (Apêndice A = superfícies novas, aditivas) |
+| `docs/LESSONS_E2_E3.md` | lições operacionais do Corpo 2 + fechamento do Corpo 3 (armadilhas, gates, processo) |
 | `src/core/spsc_ring.rs` | transporte do T1 |
 | `src/phase_memory.rs` | alvo do `cue_into` |
 | `src/core/fhrr.rs` | `add_fact` / `query_selective` |
