@@ -703,9 +703,7 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
                 println!("  --samples <n>    amostras do sonhador (>0)");
                 println!("  --steps <n>      passos do sonhador (>0)");
                 println!("  --sgdb <spec>    liga o T2: mock | http://host:porta/mcp | stdio:programa args");
-                println!(
-                    "                   (sem --sgdb, usa AETHER_SGDB_URL/AETHER_SGDB_STDIO)"
-                );
+                println!("                   (sem --sgdb, usa AETHER_SGDB_URL/AETHER_SGDB_STDIO)");
                 println!(
                     "  --sgdb-outbox <arquivo>  diário local de replay quando o banco está fora"
                 );

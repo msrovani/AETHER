@@ -101,9 +101,15 @@ fn main() {
                 let clauses = if family == 0 {
                     random_3sat(n, m, 0xE2_0000 + seed * 7 + n as u64)
                 } else {
-                    planted_3sat(n, m, (0.2 * n as f64).round() as usize, 0xE2_1000 + seed * 13)
+                    planted_3sat(
+                        n,
+                        m,
+                        (0.2 * n as f64).round() as usize,
+                        0xE2_1000 + seed * 13,
+                    )
                 };
-                let mut pipe = LogicPipeline::new(n, clauses.len().max(4), STEPS, RESTARTS, ROUNDS, 0.5);
+                let mut pipe =
+                    LogicPipeline::new(n, clauses.len().max(4), STEPS, RESTARTS, ROUNDS, 0.5);
                 let mut out = vec![0i8; n];
                 pipe.resolve_into(n, &clauses, 0xDEAD_BEEF ^ seed, &mut out, &mut cert)
                     .expect("resolve");

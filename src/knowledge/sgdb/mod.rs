@@ -49,9 +49,7 @@ pub mod worker;
 
 use std::fmt;
 
-pub use client::{
-    open, open_transport, RecallPage, SgdbClient, SgdbConfig, TextHit,
-};
+pub use client::{open, open_transport, RecallPage, SgdbClient, SgdbConfig, TextHit};
 pub use ledger::{
     encode_phases, phase_key, phases_from_payload, SgdbLedger, SgdbMetrics, SgdbStatus,
 };
@@ -121,7 +119,9 @@ impl SgdbError {
             }
             Self::Rpc(_) => "o servidor recusou a chamada; veja a mensagem e o escopo",
             Self::Tool(_) => "os argumentos não batem com a ferramenta; use --help",
-            Self::Config(_) => "corrija as flags/ambiente (aether-sgdb doctor mostra a configuração)",
+            Self::Config(_) => {
+                "corrija as flags/ambiente (aether-sgdb doctor mostra a configuração)"
+            }
             Self::NotSupported(_) => "use http:// (sem TLS) ou o transporte stdio",
         }
     }

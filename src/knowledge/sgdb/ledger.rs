@@ -248,12 +248,7 @@ impl<T: Transport> SgdbLedger<T> {
     }
 
     fn pending_len(&self) -> usize {
-        self.pending.len()
-            + self
-                .outbox
-                .as_ref()
-                .map(|outbox| outbox.len())
-                .unwrap_or(0)
+        self.pending.len() + self.outbox.as_ref().map(|outbox| outbox.len()).unwrap_or(0)
     }
 
     fn backing_off(&self) -> bool {
@@ -266,10 +261,7 @@ impl<T: Transport> SgdbLedger<T> {
         self.last_error = Some(error.to_string());
         self.failures = self.failures.saturating_add(1);
         let factor = 1u64 << (self.failures.saturating_sub(1)).min(6);
-        let delay = self
-            .retry_base_ms
-            .saturating_mul(factor)
-            .clamp(50, 30_000);
+        let delay = self.retry_base_ms.saturating_mul(factor).clamp(50, 30_000);
         self.not_before = Some(Instant::now() + Duration::from_millis(delay));
     }
 

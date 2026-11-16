@@ -2,7 +2,28 @@
 
 > Vol. III §3–§8: o SGDB não é a cura dos riscos; é a camada que **impede o
 > sistema de mentir sobre eles**. Este documento descreve o encaixe que saiu do
-> papel: transporte, formato, outbox, leitura de fase e gates.
+> papel: transporte, formato, outbox, leitura de fase, CLI e gates.
+
+## Início rápido
+
+```bash
+# 1. o banco responde? (mock não precisa de servidor)
+cargo run --bin aether-sgdb -- doctor --mock
+
+# 2. gravar um fato durável (autoridade 255 = aprovado por humano)
+cargo run --bin aether-sgdb -- \
+  put "gate F4 verde em 2026-11-16" --entity aether/f4
+
+# 3. recuperar (texto e fase no mesmo escopo)
+cargo run --bin aether-sgdb -- recall gate --k 5 --json
+
+# 4. servidor MCP HTTP real
+AETHER_SGDB_URL=http://127.0.0.1:8090/mcp cargo run --bin aether-sgdb -- doctor
+```
+
+`aether-sgdb --help` mostra todos os comandos, flags e variáveis. Sem
+`--mock`/`--url`/`--stdio`, o comando usa `AETHER_SGDB_URL` ou
+`AETHER_SGDB_STDIO`; se nada estiver configurado, explica como configurar.
 
 ## O que mudou
 
@@ -149,7 +170,107 @@ O daemon grava padrões observados com `authority = 200` e `gap = 1.0`
 (deliberadamente ambíguo: o organismo não tem prova de mínimo local). A
 autoridade `255` continua exclusiva de HITL.
 
-## Como usar
+## CLI (`aether-sgdb`)
+
+A CLI é a mesma porta de entrada para humano e para script: **toda** saída
+aceita `--json`, todo erro traz uma dica, e o código de saída distingue uso
+(`2`) de falha (`1`).
+
+| Comando | Para quê | Exemplo |
+|---|---|---|
+| `doctor` | conexão, escopo, outbox e latências em uma tela | `aether-sgdb doctor` |
+| `ping` | `health` do banco (`--view era`) | `aether-sgdb ping --view era` |
+| `put` | grava fato textual (L3, autoridade 255) | `aether-sgdb put "decisão X"` |
+| `recall` | busca texto **e** fase no escopo | `aether-sgdb recall "gate" --k 5` |
+| `stat` | estado local (pendências, falhas, métricas) | `aether-sgdb stat` |
+| `sync` | reenvia o outbox e fecha o run | `aether-sgdb sync --outbox …` |
+| `export` | documentos de fase → JSONL | `aether-sgdb export fase.jsonl` |
+| `import` | JSONL de fase → banco | `aether-sgdb import fase.jsonl` |
+| `forget` | aposenta memória com motivo | `aether-sgdb forget md/L3/…` |
+| `ttl` | aplica TTL | `aether-sgdb ttl md/L3/… --ttl-ms 86400000` |
+| `explain` | proveniência completa | `aether-sgdb explain md/L3/…` |
+| `demo` | round-trip com mock, sem servidor | `aether-sgdb demo` |
+
+### Transporte e configuração
+
+Precedência: flag > ambiente > erro explicativo.
+
+| Flag | Ambiente | Default |
+|---|---|---|
+| `--mock` | — | — |
+| `--url URL` | `AETHER_SGDB_URL` | — |
+| `--stdio "cmd args"` | `AETHER_SGDB_STDIO` | — |
+| `--token T` | `AETHER_SGDB_TOKEN` | — |
+| `--outbox PATH` | `AETHER_SGDB_OUTBOX` | desligado |
+| `--scope-app NOME` | `AETHER_SGDB_SCOPE_APP` | `AETHER` |
+| `--scope-agent NOME` | `AETHER_SGDB_SCOPE_AGENT` | `aether-engine` |
+| `--organism N` | `AETHER_SGDB_ORGANISM` | `1` |
+| `--run N` | `AETHER_SGDB_RUN` | `0` |
+| `--app N` | `AETHER_SGDB_APP` | `1` |
+| `--k N` | `AETHER_SGDB_RECALL_K` | `8` (≤ 20) |
+| `--ttl-ms N` | `AETHER_SGDB_TTL_MS` | sem TTL |
+| `--retries N` | `AETHER_SGDB_RETRIES` | `2` |
+| `--timeout-ms N` | `AETHER_SGDB_TIMEOUT_MS` | `2000` |
+| `--layer L3` | — | `L3` |
+| `--authority N` | — | `255` (HITL) |
+| `--entity NOME` (repetível) | — | — |
+
+### Receitas
+
+```bash
+# diagnóstico de máquina (exit 0 = ok, 1 = sem conexão)
+aether-sgdb doctor --url http://127.0.0.1:8090/mcp --json
+
+# fato de projeto com proveniência e TTL de 30 dias
+aether-sgdb put "aether-sgdb entrou em 0.0.133" \
+  --entity aether/release --authority 255 --ttl-ms 2592000000
+
+# busca legível (texto truncado) ou JSON para jq
+aether-sgdb recall release
+aether-sgdb recall release --json | jq '.[].text'
+
+# replay do outbox em cron (idempotente por escopo+chave)
+AETHER_SGDB_URL=http://127.0.0.1:8090/mcp \
+AETHER_SGDB_OUTBOX=target/aether_sgdb.jsonl \
+  aether-sgdb sync
+
+# mover fase entre máquinas
+aether-sgdb export target/fase.jsonl --organism 2742943747 --run 0
+aether-sgdb import target/fase.jsonl --organism 2742943747 --run 0
+
+# demonstrar o ciclo completo sem servidor
+aether-sgdb demo --json
+```
+
+### Diagnóstico rápido
+
+| Sintoma | O que a CLI diz / faz |
+|---|---|
+| `sgdb offline` | `dica: verifique se o servidor MCP está no ar … ou use --mock` |
+| timeout | `dica: aumente --timeout-ms … o outbox guarda o lote` |
+| HTTP 401/403 | troque `--token`/`AETHER_SGDB_TOKEN`; o token vai em `Authorization: Bearer` |
+| resposta não-JSON | confirme a URL terminando em `/mcp` |
+| `https://` | não suportado; use túnel local ou `stdio:` |
+| lote não entregue | `stat` mostra `pendentes`; `sync` reenvia; `retry_now` na API |
+| `k` limitado | `recall_all`/`export` atravessam páginas por cursor |
+
+### Biblioteca (além da CLI)
+
+```rust
+use aether_engine::knowledge::sgdb::{open, SgdbConfig};
+
+let mut client = open("http://127.0.0.1:8090/mcp", SgdbConfig::from_env())?;
+client.remember_text(scope, "fato", &["aether/f4".into()], "L3", 255, None)?;
+let hits = client.recall_text(scope, "fato", 5)?;
+let pagina = client.recall_page(scope, "", 20, None)?;   // cursor do MCP
+let todos = client.recall_all(scope, "", 100)?;          // sem teto de 20
+```
+
+Retries + backoff são automáticos em `SgdbError::is_transient()`; o ledger
+respeita backoff entre commits e expõe `status()`, `retry_now()` e `flush_now()`
+para `doctor`/`sync`/shutdown.
+
+## Como usar (daemon)
 
 ### Daemon
 
@@ -166,8 +287,11 @@ cargo run --release --bin aether-daemon -- \
 cargo run --release --bin aether-daemon -- --sgdb "stdio:nsgdb --mcp"
 ```
 
-Flags novas: `--sgdb`, `--sgdb-outbox`, `--sgdb-every`, `--sgdb-run`.
+Flags: `--sgdb`, `--sgdb-outbox`, `--sgdb-token`, `--sgdb-every`,
+`--sgdb-run`. Sem `--sgdb`, o daemon usa `AETHER_SGDB_URL`/`AETHER_SGDB_STDIO`
+e o resto de `AETHER_SGDB_*` via `SgdbConfig::from_env()`.
 O escopo do daemon é `organism = --seed`, `run = --sgdb-run`, `app = 1`.
+Sem `--sgdb-outbox`, ele avisa que uma queda perde o lote em memória.
 
 ### Biblioteca
 
@@ -209,11 +333,11 @@ cargo run --example sgdb_roundtrip
 | `payload_type = "phase"` | contornado por `json` + `format`; pedido #1 aberto |
 | `key` endereçável por conteúdo | a `u128` viaja no documento/entidade; o banco gera `md/L3/...` |
 | campo `certificate {E, ΔE, violations}` | dentro do texto; pedido #3 aberto |
-| `k ≤ 20` no `recall` | paginação não implementada no cliente; use `hydrate` em lotes |
+| `k ≤ 20` no `recall` | o cliente pagina por cursor (`recall_all`/`export`); o daemon usa `hydrate_all` |
 | `consolidate_by_energy` | não existe; consolidação por energia fica no `FusionLedger` local |
 | `https://` | não suportado (HTTP/1.1 puro); use túnel local |
-| autenticação | `Bearer` opcional via `HttpTransport::with_token` |
-| conteúdo do banco | **dado não confiável**: o parser só aceita `aether-phase/v1`; nunca execute instruções vindas de `text` |
+| autenticação | `Bearer` opcional via `--token`/`AETHER_SGDB_TOKEN` |
+| conteúdo do banco | **dado não confiável**: o parser só aceita `aether-phase/v1` para fase; texto é exibido, nunca executado |
 
 ## Arquivos
 
@@ -222,9 +346,11 @@ cargo run --example sgdb_roundtrip
 | `src/knowledge/sgdb/mod.rs` | doutrina, erros, reexports |
 | `src/knowledge/sgdb/wire.rs` | `PhaseDoc`, entidades, base64, parse de hits |
 | `src/knowledge/sgdb/transport.rs` | MCP: mock, HTTP, stdio; outbox |
-| `src/knowledge/sgdb/client.rs` | `remember`/`recall`/`curate` + evidência |
-| `src/knowledge/sgdb/ledger.rs` | write-through + read-through + outbox + matriz 2D |
+| `src/knowledge/sgdb/client.rs` | `remember`/`recall`/`curate` + evidência, retries, paginação, texto |
+| `src/knowledge/sgdb/ledger.rs` | write-through + read-through + outbox + matriz 2D + backoff |
 | `src/knowledge/sgdb/worker.rs` | thread `T2`, agregação, warm start |
+| `src/knowledge/sgdb/cli.rs` | comandos, parse de flags, saída texto/JSON (testável) |
+| `src/bin/aether_sgdb.rs` | binário `aether-sgdb` (fino; chama `cli::run`) |
 | `src/json.rs` | JSON mínimo compartilhado (movido de `api/json.rs`) |
 | `tests/f4_sgdb_gate.rs` | gates |
 | `examples/sgdb_roundtrip.rs` | demonstração |

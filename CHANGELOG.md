@@ -3,6 +3,24 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.134] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 10 arquivo(s) (.:1, docs:1, examples:1, src:6, tests:1).
+- Gate: ok (11s).
+
+- `README.md`
+- `docs/SGDB_INTEGRATION.md`
+- `examples/e2_pipeline_digest.rs`
+- `src/bin/aether_daemon.rs`
+- `src/knowledge/sgdb/cli.rs`
+- `src/knowledge/sgdb/client.rs`
+- `src/knowledge/sgdb/ledger.rs`
+- `src/knowledge/sgdb/mod.rs`
+- `src/knowledge/sgdb/transport.rs`
+- `tests/f5_sgdb_cli.rs`
+
 ## [0.0.133] - 2026-11-16
 
 ### Changed

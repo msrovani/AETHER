@@ -127,9 +127,7 @@ impl SgdbConfig {
         if let Some(v) = env_nonempty("AETHER_SGDB_TIMEOUT_MS").and_then(|v| v.parse().ok()) {
             cfg.timeout_ms = v;
         }
-        if let Some(v) = env_nonempty("AETHER_SGDB_RETRY_BACKOFF_MS")
-            .and_then(|v| v.parse().ok())
-        {
+        if let Some(v) = env_nonempty("AETHER_SGDB_RETRY_BACKOFF_MS").and_then(|v| v.parse().ok()) {
             cfg.retry_backoff_ms = v;
         }
         if let Some(v) = env_nonempty("AETHER_SGDB_TOKEN") {
@@ -412,11 +410,7 @@ impl<T: Transport> SgdbClient<T> {
 
     fn backoff(&self, attempt: u32) {
         let factor = 1u64 << attempt.min(5);
-        let delay = self
-            .cfg
-            .retry_backoff_ms
-            .saturating_mul(factor)
-            .min(2_000);
+        let delay = self.cfg.retry_backoff_ms.saturating_mul(factor).min(2_000);
         if delay > 0 {
             std::thread::sleep(Duration::from_millis(delay));
         }
@@ -594,10 +588,7 @@ impl<T: Transport> SgdbClient<T> {
         authority: u8,
         ttl_ms: Option<u64>,
     ) -> Result<Option<String>, SgdbError> {
-        let mut all_entities = vec![
-            wire::scope_entity(scope),
-            "aether/fact".to_string(),
-        ];
+        let mut all_entities = vec![wire::scope_entity(scope), "aether/fact".to_string()];
         all_entities.extend(entities.iter().cloned());
         let args = Json::obj([
             ("author", Json::str("system")),
@@ -608,14 +599,8 @@ impl<T: Transport> SgdbClient<T> {
                 "entities",
                 Json::Arr(all_entities.iter().cloned().map(Json::Str).collect()),
             ),
-            (
-                "scope_app",
-                Json::str(self.cfg.scope_app.clone()),
-            ),
-            (
-                "scope_agent",
-                Json::str(self.cfg.scope_agent.clone()),
-            ),
+            ("scope_app", Json::str(self.cfg.scope_app.clone())),
+            ("scope_agent", Json::str(self.cfg.scope_agent.clone())),
             ("scope_run", Json::str(wire::scope_run(scope))),
             ("if_exists", Json::str(self.cfg.if_exists.clone())),
         ]);

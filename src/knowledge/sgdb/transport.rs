@@ -387,16 +387,13 @@ impl MockTransport {
                 continue;
             }
             let age = self.now_ms.saturating_sub(entry.created_ms) as f32;
-            let score =
-                (score_text(&entry.doc.to_text(), &query) + 1.0 / (1.0 + age / 60_000.0) * 1e-3)
-                    .min(1.0);
+            let score = (score_text(&entry.doc.to_text(), &query)
+                + 1.0 / (1.0 + age / 60_000.0) * 1e-3)
+                .min(1.0);
             hits.push((
                 score,
                 Json::obj([
-                    (
-                        "key",
-                        Json::str(entry.storage_key.clone()),
-                    ),
+                    ("key", Json::str(entry.storage_key.clone())),
                     ("text", Json::str(entry.doc.to_text())),
                     ("score", Json::num(f64::from(score))),
                     ("authority", Json::num(f64::from(entry.doc.authority))),
@@ -466,7 +463,10 @@ impl MockTransport {
                 Ok(Json::obj([
                     ("status", Json::str("ok")),
                     ("op", Json::str("commit_run")),
-                    ("committed", Json::num((self.entries.len() + self.texts.len()) as f64)),
+                    (
+                        "committed",
+                        Json::num((self.entries.len() + self.texts.len()) as f64),
+                    ),
                 ]))
             }
             "audit_checkpoint" => {
@@ -729,8 +729,8 @@ impl HttpTransport {
             .map_err(|_| SgdbError::Offline)?
             .next()
             .ok_or(SgdbError::Offline)?;
-        let mut stream = TcpStream::connect_timeout(&socket, self.timeout)
-            .map_err(|_| SgdbError::Offline)?;
+        let mut stream =
+            TcpStream::connect_timeout(&socket, self.timeout).map_err(|_| SgdbError::Offline)?;
         let _ = stream.set_read_timeout(Some(self.timeout));
         let _ = stream.set_write_timeout(Some(self.timeout));
         let mut headers = format!(

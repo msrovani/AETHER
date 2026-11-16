@@ -26,6 +26,7 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 | 7 | `m7` | `src/morphogenesis.rs` | Plasticidade topológica por energia livre (crescimento hebbiano + poda metabólica) |
 | 8 | `m8` | `src/bin/aether_daemon.rs` | Transdutor físico real + enxame UDP multicast `239.255.42.99:7777` |
 | — | `sgdb` | `src/knowledge/sgdb/` | `T2` do `neural-sgdb`: MCP (mock/HTTP/stdio), outbox, recall→fase |
+| — | `sgdb` | `src/bin/aether_sgdb.rs` | CLI `aether-sgdb`: doctor, put, recall, sync, export/import |
 
 ## Build
 

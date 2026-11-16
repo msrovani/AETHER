@@ -478,15 +478,18 @@ fn doctor(inv: &Invocation, out: &mut dyn Write) -> i32 {
             }
         }
         match &recall {
-            Ok(hits) => {
+            Some(Ok(hits)) => {
                 let _ = writeln!(
                     out,
                     "  recall     : ok ({recall_ms:.1} ms, {} hit(s))",
                     hits.len()
                 );
             }
-            Err(e) => {
+            Some(Err(e)) => {
                 let _ = writeln!(out, "  recall     : FALHOU — {e}");
+            }
+            None => {
+                let _ = writeln!(out, "  recall     : não testado (ping falhou)");
             }
         }
         let _ = writeln!(
@@ -494,7 +497,11 @@ fn doctor(inv: &Invocation, out: &mut dyn Write) -> i32 {
             "  política   : retries={} backoff={} ms timeout={} ms",
             cfg.retries, cfg.retry_backoff_ms, cfg.timeout_ms
         );
-        let _ = writeln!(out, "  status     : {}", if ok { "OK" } else { "SEM CONEXÃO" });
+        let _ = writeln!(
+            out,
+            "  status     : {}",
+            if ok { "OK" } else { "SEM CONEXÃO" }
+        );
         if inv.outbox.is_none() && !inv.mock {
             let _ = writeln!(
                 out,
@@ -539,7 +546,10 @@ fn ping(inv: &Invocation, out: &mut dyn Write) -> i32 {
 fn put(inv: &Invocation, out: &mut dyn Write) -> i32 {
     let text = inv.text();
     if text.trim().is_empty() {
-        let _ = writeln!(out, "erro de uso: put exige o texto como argumento ou --text");
+        let _ = writeln!(
+            out,
+            "erro de uso: put exige o texto como argumento ou --text"
+        );
         return EXIT_USAGE;
     }
     let cfg = inv.config();
@@ -572,10 +582,7 @@ fn put(inv: &Invocation, out: &mut dyn Write) -> i32 {
                     "{}",
                     Json::obj([
                         ("ok", Json::Bool(true)),
-                        (
-                            "key",
-                            Json::Str(key.clone().unwrap_or_default())
-                        ),
+                        ("key", Json::Str(key.clone().unwrap_or_default())),
                         ("layer", Json::str(inv.layer.clone())),
                         ("authority", Json::num(f64::from(inv.authority))),
                     ])
@@ -618,55 +625,80 @@ fn recall(inv: &Invocation, out: &mut dyn Write) -> i32 {
             return EXIT_FAIL;
         }
     };
-    match client.recall_text(inv.scope(), &query, inv.k) {
-        Ok(hits) => {
-            if inv.json {
-                let array = hits
-                    .iter()
-                    .map(|hit| {
-                        Json::obj([
-                            ("text", Json::str(hit.text.clone())),
-                            (
-                                "key",
-                                Json::Str(hit.storage_key.clone().unwrap_or_default()),
-                            ),
-                            ("score", Json::num(f64::from(hit.score))),
-                            ("authority", Json::num(f64::from(hit.authority))),
-                            (
-                                "kind",
-                                Json::str(if hit.is_phase { "phase" } else { "text" }),
-                            ),
-                        ])
-                    })
-                    .collect();
-                let _ = writeln!(out, "{}", Json::Arr(array));
-            } else if hits.is_empty() {
-                let _ = writeln!(out, "nenhum hit para {query:?}");
-            } else {
-                for (i, hit) in hits.iter().enumerate() {
-                    let text = if hit.is_phase {
-                        "[fase] documento aether-phase/v1".to_string()
-                    } else {
-                        summarize(&hit.text, 160)
-                    };
-                    let _ = writeln!(
-                        out,
-                        "{:>2}. {:.2} auth={:<3} {}  {}",
-                        i + 1,
-                        hit.score,
-                        hit.authority,
-                        hit.storage_key.as_deref().unwrap_or("-"),
-                        text
-                    );
-                }
-            }
-            EXIT_OK
+    let scope = inv.scope();
+    let text_hits = client.recall_text(scope, &query, inv.k);
+    let phase_hits = client.recall(scope, &query, inv.k);
+    if text_hits.is_err() && phase_hits.is_err() {
+        let error = text_hits.err().or_else(|| phase_hits.err());
+        if let Some(error) = error {
+            record_failure(out, &error);
         }
-        Err(e) => {
-            record_failure(out, &e);
-            EXIT_FAIL
+        return EXIT_FAIL;
+    }
+    let mut rows: Vec<(f32, String, String, f32, u8, bool)> = Vec::new();
+    if let Ok(hits) = text_hits {
+        for hit in hits {
+            rows.push((
+                hit.score,
+                hit.text,
+                hit.storage_key.unwrap_or_default(),
+                hit.score,
+                hit.authority,
+                hit.is_phase,
+            ));
         }
     }
+    if let Ok(hits) = phase_hits {
+        for hit in hits {
+            rows.push((
+                hit.score,
+                format!(
+                    "fase L{} E={:.3} ΔE={:.3}",
+                    hit.doc.layer.code(),
+                    hit.doc.certificate.energy,
+                    hit.doc.certificate.gap
+                ),
+                hit.storage_key.unwrap_or_default(),
+                hit.score,
+                hit.authority,
+                true,
+            ));
+        }
+    }
+    rows.sort_by(|a, b| b.0.total_cmp(&a.0));
+    if inv.json {
+        let array = rows
+            .iter()
+            .map(|(_, text, key, score, authority, is_phase)| {
+                Json::obj([
+                    ("text", Json::str(text.clone())),
+                    ("key", Json::str(key.clone())),
+                    ("score", Json::num(f64::from(*score))),
+                    ("authority", Json::num(f64::from(*authority))),
+                    ("kind", Json::str(if *is_phase { "phase" } else { "text" })),
+                ])
+            })
+            .collect();
+        let _ = writeln!(out, "{}", Json::Arr(array));
+    } else if rows.is_empty() {
+        let _ = writeln!(out, "nenhum hit para {query:?}");
+    } else {
+        for (i, (_, text, key, score, authority, is_phase)) in rows.iter().enumerate() {
+            let body = if *is_phase {
+                text.clone()
+            } else {
+                summarize(text, 160)
+            };
+            let _ = writeln!(
+                out,
+                "{:>2}. {score:.2} auth={authority:<3} {}  {}",
+                i + 1,
+                if key.is_empty() { "-" } else { key.as_str() },
+                body
+            );
+        }
+    }
+    EXIT_OK
 }
 
 fn stat(inv: &Invocation, out: &mut dyn Write) -> i32 {
@@ -718,7 +750,11 @@ fn stat(inv: &Invocation, out: &mut dyn Write) -> i32 {
         let _ = writeln!(out, "{}", Json::Obj(pairs));
     } else {
         let _ = writeln!(out, "transporte : {}", status.transport);
-        let _ = writeln!(out, "online     : {}", if status.online { "sim" } else { "não" });
+        let _ = writeln!(
+            out,
+            "online     : {}",
+            if status.online { "sim" } else { "não" }
+        );
         let _ = writeln!(out, "pendentes  : {}", status.pending);
         let _ = writeln!(out, "falhas     : {}", status.failures);
         let _ = writeln!(
@@ -786,7 +822,11 @@ fn sync(inv: &Invocation, out: &mut dyn Write) -> i32 {
     } else {
         let _ = writeln!(out, "entregues : {delivered}");
         let _ = writeln!(out, "pendentes : {}", status.pending);
-        let _ = writeln!(out, "commit_run: {}", if committed { "ok" } else { "falhou" });
+        let _ = writeln!(
+            out,
+            "commit_run: {}",
+            if committed { "ok" } else { "falhou" }
+        );
         if let Some(error) = &status.last_error {
             let _ = writeln!(out, "erro      : {error}");
         }
@@ -1167,21 +1207,11 @@ mod tests {
         };
         let path = temp_path("import");
         std::fs::write(&path, format!("{}\n", doc.to_text())).unwrap();
-        let (code, text) = run_capture(&[
-            "import",
-            path.to_str().unwrap(),
-            "--mock",
-            "--json",
-        ]);
+        let (code, text) = run_capture(&["import", path.to_str().unwrap(), "--mock", "--json"]);
         assert_eq!(code, EXIT_OK, "{text}");
         assert!(text.contains("\"written\":1"));
         let exported = temp_path("export");
-        let (code, text) = run_capture(&[
-            "export",
-            exported.to_str().unwrap(),
-            "--mock",
-            "--json",
-        ]);
+        let (code, text) = run_capture(&["export", exported.to_str().unwrap(), "--mock", "--json"]);
         assert_eq!(code, EXIT_OK, "{text}");
         assert!(text.contains("\"documents\":0"));
         let _ = std::fs::remove_file(&path);
