@@ -1,8 +1,8 @@
 # CORPO 3 — errata de execução (E4, E5, E7, E8, F2, F3)
 
 **Autor:** OPENCODE (claim MSG 0121/0123, escopo confirmado em MSG 0128)
-**Data:** 2026-11-15
-**Base:** `aether_engine 0.0.98`, `cargo test --release`, artefatos em `target/`.
+**Data:** 2026-11-16
+**Base:** `aether_engine 0.0.118`, `cargo test --release`, artefatos em `target/`.
 
 Este arquivo é **aditivo**: não reescreve as tabelas de
 `O_PROBLEMA_DOS_3_CORPOS_NAO*.md`. As linhas de fechamento abaixo devem ser
