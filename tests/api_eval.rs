@@ -144,6 +144,9 @@ fn avaliacao_de_usabilidade() {
             );
             let (st, resp) = request(addr, "POST", "/v1/aether/cue", &q);
             assert_eq!(st, 200);
+            if i == 0 && name == "paráfrase" {
+                println!("DEBUG parafrase resp: {resp}");
+            }
             if resp.contains("\"abstain\":true") {
                 abstained += 1;
             }

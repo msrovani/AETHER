@@ -81,6 +81,9 @@ aether_engine/
 │   ├── core/
 │   │   ├── mod.rs
 │   │   ├── thermodynamic_solver.rs   # Módulo 1 — Ballistic Simulated Bifurcation
+│   │   ├── logic_pipeline.rs         # E2 — Logos (presolve→BSB+Lagrange→Certificate)
+│   │   ├── sudoku_csp.rs             # E2d — oráculo CSP Sudoku-like (lab)
+│   │   ├── constraint_acquisition.rs # E2d — CRAM pairwise → QUBO (lab)
 │   │   ├── wave_interference.rs      # Módulo 2 — Operador Neural de Fourier
 │   │   └── kuramoto_field.rs         # Módulo 3 — Sincronização de fase P2P (UDP)
 │   ├── simulation/
@@ -168,6 +171,11 @@ Regras de engenharia que sustentam essas metas:
 ## 4. Especificação Matemática e de Implementação por Módulo
 
 ### Módulo 1: `src/core/thermodynamic_solver.rs` — Relaxamento Termodinâmico
+
+Extensão Logos **E2d** (lab, feature `m1`, **não** é pilar novo): 
+`sudoku_csp` + `constraint_acquisition` aprendem custos pairwise (CRAM /
+arXiv:2611.17309) e emitem `J,h` para o mesmo `BsbCore`/`Certificate`. Doc:
+`docs/CRAM_LOGOS.md`. Probe: `examples/cram_logos_probe.rs`.
 
 Solver de **Bifurcação Simulada Balística (bSB)** para otimização combinatória e tomada de decisão
 como relaxamento de um Hamiltoniano de Ising:

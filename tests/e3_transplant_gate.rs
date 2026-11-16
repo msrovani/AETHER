@@ -477,7 +477,13 @@ fn g3_abstencao_por_margem_tem_poucos_falsos_confiaveis() {
         region.push((e, r));
     }
     for (e, r) in &region {
-        let hit = store.query_match(e, r, &mask).expect("q");
+        // regime ruidoso: pista com 0,6 rad de ruído (transplante imperfeito)
+        let mut cue = e.clone();
+        let noise = gauss_vec(&mut rng, dim, 0.6);
+        for (a, b) in cue.iter_mut().zip(&noise) {
+            *a = (*a + *b).rem_euclid(std::f32::consts::TAU);
+        }
+        let hit = store.query_match(&cue, r, &mask).expect("q");
         in_domain.push(hit.margin);
         in_role.push(hit.role_similarity);
     }

@@ -54,6 +54,7 @@ pub struct SearchReport {
 /// Workspace pré-alocado da busca exata.
 ///
 /// Construa **uma vez** e reutilize em `solve`; a busca em si não aloca.
+#[derive(Debug)]
 pub struct ExactSearch {
     assign: [i8; ROOF_MAX_N],
     sub_j: [f64; ROOF_MAX_N * ROOF_MAX_N],
@@ -198,6 +199,52 @@ impl ExactSearch {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::{Rng, SeedableRng};
+    use rand_chacha::ChaCha8Rng;
+
+    const DELTA: f64 = 0.6;
+    const SEED0: u64 = 0xE2C_2026;
+
+    fn make_instance(n: usize, k: usize, delta: f64, seed: u64) -> (Vec<f64>, Vec<f64>) {
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        let mut j = vec![0.0f64; n * n];
+        for i in 0..n {
+            for m in (i + 1)..n {
+                let w = if rng.gen::<bool>() { 1.0 } else { -1.0 };
+                j[i * n + m] = w;
+                j[m * n + i] = w;
+            }
+        }
+        let mut h = vec![0.0f64; n];
+        let mut order: Vec<usize> = (0..n).collect();
+        for idx in (1..n).rev() {
+            let sw = rng.gen_range(0..=idx);
+            order.swap(idx, sw);
+        }
+        for &v in order.iter().take(k) {
+            let row_abs: f64 = j[v * n..(v + 1) * n]
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| *idx != v)
+                .map(|(_, x)| x.abs())
+                .sum();
+            let sign = if rng.gen::<bool>() { 1.0 } else { -1.0 };
+            h[v] = sign * (row_abs + delta);
+        }
+        (j, h)
+    }
+
+    fn brute_force(n: usize, j: &[f64], h: &[f64]) -> f64 {
+        let mut best = f64::INFINITY;
+        let mut s = vec![0i8; n];
+        for mask in 0..(1u64 << n) {
+            for (i, si) in s.iter_mut().enumerate() {
+                *si = if (mask >> i) & 1 == 0 { -1 } else { 1 };
+            }
+            best = best.min(energy(j, h, n, &s));
+        }
+        best
+    }
 
     /// Gadget estrela: centro com acoplamento `−1` e `k` folhas com `h = −10`.
     /// O centro é constante em todos os ótimos e **não** é dominado por `h`.

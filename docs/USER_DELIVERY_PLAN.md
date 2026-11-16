@@ -48,6 +48,7 @@ fluxo padrão, backends de produto A/B e superfície cloud/auth.
 | Example campo | `examples/field_probe.rs` | Demo | Pronto | Entropia vs carga |
 | Example transdutor | `examples/transducer_probe.rs` | Demo | Pronto | `F(t)` + sparkline Zero-UI |
 | Example BAM | `examples/bam_probe.rs` | Research | Pronto | Só medição (não produto) |
+| Example CRAM→Logos | `examples/cram_logos_probe.rs` | Research / lab only | Pronto | E2d; **não** hub — ver `docs/CRAM_LOGOS.md` |
 | Contrato produtos A/B/C | `docs/TRANSDUCER_IO.md` | Spec | Contrato | Sem backend CAN/CSI shippável |
 | Transdutor sintético | `src/transducer_io.rs` | Lab | Pronto | Baseline determinístico |
 | Transdutor host (daemon) | `aether_daemon` / `HardwareTransducer` | Embrião C | Parcial | Jitter/CPU/rede do próprio processo |

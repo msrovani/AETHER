@@ -81,8 +81,8 @@ impl PairwiseEnergy {
                 continue;
             };
             e += self.bias[di as usize];
-            for j in (i + 1)..self.shape.n_cells() {
-                let Some(dj) = board.cells[j] else {
+            for (j, cell) in board.cells.iter().enumerate().skip(i + 1) {
+                let Some(dj) = *cell else {
                     continue;
                 };
                 if let Some(rel) = relation(self.shape, i, j) {
@@ -151,8 +151,8 @@ pub fn pairwise_to_qubo(
     }
 
     // Pistas: campo forte empurrando o dígito correto
-    for i in 0..shape.n_cells() {
-        if let Some(d) = clues.cells[i] {
+    for (i, cell) in clues.cells.iter().enumerate() {
+        if let Some(d) = *cell {
             let d = d as usize;
             for a in 0..c {
                 let u = shape.spin(i, a);
@@ -207,11 +207,11 @@ pub fn train_pseudolikelihood(
             // Campo local L_a = −bias_a − Σ_{j,b} K[a,b] 1[digit_j=b]
             for a in 0..c {
                 let mut field = -energy.bias[a];
-                for j in 0..shape.n_cells() {
+                for (j, cell) in board.cells.iter().enumerate() {
                     if j == i {
                         continue;
                     }
-                    let Some(dj) = board.cells[j] else {
+                    let Some(dj) = *cell else {
                         continue;
                     };
                     let Some(rel) = relation(shape, i, j) else {
@@ -225,12 +225,12 @@ pub fn train_pseudolikelihood(
             // softmax
             let max_l = logits.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
             let mut sum = 0.0;
-            for a in 0..c {
-                logits[a] = (logits[a] - max_l).exp();
-                sum += logits[a];
+            for x in logits.iter_mut() {
+                *x = (*x - max_l).exp();
+                sum += *x;
             }
-            for a in 0..c {
-                logits[a] /= sum;
+            for x in logits.iter_mut() {
+                *x /= sum;
             }
             // ∇: (p_a − 1[a=true]) * ∂field/∂θ ; field = −bias − K·…
             // Maximizar log p_true ⇒ gradiente em bias_a: +(p_a − 1_true)
@@ -238,11 +238,11 @@ pub fn train_pseudolikelihood(
             for a in 0..c {
                 let err = logits[a] - if a == true_d { 1.0 } else { 0.0 };
                 energy.bias[a] += lr * err;
-                for j in 0..shape.n_cells() {
+                for (j, cell) in board.cells.iter().enumerate() {
                     if j == i {
                         continue;
                     }
-                    let Some(dj) = board.cells[j] else {
+                    let Some(dj) = *cell else {
                         continue;
                     };
                     let Some(rel) = relation(shape, i, j) else {

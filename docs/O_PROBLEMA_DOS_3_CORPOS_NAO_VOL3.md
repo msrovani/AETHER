@@ -404,6 +404,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | `NO_BINDING_HEAD` | I | ✅ **resolvido (E1)** | 1.000 fatos sharded · recall@1 **1,0000** · p50 **5,80 µs** · **0 alloc** | — |
 | `NO_ENERGY_CERT` | I | ✅ **resolvido (E2)** | resposta sempre com `(E, ΔE, violações, proveniência)`; 169/169 testemunhas válidas | — |
 | `NO_ISING_CONSTRAINTS` | I | ✅ **resolvido (E2)** | gadget exato de 3-SAT (2 spins aux) + multiplicadores de Lagrange; 100% vs 5,3% do BSB puro | — |
+| *(E2d aquisição)* | I | ✅ **lab** | custos pairwise CRAM→QUBO offline; warrant na inferência continua sendo o `Certificate` (`docs/CRAM_LOGOS.md`) | — |
 | `NO_SELF_FIELD` | I | alto | E4 |
 | `NO_PROGRESS_CURRICULUM` | I | médio | E5 |
 | `CACHE_METRIC_ABSENT` | I | médio | sonda LLC |

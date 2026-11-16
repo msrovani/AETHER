@@ -153,6 +153,7 @@ um sistema que faça a álgebra *exata* (fase) deveria ser mais robusto, não me
 | **PRISM** · arXiv:2512.01208 | restrição iso-energética (só fase, ganho 1.0): COMET 0.799 vs 0.821 do Transformer, com 11,5% menos parâmetros |
 | **Attention by Synchronization** · arXiv:2606.12059 | atenção = equilíbrio de Kuramoto–Lohe; ponto fixo único e atrativo; gap de PPL fecha com `d_osc` |
 | **WONN** · arXiv:2605.20922 | Winfree ONN escala para ImageNet-1K e **Sudoku/Maze**; 80,1% no Maze-hard com 1% dos parâmetros do SOTA |
+| **CRAM** · arXiv:2611.17309 | energia clássica pairwise aprende restrições 1000× mais rápido que looped; aviso: Sudoku/Maze **não** medem scaling de reasoning |
 | **CAWN** · arXiv:2604.04250 | ondas acústicas contínuas, estado O(1), 2M tokens de contexto |
 | **Emruli/Gayler/Sandin** (DiVA) | VSA + *sparse distributed memory* para mapeamento analógico em Raven |
 
@@ -217,6 +218,12 @@ graça**. T09 descobre a lei de um sistema observado — não faz matemática ab
 Euler simplético, paredes inelásticas, elitismo) é um solver de Ising que hoje só
 decide spins — pode ser **o raciocinador**.
 
+Os custos do landscape **não precisam ser só hand-coded**: o experimento **E2d**
+mostra aquisição CRAM-style (`K` pairwise por pseudolikelihood, sem BPTT) que
+alimenta o mesmo `BsbCore`/`Certificate` — ver `docs/CRAM_LOGOS.md` e
+arXiv:2611.17309. A decisão continua Ising; o atestado continua por
+`violations == 0`.
+
 E conhecimento geral não precisa ser armazenado como fatos: pode ser importado
 como **geometria**.
 
@@ -224,6 +231,7 @@ como **geometria**.
 
 | Trabalho | Achado |
 |---|---|
+| **CRAM** · arXiv:2611.17309 | aprende energia pairwise de soluções; treina em ms; early-stop por limiar — base do E2d (aquisição → Logos) |
 | **Ising/QUBO p/ implicantes** · arXiv:2605.07017 | SAT→QUBO com semântica de "don't care" (duas polaridades por variável): *ground state* = implicante curto, não atribuição total |
 | **Limits of Ising Machines for SAT** · arXiv:2511.21046 | ⚠️ restrições apertadas viram só penalidades e **distorcem o landscape**; decomposição ingênua propaga erro. Precisa pré-processamento simbólico + partição *structure-aware*. Muda solver clássico <3×, Ising >150× |
 | **p-bit guided CDCL** · arXiv:2605.04033 | amostras de baixa violação viram *assumptions* para CDCL: −80,8% conflitos, correção preservada |
@@ -507,6 +515,7 @@ Todos com: `--release`, seed fixa (`ChaCha8Rng`), `alloc_invariants` verde,
 |---|---|---|---|
 | **E1** | probe de linguagem em fase | `examples/phase_language_probe.rs` | recuperação papel–filler com SNR > 5σ, 0 alloc |
 | **E2** ✅ | lógica como Ising + certificado | `examples/ising_logic_probe.rs` | **169/169** satisfatíveis `n = 20` (100%) · decisivas **100%** · **0 alloc** · G3b **FAIL declarado** (23× o teto) |
+| **E2d** ✅ | aquisição CRAM→Logos (custos pairwise) | `examples/cram_logos_probe.rs` · `docs/CRAM_LOGOS.md` | Shidoku 4×4: hand-set **100%** · PL **100%** · fit ~**3,7 ms** · G1–G3 PASS · 52 params |
 | **E3** ✅ | transplantação de embeddings | `examples/transplant_probe.rs` | **ρ = 0,9528** · relação **0,9990** · analogia R@1 **0,9549** · proveniência **100%** |
 | **E4** | self-field + ablação | `tests/self_field_audit.rs` | ECE melhora; T01 **não** regride |
 | **E5** | currículo por progresso | `tests/curriculum_audit.rs` | readaptação pós-ruptura < T03 (150 ciclos) |
@@ -578,6 +587,7 @@ Qualquer F1–F4 é um resultado legítimo e publicável. O pior desfecho não �
 | 2512.01208 | Language as a Wave Phenomenon (PRISM) | 1 | fase pura, COMET 0.799 |
 | 2606.12059 | Attention by Synchronization in Coupled Oscillator Networks | 1 | atenção = Kuramoto–Lohe |
 | 2605.20922 | Winfree Oscillatory Neural Network (WONN) | 1 | osciladores em Sudoku/Maze/ImageNet |
+| 2611.17309 | Classical Energies Learn to Reason 1,000× Faster than Looped Models (CRAM) | 2 | E2d aquisição de restrições → Logos |
 | 2604.04250 | CAWN: Continuous Acoustic Wave Networks | 1 | sequência contínua O(1) |
 | 2411.08290 | RESOLVE: Relational Reasoning with Vector Symbolic Processing | 1 | objeto + relação |
 | 2405.14436 | LARS-VSA: A VSA for Learning with Abstract Rules | 1 | *relational bottleneck* |
@@ -706,6 +716,9 @@ Propostas deste dossiê (ainda inexistentes):
 
 # E2 — lógica como Ising + certificado de factibilidade
 .\scripts\cargo.ps1 run --release --example ising_logic_probe
+
+# E2d — aquisição CRAM de restrições → Logos (Certificate)
+.\scripts\cargo.ps1 run --release --example cram_logos_probe --features m1
 
 # E3 — transplantação de embeddings
 .\scripts\cargo.ps1 run --release --example transplant_probe

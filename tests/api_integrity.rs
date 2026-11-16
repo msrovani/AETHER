@@ -147,7 +147,7 @@ fn nao_finitos_sao_recusados() {
     let addr = start();
     let body = format!(
         r#"{{"key":"1","phases":[1e999,{}],"scope":{{"organism":1}}}}"#,
-        "0.5,".repeat(158)
+        "0.5,".repeat(159)
     );
     let (st, resp) = request(addr, "POST", "/v1/aether/remember", &body);
     assert_eq!(st, 400, "{resp}");

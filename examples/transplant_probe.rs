@@ -503,7 +503,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if hit.value_index == local {
                     rel_hits[si] += 1;
                 }
-                if si == 0 {
+                if si == 1 {
+                    // calibração no regime **ruidoso** (transplante imperfeito):
+                    // com pista exata `role_similarity` satura em 1,0 e o limiar
+                    // de evidência fica degenerado.
                     margins.push(hit.margin);
                     role_margins.push(hit.role_similarity);
                     answer_tags_total += 1;
@@ -620,7 +623,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             let (e, r, _) = ds.triples[i];
             let local = i - shard_off;
-            let hit = store.query_match(&entity_phase[e], &relation_phase[r], &mask)?;
+            // mesma distribuição da calibração: ruído de pista 0,6 rad
+            let mut cue = entity_phase[e].clone();
+            let noise = gauss_vec(&mut rng_noise, FHRR_DIM, 0.6);
+            for (a, b) in cue.iter_mut().zip(&noise) {
+                *a = (*a + *b).rem_euclid(std::f32::consts::TAU);
+            }
+            let hit = store.query_match(&cue, &relation_phase[r], &mask)?;
             if hit.margin >= threshold && hit.role_similarity >= evidence_cut {
                 accepted += 1;
                 if hit.value_index != local {
@@ -651,7 +660,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         0.0
     };
 
-    println!("abstenção (evidência `role_similarity` + margem, calibradas no treino)");
+    println!("abstenção (evidência `role_similarity` + margem; calibração e avaliação com ruído de 0,6 rad)");
     println!(
         "  limiar de margem (50% cobertura): {threshold:.4} · evidência (p5): {evidence_cut:.4}"
     );
@@ -764,7 +773,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "  \"analogy_r1_atom_noise\": {an1_noise:.6}, \"analogy_r1_atom_noise2\": {an1_noise2:.6},\n"
     ));
     json.push_str(&format!(
-        "  \"threshold\": {threshold:.6}, \"accepted\": {accepted}, \"false_confident\": {false_conf:.6},\n"
+        "  \"threshold\": {threshold:.6}, \"evidence_cut\": {evidence_cut:.6}, \"accepted\": {accepted}, \"false_confident\": {false_conf:.6},\n"
     ));
     json.push_str(&format!(
         "  \"ood_abstained\": {:.6}, \"verifier_ms\": {verifier_ms:.4}, \"verifier_allocs\": {allocs},\n",
