@@ -17,23 +17,26 @@ use aether_engine::core::s0_body::{run_s0_fixed, HostSample};
 /// Host de referência sintético: latências medianas de uma máquina saudável.
 /// Congelado de propósito — é o contrato do gate.
 const REF: HostSample = HostSample {
-    jitter_us: 6.0,
-    cpu_us: 120.0,
-    disk_us: 250.0,
-    net_us: 40.0,
+    jitter_us: 10.0,
+    cpu_us: 220.0,
+    disk_us: 450.0,
+    net_us: 70.0,
 };
 
 /// Sementes do gate: o valor reportado é a mediana, mas **todas** precisam
 /// passar nas três hipóteses.
+///
+/// Atenção: `LcgState::new` faz `state | 1`, então par/ímpar consecutivos
+/// colapsam no mesmo estado — as seeds abaixo são distintas depois do `| 1`.
 const SEEDS: [u64; 8] = [
     0xA37E_0E74,
-    0xA37E_0E75,
-    0xA37E_0E76,
-    0xA37E_0E77,
-    0xA37E_0E78,
-    0xA37E_0E79,
-    0xA37E_0E7A,
-    0xA37E_0E7B,
+    0x1234_5678,
+    0x0BAD_F00D,
+    0xDEAD_BEEF,
+    0x5EED_1234,
+    0x7777_7777,
+    0xC0FF_EE00,
+    0x9E37_79B9,
 ];
 
 #[test]

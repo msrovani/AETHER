@@ -18,6 +18,14 @@ pub mod presolve;
 #[cfg(feature = "m1")]
 pub mod logic_pipeline;
 
+// E2d — CSP Sudoku-like (oráculo de violações) + aquisição CRAM de custos
+// pairwise → QUBO → BsbCore → Certificate. Lab only; ver docs/CRAM_LOGOS.md.
+#[cfg(feature = "m1")]
+pub mod sudoku_csp;
+
+#[cfg(feature = "m1")]
+pub mod constraint_acquisition;
+
 // F1/E3 — proveniência e ponte de eventos read-only (SPSC, zero-alloc).
 #[cfg(feature = "m1")]
 pub mod knowledge_bridge;

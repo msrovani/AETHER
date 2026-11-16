@@ -2,33 +2,53 @@
 //!
 //! Sobe o servidor em porta efêmera e fala HTTP/1.1 cru por `TcpStream`.
 //! Cobre: saúde, catálogo, `remember`/`cue` com isolamento de escopo, abstenção,
-//! `solve` com ótimo conhecido, dialeto OpenAI e dialeto llama.cpp.
+//! `solve`, SSE, auth/escopo, persistência em disco, concorrência e os dois
+//! dialetos (OpenAI e llama.cpp).
 
 #![cfg(feature = "api")]
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
+use std::path::PathBuf;
 use std::time::Duration;
 
-use aether_engine::api;
+use aether_engine::api::{self, ApiConfig};
 
 fn start() -> SocketAddr {
+    start_cfg(ApiConfig {
+        threads: 2,
+        ..ApiConfig::default()
+    })
+}
+
+fn start_cfg(cfg: ApiConfig) -> SocketAddr {
     let listener = api::bind("127.0.0.1:0".parse().unwrap()).expect("bind");
     let addr = listener.local_addr().expect("addr");
     std::thread::spawn(move || {
-        let _ = api::serve(listener);
+        let _ = api::serve_listener(listener, cfg);
     });
     addr
 }
 
-fn request(addr: SocketAddr, method: &str, path: &str, body: &str) -> (u16, String) {
+fn request_h(
+    addr: SocketAddr,
+    method: &str,
+    path: &str,
+    body: &str,
+    headers: &[(&str, &str)],
+) -> (u16, String) {
     let mut s = TcpStream::connect(addr).expect("connect");
     s.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
-    let req = format!(
+    let mut req = format!(
         "{method} {path} HTTP/1.1\r\nhost: localhost\r\ncontent-type: application/json\r\n\
-         content-length: {}\r\nconnection: close\r\n\r\n{body}",
+         content-length: {}\r\nconnection: close\r\n",
         body.len()
     );
+    for (k, v) in headers {
+        req.push_str(&format!("{k}: {v}\r\n"));
+    }
+    req.push_str("\r\n");
+    req.push_str(body);
     s.write_all(req.as_bytes()).expect("write");
     let mut resp = String::new();
     s.read_to_string(&mut resp).expect("read");
@@ -42,11 +62,23 @@ fn request(addr: SocketAddr, method: &str, path: &str, body: &str) -> (u16, Stri
     (status, payload.to_string())
 }
 
+fn request(addr: SocketAddr, method: &str, path: &str, body: &str) -> (u16, String) {
+    request_h(addr, method, path, body, &[])
+}
+
 fn phases() -> String {
     let v: Vec<String> = (0..160)
         .map(|i| format!("{:.6}", (i as f32 * 0.01).sin()))
         .collect();
     format!("[{}]", v.join(","))
+}
+
+fn remember_body(key: &str, organism: u64) -> String {
+    format!(
+        r#"{{"key":"{key}","phases":{},"scope":{{"organism":{organism},"run":1,"app":1}},
+            "certificate":{{"energy":-1.5,"gap":0.25,"violations":0}},"authority":255}}"#,
+        phases()
+    )
 }
 
 #[test]
@@ -69,16 +101,14 @@ fn saude_e_catalogo() {
 #[test]
 fn remember_e_cue_com_isolamento_de_escopo() {
     let addr = start();
-    let body = format!(
-        r#"{{"key":"42","phases":{},"scope":{{"organism":1,"run":1,"app":1}},
-            "certificate":{{"energy":-1.5,"gap":0.25,"violations":0}},"authority":255}}"#,
-        phases()
-    );
-    let (st, resp) = request(addr, "POST", "/v1/aether/remember", &body);
+    let (st, resp) = request(addr, "POST", "/v1/aether/remember", &remember_body("42", 1));
     assert_eq!(st, 200, "{resp}");
     assert!(resp.contains("\"stored\":true"), "{resp}");
 
-    let query = format!(r#"{{"scope":{{"organism":1,"run":1,"app":1}},"query":{}}}"#, phases());
+    let query = format!(
+        r#"{{"scope":{{"organism":1,"run":1,"app":1}},"query":{}}}"#,
+        phases()
+    );
     let (st, resp) = request(addr, "POST", "/v1/aether/cue", &query);
     assert_eq!(st, 200, "{resp}");
     assert!(resp.contains("\"abstain\":false"), "{resp}");
@@ -86,7 +116,10 @@ fn remember_e_cue_com_isolamento_de_escopo() {
     assert!(resp.contains("\"authority\":255"), "{resp}");
 
     // Outro organismo no mesmo servidor: abstém, nunca devolve o de 1.
-    let outro = format!(r#"{{"scope":{{"organism":2,"run":1,"app":1}},"query":{}}}"#, phases());
+    let outro = format!(
+        r#"{{"scope":{{"organism":2,"run":1,"app":1}},"query":{}}}"#,
+        phases()
+    );
     let (st, resp) = request(addr, "POST", "/v1/aether/cue", &outro);
     assert_eq!(st, 200, "{resp}");
     assert!(resp.contains("\"abstain\":true"), "{resp}");
@@ -103,7 +136,10 @@ fn solve_atinge_otimo_conhecido() {
     assert_eq!(st, 200, "{resp}");
     assert!(resp.contains("\"energy\":-1"), "{resp}");
     assert!(resp.contains("\"coherent\":true"), "{resp}");
-    assert!(resp.contains("\"states\":[-1,-1]") || resp.contains("\"states\":[1,1]"), "{resp}");
+    assert!(
+        resp.contains("\"states\":[-1,-1]") || resp.contains("\"states\":[1,1]"),
+        "{resp}"
+    );
 }
 
 #[test]
@@ -116,16 +152,13 @@ fn openai_chat_abstem_sem_ledger_e_cita_com_ledger() {
     assert!(resp.contains("content_filter"), "{resp}");
     assert!(resp.contains("empty_scope"), "{resp}");
 
-    // Popula o escopo default (0,0,0) e o mesmo prompt passa a citar.
-    let body = format!(
-        r#"{{"key":"7","phases":{},"scope":{{"organism":0,"run":0,"app":0}},
-            "certificate":{{"energy":-2.0,"gap":0.5,"violations":0}},"authority":200}}"#,
-        phases()
-    );
-    let (st, _) = request(addr, "POST", "/v1/aether/remember", &body);
+    let (st, _) = request(addr, "POST", "/v1/aether/remember", &remember_body("7", 0));
     assert_eq!(st, 200);
 
-    let (st, resp) = request(addr, "POST", "/v1/chat/completions", chat);
+    let chat_scoped = r#"{"model":"aether-phase-160",
+        "aether":{"scope":{"organism":0,"run":1,"app":1}},
+        "messages":[{"role":"user","content":"ola"}]}"#;
+    let (st, resp) = request(addr, "POST", "/v1/chat/completions", chat_scoped);
     assert_eq!(st, 200, "{resp}");
     assert!(resp.contains("\"finish_reason\":\"stop\""), "{resp}");
     assert!(resp.contains("\"verdict\":\"act\""), "{resp}");
@@ -142,4 +175,123 @@ fn dialeto_llama_cpp_e_404() {
     let (st, resp) = request(addr, "GET", "/nao-existe", "");
     assert_eq!(st, 404, "{resp}");
     assert!(resp.contains("not_found"), "{resp}");
+}
+
+#[test]
+fn sse_entrega_chunks_e_done() {
+    let addr = start();
+    let (st, _) = request(addr, "POST", "/v1/aether/remember", &remember_body("1", 0));
+    assert_eq!(st, 200);
+    let chat = r#"{"model":"aether-phase-160","stream":true,
+                   "messages":[{"role":"user","content":"ola"}]}"#;
+    let (st, resp) = request(addr, "POST", "/v1/chat/completions", chat);
+    assert_eq!(st, 200, "{resp}");
+    assert!(resp.contains("\"object\":\"chat.completion.chunk\""), "{resp}");
+    assert!(resp.contains("\"role\":\"assistant\""), "{resp}");
+    assert!(resp.contains("data: [DONE]"), "{resp}");
+    assert!(resp.contains("\"finish_reason\":\"stop\""), "{resp}");
+}
+
+#[test]
+fn auth_exige_token_e_limita_organismo() {
+    let addr = start_cfg(ApiConfig {
+        token: Some("s3cr3t".to_string()),
+        organism: Some(1),
+        threads: 2,
+        ..ApiConfig::default()
+    });
+
+    // liveness é público
+    let (st, _) = request(addr, "GET", "/health", "");
+    assert_eq!(st, 200);
+
+    // sem token: 401
+    let (st, resp) = request(addr, "POST", "/v1/aether/remember", &remember_body("1", 1));
+    assert_eq!(st, 401, "{resp}");
+    assert!(resp.contains("unauthorized"), "{resp}");
+
+    // token errado: 401
+    let (st, _) = request_h(
+        addr,
+        "POST",
+        "/v1/aether/remember",
+        &remember_body("1", 1),
+        &[("authorization", "Bearer nope")],
+    );
+    assert_eq!(st, 401);
+
+    // token certo, organismo errado: 403
+    let (st, resp) = request_h(
+        addr,
+        "POST",
+        "/v1/aether/remember",
+        &remember_body("1", 2),
+        &[("authorization", "Bearer s3cr3t")],
+    );
+    assert_eq!(st, 403, "{resp}");
+    assert!(resp.contains("forbidden_scope"), "{resp}");
+
+    // token certo, organismo certo: 200
+    let (st, resp) = request_h(
+        addr,
+        "POST",
+        "/v1/aether/remember",
+        &remember_body("1", 1),
+        &[("authorization", "Bearer s3cr3t")],
+    );
+    assert_eq!(st, 200, "{resp}");
+    assert!(resp.contains("\"stored\":true"), "{resp}");
+}
+
+#[test]
+fn persistencia_em_disco_sobrevive_a_reinicio() {
+    let path = std::env::temp_dir().join(format!(
+        "aether_api_ledger_{}_{}.jsonl",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    let _ = std::fs::remove_file(&path);
+    let cfg = ApiConfig {
+        ledger_path: Some(PathBuf::from(&path)),
+        threads: 2,
+        ..ApiConfig::default()
+    };
+
+    let a = start_cfg(cfg.clone());
+    let (st, resp) = request(a, "POST", "/v1/aether/remember", &remember_body("99", 3));
+    assert_eq!(st, 200, "{resp}");
+    assert!(resp.contains("\"persisted\":true"), "{resp}");
+
+    // "reinício": outro servidor, mesmo arquivo
+    let b = start_cfg(cfg);
+    let (st, resp) = request(b, "GET", "/health", "");
+    assert_eq!(st, 200);
+    assert!(resp.contains("\"ledger_entries\":1"), "{resp}");
+
+    let query = format!(
+        r#"{{"scope":{{"organism":3,"run":1,"app":1}},"query":{}}}"#,
+        phases()
+    );
+    let (st, resp) = request(b, "POST", "/v1/aether/cue", &query);
+    assert_eq!(st, 200, "{resp}");
+    assert!(resp.contains("\"key\":\"99\""), "{resp}");
+
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn concorrencia_atende_em_paralelo() {
+    let addr = start();
+    let mut handles = Vec::new();
+    for _ in 0..8 {
+        handles.push(std::thread::spawn(move || {
+            request(addr, "GET", "/health", "").0
+        }));
+    }
+    for h in handles {
+        assert_eq!(h.join().unwrap(), 200);
+    }
 }
