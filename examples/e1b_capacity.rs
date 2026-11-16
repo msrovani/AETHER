@@ -296,7 +296,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // ---------------- Arm B ----------------
-    println!("Arm B — memória de fase (M5): erro angular, 40% da pista oculto");
+    println!(
+        "Arm B — memória de fase (M5): erro angular, {:.0}% da pista oculto",
+        100.0 * args.hidden
+    );
     let n = args.dim;
     let mem_ref = ComplexPhaseMemory::new(n);
     let hidden = ((n as f64) * args.hidden).round() as usize;
