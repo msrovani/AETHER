@@ -460,3 +460,32 @@ clippy `-D warnings` limpo.
 **E2c-3B (2-SAT)** deixa de ser necessário para `n ≤ 64`: a árvore fechada é o
 certificado. Ele volta a valer para **certificar sem enumerar** (velocidade) ou
 para `n > 64`.
+
+---
+
+## 9. Lições (2026-11-16)
+
+1. **Gate analítico antes do estatístico.** O bound `c0 − flow` passou em 90
+   instâncias densas e caiu em `n=1`. Um caso com solução fechada vale mais que
+   cem amostras.
+2. **Fixações no root não são a métrica.** Em vidro puro (`h=0`) o número é
+   **0 por teorema** (simetria `s→−s`). A métrica útil é o tamanho da árvore e o
+   certificado.
+3. **Autarkia tem teto.** Naumann–Andres (2026): nenhum autarky de posiforme
+   supera o roof dual. *Strong persistency* não é extensão; probing/B&B são.
+4. **Propagador > redutor.** O roof dual não reduz o vidro no root, mas uma
+   ramificação quebra a simetria e ele passa a fixar o resto. Foi o que fechou
+   `n ≤ 48` e, com bound, `n=64`.
+5. **Bits não são spins.** `pass_into` devolve 0/1; o estado interno usa
+   0=livre/±1. Confundir os dois gera recursão infinita — e stack overflow.
+6. **Isole o crate quando a lib está em edição.** Um crate temporário com
+   `#[path]` nos três arquivos necessários validou o B&B enquanto outro agente
+   editava `logic_pipeline.rs`.
+7. **Latência sob carga não é latência.** E1 g5: 11,4 µs isolado vs 30,1 µs na
+   suíte paralela. Alvos de latência precisam de execução isolada.
+8. **Baseline fraco transforma gate em teatro.** E8 compara contra Oja local,
+   não backprop; `regression = max(0, …)` é unilateral.
+9. **Nomeie o que é janela e o que é capacidade.** `pattern_capacity()=40` é
+   armazenamento; o recall medido é 4–8. Docstring certo evita “otimismo de 5×”.
+10. **Registre o custo, não só o resultado.** `n=64` fecha, mas em ~4,2M nós e
+    ~2 min/instância: é T1/T2, não T0.

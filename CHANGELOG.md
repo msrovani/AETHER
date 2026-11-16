@@ -3,6 +3,31 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.126] - 2026-11-16
+
+### Added
+
+- `RoofDualWorkspace::bound_into`: lower bound `C + ν` do roof dual, com
+  `C = c0 + Σ min(0,l_i) − Σ|q_ij|`; `pass_into`/`solve_into` intactos.
+- `tests/e2c3_bound_gate.rs`: gates analíticos `n=1`/`n=2` + 300 instâncias
+  densas (`bound ≤ ótimo`).
+- `examples/e2c3_probe.rs`: modos `--scale`, `--deep`, `--flow`; artefato
+  `target/aether_e2c3_scale.json`.
+
+### Changed
+
+- `ExactSearch` virou B&B: poda por `const_fixo + bound_resíduo ≥ incumbente`,
+  incumbente guloso + descida coordenada, ramificação na primeira livre e
+  cascata para fixar.
+- Q4: `n=48` com 52.790 nós (vs 222.270 sem bound); `n=64` fecha 3/3 em ~4,2M
+  nós (~2 min/instância).
+- `docs/AUDIT_CLAIMS_VOL3.md`: §8.7 (E2c-3C) e §9 (lições).
+
+### Fixed
+
+- `pass_into` devolve bits 0/1; o estado usa 0=livre/±1. A conversão evita
+  recursão infinita ao aplicar fixações.
+
 ## [0.0.125] - 2026-11-16
 
 ### Changed
