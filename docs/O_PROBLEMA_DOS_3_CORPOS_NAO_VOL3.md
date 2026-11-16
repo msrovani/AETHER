@@ -579,15 +579,15 @@ alocação, sem violar a lei do E1b em nenhum acumulador.
 | 2 | **ΔE prevê acerto?** | ✅ **respondida** (E3b) | **Não em otimização livre** (AUC 0,46–0,55; bound 0,058 anti-preditivo). **Sim com restrições exatas**: 383 decisivas, precisão 100%. |
 | 3 | **Quantos padrões cabem em D=160?** | ✅ **respondida** (E1b/E1) | **64 fatos** por acumulador (`FhrrStore`, K=6, recall@1 ≥ 99%); 128 já cai para 89%. Lei **linear ~0,4·D** — **não** D². **E1:** com 24 shards de ≤ 48 fatos, **1.000 fatos** com recall@1 **1,0000** (superposição plana: 0,0725). Memória de fase (M5): **~4** padrões aleatórios a erro < 0,15 rad, **8** com padrões harmônicos — `pattern_capacity() = 40` é 5× otimista (E1b-2). |
 | 4 | **Roof dual reduz o suficiente em CNF de circuito?** | ✅ **respondida** (E2b/E2c/E2c-2) | **CNF:** presolve por unidades+implicação dá **64,8%** (cascata +39,8 pp), 0 insound, 200/200. **QUBO:** dominância é sound (**0/600**) mas míope; o **roof dual (max-flow)** é igualmente sound (**0/600**) e leva **42,9% → 52,0%** em viés 45%, **28,9%** em 25% e **0% no controle — que é o teto ℤ₂** (com `h = 0` nenhum spin é persistente). Fecha com **probing condicionado**, não com mais fluxo. |
-| 5 | **O self-field melhora calibração ou só replica a surpresa?** | ⏳ **aberta** (E4) | Falsificável: melhora ECE de abstenção **sem** melhorar T01. Se T01 também melhorar, a hipótese "metacognição é separada" cai. |
-| 6 | **Um atrator pode virar "gist" sem perder a habilidade?** | ⏳ **aberta** (F2) | Hoje o atrator é binário: está ou não está. Fecha consolidando no L4 (texto/energia) e medindo retenção após N consolidações. |
-| 7 | **A ponte de fase preserva o suficiente?** | ⏳ **aberta** (F3) | Fecha com `cue_into` (ledger → vetor → semente de atrator) e medindo recall@1 no round-trip **vs** recall direto; gate: perda < 5%. |
+| 5 | **O self-field melhora calibração ou só replica a surpresa?** | ✅ **respondida** (E4) | **ECE 0,3567 → 0,3238** (bootstrap p97,5 = **−0,0168** < 0) com **T01 1,0000** intacto: metacognição é separada, como previsto. Erro pós-plasticidade 0,0140 vs 0,0562 do campo congelado. |
+| 6 | **Um atrator pode virar "gist" sem perder a habilidade?** | ✅ **respondida** (F2) | `prune_to_gist` com retenção **1,000** (40/40), 0 eventos perdidos e supersede no `FusionLedger`. |
+| 7 | **A ponte de fase preserva o suficiente?** | ✅ **respondida** (F3) | `cue_into` com recall@1 direto **1,000**, round-trip **1,000**, perda **0,000** (gate < 5%). |
 
-**Placar: 4 respondidas, 3 abertas — e cada aberta tem um experimento que a
-fecha.** A pergunta 4 foi fechada em duas metades: o presolve/roof dual é *sound*
-(e o teto do controle é 0% por simetria), mas fecha parcialmente — o caminho para
-os 93,6% teóricos é `probing` condicionado. Nenhuma resposta foi inferida: as
-fechadas têm artefato em `target/`.
+**Placar: 7 respondidas, 0 abertas.** Cada resposta tem artefato em `target/`
+ou teste de gate com número impresso (`[E4]`, `[E5]`, `[F2]`, `[F3]`). A pergunta 4
+foi fechada em duas metades: o presolve/roof dual é *sound* (e o teto do controle é
+0% por simetria), mas fecha parcialmente — o caminho para os 93,6% teóricos é
+`probing` condicionado. Nenhuma resposta foi inferida.
 
 > *"Três perguntas tinham resposta e não sabíamos; uma está parcialmente
 > respondida; três continuam abertas — e agora sabemos exatamente como fechá-las."*

@@ -567,6 +567,12 @@ impl RlsReadout {
                 self.p[i * d + j] -= ki * self.zp[j];
             }
         }
+        if self.forget < 1.0 {
+            let inv = 1.0 / f64::from(self.forget);
+            for v in self.p.iter_mut() {
+                *v *= inv;
+            }
+        }
         Ok(())
     }
 }
@@ -628,10 +634,7 @@ impl FrozenModel {
         washout: usize,
         lambda: f64,
     ) -> Result<(Self, f64)> {
-        if start + len > inputs.len()
-            || start + len > targets.len()
-            || len <= washout + 1
-        {
+        if start + len > inputs.len() || start + len > targets.len() || len <= washout + 1 {
             return Err(AetherError::Config(
                 "FrozenModel: janela supervisionada invalida".into(),
             ));
@@ -1035,8 +1038,13 @@ pub fn joint_search_supervised(
             washout,
             lambda,
         )?;
-        let (val, _) =
-            evaluate_supervised(&mut model, inputs, targets, train_start + train_len, val_len)?;
+        let (val, _) = evaluate_supervised(
+            &mut model,
+            inputs,
+            targets,
+            train_start + train_len,
+            val_len,
+        )?;
         if val < best_val {
             best_val = val;
             best = cfg;

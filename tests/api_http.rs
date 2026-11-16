@@ -67,10 +67,11 @@ fn request(addr: SocketAddr, method: &str, path: &str, body: &str) -> (u16, Stri
 }
 
 fn phases() -> String {
-    let v: Vec<String> = (0..160)
-        .map(|i| format!("{:.6}", (i as f32 * 0.01).sin()))
-        .collect();
-    format!("[{}]", v.join(","))
+    // Fasores unitários (320 floats): é o que o F1 espera e o que a borda
+    // gera para "ola" — assim `remember` e `chat` casam de verdade.
+    let v = api::text_to_phases("ola");
+    let s: Vec<String> = v.iter().map(|p| format!("{p}")).collect();
+    format!("[{}]", s.join(","))
 }
 
 fn remember_body(key: &str, organism: u64) -> String {

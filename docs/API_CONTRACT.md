@@ -234,3 +234,29 @@ implementados e aprovados:
   retorna 0.0 em erro.
 * **M8** CLI e telemetria em `src/bin/aether_daemon.rs`; não é API de
   biblioteca.
+
+---
+
+## Apêndice A — Superfícies públicas adicionadas após a v1.0 (aditivas)
+
+Nenhuma assinatura das seções M1–M8 foi alterada. Estas são **novas** e seguem as
+mesmas invariantes (crate sem `unsafe`, `*_into` sem alocação, nenhum `String` no
+caminho de sinal):
+
+| Módulo | Feature | Superfície principal |
+|---|---|---|
+| `core::logic_pipeline` | `m1` | `Clause3`, `LogicPipeline::resolve_into`, `StageStats`, `BsbCore`, `PROBE_MAX` |
+| `core::transplant` | `m1` | `JlProjector`, `PhaseEncoder`, `BinaryBam`, `FactRecord`, `StructuralVerifier`, `spearman` |
+| `core::knowledge_bridge` | `m1` | `SourceTag`, `EventKind`, `Verdict`, `KnowledgeEvent` (32 B), `KnowledgeSink`, `SpscKnowledgeBridge<N>`, `NullSink` |
+| `core::knowledge_bridge_f1` | `m1` | `Certificate`, `Layer`, `ScopeId`, `KnowledgeEvent` (payload), `KnowledgeSource`, `ScopeLedger` |
+| `core::presolve` | `m1` | `persistency_qumo_into`, `RoofDualWorkspace`, `roof_dual_qumo`, `ROOF_MAX_N` |
+| `core::self_field` | `m1` | `SelfField`, `SelfFrame`, `TopologyStats` (16 canais) |
+| `core::s0_body` | `m4` | `HostSample`, `Actuators` (4 atuadores), `GoalStats` |
+| `core::reservoir` | `m5` | `Reservoir`, `RlsReadout`, `RidgeReadout`, `FrozenModel` |
+| `core::knowledge_fusion` | `m5` | `FusionLedger`, `Quadrant`, `FusionAction`, `Gist`, `Decision` |
+
+Contratos de decisão (E2/E3): `LogicPipeline::resolve_into` devolve a atribuição e
+um `Certificate` cuja decisão é `violations == 0` (**testemunha de factibilidade**);
+`ΔE` é diagnóstico, nunca decisão. `StructuralVerifier::verify_into` é 0-alloc e
+retorna `StructuralVerdict`; a abstenção usa `role_similarity` (evidência) **e**
+margem (ambiguidade), não apenas a margem.

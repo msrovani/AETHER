@@ -1,29 +1,29 @@
-//! E2c-3 — o que vem **depois** do roof dual em QUBO denso.
+﻿//! E2c-3 â€” o que vem **depois** do roof dual em QUBO denso.
 //!
 //! O E2c-2 fechou o roof dual e mediu: no vidro puro (`h=0`) ele fixa 0, e sob
-//! viés estende a dominância (+9,1 pp em plant=45%). A literatura de 2026 diz
-//! por quê e o que fazer:
+//! viÃ©s estende a dominÃ¢ncia (+9,1 pp em plant=45%). A literatura de 2026 diz
+//! por quÃª e o que fazer:
 //!
-//! * **Naumann & Andres (arXiv:2610.20346, 2026):** todo posiforme ótimo de roof
-//!   dual já dá o **maior domínio de autarkia possível**. Nenhum autarky de
-//!   posiforme quadrático fixa mais que o roof dual — para ir além é preciso
+//! * **Naumann & Andres (arXiv:2610.20346, 2026):** todo posiforme Ã³timo de roof
+//!   dual jÃ¡ dÃ¡ o **maior domÃ­nio de autarkia possÃ­vel**. Nenhum autarky de
+//!   posiforme quadrÃ¡tico fixa mais que o roof dual â€” para ir alÃ©m Ã© preciso
 //!   sair de autarkias.
-//! * **Wang & Hahn (Front. Comput. Sci. 2026):** *probing* (fixar variáveis e
-//!   recomputar o roof dual) aumenta a probabilidade de atingir o ótimo global;
-//!   com um subconjunto pequeno, o resíduo vira 2-SAT solúvel e o ótimo é
-//!   **certificado**. Em QUBO aleatório denso, ~metade das variáveis basta.
-//! * **Rother et al. (CVPR 2007):** QPBO-P, a versão prática do probing.
+//! * **Wang & Hahn (Front. Comput. Sci. 2026):** *probing* (fixar variÃ¡veis e
+//!   recomputar o roof dual) aumenta a probabilidade de atingir o Ã³timo global;
+//!   com um subconjunto pequeno, o resÃ­duo vira 2-SAT solÃºvel e o Ã³timo Ã©
+//!   **certificado**. Em QUBO aleatÃ³rio denso, ~metade das variÃ¡veis basta.
+//! * **Rother et al. (CVPR 2007):** QPBO-P, a versÃ£o prÃ¡tica do probing.
 //!
-//! Este probe mede, em `n=14` (mesmo gerador do E2c): fixações do roof dual,
-//! fixações por **união de persistências dos dois ramos** (probing sem 2-SAT) e
-//! o custo de uma **busca exata guiada por roof dual** (nós/folhas) — com
-//! soundness contra força bruta.
+//! Este probe mede, em `n=14` (mesmo gerador do E2c): fixaÃ§Ãµes do roof dual,
+//! fixaÃ§Ãµes por **uniÃ£o de persistÃªncias dos dois ramos** (probing sem 2-SAT) e
+//! o custo de uma **busca exata guiada por roof dual** (nÃ³s/folhas) â€” com
+//! soundness contra forÃ§a bruta.
 //!
 //! ```text
 //! cargo run --release --example e2c3_probe
 //! ```
 //!
-//! Saída: tabela + `target/aether_e2c3_probe.json`.
+//! SaÃ­da: tabela + `target/aether_e2c3_probe.json`.
 
 #![allow(clippy::needless_range_loop)]
 
@@ -41,6 +41,8 @@ const DELTA: f64 = 0.6;
 const INSTANCES: usize = 200;
 const INSTANCES_DFS_PLANT0: usize = 20;
 const SEED0: u64 = 0xE2C_2026;
+/// OrÃ§amento de nÃ³s por instÃ¢ncia no modo `--scale`.
+const SCALE_BUDGET: u32 = 500_000;
 
 fn make_instance(n: usize, k: usize, delta: f64, seed: u64) -> (Vec<f64>, Vec<f64>) {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
@@ -86,7 +88,7 @@ fn brute_force(n: usize, j: &[f64], h: &[f64]) -> f64 {
     best
 }
 
-/// Reduz o QUBO às variáveis livres, substituindo as fixas em `h`.
+/// Reduz o QUBO Ã s variÃ¡veis livres, substituindo as fixas em `h`.
 fn reduce(
     n: usize,
     j: &[f64],
@@ -114,13 +116,13 @@ fn reduce(
     (free, js, hs)
 }
 
-/// Fixações de uma passada de roof dual.
+/// FixaÃ§Ãµes de uma passada de roof dual.
 fn root_fixed(n: usize, j: &[f64], h: &[f64]) -> usize {
     roof_dual_qumo(n, j, h).fixed_count()
 }
 
-/// Probing por união de persistências: se os dois ramos de `p` fixam `q` no
-/// mesmo valor, `q` é persistente no problema original. Itera até fixpoint.
+/// Probing por uniÃ£o de persistÃªncias: se os dois ramos de `p` fixam `q` no
+/// mesmo valor, `q` Ã© persistente no problema original. Itera atÃ© fixpoint.
 fn probe_fixed(n: usize, j: &[f64], h: &[f64], max_rounds: usize) -> usize {
     let mut assign = vec![None::<i8>; n];
     for _ in 0..max_rounds {
@@ -195,9 +197,83 @@ fn probe_fixed(n: usize, j: &[f64], h: &[f64], max_rounds: usize) -> usize {
     assign.iter().filter(|x| x.is_some()).count()
 }
 
+/// Escala: atÃ© onde a busca exata fecha **sem** bound? (plant 45%)
+fn scale_table() {
+    println!("E2c-3 scale | plant=45% delta={DELTA} budget={SCALE_BUDGET}");
+    println!(
+        "{:>4} {:>4} {:>9} {:>10} {:>9} {:>8} {:>8}",
+        "n", "k", "closed", "mean_nodes", "max_nodes", "mean_ms", "total_ms"
+    );
+    let mut json = String::from("[\n");
+    let ns = [20usize, 24, 28, 32, 40, 48, 64];
+    let instances = 10u64;
+    for (i, &n) in ns.iter().enumerate() {
+        let k = (0.45 * n as f64).round() as usize;
+        let mut search = ExactSearch::new(SCALE_BUDGET);
+        let mut closed = 0usize;
+        let mut nodes_sum = 0u64;
+        let mut nodes_max = 0u32;
+        let t0 = Instant::now();
+        for inst in 0..instances {
+            let (j, h) = make_instance(n, k, DELTA, SEED0.wrapping_add(inst));
+            let r = search.solve(n, &j, &h);
+            if !r.exhausted {
+                closed += 1;
+                nodes_sum += u64::from(r.nodes);
+                nodes_max = nodes_max.max(r.nodes);
+            }
+        }
+        let dt = t0.elapsed().as_secs_f64() * 1000.0;
+        let mean_nodes = if closed > 0 {
+            nodes_sum / closed as u64
+        } else {
+            0
+        };
+        let mean_ms = dt / instances as f64;
+        println!(
+            "{:>4} {:>4} {:>4}/{:<4} {:>10} {:>9} {:>8.1} {:>8.1}",
+            n, k, closed, instances, mean_nodes, nodes_max, mean_ms, dt
+        );
+        json.push_str(&format!(
+            "  {{\"n\": {n}, \"k\": {k}, \"closed\": {closed}, \"instances\": {instances}, \"mean_nodes\": {mean_nodes}, \"max_nodes\": {nodes_max}, \"mean_ms\": {mean_ms:.1}, \"total_ms\": {dt:.1}}}{}\n",
+            if i + 1 < ns.len() { "," } else { "" }
+        ));
+    }
+    json.push_str("]\n");
+    let _ = std::fs::write("target/aether_e2c3_scale.json", json);
+    println!("\nartefato: target/aether_e2c3_scale.json");
+}
+
+/// n=64 com orçamento maior: o bound é obrigatório ou é só custo?
+fn deep_n64() {
+    let n = 64usize;
+    let k = (0.45 * n as f64).round() as usize;
+    let instances = 3u64;
+    let budget = 5_000_000u32;
+    println!("E2c-3 deep | n={n} k={k} budget={budget}");
+    let mut search = ExactSearch::new(budget);
+    for inst in 0..instances {
+        let (j, h) = make_instance(n, k, DELTA, SEED0.wrapping_add(inst));
+        let t0 = Instant::now();
+        let r = search.solve(n, &j, &h);
+        println!(
+            "inst={inst} closed={} nodes={} leaves={} root={} ms={:.1}",
+            !r.exhausted,
+            r.nodes,
+            r.leaves,
+            r.root_fixed,
+            t0.elapsed().as_secs_f64() * 1000.0
+        );
+    }
+}
+
 fn main() {
     if std::env::args().any(|a| a == "--scale") {
         scale_table();
+        return;
+    }
+    if std::env::args().any(|a| a == "--deep") {
+        deep_n64();
         return;
     }
     println!("E2c-3 probe | n={N} inst={INSTANCES} delta={DELTA} seed={SEED0:#x}");

@@ -28,7 +28,7 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 ## Build
 
 ```bash
-cargo test --release          # 95 testes: fase 1 + fase 2 + engenharia + FHRR
+cargo test --release          # 40 alvos / 251 testes: fase 1 + fase 2 + E1-E8 + F1-F3
 cargo clippy --all-targets -- -D warnings
 cargo run --release --bin aether-organism   # Fase 1: painel em tempo real
 cargo run --release --bin aether-daemon     # Fase 2: organismo encarnado

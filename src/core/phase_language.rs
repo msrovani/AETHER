@@ -82,7 +82,7 @@ pub const JITTER_FRAC: f32 = 0.04;
 /// Passos máximos do ressonador de sentença (4 fatores).
 pub const RES_ITERS: usize = 4;
 /// Passos máximos do ressonador do predicado (2 fatores).
-pub const PAIR_ITERS: usize = 1;
+pub const PAIR_ITERS: usize = 2;
 /// Piso de evidência para abstenção (escolhido *a priori*, não no teste).
 pub const SIM_FLOOR: f32 = 0.55;
 /// Piso de margem (1º − 2º) para abstenção.
@@ -511,6 +511,20 @@ fn cue_q5_into(cue_re: &[f32; D], cue_im: &[f32; D], cr: &mut [i16; D], ci: &mut
         cr[j] = (cue_re[j] * CUE_Q).clamp(-256.0, 256.0) as i16;
         ci[j] = (cue_im[j] * CUE_Q).clamp(-256.0, 256.0) as i16;
     }
+}
+
+/// Similaridade complexa de um único átomo (validação do vencedor).
+#[inline]
+fn atom_sim(cue_re: &[f32; D], cue_im: &[f32; D], atom: &Q15Atom) -> f32 {
+    const CUE_Q: f32 = 32.0;
+    let mut cr = [0i16; D];
+    let mut ci = [0i16; D];
+    cue_q5_into(cue_re, cue_im, &mut cr, &mut ci);
+    let mut acc = 0i32;
+    for j in 0..D {
+        acc += cr[j] as i32 * atom.re[j] as i32 + ci[j] as i32 * atom.im[j] as i32;
+    }
+    acc as f32 / (D as f32 * Q15 * CUE_Q)
 }
 
 // ---------------------------------------------------------------------------
@@ -985,7 +999,7 @@ pub fn resonate_pair(sc: &mut QueryScratch, cb: &Codebooks, a: &Anchors) -> Pair
         &mut sc.cue_re,
         &mut sc.cue_im,
     );
-    let co = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.clean_q(ROLE_O), &mut sc.sims);
+    let sim_obj = atom_sim(&sc.cue_re, &sc.cue_im, &cb.ent.clean_q[o]);
 
     term_phasor_into(
         &a.o,
@@ -1004,16 +1018,16 @@ pub fn resonate_pair(sc: &mut QueryScratch, cb: &Codebooks, a: &Anchors) -> Pair
         &mut sc.cue_re,
         &mut sc.cue_im,
     );
-    let cm = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.clean_q(ROLE_M), &mut sc.sims);
+    let sim_mod = atom_sim(&sc.cue_re, &sc.cue_im, &cb.modu.clean_q[m]);
+    let validated = sim_obj > SIM_FLOOR && sim_mod > SIM_FLOOR;
 
-    let validated = co.index == o && cm.index == m;
     PairFactors {
         obj: o,
         modu: m,
-        sim_obj: co.sim,
-        sim_mod: cm.sim,
-        margin_obj: co.margin,
-        margin_mod: cm.margin,
+        sim_obj,
+        sim_mod,
+        margin_obj: sim_obj,
+        margin_mod: sim_mod,
         iters,
         converged,
         validated,

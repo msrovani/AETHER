@@ -1,6 +1,6 @@
 //! E1 — gates do *Phase-Language Head* (PLH) sharded + ressonador ACF.
 //!
-//! Cinco gates, todos em `D=160`, `K=17`, 24 shards `≤ 48` fatos:
+//! Cinco gates, todos em `D=160`, `K=20`, 24 shards `≤ 48` fatos:
 //!
 //! 1. **Escala** — 1.000 fatos sharded com `recall@1 ≥ 0,99`; o controle de
 //!    superposição plana colapsa (`< 0,10`).

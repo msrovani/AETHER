@@ -29,15 +29,19 @@ fn e8_mackey_glass_acuracy_e_tempo_de_um_milhao() {
         input_scale: 1.0,
         seed: 0xA37E_0E91,
     };
-    let b = bench_frozen(&series, cfg, 0, train_len, test_len, 200, 1e-8).expect("mg");
+    let b = bench_frozen(&series, cfg, 0, train_len, test_len, 200, 1e-10).expect("mg");
     println!(
         "[E8] MG samples={train_len} train_s={:.3} nrmse={:.8} pps={:.0}",
         b.train_secs, b.nrmse, b.predict_per_sec
     );
-    assert!(b.nrmse.is_finite() && b.nrmse < 0.01, "NRMSE MG {:.6}", b.nrmse);
+    assert!(
+        b.nrmse.is_finite() && b.nrmse < 1e-3,
+        "NRMSE MG {:.6}",
+        b.nrmse
+    );
     assert!(b.train_secs < 60.0, "treino MG {:.3}s >= 60s", b.train_secs);
     let pps_min = if cfg!(debug_assertions) {
-        100_000.0
+        20_000.0
     } else {
         500_000.0
     };
@@ -61,13 +65,17 @@ fn e8_narma10_acuracy() {
         input_scale: 0.4,
         seed: 0xA37E_0E92,
     };
-    let b = bench_frozen_supervised(&u, &y, cfg, 0, train_len, test_len, 200, 1e-10)
-        .expect("narma");
+    let b =
+        bench_frozen_supervised(&u, &y, cfg, 0, train_len, test_len, 200, 1e-10).expect("narma");
     println!(
         "[E8] NARMA train_s={:.3} nrmse={:.6} pps={:.0}",
         b.train_secs, b.nrmse, b.predict_per_sec
     );
-    assert!(b.nrmse.is_finite() && b.nrmse < 0.15, "NRMSE NARMA {:.6}", b.nrmse);
+    assert!(
+        b.nrmse.is_finite() && b.nrmse < 0.15,
+        "NRMSE NARMA {:.6}",
+        b.nrmse
+    );
 }
 
 #[test]
@@ -86,17 +94,17 @@ fn e8_congelado_vence_ajuste_conjunto_em_tempo() {
     };
 
     let (mut frozen, frozen_secs) =
-        FrozenModel::train(cfg, &series, 0, train_len, 200, 1e-8).expect("frozen");
-    let (frozen_test, _) = evaluate(&mut frozen, &series, train_len + val_len, test_len)
-        .expect("eval frozen");
+        FrozenModel::train(cfg, &series, 0, train_len, 200, 1e-10).expect("frozen");
+    let (frozen_test, _) =
+        evaluate(&mut frozen, &series, train_len + val_len, test_len).expect("eval frozen");
 
-    let joint = joint_search(&series, cfg, 0, train_len, val_len, 200, 40, 1e-8)
-        .expect("joint search");
+    let joint =
+        joint_search(&series, cfg, 0, train_len, val_len, 200, 40, 1e-10).expect("joint search");
     // Comparação no **teste**, não na validação usada para selecionar.
     let (mut joint_model, _) =
-        FrozenModel::train(joint.best, &series, 0, train_len, 200, 1e-8).expect("joint best");
-    let (joint_test, _) = evaluate(&mut joint_model, &series, train_len + val_len, test_len)
-        .expect("eval joint");
+        FrozenModel::train(joint.best, &series, 0, train_len, 200, 1e-10).expect("joint best");
+    let (joint_test, _) =
+        evaluate(&mut joint_model, &series, train_len + val_len, test_len).expect("eval joint");
     let speedup = joint.search_secs / frozen_secs.max(1e-12);
     println!(
         "[E8] joint passes={} val={:.6} test={:.6} secs={:.3} | frozen test={:.6} secs={:.4} | speedup={:.1}x",

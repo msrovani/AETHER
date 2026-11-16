@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.112] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 12 arquivo(s) (.:1, docs:2, examples:3, src:3, tests:3).
+- Gate: ok (2s).
+
+- `README.md`
+- `docs/API_CONTRACT.md`
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md`
+- `examples/e2c3_probe.rs`
+- `examples/plh_bench.rs`
+- `examples/reservoir_readout_bench.rs`
+- `src/core/logic_pipeline.rs`
+- `src/core/phase_language.rs`
+- `src/core/reservoir.rs`
+- `tests/api_http.rs`
+- `tests/e1_language_gate.rs`
+- `tests/e8_reservoir_gate.rs`
+
 ## [0.0.111] - 2026-11-16
 
 ### Changed

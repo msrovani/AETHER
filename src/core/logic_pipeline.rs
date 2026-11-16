@@ -744,7 +744,7 @@ impl Prop3 {
             for c in clauses {
                 match clause_state(c, fixed) {
                     CState::Free => {
-                        let mut ids = [usize::MAX; 2];
+                        let mut ids = [usize::MAX; 3];
                         let mut nfree = 0usize;
                         for idx in 0..c.len() {
                             let (v, _s) = c.lit(idx);
@@ -814,7 +814,6 @@ pub struct LogicPipeline {
     /// Presolve simbólico dirigido por ocorrências (buffers próprios).
     prop: Prop3,
     res_of: Vec<usize>,
-    res_var: Vec<usize>,
     res_clauses: Vec<Clause3>,
     /// Índice da cláusula **original** de cada cláusula residual (para o λ).
     res_orig: Vec<usize>,
@@ -887,7 +886,6 @@ impl LogicPipeline {
             fixed3: vec![None; n_max],
             prop: Prop3::new(n_max, m_max),
             res_of: vec![usize::MAX; n_max],
-            res_var: vec![0; n_max],
             res_clauses: vec![Clause3::new3(0, 1, 0, 1, 0, 1); m_max],
             res_orig: vec![0; m_max],
             terms: Vec::with_capacity(9 * m_max + 4),
@@ -1000,7 +998,6 @@ impl LogicPipeline {
         for v in 0..n {
             if self.fixed3[v].is_none() {
                 self.res_of[v] = n_res;
-                self.res_var[n_res] = v;
                 n_res += 1;
             }
         }

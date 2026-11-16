@@ -36,7 +36,7 @@ fn main() {
         input_scale: 1.0,
         seed: 0xA37E_0E91,
     };
-    let mg_bench = bench_frozen(&mg, mg_cfg, 0, train_len, test_len, washout, 1e-8)
+    let mg_bench = bench_frozen(&mg, mg_cfg, 0, train_len, test_len, washout, 1e-10)
         .expect("mackey-glass frozen");
     println!(
         "[E8] MG train={}s nrmse={:.6} pps={:.0}",
@@ -46,7 +46,7 @@ fn main() {
     // Varredura de λ no MESMO acumulador (sem reexecutar o reservatório).
     let small = train_len.min(20_000);
     let (mut sweep_model, _) =
-        FrozenModel::train(mg_cfg, &mg, 0, small, washout, 1e-8).expect("sweep");
+        FrozenModel::train(mg_cfg, &mg, 0, small, washout, 1e-10).expect("sweep");
     let mut lambda_rows = String::new();
     for lambda in [1e-10f64, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5] {
         sweep_model.recalibrate(lambda).expect("recalibrate");
@@ -62,12 +62,11 @@ fn main() {
     let (mut rls, rls_secs) =
         RlsModel::train_supervised(mg_cfg, &mg, &mg[1..], 0, small, washout, 0.05, 1.0)
             .expect("rls");
-    let (rls_nrmse, _) =
-        evaluate_rls(&mut rls, &mg, &mg[1..], small, test_len).expect("eval rls");
+    let (rls_nrmse, _) = evaluate_rls(&mut rls, &mg, &mg[1..], small, test_len).expect("eval rls");
     println!("[E8] RLS train={rls_secs:.3}s nrmse={rls_nrmse:.6}");
 
     // Baseline conjunto: 40 passadas completas de treino (sem backprop).
-    let joint = joint_search(&mg, mg_cfg, 0, small, 1_000, washout, 40, 1e-8).expect("joint");
+    let joint = joint_search(&mg, mg_cfg, 0, small, 1_000, washout, 40, 1e-10).expect("joint");
     let ratio = joint.search_secs / (mg_bench.train_secs * small as f64 / train_len as f64);
     println!(
         "[E8] joint passes={} secs={:.3} val={:.6} speedup_vs_frozen={:.1}x",
@@ -87,17 +86,16 @@ fn main() {
         input_scale: 0.4,
         seed: 0xA37E_0E92,
     };
-    let narma_bench = bench_frozen_supervised(
-        &u, &y, narma_cfg, 0, narma_train, test_len, washout, 1e-10,
-    )
-    .expect("narma frozen");
+    let narma_bench =
+        bench_frozen_supervised(&u, &y, narma_cfg, 0, narma_train, test_len, washout, 1e-10)
+            .expect("narma frozen");
     println!(
         "[E8] NARMA train={}s nrmse={:.6} pps={:.0}",
         narma_bench.train_secs, narma_bench.nrmse, narma_bench.predict_per_sec
     );
 
     let json = format!(
-        "{{\"mg\":{{\"train_samples\":{train_len},\"train_s\":{:.6},\"nrmse\":{:.8},\"predict_per_s\":{:.1},\"n\":{},\"degree\":{},\"rho\":{},\"leak\":{},\"input\":{},\"lambda\":1e-8}},\"narma\":{{\"train_samples\":{narma_train},\"train_s\":{:.6},\"nrmse\":{:.8},\"predict_per_s\":{:.1},\"n\":{},\"degree\":{},\"rho\":{},\"leak\":{},\"input\":{},\"lambda\":1e-10}},\"lambda_sweep\":[{}],\"rls\":{{\"train_s\":{rls_secs:.6},\"nrmse\":{rls_nrmse:.8}}},\"joint\":{{\"passes\":{},\"secs\":{:.6},\"val_nrmse\":{:.8},\"speedup\":{ratio:.3}}}}}",
+        "{{\"mg\":{{\"train_samples\":{train_len},\"train_s\":{:.6},\"nrmse\":{:.8},\"predict_per_s\":{:.1},\"n\":{},\"degree\":{},\"rho\":{},\"leak\":{},\"input\":{},\"lambda\":1e-10}},\"narma\":{{\"train_samples\":{narma_train},\"train_s\":{:.6},\"nrmse\":{:.8},\"predict_per_s\":{:.1},\"n\":{},\"degree\":{},\"rho\":{},\"leak\":{},\"input\":{},\"lambda\":1e-10}},\"lambda_sweep\":[{}],\"rls\":{{\"train_s\":{rls_secs:.6},\"nrmse\":{rls_nrmse:.8}}},\"joint\":{{\"passes\":{},\"secs\":{:.6},\"val_nrmse\":{:.8},\"speedup\":{ratio:.3}}}}}",
         mg_bench.train_secs,
         mg_bench.nrmse,
         mg_bench.predict_per_sec,
