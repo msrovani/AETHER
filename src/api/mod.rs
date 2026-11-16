@@ -1136,6 +1136,8 @@ fn parse_json(body: &[u8]) -> std::result::Result<Json, (u16, Json)> {
         Ok(t) => t,
         Err(_) => return Err(bad_pair("corpo não é UTF-8")),
     };
+    // Clientes Windows (PowerShell `Set-Content`) mandam BOM: aceitar e remover.
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     if text.trim().is_empty() {
         return Ok(Json::Obj(Vec::new()));
     }

@@ -300,3 +300,66 @@ errado (`min(N−1, 64)`) e nome ambíguo. Corrigido só na documentação
 **Placar: 6 respondidas, 1 parcial, 0 abertas** — com o escopo declarado: F2/F3
 são harness local (não o SGDB real) e o E4 é um único seed. A pergunta 4
 continua sendo a única científica em aberto.
+
+---
+
+## 8. Q4 — o que a literatura diz e o que o protótipo mediu
+
+### 8.1 Três camadas acima do roof dual
+
+| Fonte | O que dá | Custo |
+|---|---|---|
+| Hammer–Hansen–Simeone 1984 | roof dual + persistência | max-flow |
+| Boros–Hammer 2002 | posiforme, bound `C+ν` | `O(n⁵)` Edmonds–Karp |
+| Boros et al. 2006 | **probing** de variáveis; preprocessing | `2n` roof duals |
+| Rother et al. 2007 (QPBO-P) | probing + contração, exato | `2n` roof duals |
+| Boros et al. 2008 | **iterated roof dual**, bound mais forte | `O(n³)` por iteração |
+| Shekhovtsov 2014 | **maximum persistency** via LP | LP |
+| Naumann–Andres 2026 | **teorema negativo**: todo posiforme ótimo de roof dual já dá o maior domínio de autarkia | — |
+| Wang–Hahn 2026 | probing de `k` variáveis + **2-SAT** certifica o ótimo global | `2^k` roof duals |
+| Del Pia–Di Gregorio; Boros–Crama–Hammer | odd-cycle / fecho de Chvátal–Gomory: relaxações mais estreitas | separação/LP |
+
+### 8.2 O teorema que fecha a porta errada
+
+Naumann & Andres (arXiv:2610.20346, 2026) provam que **nenhum autarky de
+posiforme quadrático fixa mais variáveis que um roof dual ótimo**. Ou seja:
+“strong persistency” via autarkias/BHS **não é** uma extensão — é o mesmo
+conjunto. Para ir além é preciso sair de autarkias (probing, bound, 2-SAT).
+
+### 8.3 O protótipo (n=14, 200 instâncias/regime, `examples/e2c3_probe.rs`)
+
+| plant | roof fix | probe fix | extra | nós DFS | folhas | folhas/2¹⁴ | sound |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0% | 0,00 | 0,00 | **0,00** | 1.017 | 330 | 2,0% | 20/20 |
+| 25% | 4,00 | 4,00 | **0,00** | 59 | 19 | 0,12% | 200/200 |
+| 45% | 7,10 | 7,10 | **0,00** | 16 | 5 | 0,032% | 200/200 |
+
+Três leituras:
+
+1. **Probing por união de persistências = 0 extra em 600 instâncias.** Consistente
+   com o teorema: a implementação já extrai o autarky máximo.
+2. **Busca com propagação de roof dual é exata** (420/420 contra força bruta) e
+   reduz a árvore em **50× (plant 0)** a **3.000× (plant 45)**.
+3. **No vidro puro, 0 fixações no root é teorema** (simetria `s → −s`): nenhuma
+   variável é persistente. Mas **uma ramificação quebra a simetria** e o roof
+   dual passa a fixar o resto — 1.017 nós em vez de 16.384.
+
+### 8.4 A resposta para o Q4
+
+A pergunta estava mal posta: **“quantas variáveis o roof dual fixa no root?”**
+não é a métrica. Em vidro simétrico a resposta é 0 por teorema, e nenhum método
+de persistência muda isso. A métrica útil é **tamanho da árvore** e
+**certificado**:
+
+- **E2c-3A (curto prazo, exato):** DFS/DPLL com propagação de roof dual.
+  Gate: soundness 420/420; nós médios < 2.000 (plant 0) e < 100 (plant ≥ 25);
+  substitui o BSB heurístico por ótimo **certificado**.
+- **E2c-3B (certificado global sem enumerar):** probing de `k≈n/2` + 2-SAT do
+  posiforme residual (Wang–Hahn 2026). Para `n=14`, `2⁷=128` roof duals por
+  instância. Requer expor o **posiforme residual** (hoje `solve_into` devolve só
+  `fixed`).
+- **E2c-3C (escala até n=64):** B&B com o **bound** `C+ν` — hoje `pass_into`
+  calcula o fluxo mas não o expõe. Gate: fechar `n=20..24` com nós ≤ 10⁴.
+
+**Não fazer:** implementar strong persistency/BHS como “extensão do E2c-2” — o
+teorema de 2026 garante que o ganho é zero.

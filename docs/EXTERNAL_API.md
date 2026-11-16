@@ -14,11 +14,23 @@ app (llama/agent) ──HTTP/JSON──► aether-api ──► ScopeLedger (F1,
 ## 1. Subir
 
 ```powershell
-cargo run --release --features api --bin aether-api -- 127.0.0.1:8787
+cargo run --release --features api --bin aether-api -- 127.0.0.1:8787 `
+  --ledger target/aether_ledger.jsonl `
+  --token s3cr3t --organism 1 --threads 4
 ```
 
-Não há dependência nova: o servidor é HTTP/1.1 mínimo sobre `std::net`,
-`Connection: close`, uma conexão por vez.
+| flag | efeito |
+|---|---|
+| `--addr IP:PORTA` (ou posicional) | endereço de escuta (padrão `127.0.0.1:8787`) |
+| `--ledger arquivo.jsonl` | persiste o ledger em disco (append-only) e recarrega no boot |
+| `--token T` | exige `Authorization: Bearer T` (ou `X-Aether-Token`) nas rotas com estado |
+| `--organism N` | amarra o token ao organismo `N`; escopo diferente recebe `403` |
+| `--threads N` | workers de conexão (padrão 4) |
+
+Sem dependência nova: HTTP/1.1 mínimo sobre `std::net`, `Connection: close`.
+
+Rotas de liveness (`/health`, `/props`, `/v1/models`) são **públicas**; as demais
+exigem token quando `--token` é usado.
 
 ## 2. Rotas
 
@@ -98,6 +110,25 @@ A resposta é OpenAI-válida (`choices[0].message.content`) e carrega
 Sem fato no escopo, `finish_reason` é `content_filter` e o conteúdo é
 `{"abstain":true,"reason":"empty_scope"}`.
 
+### streaming (SSE)
+
+```bash
+curl -N -X POST http://127.0.0.1:8787/v1/chat/completions \
+  -H "Authorization: Bearer s3cr3t" \
+  -d '{"model":"aether-phase-160","stream":true,
+       "messages":[{"role":"user","content":"qual o fato?"}]}'
+```
+
+```text
+data: {"id":"chatcmpl-aether-2","object":"chat.completion.chunk",...,"delta":{"role":"assistant"},...}
+data: {"...","delta":{"content":"{\"abstain\":false,\"verdict\":\"act\",...}"},...}
+data: {"...","delta":{},"finish_reason":"stop"}
+data: [DONE]
+```
+
+São 4 eventos: papel, conteúdo, `finish_reason` e `[DONE]`. A abstenção vira
+`finish_reason: "content_filter"`.
+
 ### apontar um cliente OpenAI / llama.cpp
 
 ```bash
@@ -143,22 +174,70 @@ Para o llama.cpp, aponte o cliente para `/completion`; o payload é
 | dimensão de fase | 160 (f32) |
 | `n` em `solve` | 1..=256 |
 | passos / reinícios | 1..=4096 / 1..=32 |
-| conexões | uma por vez, `Connection: close` |
+| conexões | `--threads` workers (padrão 4), `Connection: close` |
+| ledger em disco | uma linha JSON por fato, append-only |
 | dependências novas | **zero** |
 
-## 6. Invariantes preservados
+## 5.1 Persistência (T2)
+
+`--ledger arquivo.jsonl` grava cada `remember` como **uma linha JSON** e recarrega
+o arquivo no boot. Linhas inválidas são ignoradas e contadas em
+`/health` → `bad_lines`. O formato é legível e append-only:
+
+```json
+{"key":"777","layer":4,"certificate":{"energy":-2.5,"gap":0.4,"violations":0},
+ "authority":255,"scope":{"organism":7,"run":1,"app":1},
+ "tick":0,"wall_ms":1763...,"phases":[0.123,...]}
+```
+
+O arquivo é a **memória de longo prazo do escopo**, não o motor: apagar o
+arquivo não altera a física, só o que o app consegue citar.
+
+## 5.2 Auth e escopo (R8)
+
+Com `--token`, toda rota com estado exige o token; sem ele, `401`. Com
+`--organism N`, qualquer escopo cujo `organism != N` recebe `403
+forbidden_scope` — o token de um organismo **não** cita fatos de outro.
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8787/v1/aether/remember -d '{}'
+# 401
+curl -s -X POST http://127.0.0.1:8787/v1/aether/remember \
+  -H "Authorization: Bearer s3cr3t" -d '{"scope":{"organism":2,...}}'
+# 403
+```
+
+## 5.3 Concorrência
+
+`--threads N` sobe N workers sobre uma fila de conexões. O estado (ledger) é
+protegido por `Mutex`: o **I/O** roda em paralelo; a consulta ao ledger é
+serializada. Para 60 Hz de telemetria isso sobra; para carga de LLM, suba o
+`--threads` e lembre que a serialização é do estado, não da rede.
+
+## 6. Notas de interoperabilidade
+
+* **BOM UTF-8** no início do corpo é aceito e removido (clientes Windows
+  escrevem BOM com `Set-Content`).
+* **Locale**: gere números JSON com cultura invariante (`1.5`, não `1,5`) —
+  vírgula decimal quebra o parser, como quebraria em qualquer API.
+* `key` viaja como **string decimal** (u128 não cabe em `f64`); aceita número
+  na entrada por conveniência.
+
+## 7. Invariantes preservados
 
 * Nenhum `String` entra no sinal do núcleo: `String` só existe nesta borda (T2).
 * `t0_ledger_calls` continua `0` — a borda **lê** o ledger, não é chamada pelo
   hot path.
 * `0` alocação no caminho quente: o servidor está fora do ciclo de 60 Hz.
 
-## 7. Testes
+## 8. Testes
 
 ```powershell
 cargo test --release --features api --test api_http
 ```
 
-Cobre: saúde/catálogo, `remember`/`cue` com isolamento entre organismos,
-abstenção sem ledger, `solve` com ótimo conhecido (ferromagneto `n=2`), dialeto
-OpenAI, dialeto llama.cpp e `404`.
+Cobre **9** gates: saúde/catálogo, `remember`/`cue` com isolamento entre
+organismos, abstenção sem ledger, `solve` com ótimo conhecido (ferromagneto
+`n=2`), dialeto OpenAI, dialeto llama.cpp, `404`, **SSE**, **auth/escopo**
+(`401`/`403`), **persistência em disco com reinício** e **8 conexões em
+paralelo**.

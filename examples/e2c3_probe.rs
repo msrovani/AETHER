@@ -259,7 +259,15 @@ fn main() {
     println!("E2c-3 probe | n={N} inst={INSTANCES} delta={DELTA} seed={SEED0:#x}");
     println!(
         "{:>6} {:>9} {:>10} {:>7} {:>10} {:>9} {:>9} {:>7} {:>8}",
-        "plant", "root_fix", "probe_fix", "extra", "dfs_nodes", "dfs_leaf", "leaf_frac", "ms", "sound"
+        "plant",
+        "root_fix",
+        "probe_fix",
+        "extra",
+        "dfs_nodes",
+        "dfs_leaf",
+        "leaf_frac",
+        "ms",
+        "sound"
     );
 
     let mut json = String::from("[\n");
