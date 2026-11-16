@@ -295,7 +295,58 @@ fn bound_check() {
     }
 }
 
+/// Diagnóstico: fluxo e constantes nos casos analíticos.
+fn flow_check() {
+    let mut ws = RoofDualWorkspace::new();
+    let mut fixed = [None::<i8>; ROOF_MAX_N];
+    let cases: [(usize, Vec<f64>, Vec<f64>, f64); 3] = [
+        (1, vec![0.0], vec![1.0], -1.0),
+        (2, vec![0.0, 1.0, 1.0, 0.0], vec![0.0, 0.0], -1.0),
+        (2, vec![0.0; 4], vec![1.0, 0.0], -1.0),
+    ];
+    for (n, j, h, opt) in cases {
+        let flow = ws.pass_into(n, &j, &h, &mut fixed[..n]);
+        let mut c0 = 0.0;
+        let mut lin_neg = 0.0;
+        for i in 0..n {
+            c0 += h[i];
+            let mut row = 0.0;
+            for k in 0..n {
+                if k != i {
+                    row += j[i * n + k];
+                }
+            }
+            let l = 2.0 * (row - h[i]);
+            if l < 0.0 {
+                lin_neg += l;
+            }
+            for k in (i + 1)..n {
+                c0 -= j[i * n + k];
+            }
+        }
+        let mut quad_neg = 0.0;
+        for i in 0..n {
+            for k in (i + 1)..n {
+                let q = -4.0 * j[i * n + k];
+                if q < 0.0 {
+                    quad_neg += q;
+                }
+            }
+        }
+        println!(
+            "n={n} flow={flow:.3} c0={c0:.3} lin_neg={lin_neg:.3} quad_neg={quad_neg:.3} C={:.3} C+flow={:.3} C-flow={:.3} opt={opt:.3}",
+            c0 + lin_neg + quad_neg,
+            c0 + lin_neg + quad_neg + flow,
+            c0 + lin_neg + quad_neg - flow
+        );
+    }
+}
+
 fn main() {
+    if std::env::args().any(|a| a == "--flow") {
+        flow_check();
+        return;
+    }
     if std::env::args().any(|a| a == "--scale") {
         scale_table();
         return;

@@ -297,8 +297,24 @@ def main() -> None:
         args.dry_run = True
 
     facts = synthetic_corpus(args.limit)
-    labels = unique_labels(facts)
+    # Átomo = fato composto (s,r,o) — mesma lógica E3 para Spearman JL
+    atom_labels = [
+        nfc(f"{f['subject']}|{f['relation']}|{f['object']}") for f in facts
+    ]
+    # dedup facts by label keep first
+    seen: set[str] = set()
+    uniq_facts: list[dict] = []
+    uniq_labels: list[str] = []
+    for f, lab in zip(facts, atom_labels):
+        if lab in seen:
+            continue
+        seen.add(lab)
+        uniq_facts.append(f)
+        uniq_labels.append(lab)
+    facts = uniq_facts
+    labels = uniq_labels
     X = embed_synthetic(labels, args.dim_in, args.seed)
+    # Re-build as compositional: hash parts into base mix (already in embed_synthetic)
     whitened = not args.no_whiten
     whiten_hash = None
     if whitened:
@@ -313,10 +329,10 @@ def main() -> None:
     keys: list[int] = []
     kinds: list[int] = []
     langs: list[int] = []
-    for lab, x in zip(labels, X):
+    for lab, x, f in zip(labels, X, facts):
         bits_rows.append(project_bits(P, x, DIM_BITS, args.dim_in))
         keys.append(key_u128(lab))
-        kinds.append(1)
+        kinds.append(int(f.get("kind", 1)))
         langs.append(1)
 
     emb_sha = write_embeds(args.out / "emb" / "bank.f32", X)

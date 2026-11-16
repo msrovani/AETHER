@@ -992,6 +992,54 @@ impl RoofDualWorkspace {
         }
         count
     }
+
+    /// Roof dual **bound** `C + ν` — lower bound sobre o ótimo — em uma passada.
+    ///
+    /// `C` é a constante do posiforme: a constante do QUBO
+    /// (`−Σ_{i<j}J_ij + Σ_i h_i`) **mais** a parte negativa de cada termo
+    /// linear (`l_i = 2(Σ_{j≠i}J_ij − h_i)`) e de cada termo quadrático
+    /// (`q_ij = −4J_ij`). Sem esses termos o bound é inválido (o caso `n=1`
+    /// dá `+1` em vez de `−1`).
+    ///
+    /// `fixed` recebe as persistências da mesma passada (uma única chamada de
+    /// max-flow). `n = 0` devolve `0`; `n > ROOF_MAX_N` devolve `−∞`.
+    pub fn bound_into(
+        &mut self,
+        n: usize,
+        j: &[f64],
+        h: &[f64],
+        fixed: &mut [Option<i8>],
+    ) -> f64 {
+        let flow = self.pass_into(n, j, h, fixed);
+        if n == 0 {
+            return 0.0;
+        }
+        if n > ROOF_MAX_N {
+            return f64::NEG_INFINITY;
+        }
+        let mut c = 0.0;
+        for i in 0..n {
+            c += h[i];
+            let mut row = 0.0;
+            for k in 0..n {
+                if k != i {
+                    row += j[i * n + k];
+                }
+            }
+            let l = 2.0 * (row - h[i]);
+            if l < 0.0 {
+                c += l;
+            }
+            for k in (i + 1)..n {
+                c -= j[i * n + k];
+                let q = -4.0 * j[i * n + k];
+                if q < 0.0 {
+                    c += q;
+                }
+            }
+        }
+        c + flow
+    }
 }
 
 /// Rodadas da cascata do roof dual.

@@ -16,6 +16,8 @@ use std::fs;
 use std::path::Path;
 use std::time::Instant;
 
+use aether_engine::core::transplant::{hamming as jl_hamming, spearman as jl_spearman, JlProjector};
+
 // ---------------------------------------------------------------------------
 // Counting allocator (consulta armada)
 // ---------------------------------------------------------------------------
@@ -336,32 +338,30 @@ fn main() {
     let manifest = fs::read_to_string(manifest_path).unwrap_or_default();
     let facts = fs::read_to_string(facts_path).unwrap_or_default();
 
-    // Pairwise sample for Spearman / JL distortion
-    let n = bank.count().min(256);
+    // Spearman: todos os pares em n≤120, projeção ChaCha via JlProjector (E3)
+    let n = bank.count().min(120);
+    let mut proj = JlProjector::new(d_emb, bank.dim, 512, bank.seed);
+    let mut bits_jl = vec![0u64; n * bank.words];
+    proj.project_into(&embeds[..n * d_emb], n, &mut bits_jl);
     let mut cos_v = Vec::new();
-    let mut ham_sim = Vec::new();
-    let mut pairs = 0usize;
-    let max_pairs = 2000usize;
+    let mut ham_v = Vec::new();
     for i in 0..n {
         for j in (i + 1)..n {
-            if pairs >= max_pairs {
-                break;
-            }
             let ei = &embeds[i * d_emb..(i + 1) * d_emb];
             let ej = &embeds[j * d_emb..(j + 1) * d_emb];
-            // Mesma convenção do E3: distância angular (1−cos) ↔ Hamming bruto
-            let c = cosine(ei, ej);
-            let h = bank.hamming(bank.atom_words(i), bank.atom_words(j));
-            cos_v.push(1.0 - c);
-            ham_sim.push(f64::from(h));
-            pairs += 1;
+            cos_v.push(1.0 - cosine(ei, ej));
+            ham_v.push(f64::from(jl_hamming(
+                &bits_jl[i * bank.words..(i + 1) * bank.words],
+                &bits_jl[j * bank.words..(j + 1) * bank.words],
+                bank.words,
+                bank.dim,
+            )));
         }
     }
-    let rho = spearman(&cos_v, &ham_sim);
-    // Distorção: |H/D − (1−cos)/2| médio (escalas alinhadas)
+    let rho = jl_spearman(&cos_v, &ham_v);
     let mut abs_err = 0.0;
     for i in 0..cos_v.len() {
-        let ham_n = ham_sim[i] / bank.dim as f64;
+        let ham_n = ham_v[i] / bank.dim as f64;
         let ang = (cos_v[i] / 2.0).clamp(0.0, 1.0);
         abs_err += (ham_n - ang).abs();
     }

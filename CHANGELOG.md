@@ -3,6 +3,21 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.121] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 7 arquivo(s) (.:2, docs:1, examples:2, src:1, tools:1).
+- Gate: ok (4s).
+
+- `Cargo.lock`
+- `Cargo.toml`
+- `docs/AUDIT_CLAIMS_VOL3.md`
+- `examples/e2c3_probe.rs`
+- `examples/transplant_hv_probe.rs`
+- `src/core/presolve.rs`
+- `tools/harvest_transplant.py`
+
 ## [0.0.120] - 2026-11-16
 
 ### Changed

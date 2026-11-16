@@ -412,6 +412,16 @@ Gate proposto: `bound ≤ ótimo` em 600 instâncias (força bruta n=14) + relat
 de gap. Com isso, `ExactSearch` ganha um modo B&B (podar quando
 `const_fixo + bound_resíduo ≥ incumbente`).
 
+**Tentativa (autorizada) e recuo:** implementei `bound_into` como `c0 − flow`
+e rodei o gate. Passou em **90 instâncias densas** (gap médio 141,6), mas
+**falhou no caso analítico n=1**: `H=−s`, ótimo −1, bound devolveu **+1**. Não é
+um bound válido. Causa: `pass_into` não acumula a constante dos termos
+negativos do posiforme. Para `n=1`, `l₀=−2` e o bound correto é
+`c0 + min(0,l₀) = 1−2 = −1`. A correção exige somar `C` dentro de `pass_into`
+(linear negativo e constante da decomposição quadrática) — não é um wrapper.
+**Revertido**, árvore verde (45 alvos, 0 falhas); o E2c-3C fica aberto até essa
+constante existir, com o gate analítico `n=1/n=2` **antes** dos 600 casos.
+
 **E2c-3B** (certificado 2-SAT): precisa do **posiforme residual** (termos
 lineares/quadráticos após o flow), hoje não exposto. Para n=14, `k=7` → 128
 roof duals por instância; o gate é a taxa de certificação global.
