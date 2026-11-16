@@ -47,6 +47,7 @@ use crate::core::knowledge_bridge_f1::{
 use crate::core::presolve::{roof_dual_qumo, ROOF_MAX_N};
 use crate::core::thermodynamic_solver::{IsingLandscape, ThermodynamicIsingSolver};
 use crate::error::AetherError;
+use crate::knowledge::sgdb::{open, SgdbClient, SgdbConfig, Transport};
 
 use json::Json;
 
@@ -87,6 +88,16 @@ pub struct ApiConfig {
     pub max_ledger_bytes: u64,
     /// Workers de conexão (mínimo 1).
     pub threads: usize,
+    /// Especificação do `neural-sgdb` (`mock`, `http://…/mcp`, `stdio:…`).
+    ///
+    /// `None` = a borda usa só o ledger local. Com SGDB, cada `remember` é
+    /// replicado (best-effort) e o `cue` recupera de lá quando o cache local
+    /// não tem o padrão.
+    pub sgdb: Option<String>,
+    /// Diário local de replay do SGDB.
+    pub sgdb_outbox: Option<PathBuf>,
+    /// Token `Bearer` do SGDB (ou `AETHER_SGDB_TOKEN`).
+    pub sgdb_token: Option<String>,
 }
 
 impl Default for ApiConfig {
@@ -98,6 +109,9 @@ impl Default for ApiConfig {
             organism: None,
             max_ledger_bytes: 0,
             threads: 4,
+            sgdb: None,
+            sgdb_outbox: None,
+            sgdb_token: None,
         }
     }
 }
@@ -254,6 +268,8 @@ pub struct ApiState {
     ledger: ScopeLedger,
     store: Option<LedgerStore>,
     auth: Option<AuthPolicy>,
+    sgdb: Option<SgdbClient<Box<dyn Transport>>>,
+    sgdb_error: Option<String>,
     requests: u64,
     bad_lines: usize,
 }
@@ -284,7 +300,35 @@ impl ApiState {
             token,
             organism: cfg.organism,
         });
+        if let Some(spec) = &cfg.sgdb {
+            let mut sgdb_cfg = SgdbConfig::from_env();
+            if let Some(path) = &cfg.sgdb_outbox {
+                sgdb_cfg.outbox = Some(path.clone());
+            }
+            if let Some(token) = &cfg.sgdb_token {
+                sgdb_cfg.token = Some(token.clone());
+            }
+            sgdb_cfg.recall_k = sgdb_cfg.recall_k.max(32);
+            match open(spec, sgdb_cfg) {
+                Ok(client) => state.sgdb = Some(client),
+                Err(e) => {
+                    eprintln!(
+                        "aviso: neural-sgdb não abriu ({e}) — a borda segue só com o ledger local"
+                    );
+                    state.sgdb_error = Some(e.to_string());
+                }
+            }
+        }
         Ok(state)
+    }
+
+    /// Estado do SGDB para `/health` (`off`/`on`/`error`).
+    pub fn sgdb_status(&self) -> &'static str {
+        match &self.sgdb {
+            Some(_) => "on",
+            None if self.sgdb_error.is_some() => "error",
+            None => "off",
+        }
     }
 
     /// Registros no ledger (todos os escopos).
@@ -618,6 +662,7 @@ fn health(state: &ApiState) -> Json {
         ),
         ("auth", Json::Bool(state.auth.is_some())),
         ("bad_lines", Json::num(state.bad_lines as f64)),
+        ("sgdb", Json::str(state.sgdb_status())),
     ])
 }
 
@@ -633,6 +678,7 @@ fn props(state: &ApiState) -> Json {
                 ("phase_dims", Json::num(PHASE_DIMS as f64)),
                 ("ledger_entries", Json::num(state.ledger_len() as f64)),
                 ("persisted", Json::Bool(state.store.is_some())),
+                ("sgdb", Json::str(state.sgdb_status())),
                 ("edge", Json::str("text-phase-hash-lossy")),
             ]),
         ),
@@ -712,6 +758,20 @@ fn remember(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
             }
         }
     }
+    let result = state
+        .sgdb
+        .as_mut()
+        .map(|client| client.remember_records(std::slice::from_ref(&record)));
+    let mut sgdb_state = "off";
+    match result {
+        Some(Ok(1)) => sgdb_state = "stored",
+        Some(Ok(_)) => sgdb_state = "empty",
+        Some(Err(e)) => {
+            sgdb_state = "offline";
+            state.sgdb_error = Some(e.to_string());
+        }
+        None => {}
+    }
     state.ledger.append(record);
 
     // Compactação: reescreve só os vivos quando o arquivo passa do teto.
@@ -734,6 +794,7 @@ fn remember(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
         ("scope".into(), scope_json(scope)),
         ("scope_key".into(), Json::str(scope_key)),
         ("total".into(), Json::num(state.ledger.len() as f64)),
+        ("sgdb".into(), Json::str(sgdb_state)),
     ];
     if let Some(e) = compact_error {
         fields.push(("compact_error".into(), Json::str(e)));
@@ -815,7 +876,19 @@ fn cue(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
         return bad("query ausente, ímpar ou com mais de 320 floats");
     };
     let mut out = vec![0.0f32; query.len()];
-    match state.ledger.cue_scored(scope, &query, &mut out) {
+    let mut result = state.ledger.cue_scored(scope, &query, &mut out);
+    let mut source = "local";
+    let needs_remote = !matches!(&result, Ok((_, score)) if *score >= MIN_SCORE);
+    if needs_remote {
+        // Sem hit local (ex.: processo reiniciou): reacende do SGDB e tenta
+        // de novo. O ledger textual não substitui a fase — ele a reacende.
+        let hydrated = hydrate_from_sgdb(state, scope);
+        if hydrated > 0 {
+            result = state.ledger.cue_scored(scope, &query, &mut out);
+            source = "sgdb";
+        }
+    }
+    match result {
         Ok((hit, score)) if score >= MIN_SCORE => Reply::Json(
             200,
             Json::obj([
@@ -824,6 +897,7 @@ fn cue(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
                 ("key", Json::str(hit.key.to_string())),
                 ("authority", Json::num(f64::from(hit.authority))),
                 ("score", Json::num(f64::from(score))),
+                ("source", Json::str(source)),
                 (
                     "phases",
                     Json::Arr(out.iter().map(|p| Json::num(f64::from(*p))).collect()),
@@ -846,6 +920,38 @@ fn cue(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
         Ok((_, score)) => Reply::Json(200, abstain_scored("low_similarity", score)),
         Err(BridgeError::EmptyScope) => Reply::Json(200, abstain("empty_scope")),
         Err(e) => Reply::Json(400, error_json("cue_failed", &e.to_string())),
+    }
+}
+
+/// Reacende o cache local com os documentos de fase do escopo no SGDB.
+///
+/// Devolve quantos registros entraram. Falha de rede não derruba o `cue`:
+/// apenas registra o erro no estado (`/health` mostra `sgdb: error`).
+fn hydrate_from_sgdb(state: &mut ApiState, scope: ScopeId) -> usize {
+    let Some(client) = state.sgdb.as_mut() else {
+        return 0;
+    };
+    match client.recall_scope(scope, 32) {
+        Ok(hits) => {
+            let count = hits.len();
+            for hit in hits {
+                state.ledger.append(DraftRecord {
+                    key: hit.doc.key,
+                    layer: hit.doc.layer,
+                    certificate: hit.doc.certificate,
+                    authority: hit.authority,
+                    scope: hit.doc.scope,
+                    tick: hit.doc.tick,
+                    wall_ms: hit.doc.wall_ms,
+                    payload: hit.doc.payload,
+                });
+            }
+            count
+        }
+        Err(e) => {
+            state.sgdb_error = Some(e.to_string());
+            0
+        }
     }
 }
 

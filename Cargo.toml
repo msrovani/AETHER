@@ -1,6 +1,6 @@
 ﻿[package]
 name = "aether_engine"
-version = "0.0.135"
+version = "0.0.136"
 edition = "2021"
 rust-version = "1.78"
 description = "AETHER ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
@@ -59,7 +59,8 @@ m7 = ["m1"]
 m8 = ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "sgdb"]
 # Borda externa HTTP/JSON (T2) para apps de IA — OpenAI-compat e llama.cpp.
 # Sem dependência nova: HTTP/1.1 mínimo sobre std::net.
-api = ["m1"]
+# Inclui o sink durável do neural-sgdb (mesmo feature `sgdb`).
+api = ["m1", "sgdb"]
 # Dashboard Windows de metricas (egui). Opt-in; nao entra no default.
 dashboard = ["dep:eframe", "dep:egui", "dep:serde", "dep:serde_json", "m4"]
 # FASE 5 (hardware extremus): JIT Cranelift para termos SINDy ativos e pinning

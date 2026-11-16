@@ -16,12 +16,16 @@ fn usage() {
     println!(
         "aether-api {}\n\
          uso: aether-api [endereço] [--addr IP:PORTA] [--ledger arquivo.jsonl]\n\
-         \x20               [--token T] [--organism N] [--threads N]\n\n\
+         \x20               [--token T] [--organism N] [--threads N]\n\
+         \x20               [--sgdb mock|http://host:porta/mcp|stdio:cmd]\n\
+         \x20               [--sgdb-outbox arquivo.jsonl] [--sgdb-token T]\n\n\
          rotas: GET /health /props /v1/models\n\
          \x20      POST /v1/aether/{{remember,cue,solve}} /v1/chat/completions /completion\n\
          exemplos:\n\
          \x20 aether-api 127.0.0.1:8787 --ledger target/aether_ledger.jsonl\n\
          \x20 aether-api 127.0.0.1:8787 --token s3cr3t --organism 1\n\
+         \x20 aether-api 127.0.0.1:8787 --sgdb http://127.0.0.1:8090/mcp \\\n\
+         \x20            --sgdb-outbox target/aether_sgdb.jsonl\n\
          \x20 OPENAI_BASE_URL=http://127.0.0.1:8787/v1",
         api::VERSION
     );
@@ -82,6 +86,9 @@ fn main() -> std::io::Result<()> {
             "--threads" => {
                 cfg.threads = parse_u64(&value(&mut i)?, "--threads")?.max(1) as usize;
             }
+            "--sgdb" => cfg.sgdb = Some(value(&mut i)?),
+            "--sgdb-outbox" => cfg.sgdb_outbox = Some(PathBuf::from(value(&mut i)?)),
+            "--sgdb-token" => cfg.sgdb_token = Some(value(&mut i)?),
             other if !other.starts_with("--") && i == 0 => cfg.addr = parse_addr(other)?,
             other => {
                 return Err(std::io::Error::new(
@@ -113,6 +120,15 @@ fn main() -> std::io::Result<()> {
                 Some(o) => format!(" (organismo {o})"),
                 None => String::new(),
             }
+        );
+    }
+    if let Some(spec) = &cfg.sgdb {
+        println!(
+            "  sgdb: {spec} (replica remember/cue{})",
+            cfg.sgdb_outbox
+                .as_ref()
+                .map(|p| format!(", outbox {}", p.display()))
+                .unwrap_or_default()
         );
     }
     println!("  openai: OPENAI_BASE_URL=http://{local}/v1");
