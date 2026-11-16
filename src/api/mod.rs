@@ -1,4 +1,4 @@
-﻿//! Borda externa **HTTP/JSON** (T2): como um app de IA (llama.cpp, Ollama,
+//! Borda externa **HTTP/JSON** (T2): como um app de IA (llama.cpp, Ollama,
 //! SDK da OpenAI) consome o AETHER.
 //!
 //! # O que este módulo é — e o que não é
@@ -1038,11 +1038,7 @@ fn chat_chunks(id: &str, content: &str, abstained: bool) -> Vec<String> {
             .to_text()
         )
     };
-    let finish = if abstained {
-        "content_filter"
-    } else {
-        "stop"
-    };
+    let finish = if abstained { "content_filter" } else { "stop" };
     vec![
         base(Json::obj([("role", Json::str("assistant"))]), Json::Null),
         base(Json::obj([("content", Json::str(content))]), Json::Null),
@@ -1396,21 +1392,19 @@ fn bad_pair(msg: &str) -> (u16, Json) {
 fn forbidden(scope: ScopeId, bound: Option<u64>) -> Reply {
     Reply::Json(
         403,
-        Json::obj([
-            (
-                "error",
-                Json::obj([
-                    ("type", Json::str("forbidden_scope")),
-                    (
-                        "message",
-                        Json::str(format!(
-                            "escopo {:?} não permitido para este token (organismo {:?})",
-                            scope.organism_id, bound
-                        )),
-                    ),
-                ]),
-            ),
-        ]),
+        Json::obj([(
+            "error",
+            Json::obj([
+                ("type", Json::str("forbidden_scope")),
+                (
+                    "message",
+                    Json::str(format!(
+                        "escopo {:?} não permitido para este token (organismo {:?})",
+                        scope.organism_id, bound
+                    )),
+                ),
+            ]),
+        )]),
     )
 }
 
@@ -1456,9 +1450,7 @@ mod tests {
         let s = Json::parse(r#"{"organism":1,"run":2,"app":3}"#).unwrap();
         assert_eq!(scope_from(Some(&s)), Some(ScopeId::new(1, 2, 3)));
         assert_eq!(
-            key_from(Some(&Json::str(
-                "340282366920938463463374607431768211455"
-            ))),
+            key_from(Some(&Json::str("340282366920938463463374607431768211455"))),
             Some(u128::MAX)
         );
         assert_eq!(key_from(Some(&Json::num(7.0))), Some(7));
@@ -1518,6 +1510,3 @@ mod tests {
         assert!(!token_eq("abc", "ab"));
     }
 }
-
-
-

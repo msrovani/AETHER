@@ -26,6 +26,6 @@ pub use host_probe::{host_report_path, load_host_report, probe_and_save, HostRep
 pub use jobs::{JobKind, JobPhase, JobRunner, JobSnapshot};
 pub use model::{load_scorecard, DimCard, ScorecardView, ThroughputRegime, ThroughputView};
 pub use transplant_view::{
-    dest_detail, gates_detail, load_transplant_view, origin_detail, DonationOrigin, TransplantGates,
-    TransplantView, UsoCase,
+    dest_detail, gates_detail, load_transplant_view, origin_detail, DonationOrigin,
+    TransplantGates, TransplantView, UsoCase,
 };

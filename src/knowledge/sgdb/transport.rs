@@ -55,10 +55,7 @@ pub fn tool_request(id: u64, name: &str, arguments: Json) -> Json {
     request(
         id,
         "tools/call",
-        Json::obj([
-            ("name", Json::str(name)),
-            ("arguments", arguments),
-        ]),
+        Json::obj([("name", Json::str(name)), ("arguments", arguments)]),
     )
 }
 
@@ -163,16 +160,16 @@ impl MockTransport {
     /// Memórias de um escopo vivo (sem TTL aplicado ao resto).
     pub fn scope_len(&mut self, scope: crate::core::knowledge_bridge_f1::ScopeId) -> usize {
         self.expire();
-        self.entries
-            .iter()
-            .filter(|e| e.doc.scope == scope)
-            .count()
+        self.entries.iter().filter(|e| e.doc.scope == scope).count()
     }
 
     /// Documento armazenado para uma chave de conteúdo (auditoria de payload).
     pub fn stored(&mut self, key: u128) -> Option<&PhaseDoc> {
         self.expire();
-        self.entries.iter().find(|e| e.doc.key == key).map(|e| &e.doc)
+        self.entries
+            .iter()
+            .find(|e| e.doc.key == key)
+            .map(|e| &e.doc)
     }
 
     fn expire(&mut self) {
@@ -250,10 +247,7 @@ impl MockTransport {
         Ok(Json::obj([
             ("status", Json::str("ok")),
             ("remembered", Json::num(keys.len() as f64)),
-            (
-                "keys",
-                Json::Arr(keys.into_iter().map(Json::Str).collect()),
-            ),
+            ("keys", Json::Arr(keys.into_iter().map(Json::Str).collect())),
         ]))
     }
 
@@ -282,10 +276,7 @@ impl MockTransport {
     fn recall(&mut self, args: &Json) -> Result<Json, SgdbError> {
         self.expire();
         self.recalls += 1;
-        let scope_run = args
-            .get("scope_run")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let scope_run = args.get("scope_run").and_then(|v| v.as_str()).unwrap_or("");
         let scope_app = args.get("scope_app").and_then(|v| v.as_str());
         let entities: Vec<&str> = args
             .get("entities")
@@ -314,7 +305,9 @@ impl MockTransport {
                 continue;
             }
             if !entities.is_empty()
-                && !entities.iter().any(|e| entry.entities.iter().any(|x| x == e))
+                && !entities
+                    .iter()
+                    .any(|e| entry.entities.iter().any(|x| x == e))
             {
                 continue;
             }
@@ -335,7 +328,7 @@ impl MockTransport {
             };
             // Frescor desempata (o mais novo primeiro).
             let age = self.now_ms.saturating_sub(entry.created_ms) as f32;
-            score += 1.0 / (1.0 + age / 60_000.0) * 1e-3;
+            score = (score + 1.0 / (1.0 + age / 60_000.0) * 1e-3).min(1.0);
             hits.push((
                 score,
                 MemoryHit {
@@ -351,7 +344,10 @@ impl MockTransport {
         let mut json_hits = Vec::with_capacity(hits.len());
         for (_, hit) in hits.iter() {
             json_hits.push(Json::obj([
-                ("key", Json::str(hit.storage_key.clone().unwrap_or_default())),
+                (
+                    "key",
+                    Json::str(hit.storage_key.clone().unwrap_or_default()),
+                ),
                 ("text", Json::str(hit.doc.to_text())),
                 ("score", Json::num(f64::from(hit.score))),
                 ("authority", Json::num(f64::from(hit.authority))),
@@ -902,5 +898,56 @@ mod tests {
         mock.set_offline(false);
         assert!(mock.call(&req).is_ok());
         assert_eq!(mock.calls(), 2);
+    }
+
+    #[test]
+    fn http_transport_le_resultado_e_sessao() {
+        use std::net::TcpListener;
+        use std::thread;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener");
+        let addr = listener.local_addr().expect("addr");
+        let server = thread::spawn(move || {
+            let (stream, _) = listener.accept().expect("accept");
+            let mut reader = BufReader::new(stream.try_clone().expect("clone"));
+            let mut request = String::new();
+            let mut content_length = 0usize;
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                    break;
+                }
+                if line == "\r\n" || line == "\n" {
+                    break;
+                }
+                if let Some((name, value)) = line.split_once(':') {
+                    if name.eq_ignore_ascii_case("content-length") {
+                        content_length = value.trim().parse().unwrap_or(0);
+                    }
+                }
+                request.push_str(&line);
+            }
+            let mut body = vec![0u8; content_length];
+            reader.read_exact(&mut body).expect("body");
+            request.push_str(&String::from_utf8_lossy(&body));
+            assert!(request.contains("\"jsonrpc\":\"2.0\""));
+            assert!(request.contains("\"method\":\"tools/call\""));
+            let response_body = r#"{"jsonrpc":"2.0","id":1,"result":{"status":"ok"}}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+                 Mcp-Session-Id: sess-1\r\nContent-Length: {}\r\n\r\n{}",
+                response_body.len(),
+                response_body
+            );
+            let mut stream = stream;
+            stream.write_all(response.as_bytes()).expect("write");
+        });
+        let mut transport = HttpTransport::new(&format!("http://{addr}/mcp")).expect("transporte");
+        let result = transport
+            .call(&tool_request(1, "health", Json::obj([])))
+            .expect("result");
+        assert_eq!(result.get("status").and_then(|v| v.as_str()), Some("ok"));
+        assert_eq!(transport.session.as_deref(), Some("sess-1"));
+        server.join().expect("join");
     }
 }

@@ -66,12 +66,7 @@ impl std::error::Error for JsonError {}
 impl Json {
     /// Constrói um objeto a partir de pares.
     pub fn obj<const N: usize>(pairs: [(&str, Json); N]) -> Self {
-        Self::Obj(
-            pairs
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v))
-                .collect(),
-        )
+        Self::Obj(pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
     }
 
     /// `Json::Str` a partir de qualquer coisa stringificável.
@@ -441,9 +436,7 @@ impl Parser<'_> {
                                     self.i += 2;
                                     let lo = self.hex4()?;
                                     if (0xDC00..0xE000).contains(&lo) {
-                                        let cp = 0x1_0000
-                                            + ((hi - 0xD800) << 10)
-                                            + (lo - 0xDC00);
+                                        let cp = 0x1_0000 + ((hi - 0xD800) << 10) + (lo - 0xDC00);
                                         out.push(char::from_u32(cp).unwrap_or('\u{fffd}'));
                                     } else {
                                         out.push('\u{fffd}');
@@ -518,7 +511,10 @@ mod tests {
         assert_eq!(Json::parse("-12.5e2").unwrap(), Json::Num(-1250.0));
         assert_eq!(Json::parse(r#""a\nb""#).unwrap(), Json::str("a\nb"));
         let v = Json::parse(r#"{"a":[1,2,{"b":null}],"c":true}"#).unwrap();
-        assert_eq!(v.get("a").unwrap().idx(2).unwrap().get("b"), Some(&Json::Null));
+        assert_eq!(
+            v.get("a").unwrap().idx(2).unwrap().get("b"),
+            Some(&Json::Null)
+        );
         assert_eq!(v.get("c").unwrap().as_bool(), Some(true));
     }
 
@@ -533,10 +529,7 @@ mod tests {
             JsonErrorKind::UnexpectedByte
         );
         let deep = "[".repeat(MAX_DEPTH + 5);
-        assert_eq!(
-            Json::parse(&deep).unwrap_err().kind,
-            JsonErrorKind::TooDeep
-        );
+        assert_eq!(Json::parse(&deep).unwrap_err().kind, JsonErrorKind::TooDeep);
     }
 
     #[test]

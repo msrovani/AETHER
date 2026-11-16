@@ -26,10 +26,10 @@ mod aether_dashboard_win {
     use eframe::App;
 
     use aether_engine::dashboard::{
-        dest_detail, dimension_ficha, dimension_tooltip, fmt_compact, gates_detail,
-        global_tooltip, glossary_entries, load_host_report, load_scorecard, load_transplant_view,
-        origin_detail, throughput_tooltip, DimFicha, HostReport, JobKind, JobPhase, JobRunner,
-        ScorecardView, TransplantView,
+        dest_detail, dimension_ficha, dimension_tooltip, fmt_compact, gates_detail, global_tooltip,
+        glossary_entries, load_host_report, load_scorecard, load_transplant_view, origin_detail,
+        throughput_tooltip, DimFicha, HostReport, JobKind, JobPhase, JobRunner, ScorecardView,
+        TransplantView,
     };
 
     /// Paleta do hub (lab slate + teal — sem glow/roxo).
@@ -794,7 +794,11 @@ mod aether_dashboard_win {
                 ui.add_space(4.0);
             }
 
-            ui.label(RichText::new("Origem (doação)").strong().color(theme::ACCENT));
+            ui.label(
+                RichText::new("Origem (doação)")
+                    .strong()
+                    .color(theme::ACCENT),
+            );
             ui.add_space(4.0);
             if let Some(o) = &tv.origin {
                 let body = origin_detail(o);
@@ -810,12 +814,7 @@ mod aether_dashboard_win {
                     ) {
                         self.note_hover("Doação (origem)", body.clone());
                     }
-                    if meter_card(
-                        ui,
-                        "dim",
-                        format!("{}→{}", o.dim_in, o.dim_hv),
-                        theme::OK,
-                    ) {
+                    if meter_card(ui, "dim", format!("{}→{}", o.dim_in, o.dim_hv), theme::OK) {
                         self.note_hover("Doação (origem)", body.clone());
                     }
                     if meter_card(
@@ -872,7 +871,11 @@ mod aether_dashboard_win {
             }
 
             ui.add_space(8.0);
-            ui.label(RichText::new("Gates / estatística").strong().color(theme::ACCENT));
+            ui.label(
+                RichText::new("Gates / estatística")
+                    .strong()
+                    .color(theme::ACCENT),
+            );
             ui.add_space(4.0);
             if let Some(g) = &tv.gates {
                 let gbody = gates_detail(g);
@@ -881,11 +884,7 @@ mod aether_dashboard_win {
                     if meter_card(
                         ui,
                         "Probe",
-                        if g.pass {
-                            "PASS".into()
-                        } else {
-                            "FAIL".into()
-                        },
+                        if g.pass { "PASS".into() } else { "FAIL".into() },
                         pass_c,
                     ) {
                         self.note_hover("Gates INTAKE", gbody.clone());
@@ -896,12 +895,7 @@ mod aether_dashboard_win {
                     if meter_card(ui, "R@10", format!("{:.3}", g.recall_at_10), theme::OK) {
                         self.note_hover("Gates INTAKE", gbody.clone());
                     }
-                    if meter_card(
-                        ui,
-                        "lat",
-                        format!("{:.3}ms", g.latency_ms),
-                        theme::ACCENT,
-                    ) {
+                    if meter_card(ui, "lat", format!("{:.3}ms", g.latency_ms), theme::ACCENT) {
                         self.note_hover("Gates INTAKE", gbody);
                     }
                 });

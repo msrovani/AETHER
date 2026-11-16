@@ -188,7 +188,10 @@ fn sse_entrega_chunks_e_done() {
                    "messages":[{"role":"user","content":"ola"}]}"#;
     let (st, resp) = request(addr, "POST", "/v1/chat/completions", chat);
     assert_eq!(st, 200, "{resp}");
-    assert!(resp.contains("\"object\":\"chat.completion.chunk\""), "{resp}");
+    assert!(
+        resp.contains("\"object\":\"chat.completion.chunk\""),
+        "{resp}"
+    );
     assert!(resp.contains("\"role\":\"assistant\""), "{resp}");
     assert!(resp.contains("data: [DONE]"), "{resp}");
     assert!(resp.contains("\"finish_reason\":\"stop\""), "{resp}");

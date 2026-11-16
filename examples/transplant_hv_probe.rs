@@ -445,10 +445,7 @@ fn main() {
         let sub = extract_json_str(line, "subject").unwrap_or_default();
         let rel = extract_json_str(line, "relation").unwrap_or_default();
         let obj = extract_json_str(line, "object").unwrap_or_default();
-        by_sr
-            .entry((sub, rel))
-            .or_default()
-            .insert(obj);
+        by_sr.entry((sub, rel)).or_default().insert(obj);
     }
     let detected = by_sr.values().filter(|s| s.len() > 1).count();
     let conflict_rate = if planted == 0 {
@@ -474,9 +471,20 @@ fn main() {
     let g_rebuild = rebuild_ok;
 
     println!("=== INTAKE_TRANSPLANT probe ===");
-    println!("atoms={} dim={} dim_in={}", bank.count(), bank.dim, bank.dim_in);
-    println!("Spearman={:.4}  JL_dist={:.4}  Recall@10={:.4}", rho, jl_distortion, recall10);
-    println!("lat_ms={:.4}  allocs={}  conflicts={}/{} determ={}", lat_ms, allocs, detected, planted, determ);
+    println!(
+        "atoms={} dim={} dim_in={}",
+        bank.count(),
+        bank.dim,
+        bank.dim_in
+    );
+    println!(
+        "Spearman={:.4}  JL_dist={:.4}  Recall@10={:.4}",
+        rho, jl_distortion, recall10
+    );
+    println!(
+        "lat_ms={:.4}  allocs={}  conflicts={}/{} determ={}",
+        lat_ms, allocs, detected, planted, determ
+    );
 
     let pass = g_spear && g_recall && g_jl && g_det && g_lat && g_alloc && g_conf && g_rebuild;
     let json = format!(

@@ -1,4 +1,4 @@
-﻿//! `aether-api` — borda HTTP/JSON do AETHER (T2).
+//! `aether-api` — borda HTTP/JSON do AETHER (T2).
 //!
 //! ```text
 //! aether-api [--addr IP:PORTA] [--ledger arquivo.jsonl] [--token T]
@@ -119,4 +119,3 @@ fn main() -> std::io::Result<()> {
     println!("  threads: {}", cfg.threads.max(1));
     api::serve_listener(listener, cfg)
 }
-

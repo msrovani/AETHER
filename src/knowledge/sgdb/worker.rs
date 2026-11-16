@@ -117,9 +117,7 @@ impl T2Worker {
                     if batch.len() < DRAIN_MAX {
                         let room = DRAIN_MAX - batch.len();
                         let drained = rx.drain_batch(&mut batch, room);
-                        shared
-                            .drained
-                            .fetch_add(drained as u64, Ordering::Relaxed);
+                        shared.drained.fetch_add(drained as u64, Ordering::Relaxed);
                     }
                     let due = last.elapsed() >= COMMIT_WINDOW;
                     if !batch.is_empty() && (batch.len() >= DRAIN_MAX || due) {
@@ -141,9 +139,7 @@ impl T2Worker {
                 loop {
                     let mut tail = Vec::with_capacity(DRAIN_MAX);
                     let drained = rx.drain_batch(&mut tail, DRAIN_MAX);
-                    shared
-                        .drained
-                        .fetch_add(drained as u64, Ordering::Relaxed);
+                    shared.drained.fetch_add(drained as u64, Ordering::Relaxed);
                     if tail.is_empty() {
                         break;
                     }
@@ -210,7 +206,16 @@ impl T2Worker {
         wall_ms: u64,
         payload: &[u8],
     ) -> bool {
-        self.record_event(key, layer, certificate, authority, scope, tick, wall_ms, payload)
+        self.record_event(
+            key,
+            layer,
+            certificate,
+            authority,
+            scope,
+            tick,
+            wall_ms,
+            payload,
+        )
     }
 
     /// Contadores do lado do produtor (anel).

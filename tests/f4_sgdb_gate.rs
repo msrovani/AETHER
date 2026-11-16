@@ -64,7 +64,10 @@ fn temp_outbox(tag: &str) -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    std::env::temp_dir().join(format!("aether_sgdb_{tag}_{}_{unique}.jsonl", std::process::id()))
+    std::env::temp_dir().join(format!(
+        "aether_sgdb_{tag}_{}_{unique}.jsonl",
+        std::process::id()
+    ))
 }
 
 #[test]
@@ -141,11 +144,14 @@ fn f4_gate_t0_ao_sgdb_sem_perda_e_sem_vazamento() {
     let cert = EngineCertificate::new(-1.0, 0.01, 0, 0.9, Provenance::Observed);
     // Autoridade alta + ambíguo (gap abaixo do piso) ⇒ cita, não atua.
     let decision = cert.decide_with_evidence(&ev, 0.5);
-    let fusion = ledger.decide(ev[0].authority, Certificate {
-        energy: -1.0,
-        gap: 1.0,
-        violations: 0,
-    });
+    let fusion = ledger.decide(
+        ev[0].authority,
+        Certificate {
+            energy: -1.0,
+            gap: 1.0,
+            violations: 0,
+        },
+    );
     assert_eq!(fusion.action, FusionAction::CiteNoAct);
     assert_eq!(decision, aether_engine::core::certificate::Decision::Cite);
 
@@ -181,11 +187,7 @@ fn f4_gate_offline_outbox_replay_e_ttl() {
     let _ = std::fs::remove_file(&path);
 
     // Banco fora: tudo vai para o outbox local (nada se perde).
-    let mut offline = SgdbLedger::new(
-        MockTransport::new(),
-        SgdbConfig::durable(&path),
-        scope,
-    );
+    let mut offline = SgdbLedger::new(MockTransport::new(), SgdbConfig::durable(&path), scope);
     offline.client_mut().transport_mut().set_offline(true);
     for i in 0..5u8 {
         offline.stage(record(scope, i, 200));

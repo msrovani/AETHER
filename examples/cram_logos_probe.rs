@@ -24,9 +24,7 @@ use aether_engine::core::constraint_acquisition::{
     solve_with_certificate, train_pseudolikelihood, PairwiseEnergy,
 };
 use aether_engine::core::logic_pipeline::BsbCore;
-use aether_engine::core::sudoku_csp::{
-    shidoku_instances, shidoku_solutions, SudokuShape,
-};
+use aether_engine::core::sudoku_csp::{shidoku_instances, shidoku_solutions, SudokuShape};
 
 #[derive(Clone, Copy)]
 struct Args {
@@ -74,9 +72,7 @@ fn parse_args() -> Args {
                 }
             }
             "--help" | "-h" => {
-                eprintln!(
-                    "cram_logos_probe [--quick|--full] [--instances N] [--clues K]"
-                );
+                eprintln!("cram_logos_probe [--quick|--full] [--instances N] [--clues K]");
                 std::process::exit(0);
             }
             _ => {}
@@ -108,7 +104,10 @@ impl ArmStats {
 fn eval_arm(
     name: &'static str,
     energy: &PairwiseEnergy,
-    instances: &[(aether_engine::core::sudoku_csp::SudokuBoard, aether_engine::core::sudoku_csp::SudokuBoard)],
+    instances: &[(
+        aether_engine::core::sudoku_csp::SudokuBoard,
+        aether_engine::core::sudoku_csp::SudokuBoard,
+    )],
     restarts: usize,
     provenance: Provenance,
     fit_ms: f64,
@@ -161,7 +160,11 @@ fn main() {
         "instances={} clues={} restarts={} pl_steps={} quick={} full={}",
         args.instances, args.clues, args.restarts, args.pl_steps, args.quick, args.full
     );
-    println!("train_solutions={} n_spins={}", train_sols.len(), shape.n_spins());
+    println!(
+        "train_solutions={} n_spins={}",
+        train_sols.len(),
+        shape.n_spins()
+    );
 
     // Braço A — hand-set
     let hand = PairwiseEnergy::hand_set(shape, 2.5);
@@ -209,8 +212,7 @@ fn main() {
     // G1: hand-set ≥ 95% factível
     let g1 = arm_a.feasible_pct() >= 95.0;
     // G2: learned ≥ hand-set − 15 pp (ou ≥ 80%)
-    let g2 = arm_b.feasible_pct() + 15.0 >= arm_a.feasible_pct()
-        || arm_b.feasible_pct() >= 80.0;
+    let g2 = arm_b.feasible_pct() + 15.0 >= arm_a.feasible_pct() || arm_b.feasible_pct() >= 80.0;
     // G3: quando factível, coerência do certificado não deve ser pior que factível
     // (is_coherent exige gap>0; toleramos coherent ≥ 50% dos factíveis)
     let g3 = if arm_b.feasible == 0 {
@@ -220,9 +222,18 @@ fn main() {
     };
 
     println!();
-    println!("G1 hand_set feas≥95%:     {}", if g1 { "PASS" } else { "FAIL" });
-    println!("G2 learned vs hand_set:   {}", if g2 { "PASS" } else { "FAIL" });
-    println!("G3 cert coherent@feas:    {}", if g3 { "PASS" } else { "FAIL" });
+    println!(
+        "G1 hand_set feas≥95%:     {}",
+        if g1 { "PASS" } else { "FAIL" }
+    );
+    println!(
+        "G2 learned vs hand_set:   {}",
+        if g2 { "PASS" } else { "FAIL" }
+    );
+    println!(
+        "G3 cert coherent@feas:    {}",
+        if g3 { "PASS" } else { "FAIL" }
+    );
 
     let json = format!(
         r#"{{

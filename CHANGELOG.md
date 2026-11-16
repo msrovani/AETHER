@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.130] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 24 arquivo(s) (.:2, docs:1, examples:3, src:12, tests:6).
+- Gate: ok (20s).
+
+- `Cargo.lock`
+- `README.md`
+- `examples/cram_logos_probe.rs`
+- `examples/sgdb_roundtrip.rs`
+- `examples/transplant_hv_probe.rs`
+- `src/api/mod.rs`
+- `src/bin/aether_api.rs`
+- `src/bin/aether_daemon.rs`
+- `src/bin/aether_dashboard.rs`
+- `src/dashboard/mod.rs`
+- `src/json.rs`
+- `src/knowledge/sgdb/client.rs`
+
 ## [0.0.129] - 2026-11-16
 
 ### Changed

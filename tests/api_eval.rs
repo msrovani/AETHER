@@ -133,7 +133,9 @@ fn avaliacao_de_usabilidade() {
         ("paráfrase", |f| format!("{f}?")),
         ("maiúsculas", |f| f.to_uppercase()),
         ("1 caractere", |f| format!("{f}x")),
-        ("prefixo", |f| f.split_whitespace().take(2).collect::<Vec<_>>().join(" ")),
+        ("prefixo", |f| {
+            f.split_whitespace().take(2).collect::<Vec<_>>().join(" ")
+        }),
     ];
     let mut results: Vec<(&str, usize)> = Vec::new();
     for (name, f) in variants {
@@ -170,7 +172,8 @@ fn avaliacao_de_usabilidade() {
                    "messages":[{"role":"user","content":"fato 7 sobre o tema 2 com valor 49"}]}"#;
     let (st, chat_resp) = request(addr, "POST", "/v1/chat/completions", chat);
     assert_eq!(st, 200, "{chat_resp}");
-    let chat_ok = chat_resp.contains("\"finish_reason\":\"stop\"") && chat_resp.contains("\"key\":\"7\"");
+    let chat_ok =
+        chat_resp.contains("\"finish_reason\":\"stop\"") && chat_resp.contains("\"key\":\"7\"");
 
     // ---- 6. custo do solver ------------------------------------------------
     let mut solve_lat = Vec::new();
@@ -179,7 +182,11 @@ fn avaliacao_de_usabilidade() {
             r#"{{"n":12,"j":[[{}]],"h":[{}],"steps":80,"restarts":4,"seed":{seed}}}"#,
             (0..12)
                 .map(|i| (0..12)
-                    .map(|k| if i == k { "0".to_string() } else { "1".to_string() })
+                    .map(|k| if i == k {
+                        "0".to_string()
+                    } else {
+                        "1".to_string()
+                    })
                     .collect::<Vec<_>>()
                     .join(","))
                 .collect::<Vec<_>>()
@@ -206,7 +213,10 @@ fn avaliacao_de_usabilidade() {
         println!("{name:<33} : abstém {abst}/{n}");
     }
     println!("escopo alheio                     : abstém {cross_abstained}/{n}");
-    println!("chat OpenAI com fato exato        : {}", if chat_ok { "act + key=7" } else { "FALHOU" });
+    println!(
+        "chat OpenAI com fato exato        : {}",
+        if chat_ok { "act + key=7" } else { "FALHOU" }
+    );
     println!("latência cue p50/p99              : {p50} µs / {p99} µs");
     println!(
         "latência solve n=12 p50/p99       : {} µs / {} µs",
@@ -218,7 +228,10 @@ fn avaliacao_de_usabilidade() {
     assert_eq!(exact_ok, n, "memória exata tem de acertar 100%");
     assert_eq!(noise_ok, n, "fases com ruído 1e-3 têm de acertar");
     for (name, abst) in &results {
-        assert_eq!(*abst, n, "{name} não pode acertar: a borda é hash, não embedding");
+        assert_eq!(
+            *abst, n,
+            "{name} não pode acertar: a borda é hash, não embedding"
+        );
     }
     assert_eq!(cross_abstained, n, "R8: escopo alheio não vaza");
     assert!(chat_ok, "dialeto OpenAI tem de citar o fato exato");

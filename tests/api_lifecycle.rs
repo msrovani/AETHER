@@ -190,7 +190,10 @@ fn compactacao_descarta_tumulos_e_morto() {
     assert_eq!(st, 200, "{resp}");
     assert!(resp.contains("\"compacted\":true"), "{resp}");
     let after = std::fs::metadata(&file).expect("arquivo").len();
-    assert!(after < before, "compactação não reduziu: {before} -> {after}");
+    assert!(
+        after < before,
+        "compactação não reduziu: {before} -> {after}"
+    );
     // Um registro de 160 fasores tem ~6 KB: 3 vivos cabem folgado em 24 KB.
     assert!(after < 24_000, "arquivo ainda grande: {after} bytes");
 
@@ -238,7 +241,8 @@ fn indice_por_escopo_aguenta_muitos_fatos() {
         let (st, resp) = request(addr, "POST", "/v1/aether/cue", &q);
         lat.push(t0.elapsed().as_micros());
         assert_eq!(st, 200);
-        if resp.contains(&format!("\"key\":\"{}", org * 1000)) || resp.contains("\"abstain\":false") {
+        if resp.contains(&format!("\"key\":\"{}", org * 1000)) || resp.contains("\"abstain\":false")
+        {
             ok += 1;
         }
     }
@@ -246,7 +250,10 @@ fn indice_por_escopo_aguenta_muitos_fatos() {
     let p50 = lat[lat.len() / 2];
     println!("índice: 2.000 fatos, cue p50 = {p50} µs");
     assert_eq!(ok, 20, "todo escopo tem de responder do próprio escopo");
-    assert!(p50 < 5_000, "cue ficou lento demais: {p50} µs (índice não aplicado?)");
+    assert!(
+        p50 < 5_000,
+        "cue ficou lento demais: {p50} µs (índice não aplicado?)"
+    );
 
     let _ = std::fs::remove_file(&file);
 }

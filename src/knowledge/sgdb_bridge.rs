@@ -77,9 +77,7 @@ fn extract(line: &str, key: &str) -> Option<String> {
 }
 
 /// Loader de arranque: valida manifest; se faltar bank, retorna None (sem panic).
-pub fn try_load_hv_bank(
-    data_dir: &Path,
-) -> Result<Option<crate::core::hv::HvBank>, String> {
+pub fn try_load_hv_bank(data_dir: &Path) -> Result<Option<crate::core::hv::HvBank>, String> {
     let bank = data_dir.join("hv/bank.bin");
     let idx = data_dir.join("hv/bank.idx");
     let manifest = data_dir.join("manifest.json");

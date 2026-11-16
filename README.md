@@ -11,6 +11,7 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 * **docs/HARDENING_REPORT.md** - auditoria, correcoes e medicoes finais (2026-11-15).
 * **docs/USER_DELIVERY_PLAN.md** — mapa do entregável ao usuário + plano de ondas (demo → Produto C → A/B).
 * **docs/O_PROBLEMA_DOS_3_CORPOS_NAO.md** (+ `_VOL2`, `_VOL3`) — dossiê dos três "NÃO" (linguagem, lógica, self): tese, preço em hardware e gestão do conhecimento. Registro mestre no Vol. III §11.
+* **docs/SGDB_INTEGRATION.md** — encaixe operacional do `neural-sgdb` (`T2`): MCP, outbox, leitura de fase e gates F4.
 
 ## Pilares
 
@@ -24,6 +25,7 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 | 6 | `m6` | `src/thermodynamic_dreamer.rs` | GSB na borda do caos + Langevin (amostragem de Boltzmann, incerteza epistêmica) |
 | 7 | `m7` | `src/morphogenesis.rs` | Plasticidade topológica por energia livre (crescimento hebbiano + poda metabólica) |
 | 8 | `m8` | `src/bin/aether_daemon.rs` | Transdutor físico real + enxame UDP multicast `239.255.42.99:7777` |
+| — | `sgdb` | `src/knowledge/sgdb/` | `T2` do `neural-sgdb`: MCP (mock/HTTP/stdio), outbox, recall→fase |
 
 ## Build
 

@@ -69,7 +69,9 @@ fn split(resp: String) -> (u16, String) {
 }
 
 fn phases_text(n: usize) -> String {
-    let v: Vec<String> = (0..n).map(|i| format!("{}", (i as f32 * 0.37).sin())).collect();
+    let v: Vec<String> = (0..n)
+        .map(|i| format!("{}", (i as f32 * 0.37).sin()))
+        .collect();
     format!("[{}]", v.join(","))
 }
 
@@ -127,7 +129,10 @@ fn requisicao_sem_content_length_nao_pendura() {
     let mut resp = String::new();
     let _ = s.read_to_string(&mut resp);
     let (st, _) = split(resp);
-    assert_eq!(st, 400, "sem content-length o corpo é vazio: 400, não timeout");
+    assert_eq!(
+        st, 400,
+        "sem content-length o corpo é vazio: 400, não timeout"
+    );
 }
 
 #[test]

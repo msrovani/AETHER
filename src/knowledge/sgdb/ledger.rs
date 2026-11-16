@@ -157,10 +157,7 @@ impl<T: Transport> SgdbLedger<T> {
     pub fn commit_run(&mut self) -> usize {
         let batch = std::mem::take(&mut self.staged);
         if !batch.is_empty() {
-            let replayed = self.flush();
-            if replayed > 0 {
-                self.metrics.replayed += replayed as u64;
-            }
+            self.flush();
             let mut docs: Vec<PhaseDoc> = batch.iter().map(PhaseDoc::from_record).collect();
             let count = docs.len();
             match self.client.remember_docs(&mut docs) {
@@ -194,6 +191,7 @@ impl<T: Transport> SgdbLedger<T> {
         match self.client.remember_docs(&mut docs) {
             Ok(written) => {
                 self.last_error = None;
+                self.metrics.replayed += written as u64;
                 let remaining = docs.split_off(written.min(docs.len()));
                 self.replace_pending(remaining);
                 written

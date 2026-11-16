@@ -85,10 +85,7 @@ impl PhaseDoc {
                 Json::obj([
                     ("e", Json::num(f64::from(self.certificate.energy))),
                     ("g", Json::num(f64::from(self.certificate.gap))),
-                    (
-                        "v",
-                        Json::num(f64::from(self.certificate.violations)),
-                    ),
+                    ("v", Json::num(f64::from(self.certificate.violations))),
                 ]),
             ),
             ("auth", Json::num(f64::from(self.authority))),
@@ -179,19 +176,10 @@ impl PhaseDoc {
                 "entities".to_string(),
                 Json::Arr(self.entities().into_iter().map(Json::Str).collect()),
             ),
-            (
-                "if_exists".to_string(),
-                Json::str(cfg.if_exists),
-            ),
+            ("if_exists".to_string(), Json::str(cfg.if_exists)),
             ("scope_app".to_string(), Json::str(cfg.scope_app)),
-            (
-                "scope_run".to_string(),
-                Json::str(scope_run(self.scope)),
-            ),
-            (
-                "scope_agent".to_string(),
-                Json::str(cfg.scope_agent),
-            ),
+            ("scope_run".to_string(), Json::str(scope_run(self.scope))),
+            ("scope_agent".to_string(), Json::str(cfg.scope_agent)),
             // `index_key` está fora do escopo do payload: o nome da chave é
             // derivado do conteúdo e não ajuda a busca semântica.
         ];
@@ -225,10 +213,7 @@ pub struct RememberConfig<'a> {
 
 /// Escopo textual do evento (`org/run/app`), estável entre `T0` e `T2`.
 pub fn scope_text(scope: ScopeId) -> String {
-    format!(
-        "{}/{}/{}",
-        scope.organism_id, scope.run_id, scope.app_tag
-    )
+    format!("{}/{}/{}", scope.organism_id, scope.run_id, scope.app_tag)
 }
 
 /// Inverso de [`scope_text`] (`None` se malformado).
@@ -522,9 +507,10 @@ mod tests {
             "content",
             Json::Arr(vec![Json::obj([
                 ("type", Json::str("text")),
-                ("text", Json::str(
-                    Json::obj([("hits", Json::Arr(vec![hit.clone()]))]).to_text(),
-                )),
+                (
+                    "text",
+                    Json::str(Json::obj([("hits", Json::Arr(vec![hit.clone()]))]).to_text()),
+                ),
             ])]),
         )]);
         let hits = hits_json(&wrapped);

@@ -676,8 +676,12 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
                 println!("  --samples <n>    amostras do sonhador (>0)");
                 println!("  --steps <n>      passos do sonhador (>0)");
                 println!("  --sgdb <spec>    liga o T2: mock | http://host:porta/mcp | stdio:programa args");
-                println!("  --sgdb-outbox <arquivo>  diário local de replay quando o banco está fora");
-                println!("  --sgdb-every <n> emite um padrão a cada n ciclos (padrão 60; 0 desliga)");
+                println!(
+                    "  --sgdb-outbox <arquivo>  diário local de replay quando o banco está fora"
+                );
+                println!(
+                    "  --sgdb-every <n> emite um padrão a cada n ciclos (padrão 60; 0 desliga)"
+                );
                 println!("  --sgdb-run <id>  linhagem durável no escopo (padrão 0)");
                 println!("  --help           esta ajuda");
                 std::process::exit(0);
@@ -822,11 +826,12 @@ fn build_transport(spec: &str) -> Result<Box<dyn Transport>> {
             .next()
             .ok_or_else(|| config("stdio: exige um programa".into()))?;
         let args: Vec<String> = parts.map(str::to_string).collect();
-        let transport =
-            StdioTransport::spawn(program, &args).map_err(|e| config(e.to_string()))?;
+        let transport = StdioTransport::spawn(program, &args).map_err(|e| config(e.to_string()))?;
         return Ok(Box::new(transport));
     }
-    Err(config(format!("especificação de SGDB desconhecida: {spec}")))
+    Err(config(format!(
+        "especificação de SGDB desconhecida: {spec}"
+    )))
 }
 
 fn main() -> Result<()> {

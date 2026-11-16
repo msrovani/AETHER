@@ -152,10 +152,7 @@ impl<T: Transport> SgdbClient<T> {
             "initialize",
             Json::obj([
                 ("protocolVersion", Json::str(transport::MCP_PROTOCOL)),
-                (
-                    "capabilities",
-                    Json::obj([("tools", Json::obj([]))]),
-                ),
+                ("capabilities", Json::obj([("tools", Json::obj([]))])),
                 (
                     "clientInfo",
                     Json::obj([
@@ -200,7 +197,10 @@ impl<T: Transport> SgdbClient<T> {
         for chunk_start in (0..docs.len()).step_by(batch) {
             let chunk_end = (chunk_start + batch).min(docs.len());
             let chunk = &mut docs[chunk_start..chunk_end];
-            let memories: Vec<Json> = chunk.iter().map(|d| d.memory_args(&self.cfg.remember())).collect();
+            let memories: Vec<Json> = chunk
+                .iter()
+                .map(|d| d.memory_args(&self.cfg.remember()))
+                .collect();
             let args = Json::obj([
                 ("author", Json::str("agent")),
                 ("memories", Json::Arr(memories)),
@@ -232,10 +232,7 @@ impl<T: Transport> SgdbClient<T> {
         }
         self.remembered += written as u64;
         if self.cfg.audit {
-            let _ = self.call_tool(
-                "curate",
-                Json::obj([("op", Json::str("audit_checkpoint"))]),
-            );
+            let _ = self.call_tool("curate", Json::obj([("op", Json::str("audit_checkpoint"))]));
         }
         Ok(written)
     }
@@ -254,11 +251,17 @@ impl<T: Transport> SgdbClient<T> {
         k: usize,
     ) -> Result<Vec<MemoryHit>, SgdbError> {
         let mut args = vec![
-            ("entities".to_string(), Json::Arr(vec![
-                Json::str(wire::scope_entity(scope)),
-                Json::str(ENTITY_PHASE),
-            ])),
-            ("scope_app".to_string(), Json::str(self.cfg.scope_app.clone())),
+            (
+                "entities".to_string(),
+                Json::Arr(vec![
+                    Json::str(wire::scope_entity(scope)),
+                    Json::str(ENTITY_PHASE),
+                ]),
+            ),
+            (
+                "scope_app".to_string(),
+                Json::str(self.cfg.scope_app.clone()),
+            ),
             ("scope_run".to_string(), Json::str(wire::scope_run(scope))),
             ("k".to_string(), Json::num(k.clamp(1, 20) as f64)),
             ("format".to_string(), Json::str("json")),
@@ -297,10 +300,7 @@ impl<T: Transport> SgdbClient<T> {
 
     /// Grava um checkpoint de auditoria.
     pub fn audit_checkpoint(&mut self) -> Result<Json, SgdbError> {
-        self.call_tool(
-            "curate",
-            Json::obj([("op", Json::str("audit_checkpoint"))]),
-        )
+        self.call_tool("curate", Json::obj([("op", Json::str("audit_checkpoint"))]))
     }
 
     /// Aposenta uma memória (`forget_purge` com motivo).

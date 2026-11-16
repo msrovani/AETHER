@@ -64,11 +64,16 @@ fn main() {
         ledger.stage(record(scope, phases, 200 + i as u8));
     }
     let committed = ledger.commit_run();
-    println!("1. T1→T2: {committed} padrões no banco ({:?})", ledger.metrics());
+    println!(
+        "1. T1→T2: {committed} padrões no banco ({:?})",
+        ledger.metrics()
+    );
 
     // 2. Round-trip íntegro.
     let hits = ledger.recall(scope, "", 20);
-    let first = hits.iter().find(|h| h.doc.key == record(scope, &patterns[0], 200).key);
+    let first = hits
+        .iter()
+        .find(|h| h.doc.key == record(scope, &patterns[0], 200).key);
     match first {
         Some(hit) => println!(
             "2. recall: {} hits | payload={} B | auth={} | E={:.3} | ΔE={:.3}",
@@ -94,7 +99,10 @@ fn main() {
             .zip(patterns[0].iter())
             .map(|(a, b)| ((a - b).rem_euclid(TAU)).min((b - a).rem_euclid(TAU)))
             .fold(0.0f32, f32::max);
-        println!("3. cue_into: key={:032x} erro angular máx={err:.2e}", hit.key);
+        println!(
+            "3. cue_into: key={:032x} erro angular máx={err:.2e}",
+            hit.key
+        );
     }
 
     // 4. Offline → outbox → replay (em memória, sem tocar o disco).
@@ -135,10 +143,7 @@ fn main() {
     }
 
     // 6. Reinício: a fase volta do banco.
-    let transport = std::mem::replace(
-        ledger.client_mut().transport_mut(),
-        MockTransport::new(),
-    );
+    let transport = std::mem::replace(ledger.client_mut().transport_mut(), MockTransport::new());
     let mut restarted = SgdbLedger::new(transport, SgdbConfig::default(), scope);
     let revived = restarted.hydrate(scope, 16);
     let seeds = restarted

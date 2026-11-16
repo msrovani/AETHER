@@ -113,7 +113,10 @@ fn g3_conflicts_from_facts() {
     let detected = map.values().filter(|s| s.len() > 1).count();
     assert!(planted > 0);
     let rate = detected as f64 / planted as f64;
-    assert!(rate >= 0.95, "conflict rate={rate} det={detected} plant={planted}");
+    assert!(
+        rate >= 0.95,
+        "conflict rate={rate} det={detected} plant={planted}"
+    );
 }
 
 #[test]
@@ -151,7 +154,11 @@ fn g5_latency_and_zero_concept() {
         }
     }
     let ms = t0.elapsed().as_secs_f64() * 1000.0;
-    assert!(ms <= 1.5 || keys.len() < 10_000, "lat={ms} ms n={}", keys.len());
+    assert!(
+        ms <= 1.5 || keys.len() < 10_000,
+        "lat={ms} ms n={}",
+        keys.len()
+    );
     assert!(ms <= 1.5, "lat={ms} ms");
     let _ = best;
 }
