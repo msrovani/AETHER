@@ -26,9 +26,10 @@ mod aether_dashboard_win {
     use eframe::App;
 
     use aether_engine::dashboard::{
-        dimension_ficha, dimension_tooltip, fmt_compact, global_tooltip, glossary_entries,
-        load_host_report, load_scorecard, throughput_tooltip, DimFicha, HostReport, JobKind,
-        JobPhase, JobRunner, ScorecardView,
+        dest_detail, dimension_ficha, dimension_tooltip, fmt_compact, gates_detail,
+        global_tooltip, glossary_entries, load_host_report, load_scorecard, load_transplant_view,
+        origin_detail, throughput_tooltip, DimFicha, HostReport, JobKind, JobPhase, JobRunner,
+        ScorecardView, TransplantView,
     };
 
     /// Paleta do hub (lab slate + teal — sem glow/roxo).
@@ -80,6 +81,7 @@ mod aether_dashboard_win {
     /// App do hub.
     pub struct DashboardApp {
         view: ScorecardView,
+        transplant: TransplantView,
         status: String,
         path_arg: Option<String>,
         jobs: JobRunner,
@@ -104,6 +106,7 @@ mod aether_dashboard_win {
                     self.view.load_error = Some(e.to_string());
                 }
             }
+            self.transplant = load_transplant_view();
         }
 
         fn try_load_host(&mut self) {
@@ -159,8 +162,10 @@ mod aether_dashboard_win {
                     // Job já gravou o JSON — só relê (não re-sonda).
                     self.try_load_host();
                 }
-                if matches!(snap.kind, Some(JobKind::Audit) | Some(JobKind::Bench))
-                    && snap.phase == JobPhase::Done
+                if matches!(
+                    snap.kind,
+                    Some(JobKind::Audit) | Some(JobKind::Bench) | Some(JobKind::TransplantProbe)
+                ) && snap.phase == JobPhase::Done
                 {
                     self.reload();
                 }
@@ -235,11 +240,13 @@ mod aether_dashboard_win {
                         ui.add_space(14.0);
                         self.draw_throughput(ui);
                         ui.add_space(14.0);
+                        self.draw_transplant(ui);
+                        ui.add_space(14.0);
                         self.draw_host(ui);
                         ui.add_space(10.0);
                         ui.label(
                             RichText::new(
-                                "Hover → Detalhe · clique T0x = ficha fixa · demos → gráficos.",
+                                "Hover → Detalhe · clique T0x = ficha fixa · demos → gráficos · doação = ETL/HV.",
                             )
                             .small()
                             .color(theme::MUTED),
@@ -522,6 +529,13 @@ mod aether_dashboard_win {
                 if resp.clicked() {
                     self.confirm_daemon = true;
                 }
+                self.action_with_detail(
+                    ui,
+                    "Probe doação HV",
+                    "ETL (se faltar bank) + transplant_hv_probe + gate → JSON doação/uso.",
+                    !self.jobs.is_busy(),
+                    JobKind::TransplantProbe,
+                );
             });
 
             let snap = self.jobs.snapshot();
@@ -765,6 +779,232 @@ mod aether_dashboard_win {
                         });
                     });
                 ui.add_space(6.0);
+            }
+        }
+
+        fn draw_transplant(&mut self, ui: &mut egui::Ui) {
+            self.section_header(ui, "Doação · ETL · Transplante");
+            // Clone evita conflito borrow (hover mutável vs view).
+            let tv = self.transplant.clone();
+
+            if !tv.load_notes.is_empty() {
+                for n in &tv.load_notes {
+                    ui.label(RichText::new(n).small().color(theme::WARN));
+                }
+                ui.add_space(4.0);
+            }
+
+            ui.label(RichText::new("Origem (doação)").strong().color(theme::ACCENT));
+            ui.add_space(4.0);
+            if let Some(o) = &tv.origin {
+                let body = origin_detail(o);
+                ui.horizontal_wrapped(|ui| {
+                    if meter_card(ui, "Doador", truncate(&o.donor, 18), theme::BRAND) {
+                        self.note_hover("Doação (origem)", body.clone());
+                    }
+                    if meter_card(
+                        ui,
+                        "Átomos",
+                        format!("{} · f{}", o.count, o.facts),
+                        theme::ACCENT,
+                    ) {
+                        self.note_hover("Doação (origem)", body.clone());
+                    }
+                    if meter_card(
+                        ui,
+                        "dim",
+                        format!("{}→{}", o.dim_in, o.dim_hv),
+                        theme::OK,
+                    ) {
+                        self.note_hover("Doação (origem)", body.clone());
+                    }
+                    if meter_card(
+                        ui,
+                        "Conflitos",
+                        format!("{}/{}", o.conflicts_detected, o.conflicts_planted),
+                        theme::WARN,
+                    ) {
+                        self.note_hover("Doação (origem)", body);
+                    }
+                });
+            } else {
+                ui.label(
+                    RichText::new("Sem data/manifest.json — rode Probe doação HV ou o ETL.")
+                        .small()
+                        .color(theme::MUTED),
+                );
+            }
+
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new("Destino (transplante)")
+                    .strong()
+                    .color(theme::ACCENT),
+            );
+            ui.add_space(4.0);
+            {
+                let dbody = dest_detail(&tv.dest);
+                ui.horizontal_wrapped(|ui| {
+                    if meter_card(ui, "HvBank", "AETHV1".into(), theme::BRAND) {
+                        self.note_hover("Transplante (destino)", dbody.clone());
+                    }
+                    if meter_card(
+                        ui,
+                        "T0",
+                        if tv.dest.t0_untouched {
+                            "intacto".into()
+                        } else {
+                            "alterado".into()
+                        },
+                        theme::OK,
+                    ) {
+                        self.note_hover("Transplante (destino)", dbody.clone());
+                    }
+                    if meter_card(
+                        ui,
+                        "Auth",
+                        format!("≤{}", tv.dest.authority_cap),
+                        theme::ACCENT,
+                    ) {
+                        self.note_hover("Transplante (destino)", dbody);
+                    }
+                });
+            }
+
+            ui.add_space(8.0);
+            ui.label(RichText::new("Gates / estatística").strong().color(theme::ACCENT));
+            ui.add_space(4.0);
+            if let Some(g) = &tv.gates {
+                let gbody = gates_detail(g);
+                let pass_c = if g.pass { theme::OK } else { theme::BAD };
+                ui.horizontal_wrapped(|ui| {
+                    if meter_card(
+                        ui,
+                        "Probe",
+                        if g.pass {
+                            "PASS".into()
+                        } else {
+                            "FAIL".into()
+                        },
+                        pass_c,
+                    ) {
+                        self.note_hover("Gates INTAKE", gbody.clone());
+                    }
+                    if meter_card(ui, "ρ", format!("{:.4}", g.spearman), theme::BRAND) {
+                        self.note_hover("Gates INTAKE", gbody.clone());
+                    }
+                    if meter_card(ui, "R@10", format!("{:.3}", g.recall_at_10), theme::OK) {
+                        self.note_hover("Gates INTAKE", gbody.clone());
+                    }
+                    if meter_card(
+                        ui,
+                        "lat",
+                        format!("{:.3}ms", g.latency_ms),
+                        theme::ACCENT,
+                    ) {
+                        self.note_hover("Gates INTAKE", gbody);
+                    }
+                });
+            } else {
+                ui.label(
+                    RichText::new("Sem target/aether_transplant_hv.json")
+                        .small()
+                        .color(theme::MUTED),
+                );
+            }
+
+            if tv.e3.present {
+                ui.add_space(6.0);
+                ui.label(
+                    RichText::new("E3 geometria")
+                        .strong()
+                        .small()
+                        .color(theme::MUTED),
+                );
+                let e3body = format!(
+                    "E3 transplant_probe\n\
+                     Spearman={:.4}\n\
+                     relação R@1={:.4}\n\
+                     analogia R@1={:.4}  R@5={:.4}\n\
+                     falsos confiáveis={:.2}%\n\
+                     verificador={:.3} ms\n\
+                     fatos={}",
+                    tv.e3.spearman,
+                    tv.e3.rel_recall,
+                    tv.e3.analogy_r1,
+                    tv.e3.analogy_r5,
+                    tv.e3.false_confident * 100.0,
+                    tv.e3.verifier_ms,
+                    tv.e3.facts
+                );
+                ui.horizontal_wrapped(|ui| {
+                    if meter_card(ui, "E3 ρ", format!("{:.4}", tv.e3.spearman), theme::BRAND) {
+                        self.note_hover("E3 geometria", e3body.clone());
+                    }
+                    if meter_card(
+                        ui,
+                        "Analogia",
+                        format!("{:.3}", tv.e3.analogy_r1),
+                        theme::OK,
+                    ) {
+                        self.note_hover("E3 geometria", e3body);
+                    }
+                });
+            }
+
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new("Usabilidade (U1–U6)")
+                    .strong()
+                    .color(theme::ACCENT),
+            );
+            ui.add_space(4.0);
+            if tv.uso.present {
+                let all_c = if tv.uso.pass_all {
+                    theme::OK
+                } else {
+                    theme::BAD
+                };
+                ui.horizontal_wrapped(|ui| {
+                    for c in &tv.uso.cases {
+                        let accent = if c.pass { theme::OK } else { theme::BAD };
+                        let detail = format!(
+                            "{} — {}\n{}\nscore: {}\npass={}",
+                            c.id, c.title, c.detail, c.score, c.pass
+                        );
+                        let val = if c.pass {
+                            "PASS".to_string()
+                        } else {
+                            "FAIL".to_string()
+                        };
+                        if meter_card(ui, &c.id, val, accent) {
+                            self.note_hover(format!("Uso {}", c.id), detail);
+                        }
+                    }
+                    if meter_card(
+                        ui,
+                        "USO",
+                        if tv.uso.pass_all {
+                            "PASS".into()
+                        } else {
+                            "FAIL".into()
+                        },
+                        all_c,
+                    ) {
+                        self.note_hover(
+                            "Usabilidade",
+                            "U1 auto-recup · U2 SGDB · U3 vizinhança · U4 conflitos · U5 Evidence · U6 latência Rust.\n\
+                             Artefato: target/aether_transplant_uso.json\n\
+                             Playbook: docs/DOACAO_PLAYBOOK.md",
+                        );
+                    }
+                });
+            } else {
+                ui.label(
+                    RichText::new("Sem target/aether_transplant_uso.json")
+                        .small()
+                        .color(theme::MUTED),
+                );
             }
         }
 
@@ -1086,6 +1326,7 @@ mod aether_dashboard_win {
 
         let mut app = DashboardApp {
             view: ScorecardView::default(),
+            transplant: TransplantView::default(),
             status: String::new(),
             path_arg,
             jobs: JobRunner::new(),

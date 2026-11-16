@@ -425,3 +425,38 @@ constante existir, com o gate analítico `n=1/n=2` **antes** dos 600 casos.
 **E2c-3B** (certificado 2-SAT): precisa do **posiforme residual** (termos
 lineares/quadráticos após o flow), hoje não exposto. Para n=14, `k=7` → 128
 roof duals por instância; o gate é a taxa de certificação global.
+
+### 8.7 E2c-3C entregue — bound + B&B (2026-11-16)
+
+A constante foi resolvida: o posiforme soma a parte negativa de **todo** termo.
+Para linear `l_i = 2(Σ_{j≠i}J_ij − h_i)` e quadrático `q_ij = −4J_ij`:
+
+```text
+C     = c0 + Σ_i min(0, l_i) − Σ_{i<j} |q_ij|
+bound = C + ν
+```
+
+`bound_into` foi adicionado ao `RoofDualWorkspace` (aditivo; `pass_into` e
+`solve_into` intactos). Gates: `n=1` (`H=−s`), `n=2` submodular e linear, e 300
+instâncias densas com `bound ≤ ótimo` (gap médio **150**, máximo 266). A
+primeira tentativa (`c0 − flow`) foi **rejeitada** pelo caso `n=1`; a forma
+acima passa os três analíticos.
+
+Com o bound, o `ExactSearch` virou B&B:
+
+- poda quando `const_fixo + bound_resíduo ≥ incumbente`;
+- incumbente inicial = guloso + descida coordenada (4 varreduras);
+- ramifica na primeira livre; cascata do `solve_into` para fixar.
+
+| n | 20 | 24 | 28 | 32 | 40 | 48 | 64 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| nós B&B (média) | 54 | 121 | 362 | 1.247 | 8.977 | 52.790 | ~4,2M |
+| sem bound | 77 | 183 | 624 | 3.122 | 25.833 | 222.270 | >5M (0/3) |
+
+`n=64` agora **fecha 3/3** (3,7–4,6M nós; 98–156 s por instância), exato contra
+força bruta nos casos menores (90/90). Suíte: **46 alvos, 277 testes, 0 falhas**;
+clippy `-D warnings` limpo.
+
+**E2c-3B (2-SAT)** deixa de ser necessário para `n ≤ 64`: a árvore fechada é o
+certificado. Ele volta a valer para **certificar sem enumerar** (velocidade) ou
+para `n > 64`.

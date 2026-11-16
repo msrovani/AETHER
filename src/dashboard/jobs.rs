@@ -22,6 +22,8 @@ pub enum JobKind {
     HostProbe,
     OrganismDemo,
     DaemonDemo,
+    /// ETL dry-run (se faltar bank) + probe INTAKE + gate.
+    TransplantProbe,
 }
 
 impl JobKind {
@@ -33,6 +35,7 @@ impl JobKind {
             Self::HostProbe => "Sondar hardware",
             Self::OrganismDemo => "Demo organismo",
             Self::DaemonDemo => "Demo daemon",
+            Self::TransplantProbe => "Probe doação HV",
         }
     }
 }
@@ -196,6 +199,7 @@ impl JobRunner {
                 },
                 JobKind::OrganismDemo => run_organism_traced(&shared, &trace),
                 JobKind::DaemonDemo => run_daemon_traced(&shared, &trace),
+                JobKind::TransplantProbe => run_transplant_probe(&shared),
             };
             if let Ok(mut t) = trace.lock() {
                 t.end();
@@ -413,6 +417,50 @@ fn run_daemon_traced(shared: &Shared, trace: &Arc<Mutex<DemoTrace>>) -> Result<S
             }
         }
     }
+}
+
+fn run_transplant_probe(shared: &Shared) -> Result<String, String> {
+    let root = workspace_root();
+    let bank = root.join("data/hv/bank.bin");
+    if !bank.exists() {
+        set_log(shared, "ETL dry-run (harvest_transplant)…");
+        let status = Command::new("python")
+            .args([
+                "tools/harvest_transplant.py",
+                "--limit",
+                "200",
+                "--dry-run",
+                "--out",
+                "data",
+                "--no-whiten",
+            ])
+            .current_dir(&root)
+            .status()
+            .map_err(|e| format!("python harvest: {e}"))?;
+        if !status.success() {
+            return Err(format!("harvest exit {}", status.code().unwrap_or(-1)));
+        }
+    }
+    set_log(shared, "transplant_hv_probe…");
+    let probe = run_cargo(
+        &[
+            "run",
+            "--release",
+            "--example",
+            "transplant_hv_probe",
+            "--features",
+            "m1",
+        ],
+        Duration::from_secs(600),
+        shared,
+    )?;
+    set_log(shared, "transplant_hv_gate…");
+    let gate = run_cargo(
+        &["test", "--release", "--test", "transplant_hv_gate"],
+        Duration::from_secs(600),
+        shared,
+    )?;
+    Ok(format!("doação OK · probe: {probe} · gate: {gate}"))
 }
 
 fn run_cargo(args: &[&str], timeout: Duration, shared: &Shared) -> Result<String, String> {

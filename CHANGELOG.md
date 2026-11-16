@@ -3,6 +3,23 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.125] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 9 arquivo(s) (docs:4, src:5).
+- Gate: ok (0s).
+
+- `docs/AUDIT_CLAIMS_VOL3.md`
+- `docs/DASHBOARD_METRICS.md`
+- `docs/HUB_DASHBOARD.md`
+- `docs/TRANSPLANT_HV.md`
+- `src/bin/aether_dashboard.rs`
+- `src/dashboard/catalog.rs`
+- `src/dashboard/jobs.rs`
+- `src/dashboard/mod.rs`
+- `src/dashboard/transplant_view.rs`
+
 ## [0.0.124] - 2026-11-16
 
 ### Changed

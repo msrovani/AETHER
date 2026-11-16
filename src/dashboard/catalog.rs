@@ -67,6 +67,22 @@ pub fn glossary_entries() -> &'static [(&'static str, &'static str)] {
             "TOP/s",
             "Tera-operações/s aproximadas (SOP/s ÷ 1e12) para comparar regimes.",
         ),
+        (
+            "Doação",
+            "Origem: mapa (embedder) + escriba (triplas). Nunca pesos. Apache Qwen3-0.6B.",
+        ),
+        (
+            "ETL",
+            "Lote offline (6 estágios) → data/: embeds, bank.bin AETHV1, facts, manifest.",
+        ),
+        (
+            "Transplante",
+            "Destino: HvBank T1/T2 + SGDB. Geometria 10.240 bits. T0 intocado. auth≤240.",
+        ),
+        (
+            "Uso HV",
+            "Consulta: JL→top_k→resolve→Evidence. U1–U6 medem recuperação, conflito, latência.",
+        ),
     ]
 }
 

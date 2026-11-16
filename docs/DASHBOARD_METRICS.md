@@ -47,3 +47,20 @@ Fonte de verdade textual alinhada a `src/dashboard/catalog.rs`. UI e docs devem 
 | `target/aether_scorecard.json` | `cognitive_audit` (+ merge throughput) |
 | `target/aether_bench_throughput.json` | `throughput_tps` |
 | `target/aether_host_report.json` | botão **Sondar hardware** |
+| `data/manifest.json` | ETL doação (origem) |
+| `target/aether_transplant_hv.json` | probe INTAKE (gates ρ/R@10/lat) |
+| `target/aether_e3.json` | E3 geometria / analogia |
+| `target/aether_transplant_uso.json` | usabilidade U1–U6 |
+
+## Doação / Transplante (painel do hub)
+
+| Medidor | Significado | Bom |
+|---|---|---|
+| **Doador** | Mapa HF (ex. Qwen3-0.6B) + revision | Apache-2.0 |
+| **Átomos · fatos** | Contagem no lote ETL | = labels no ledger |
+| **dim** | `dim_in` → `dim_hv` (768→10240) | AETHV1 |
+| **Conflitos** | detectados / plantados | ≥ 95% |
+| **HvBank / T0 / Auth** | destino: bits T1/T2; organismo intacto; cap 240 | T0 intacto |
+| **Probe / ρ / R@10 / lat** | gates INTAKE | pass · ρ≥0,95 · R@10≥0,90 · ≤1,5 ms |
+| **E3 ρ / Analogia** | geometria JL + analogia FHRR | ρ≥0,95 · R@1 alto |
+| **U1…U6 / USO** | testes reais de usabilidade | todos PASS |

@@ -36,6 +36,20 @@ python tools/harvest_transplant.py --limit 200 --dry-run --out data --no-whiten
 .\scripts\cargo.ps1 test --release --test transplant_hv_gate
 ```
 
+## Usabilidade (2026-11-16)
+
+| Caso | Resultado |
+|------|-----------|
+| U1 auto-recuperação | 5/5 |
+| U2 resolve SGDB | 9/9 |
+| U3 vizinhança | PASS |
+| U4 conflitos | 5/5 |
+| U5 Evidence | 5/5 |
+| U6 latência Rust | **0,006 ms** · 0 alloc |
+| CI gates | transplant_hv 5/5 · e3 6/6 · e3b 5/5 · f1 4/4 |
+
+Artefato: `target/aether_transplant_uso.json` · Hub: painel **Doação · ETL · Transplante**.
+
 ## Invariantes
 
 - T0 / `step_into` **não** alterados.
