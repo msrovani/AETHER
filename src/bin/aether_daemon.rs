@@ -413,16 +413,25 @@ impl AetherDaemon {
         Ok(daemon)
     }
 
-    /// Liga o `T2` ao SGDB, se `--sgdb` foi passado, e reacende a memória.
+    /// Liga o `T2` ao SGDB, se configurado, e reacende a memória.
+    ///
+    /// Precedência: `--sgdb` > `AETHER_SGDB_URL` > `AETHER_SGDB_STDIO`.
     fn attach_sgdb(&mut self) -> Result<()> {
-        let Some(spec) = self.cfg.sgdb.clone() else {
-            return Ok(());
+        let spec = match self.cfg.sgdb.clone().or_else(env_sgdb_spec) {
+            Some(spec) => spec,
+            None => return Ok(()),
         };
-        let transport = build_transport(&spec)?;
-        let mut cfg = SgdbConfig::default();
-        cfg.outbox = self.cfg.sgdb_outbox.clone();
-        cfg.recall_k = 16;
-        let worker = T2Worker::start(transport, cfg, self.scope)
+        let mut cfg = SgdbConfig::from_env();
+        if let Some(path) = &self.cfg.sgdb_outbox {
+            cfg.outbox = Some(path.clone());
+        }
+        if let Some(token) = &self.cfg.sgdb_token {
+            cfg.token = Some(token.clone());
+        }
+        cfg.recall_k = cfg.recall_k.max(16);
+        let transport = open_transport(&spec, &cfg)
+            .map_err(|e| aether_engine::error::AetherError::Config(e.to_string()))?;
+        let worker = T2Worker::start(transport, cfg.clone(), self.scope)
             .map_err(|e| aether_engine::error::AetherError::Config(e.to_string()))?;
         // Reacende os atratores que o banco guardou (o ledger não substitui a
         // fase: ele a reacende).
@@ -438,6 +447,12 @@ impl AetherDaemon {
             "  sgdb: {} | escopo org={} run={} | sementes reacendidas={revived} | a cada {} ciclos",
             spec, self.scope.organism_id, self.scope.run_id, self.sgdb_every
         );
+        if cfg.outbox.is_none() {
+            println!(
+                "  aviso: sem --sgdb-outbox, uma queda do banco perde o lote em memória \
+                 (recomendado: target/aether_sgdb_outbox.jsonl)"
+            );
+        }
         Ok(())
     }
 
@@ -689,7 +704,13 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
                 println!("  --steps <n>      passos do sonhador (>0)");
                 println!("  --sgdb <spec>    liga o T2: mock | http://host:porta/mcp | stdio:programa args");
                 println!(
+                    "                   (sem --sgdb, usa AETHER_SGDB_URL/AETHER_SGDB_STDIO)"
+                );
+                println!(
                     "  --sgdb-outbox <arquivo>  diário local de replay quando o banco está fora"
+                );
+                println!(
+                    "  --sgdb-token <T>         Bearer token do MCP HTTP (ou AETHER_SGDB_TOKEN)"
                 );
                 println!(
                     "  --sgdb-every <n> emite um padrão a cada n ciclos (padrão 60; 0 desliga)"
@@ -779,6 +800,11 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
                 let v = args.get(i).ok_or("faltou valor para --sgdb-outbox")?;
                 cfg.sgdb_outbox = Some(std::path::PathBuf::from(v));
             }
+            "--sgdb-token" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --sgdb-token")?;
+                cfg.sgdb_token = Some(v.clone());
+            }
             "--sgdb-every" => {
                 i += 1;
                 let v = args.get(i).ok_or("faltou valor para --sgdb-every")?;
@@ -822,28 +848,19 @@ fn phases_from_spins(s: &[i8], n: usize) -> Vec<f32> {
         .collect()
 }
 
-/// Constrói o transporte do SGDB a partir da especificação de CLI.
-fn build_transport(spec: &str) -> Result<Box<dyn Transport>> {
-    let config = |msg: String| aether_engine::error::AetherError::Config(msg);
-    if spec == "mock" {
-        return Ok(Box::new(MockTransport::new()));
+/// Especificação do SGDB vinda do ambiente (quando `--sgdb` não é passado).
+fn env_sgdb_spec() -> Option<String> {
+    if let Ok(url) = std::env::var("AETHER_SGDB_URL") {
+        if !url.trim().is_empty() {
+            return Some(url);
+        }
     }
-    if spec.starts_with("http://") {
-        let transport = HttpTransport::new(spec).map_err(|e| config(e.to_string()))?;
-        return Ok(Box::new(transport));
+    if let Ok(command) = std::env::var("AETHER_SGDB_STDIO") {
+        if !command.trim().is_empty() {
+            return Some(format!("stdio:{command}"));
+        }
     }
-    if let Some(cmd) = spec.strip_prefix("stdio:") {
-        let mut parts = cmd.split_whitespace();
-        let program = parts
-            .next()
-            .ok_or_else(|| config("stdio: exige um programa".into()))?;
-        let args: Vec<String> = parts.map(str::to_string).collect();
-        let transport = StdioTransport::spawn(program, &args).map_err(|e| config(e.to_string()))?;
-        return Ok(Box::new(transport));
-    }
-    Err(config(format!(
-        "especificação de SGDB desconhecida: {spec}"
-    )))
+    None
 }
 
 fn main() -> Result<()> {

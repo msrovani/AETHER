@@ -1650,6 +1650,7 @@ impl LogicPipeline {
             }
             // primeira cláusula violada a partir do cursor (salta palavras zero)
             let Some(chosen) = self.first_violated(m, cursor) else {
+                debug_assert!(viol == 0, "bitset vazio com viol={viol}");
                 self.last.repair_moves += moves;
                 return 0;
             };
@@ -1694,7 +1695,7 @@ impl LogicPipeline {
             viol = self.flip_counters(best_i, dir, viol);
             self.cur_orig[best_i] = -dir;
             debug_assert!(
-                self.check_repair_state(m, viol),
+                self.check_repair_state(clauses, n, viol),
                 "estado do reparo inconsistente (m={m}, cursor={cursor})"
             );
             self.tabu[best_i] = clock + ttl;
@@ -1708,9 +1709,20 @@ impl LogicPipeline {
     }
 
     /// Consistência de `sat_count`, `viol` e `viol_bits` (usada em `debug_assert!`).
-    fn check_repair_state(&self, m: usize, viol: u32) -> bool {
+    fn check_repair_state(&self, clauses: &[Clause3], n: usize, viol: u32) -> bool {
+        let m = clauses.len();
         let mut count = 0u32;
-        for ci in 0..m {
+        for (ci, c) in clauses.iter().enumerate() {
+            let mut k = 0u8;
+            for idx in 0..c.len() {
+                let (v, s) = c.lit(idx);
+                if v >= n || self.cur_orig[v] == s {
+                    k += 1;
+                }
+            }
+            if k != self.sat_count[ci] {
+                return false;
+            }
             let bit = self.viol_bits[ci >> 6] & (1u64 << (ci & 63)) != 0;
             let zero = self.sat_count[ci] == 0;
             if bit != zero {
@@ -1720,7 +1732,7 @@ impl LogicPipeline {
                 count += 1;
             }
         }
-        count == viol
+        count == viol && m == self.sat_count.len().min(m)
     }
 
     /// Primeira cláusula violada em ordem **cíclica** a partir de `cursor`.
@@ -1734,21 +1746,33 @@ impl LogicPipeline {
             return None;
         }
         let start = cursor % m;
-        let sw = start / 64;
-        let sb = start % 64;
+        let (sw, sb) = (start / 64, start % 64);
         let last_mask = if m % 64 == 0 {
             u64::MAX
         } else {
             (1u64 << (m % 64)) - 1
         };
-        for k in 0..words {
-            let w = (sw + k) % words;
+        // (1) de `start` até o fim
+        for w in sw..words {
             let mut word = self.viol_bits[w];
             if w == words - 1 {
                 word &= last_mask;
             }
-            if k == 0 {
+            if w == sw {
                 word &= u64::MAX << sb;
+            }
+            if word != 0 {
+                return Some(w * 64 + word.trailing_zeros() as usize);
+            }
+        }
+        // (2) do começo até `start` (o "wrap" da varredura cíclica)
+        for w in 0..=sw {
+            let mut word = self.viol_bits[w];
+            if w == words - 1 {
+                word &= last_mask;
+            }
+            if w == sw {
+                word &= (1u64 << sb) - 1;
             }
             if word != 0 {
                 return Some(w * 64 + word.trailing_zeros() as usize);

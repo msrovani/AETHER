@@ -13,7 +13,7 @@
 //! (ver [`crate::knowledge::sgdb::worker`]).
 
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::path::Path;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::time::Duration;
@@ -724,7 +724,13 @@ impl HttpTransport {
 
     fn post(&mut self, body: &str) -> Result<(String, String), SgdbError> {
         let addr = format!("{}:{}", self.endpoint.host, self.endpoint.port);
-        let mut stream = TcpStream::connect(&addr).map_err(|_| SgdbError::Offline)?;
+        let socket = addr
+            .to_socket_addrs()
+            .map_err(|_| SgdbError::Offline)?
+            .next()
+            .ok_or(SgdbError::Offline)?;
+        let mut stream = TcpStream::connect_timeout(&socket, self.timeout)
+            .map_err(|_| SgdbError::Offline)?;
         let _ = stream.set_read_timeout(Some(self.timeout));
         let _ = stream.set_write_timeout(Some(self.timeout));
         let mut headers = format!(

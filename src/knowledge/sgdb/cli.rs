@@ -377,9 +377,14 @@ fn doctor(inv: &Invocation, out: &mut dyn Write) -> i32 {
     let t0 = Instant::now();
     let ping = client.health();
     let ping_ms = t0.elapsed().as_secs_f64() * 1_000.0;
-    let t1 = Instant::now();
-    let recall = client.recall_scope(scope, 1);
-    let recall_ms = t1.elapsed().as_secs_f64() * 1_000.0;
+    // Sem ping, não insiste no recall: o diagnóstico tem que ser rápido.
+    let (recall, recall_ms) = if ping.is_ok() {
+        let t1 = Instant::now();
+        let recall = client.recall_scope(scope, 1);
+        (Some(recall), t1.elapsed().as_secs_f64() * 1_000.0)
+    } else {
+        (None, 0.0)
+    };
     let outbox_pending = cfg
         .outbox
         .as_ref()
@@ -404,7 +409,13 @@ fn doctor(inv: &Invocation, out: &mut dyn Write) -> i32 {
             ("recall_ms", Json::num(recall_ms)),
             (
                 "recall_hits",
-                Json::num(recall.as_ref().map(|h| h.len()).unwrap_or(0) as f64),
+                Json::num(
+                    recall
+                        .as_ref()
+                        .and_then(|r| r.as_ref().ok())
+                        .map(|h| h.len())
+                        .unwrap_or(0) as f64,
+                ),
             ),
             ("retries", Json::num(f64::from(cfg.retries))),
             ("timeout_ms", Json::num(cfg.timeout_ms as f64)),
@@ -1063,9 +1074,12 @@ fn demo(inv: &Invocation, out: &mut dyn Write) -> i32 {
                     Json::num(
                         seed.iter()
                             .zip(patterns[0].iter())
-                            .map(|(a, b)| (a - b).abs())
+                            .map(|(a, b)| {
+                                let delta = (a - b).rem_euclid(std::f32::consts::TAU);
+                                delta.min(std::f32::consts::TAU - delta)
+                            })
                             .fold(0.0f32, f32::max) as f64,
-                    )
+                    ),
                 ),
             ])
         );
