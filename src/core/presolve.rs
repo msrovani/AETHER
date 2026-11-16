@@ -1003,13 +1003,7 @@ impl RoofDualWorkspace {
     ///
     /// `fixed` recebe as persistências da mesma passada (uma única chamada de
     /// max-flow). `n = 0` devolve `0`; `n > ROOF_MAX_N` devolve `−∞`.
-    pub fn bound_into(
-        &mut self,
-        n: usize,
-        j: &[f64],
-        h: &[f64],
-        fixed: &mut [Option<i8>],
-    ) -> f64 {
+    pub fn bound_into(&mut self, n: usize, j: &[f64], h: &[f64], fixed: &mut [Option<i8>]) -> f64 {
         let flow = self.pass_into(n, j, h, fixed);
         if n == 0 {
             return 0.0;
@@ -1032,10 +1026,10 @@ impl RoofDualWorkspace {
             }
             for k in (i + 1)..n {
                 c -= j[i * n + k];
-                let q = -4.0 * j[i * n + k];
-                if q < 0.0 {
-                    c += q;
-                }
+                // Cada termo quadrático contribui com −|q| para a constante
+                // do posiforme (q<0 vira `q + …`; q>0 vira `q·x_i − q·x_i(1−x_j)`,
+                // cujo linear negativo gera −q). Sem isso o bound é inválido.
+                c -= (4.0 * j[i * n + k]).abs();
             }
         }
         c + flow

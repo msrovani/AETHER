@@ -45,6 +45,8 @@ pub struct SearchReport {
     pub nodes: u32,
     /// Folhas completas avaliadas.
     pub leaves: u32,
+    /// Nós podados pelo bound (`const_fixo + bound_resíduo ≥ incumbente`).
+    pub pruned: u32,
     /// Variáveis fixadas já no root (uma passada de roof dual).
     pub root_fixed: u32,
     /// `true` se o orçamento de nós foi excedido antes de fechar a árvore.
@@ -67,6 +69,8 @@ pub struct ExactSearch {
     root_fixed: u32,
     node_budget: u32,
     exhausted: bool,
+    incumbent: f64,
+    pruned: u32,
 }
 
 impl ExactSearch {
@@ -85,6 +89,8 @@ impl ExactSearch {
             root_fixed: 0,
             node_budget,
             exhausted: false,
+            incumbent: f64::INFINITY,
+            pruned: 0,
         })
     }
 
@@ -101,11 +107,14 @@ impl ExactSearch {
         self.leaves = 0;
         self.root_fixed = 0;
         self.exhausted = false;
+        self.incumbent = f64::INFINITY;
+        self.pruned = 0;
         let e = self.dfs(n, j, h, true);
         SearchReport {
             energy: e,
             nodes: self.nodes,
             leaves: self.leaves,
+            pruned: self.pruned,
             root_fixed: self.root_fixed,
             exhausted: self.exhausted,
         }
@@ -128,7 +137,11 @@ impl ExactSearch {
         }
         if m == 0 {
             self.leaves += 1;
-            return energy(j, h, n, &self.assign[..n]);
+            let e = energy(j, h, n, &self.assign[..n]);
+            if e < self.incumbent {
+                self.incumbent = e;
+            }
+            return e;
         }
 
         // Reduz: h_i += Σ_{k fixo} J_ik·v_k; J só no bloco livre.
@@ -147,12 +160,31 @@ impl ExactSearch {
             }
         }
 
-        self.roof.solve_into(
+        let bound = self.roof.bound_into(
             m,
             &self.sub_j[..m * m],
             &self.sub_h[..m],
             &mut self.fixed_tmp[..m],
         );
+
+        // B&B: constante das variáveis fixas + bound do resíduo.
+        let mut const_fixed = 0.0;
+        for i in 0..n {
+            let si = self.assign[i];
+            if si != 0 {
+                const_fixed -= h[i] * f64::from(si);
+                for k in (i + 1)..n {
+                    let sk = self.assign[k];
+                    if sk != 0 {
+                        const_fixed -= j[i * n + k] * f64::from(si) * f64::from(sk);
+                    }
+                }
+            }
+        }
+        if self.incumbent.is_finite() && const_fixed + bound >= self.incumbent - 1e-9 {
+            self.pruned += 1;
+            return f64::INFINITY;
+        }
 
         if is_root {
             self.root_fixed = self.fixed_tmp[..m].iter().filter(|f| f.is_some()).count() as u32;
@@ -177,8 +209,18 @@ impl ExactSearch {
             return e;
         }
 
-        // Sem propagação: ramifica na primeira livre.
-        let pv = self.free_idx[0];
+        // Sem propagação: ramifica na livre com maior |h_eff| (busca um bom
+        // incumbente cedo, o que fortalece o bound).
+        let mut best_a = 0usize;
+        let mut best_mag = -1.0f64;
+        for a in 0..m {
+            let mag = self.sub_h[a].abs();
+            if mag > best_mag {
+                best_mag = mag;
+                best_a = a;
+            }
+        }
+        let pv = self.free_idx[best_a];
         self.assign[pv] = -1;
         let e1 = self.dfs(n, j, h, false);
         self.assign[pv] = 0;

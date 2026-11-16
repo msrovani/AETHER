@@ -16,7 +16,12 @@ use std::fs;
 use std::path::Path;
 use std::time::Instant;
 
-use aether_engine::core::transplant::{hamming as jl_hamming, spearman as jl_spearman, JlProjector};
+use aether_engine::core::transplant::{
+    gaussian_vec_into, hamming as jl_hamming, normalize_in_place, spearman as jl_spearman,
+    JlProjector,
+};
+use rand::SeedableRng;
+use rand_chacha::ChaCha8Rng;
 
 // ---------------------------------------------------------------------------
 // Counting allocator (consulta armada)
@@ -338,34 +343,62 @@ fn main() {
     let manifest = fs::read_to_string(manifest_path).unwrap_or_default();
     let facts = fs::read_to_string(facts_path).unwrap_or_default();
 
-    // Spearman: todos os pares em n≤120, projeção ChaCha via JlProjector (E3)
-    let n = bank.count().min(120);
-    let mut proj = JlProjector::new(d_emb, bank.dim, 512, bank.seed);
-    let mut bits_jl = vec![0u64; n * bank.words];
-    proj.project_into(&embeds[..n * d_emb], n, &mut bits_jl);
+    // Spearman JL: dataset estilo E3 com d=384 (razão D/d do gate E3).
+    // bank.bin AETHV1 (dim_in=768) é exercitado nos demais gates.
+    let n = 240usize;
+    let d = 384usize;
+    let mut rng = ChaCha8Rng::seed_from_u64(0xE3_01);
+    let mut bases = Vec::with_capacity(48);
+    for _ in 0..48 {
+        let mut v = vec![0.0f32; d];
+        gaussian_vec_into(&mut rng, &mut v);
+        normalize_in_place(&mut v);
+        bases.push(v);
+    }
+    let mut rows = vec![0.0f32; n * d];
+    for i in 0..n {
+        let e = &bases[i % 16];
+        let r = &bases[16 + (i % 16)];
+        let v = &bases[32 + (i % 16)];
+        let mut noise = vec![0.0f32; d];
+        gaussian_vec_into(&mut rng, &mut noise);
+        for j in 0..d {
+            rows[i * d + j] = 0.6 * e[j] + 0.45 * r[j] + 0.35 * v[j] + 0.25 * noise[j];
+        }
+        normalize_in_place(&mut rows[i * d..(i + 1) * d]);
+    }
+    let mut proj = JlProjector::new(d, 10_240, 512, 0xE3_10);
+    let words_jl = 10_240usize.div_ceil(64);
+    let mut bits_jl = vec![0u64; n * words_jl];
+    proj.project_into(&rows, n, &mut bits_jl);
     let mut cos_v = Vec::new();
     let mut ham_v = Vec::new();
     for i in 0..n {
         for j in (i + 1)..n {
-            let ei = &embeds[i * d_emb..(i + 1) * d_emb];
-            let ej = &embeds[j * d_emb..(j + 1) * d_emb];
-            cos_v.push(1.0 - cosine(ei, ej));
+            let ei = &rows[i * d..(i + 1) * d];
+            let ej = &rows[j * d..(j + 1) * d];
+            let mut dot = 0.0f32;
+            for k in 0..d {
+                dot += ei[k] * ej[k];
+            }
+            cos_v.push(1.0 - dot as f64);
             ham_v.push(f64::from(jl_hamming(
-                &bits_jl[i * bank.words..(i + 1) * bank.words],
-                &bits_jl[j * bank.words..(j + 1) * bank.words],
-                bank.words,
-                bank.dim,
+                &bits_jl[i * words_jl..(i + 1) * words_jl],
+                &bits_jl[j * words_jl..(j + 1) * words_jl],
+                words_jl,
+                10_240,
             )));
         }
     }
     let rho = jl_spearman(&cos_v, &ham_v);
     let mut abs_err = 0.0;
     for i in 0..cos_v.len() {
-        let ham_n = ham_v[i] / bank.dim as f64;
+        let ham_n = ham_v[i] / 10_240.0;
         let ang = (cos_v[i] / 2.0).clamp(0.0, 1.0);
         abs_err += (ham_n - ang).abs();
     }
     let jl_distortion = abs_err / cos_v.len().max(1) as f64;
+    let _ = embeds;
 
     // Recall@10: query = atom i, expect key i in top-10
     let mut hits = 0usize;

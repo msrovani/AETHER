@@ -23,6 +23,10 @@
 pub mod core;
 pub mod error;
 
+/// Ponte SGDB / intake (INTAKE_TRANSPLANT) — fora do hot path.
+#[cfg(feature = "m1")]
+pub mod knowledge;
+
 /// Camada de plataforma (Fase 6): sensores reais, estado binário e LAN.
 ///
 /// O núcleo auditado permanece congelado; I/O, tempo real e rede vivem aqui.

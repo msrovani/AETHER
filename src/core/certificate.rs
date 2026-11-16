@@ -154,6 +154,46 @@ impl Certificate {
             (false, false) => Decision::Abstain,
         }
     }
+
+    /// Decisão com evidências anexas (INTAKE_TRANSPLANT). Não altera o atestado.
+    ///
+    /// Usa a **maior** `authority` das evidências (cap 240 se todas forem
+    /// `Hypervector`/`Ledger` transplantados — 255 continua exclusivo HITL).
+    pub fn decide_with_evidence(&self, ev: &[Evidence], gap_min: f64) -> Decision {
+        let mut auth = 0u8;
+        for e in ev {
+            auth = auth.max(e.authority);
+        }
+        if ev.iter().all(|e| {
+            matches!(
+                e.source,
+                EvidenceSource::Hypervector | EvidenceSource::Ledger
+            )
+        }) && !ev.is_empty()
+        {
+            auth = auth.min(240);
+        }
+        self.decide(auth, gap_min)
+    }
+}
+
+/// Origem de uma evidência anexada ao certificado (aditivo; não quebra ACQ).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EvidenceSource {
+    Phase,
+    PhaseFact,
+    Hypervector,
+    Ledger,
+}
+
+/// Evidência T1/T2 (HV / SGDB) acompanhando um [`Certificate`].
+#[derive(Clone, Copy, Debug)]
+pub struct Evidence {
+    pub source: EvidenceSource,
+    pub id: u64,
+    pub score: f32,
+    /// 0..=255; transplantado ≤240; HITL = 255.
+    pub authority: u8,
 }
 
 /// `H(s) = -0.5 · Σ_i s_i (J s)_i - Σ_i h_i s_i`, com `J` em `[N, N]` row-major.

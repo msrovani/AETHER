@@ -5,13 +5,13 @@
   "dim_hv": 10240,
   "words": 160,
   "seed": 3735928559,
-  "count": 372,
-  "labels": 372,
+  "count": 205,
+  "labels": 205,
   "facts": 205,
   "whitened": false,
   "sha256_whitening": null,
-  "sha256_embeds": "e1b727f8a08f67a9981522ac26a639894496b1fe4c2292471e7c2e5ec9c27985",
-  "sha256_bank": "a2099cca3bb23abfedbe62e0983b5cf35165ee17020f96a04768572eb818b9b5",
+  "sha256_embeds": "815e2fa5a31d1eeee814c550ffe8ae99868dc593a7a2b00baf9622f7822ffa1d",
+  "sha256_bank": "9b8bfaddcacd9a845b6333dd65225cfad499048b81feac4888b1c8c5fbc06f8f",
   "shards": [
     {
       "relation": "capital",

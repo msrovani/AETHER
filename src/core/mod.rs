@@ -28,6 +28,10 @@ pub mod sudoku_csp;
 #[cfg(feature = "m1")]
 pub mod constraint_acquisition;
 
+// INTAKE_TRANSPLANT (MSG 0229/0244) — HvBank AETHV1, camada T1/T2 (não T0).
+#[cfg(feature = "m1")]
+pub mod hv;
+
 // F1/E3 — proveniência e ponte de eventos read-only (SPSC, zero-alloc).
 #[cfg(feature = "m1")]
 pub mod knowledge_bridge;

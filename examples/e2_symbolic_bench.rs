@@ -83,6 +83,7 @@ fn parse_args() -> Args {
             }
             (k, _) => eprintln!("argumento ignorado: {k}"),
         }
+        i += 1;
     }
     a
 }
