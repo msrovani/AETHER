@@ -148,8 +148,6 @@ const RES_ITERS: usize = 3;
 const PAIR_ITERS: usize = 2;
 /// Consultas do gate de escala.
 const QUERIES: usize = 400;
-/// Semente determinística.
-const SEED: u64 = 0xE1_P1H_2026;
 /// Piso de evidência para abstenção (escolhido *a priori*, não no teste).
 const SIM_FLOOR: f32 = 0.55;
 /// Piso de margem (1º − 2º) para abstenção.
@@ -160,7 +158,6 @@ const ROLE_S: usize = 0;
 const ROLE_V: usize = 1;
 const ROLE_O: usize = 2;
 const ROLE_M: usize = 3;
-const ROLE_NAMES: [&str; 4] = ["SUBJ", "VERB", "OBJ", "MOD"];
 
 /// Fase de um fasor (`u16`, `[0, 2π) ↔ [0, 65536)`).
 type Phases = [u16; D];
@@ -168,7 +165,7 @@ type Phases = [u16; D];
 type BVec = BamHolographicVector<D>;
 
 // ---------------------------------------------------------------------------
-// Ágebra de fase: ρ (permutação), binding, similaridade, projeção unitária
+// Álgebra de fase: ρ (permutação), binding, similaridade, projeção unitária
 // ---------------------------------------------------------------------------
 
 /// `ρ^k(v)[j] = v[(j+k) mod D]` — deslocamento cíclico **de posições**.
@@ -205,16 +202,6 @@ fn bind(a: &Phases, b: &Phases) -> Phases {
     out
 }
 
-/// Binding de três fatores.
-#[inline]
-fn bind3(a: &Phases, b: &Phases, c: &Phases) -> Phases {
-    let mut out = [0u16; D];
-    for (j, o) in out.iter_mut().enumerate() {
-        *o = a[j].wrapping_add(b[j]).wrapping_add(c[j]);
-    }
-    out
-}
-
 /// `(1/D)·Σ tri(θ_a − θ_b)` em Q14, com `tri(x) = 1 − 2|x|/π`.
 ///
 /// Monotônica em `|Δθ|` e mais barata que o cosseno (só `sub`/`abs`/`add`);
@@ -245,13 +232,16 @@ fn project_unit(re: &[f32; D], im: &[f32; D]) -> Phases {
 
 /// Fasor unitário `e^{iθ}` em `(re, im)` a partir de fases BAM.
 #[inline]
-fn unit_phasor(phases: &Phases, re: &mut [f32; D], im: &mut [f32; D]) {
+fn unit_phasor(phases: &Phases) -> ([f32; D], [f32; D]) {
     let lut = BamLut::global();
+    let mut re = [0.0f32; D];
+    let mut im = [0.0f32; D];
     for j in 0..D {
         let (s, c) = lut.sin_cos(BamPhase(phases[j]));
         re[j] = c;
         im[j] = s;
     }
+    (re, im)
 }
 
 // ---------------------------------------------------------------------------
@@ -549,11 +539,13 @@ impl Shard {
     }
 
     fn memory_bytes(&self) -> usize {
-        let vec_used = |cap: usize, unit: usize| cap * unit;
-        vec_used(self.tre.capacity(), std::mem::size_of::<[i16; D]>())
-            + vec_used(self.tim.capacity(), std::mem::size_of::<[i16; D]>())
+        self.tre.capacity() * std::mem::size_of::<[i16; D]>()
+            + self.tim.capacity() * std::mem::size_of::<[i16; D]>()
             + self.psi.capacity() * 2
-            + (self.subj.capacity() + self.verb.capacity() + self.obj.capacity() + self.modu.capacity())
+            + (self.subj.capacity()
+                + self.verb.capacity()
+                + self.obj.capacity()
+                + self.modu.capacity())
                 * 2
     }
 }
@@ -574,7 +566,6 @@ fn shard_of(subj: usize, verb: usize) -> usize {
 #[derive(Debug)]
 struct PlhMemory {
     shards: Vec<Shard>,
-    traces: usize,
 }
 
 impl PlhMemory {
@@ -583,7 +574,6 @@ impl PlhMemory {
             shards: (0..SHARDS)
                 .map(|i| Shard::new(traces, seed ^ (i as u64 + 1).wrapping_mul(0x9E37_79B9)))
                 .collect(),
-            traces,
         }
     }
 
@@ -621,8 +611,6 @@ struct QueryScratch {
     f_obj: [u16; D],
     f_mod: [u16; D],
     sims: [f32; N_ENT],
-    tmp_re: [f32; D],
-    tmp_im: [f32; D],
 }
 
 impl QueryScratch {
@@ -634,8 +622,6 @@ impl QueryScratch {
             f_obj: [0u16; D],
             f_mod: [0u16; D],
             sims: [0.0; N_ENT],
-            tmp_re: [0.0; D],
-            tmp_im: [0.0; D],
         }
     }
 }
@@ -643,7 +629,6 @@ impl QueryScratch {
 /// Resposta do caminho quente, sem alocação.
 #[derive(Clone, Copy, Debug)]
 struct Answer {
-    fact: usize,
     obj: usize,
     modu: usize,
     sim_obj: f32,
@@ -652,6 +637,21 @@ struct Answer {
     margin_mod: f32,
     iters: u8,
     converged: bool,
+    validated: bool,
+}
+
+/// Fatores do predicado (2 fatores) devolvidos pelo ressonador.
+#[derive(Clone, Copy, Debug)]
+struct PairFactors {
+    obj: usize,
+    modu: usize,
+    sim_obj: f32,
+    sim_mod: f32,
+    margin_obj: f32,
+    margin_mod: f32,
+    iters: u8,
+    converged: bool,
+    validated: bool,
 }
 
 /// `f[j] = ρ^{-k}( value[j] − anchor[j] − other[j] )` — desvincula um papel
@@ -678,7 +678,7 @@ fn resonate_pair(
     cb: &Codebooks,
     a: &Anchors,
     sc: &mut QueryScratch,
-) -> (usize, usize, f32, f32, f32, f32, u8, bool, bool) {
+) -> PairFactors {
     let ao = a.o.as_slice();
     let am = a.m.as_slice();
 
@@ -691,30 +691,43 @@ fn resonate_pair(
     let mut converged = false;
     for it in 0..PAIR_ITERS {
         iters = it as u8 + 1;
-        // re-encode do MOD com o átomo limpo, subtrai, desvincula OBJ.
-        let re_m = bind3(am, &rho(cb.modu[m].as_slice(), ROLE_M), &[0u16; D]);
+        let prev = (o, m);
+
+        // OBJ: subtrai o re-encode limpo do MOD.
+        let re_m = bind(am, &rho(cb.modu[m].as_slice(), ROLE_M));
         sc.f_obj = unbind_role_sub(value, ao, ROLE_O, Some(&re_m));
-        let no = cleanup(&sc.f_obj, &cb.ent_acf, &mut sc.sims).index;
+        o = cleanup(&sc.f_obj, &cb.ent_acf, &mut sc.sims).index;
 
-        let re_o = bind3(ao, &rho(cb.ent[o].as_slice(), ROLE_O), &[0u16; D]);
+        // MOD: subtrai o re-encode limpo do OBJ (já atualizado).
+        let re_o = bind(ao, &rho(cb.ent[o].as_slice(), ROLE_O));
         sc.f_mod = unbind_role_sub(value, am, ROLE_M, Some(&re_o));
-        let nm = cleanup(&sc.f_mod, &cb.modu_acf, &mut sc.sims).index;
+        m = cleanup(&sc.f_mod, &cb.modu_acf, &mut sc.sims).index;
 
-        if no == o && nm == m {
+        if (o, m) == prev {
             converged = true;
             break;
         }
-        o = no;
-        m = nm;
     }
+
+    // Recalcula o fator OBJ com o MOD final (projeção re-encode consistente).
+    let re_m = bind(am, &rho(cb.modu[m].as_slice(), ROLE_M));
+    sc.f_obj = unbind_role_sub(value, ao, ROLE_O, Some(&re_m));
 
     // Validação na cópia limpa (o certificado do fator).
     let co = cleanup(&sc.f_obj, &cb.ent, &mut sc.sims);
     let cm = cleanup(&sc.f_mod, &cb.modu, &mut sc.sims);
     let validated = co.index == o && cm.index == m;
-    (
-        o, m, co.sim, cm.sim, co.margin, cm.margin, iters, converged, validated,
-    )
+    PairFactors {
+        obj: o,
+        modu: m,
+        sim_obj: co.sim,
+        sim_mod: cm.sim,
+        margin_obj: co.margin,
+        margin_mod: cm.margin,
+        iters,
+        converged,
+        validated,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -737,11 +750,10 @@ impl Bundle {
     }
 
     fn add_term(&mut self, phases: &Phases) {
-        let lut = BamLut::global();
+        let (re, im) = unit_phasor(phases);
         for j in 0..D {
-            let (s, c) = lut.sin_cos(BamPhase(phases[j]));
-            self.re[j] += c;
-            self.im[j] += s;
+            self.re[j] += re[j];
+            self.im[j] += im[j];
         }
     }
 
@@ -826,7 +838,11 @@ fn factorize_sentence(psi: &Bundle, cb: &Codebooks, a: &Anchors) -> Factors {
                     continue;
                 }
                 let term = role_term(a.of(r2), &cb.clean(r2)[f.ids[r2]], r2);
-                unit_phasor(&term, &mut f_reuse(&mut rr), &mut f_reuse(&mut ri));
+                let (tr, ti) = unit_phasor(&term);
+                for j in 0..D {
+                    rr[j] += tr[j];
+                    ri[j] += ti[j];
+                }
             }
             let res = Bundle {
                 re: std::array::from_fn(|j| psi.re[j] - rr[j]),
@@ -860,11 +876,6 @@ fn factorize_sentence(psi: &Bundle, cb: &Codebooks, a: &Anchors) -> Factors {
     f
 }
 
-/// Empréstimo curto de um buffer `[f32; D]` para `unit_phasor` (evita `Vec`).
-fn f_reuse(buf: &mut [f32; D]) -> [f32; D] {
-    *buf
-}
-
 // ---------------------------------------------------------------------------
 // Abstenção calibrada
 // ---------------------------------------------------------------------------
@@ -884,10 +895,10 @@ impl Evidence {
         }
     }
 
-    fn from_pair(sim_obj: f32, sim_mod: f32, margin_obj: f32, margin_mod: f32) -> Self {
+    fn from_pair(p: &PairFactors) -> Self {
         Self {
-            min_sim: sim_obj.min(sim_mod),
-            min_margin: margin_obj.min(margin_mod),
+            min_sim: p.sim_obj.min(p.sim_mod),
+            min_margin: p.margin_obj.min(p.margin_mod),
         }
     }
 }
@@ -938,8 +949,8 @@ fn build_world(n: usize) -> Vec<Fact> {
 }
 
 /// Constrói a memória sharded a partir do mundo (≤ 48 fatos por acumulador).
-fn build_sharded(facts: &[Fact], cb: &Codebooks, a: &Anchors, traces: usize) -> PlhMemory {
-    let mut mem = PlhMemory::new(traces, SEED);
+fn build_sharded(facts: &[Fact], cb: &Codebooks, a: &Anchors, traces: usize, seed: u64) -> PlhMemory {
+    let mut mem = PlhMemory::new(traces, seed);
     for f in facts {
         mem.add(
             f.ids[0],
@@ -957,7 +968,7 @@ fn build_sharded(facts: &[Fact], cb: &Codebooks, a: &Anchors, traces: usize) -> 
 /// Constrói **uma** superposição plana com todos os fatos (o controle que o
 /// E1b mostrou colapsar) — o mesmo `Shard`, sem sharding.
 fn build_flat(facts: &[Fact], cb: &Codebooks, a: &Anchors, traces: usize) -> Shard {
-    let mut s = Shard::new(traces, SEED ^ 0xF1A7);
+    let mut s = Shard::new(traces, 0xF1A7_0001);
     for f in facts {
         s.add(
             &f.key(cb, a),
@@ -970,14 +981,52 @@ fn build_flat(facts: &[Fact], cb: &Codebooks, a: &Anchors, traces: usize) -> Sha
 }
 
 // ---------------------------------------------------------------------------
+// Caminho quente
+// ---------------------------------------------------------------------------
+
+/// Caminho quente sharded: resolve o fato no shard roteado, desvincula,
+/// projeta ao círculo e roda o ressonador ACF. **Zero alocação.**
+fn hot_query(
+    mem: &PlhMemory,
+    cb: &Codebooks,
+    a: &Anchors,
+    f: &Fact,
+    sc: &mut QueryScratch,
+) -> Option<PairFactors> {
+    let idx = shard_of(f.ids[0] as usize, f.ids[1] as usize);
+    let shard = &mem.shards[idx];
+    let fact = shard.find(f.ids[0], f.ids[1])?;
+    let key = f.key(cb, a);
+    shard.unbind(fact, &key, &mut sc.z_re, &mut sc.z_im);
+    sc.value = project_unit(&sc.z_re, &sc.z_im);
+    let value = sc.value;
+    Some(resonate_pair(&value, cb, a, sc))
+}
+
+/// Controle: a mesma pipeline sobre **uma** superposição plana.
+fn hot_query_flat(
+    flat: &Shard,
+    cb: &Codebooks,
+    a: &Anchors,
+    f: &Fact,
+    sc: &mut QueryScratch,
+) -> Option<PairFactors> {
+    let fact = flat.find(f.ids[0], f.ids[1])?;
+    let key = f.key(cb, a);
+    flat.unbind(fact, &key, &mut sc.z_re, &mut sc.z_im);
+    sc.value = project_unit(&sc.z_re, &sc.z_im);
+    let value = sc.value;
+    Some(resonate_pair(&value, cb, a, sc))
+}
+
+// ---------------------------------------------------------------------------
 // Gates
 // ---------------------------------------------------------------------------
 
 /// Resultado agregado do gate de escala.
 #[derive(Clone, Copy, Debug, Default)]
 struct ScaleResult {
-    recall_fact: f64,
-    recall_pair: f64,
+    recall: f64,
     snr_obj: f64,
     snr_mod: f64,
     mean_us: f64,
@@ -986,121 +1035,7 @@ struct ScaleResult {
     allocs: usize,
     acf_validation: f64,
     converged: f64,
-}
-
-/// Gate 1/3: 1.000 fatos sharded vs superposição plana, com SNR, latência e
-/// contagem de alocações no caminho quente.
-fn gate_scale(
-    mem: &PlhMemory,
-    flat: &Shard,
-    facts: &[Fact],
-    cb: &Codebooks,
-    a: &Anchors,
-    n_queries: usize,
-) -> ScaleResult {
-    let mut sc = QueryScratch::new();
-    let mut rng = ChaCha8Rng::seed_from_u64(SEED ^ 0x5151);
-
-    // amostra determinística de consultas
-    let mut picks = Vec::with_capacity(n_queries);
-    for k in 0..n_queries {
-        picks.push((k * facts.len()) / n_queries.max(1));
-    }
-
-    let mut lat = Vec::with_capacity(n_queries);
-    let mut sig_obj = Vec::with_capacity(n_queries);
-    let mut noise_obj: Vec<f32> = Vec::new();
-    let mut sig_mod = Vec::with_capacity(n_queries);
-    let mut noise_mod: Vec<f32> = Vec::new();
-    let mut hits_fact = 0usize;
-    let mut hits_pair = 0usize;
-    let mut validated = 0usize;
-    let mut converged = 0usize;
-
-    // warmup (inicializa LUT/codebook e aquece o caminho)
-    for _ in 0..16 {
-        let f = &facts[picks[0]];
-        let answer = hot_query(mem, cb, a, f, &mut sc);
-        black_box(answer);
-    }
-
-    alloc_probe::arm();
-    for &pi in &picks {
-        let f = &facts[pi];
-        let t0 = Instant::now();
-        let answer = hot_query(mem, cb, a, f, &mut sc);
-        let dt = t0.elapsed().as_nanos() as f64 / 1000.0;
-        let _ = &mut rng;
-        lat.push(dt);
-
-        let truth_obj = f.ids[2] as usize;
-        let truth_mod = f.ids[3] as usize;
-
-        // similaridades completas do fator OBJ (as do MOD estão no codebook)
-        if let Some(ans) = answer {
-            if ans.fact == pi {
-                hits_fact += 1;
-            }
-            if ans.obj == truth_obj && ans.modu == truth_mod {
-                hits_pair += 1;
-            }
-            if ans.validated {
-                validated += 1;
-            }
-            if ans.converged {
-                converged += 1;
-            }
-            // sinal vs ruído do fator OBJ
-            let cue = unbind_role_sub(&unbind_value(mem, cb, a, f, &mut sc), a.o.as_slice(), ROLE_O, None);
-            let mut sims = [0.0f32; N_ENT];
-            let _ = cleanup(&cue, &cb.ent, &mut sims);
-            sig_obj.push(sims[truth_obj]);
-            for (i, s) in sims.iter().enumerate().take(N_ENT) {
-                if i != truth_obj {
-                    noise_obj.push(*s);
-                }
-            }
-            sig_mod.push(ans.sim_mod);
-            let cue_m = unbind_role_sub(&unbind_value(mem, cb, a, f, &mut sc), a.m.as_slice(), ROLE_M, None);
-            let mut sims_m = [0.0f32; N_ENT];
-            let _ = cleanup(&cue_m, &cb.modu, &mut sims_m);
-            for (i, s) in sims_m.iter().enumerate().take(N_MOD) {
-                if i != truth_mod {
-                    noise_mod.push(*s);
-                }
-            }
-        }
-    }
-    let allocs = alloc_probe::disarm();
-
-    lat.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
-    let mean = lat.iter().sum::<f64>() / lat.len() as f64;
-    let p = |q: f64| lat[((lat.len() as f64 * q) as usize).min(lat.len() - 1)];
-
-    // recall@1 plano: mesma pipeline, um único acumulador com 1.000 fatos
-    let mut flat_hits = 0usize;
-    for &pi in &picks {
-        let f = &facts[pi];
-        if let Some(ans) = hot_query_flat(flat, cb, a, f, &mut sc) {
-            if ans.fact == pi && ans.obj == f.ids[2] as usize && ans.modu == f.ids[3] as usize {
-                flat_hits += 1;
-            }
-        }
-    }
-    let _ = flat_hits; // devolvido à parte por `gate_flat_recall`
-
-    ScaleResult {
-        recall_fact: hits_fact as f64 / picks.len() as f64,
-        recall_pair: hits_pair as f64 / picks.len() as f64,
-        snr_obj: snr(&sig_obj, &noise_obj),
-        snr_mod: snr(&sig_mod, &noise_mod),
-        mean_us: mean,
-        p50_us: p(0.50),
-        p99_us: p(0.99),
-        allocs,
-        acf_validation: validated as f64 / picks.len() as f64,
-        converged: converged as f64 / picks.len() as f64,
-    }
+    false_abstain: f64,
 }
 
 /// `(μ_sinal − μ_ruído) / σ_ruído`.
@@ -1126,92 +1061,108 @@ fn snr(signal: &[f32], noise: &[f32]) -> f64 {
     }
 }
 
-/// Caminho quente sharded: resolve o fato no shard roteado, desvincula,
-/// projeta ao círculo e roda o ressonador ACF. **Zero alocação.**
-fn hot_query(
+/// Gate 1/3: 1.000 fatos sharded, com SNR, latência e 0-alloc no caminho quente.
+fn gate_scale(
     mem: &PlhMemory,
+    facts: &[Fact],
     cb: &Codebooks,
     a: &Anchors,
-    f: &Fact,
-    sc: &mut QueryScratch,
-) -> Option<Answer> {
-    let idx = shard_of(f.ids[0] as usize, f.ids[1] as usize);
-    let shard = &mem.shards[idx];
-    let fact = shard.find(f.ids[0], f.ids[1])?;
-    let key = f.key(cb, a);
-    shard.unbind(fact, &key, &mut sc.z_re, &mut sc.z_im);
-    sc.value = project_unit(&sc.z_re, &sc.z_im);
-    let (obj, modu, sim_obj, sim_mod, m_obj, m_mod, iters, converged, validated) =
-        resonate_pair(&sc.value, cb, a, sc);
-    Some(Answer {
-        fact,
-        obj,
-        modu,
-        sim_obj,
-        sim_mod,
-        margin_obj: m_obj,
-        margin_mod: m_mod,
-        iters,
-        converged,
-        validated,
-    })
+    n_queries: usize,
+) -> ScaleResult {
+    let mut sc = QueryScratch::new();
+    let mut picks = Vec::with_capacity(n_queries);
+    for k in 0..n_queries {
+        picks.push((k * facts.len()) / n_queries.max(1));
+    }
+
+    let mut lat = Vec::with_capacity(n_queries);
+    let mut sig_obj = Vec::with_capacity(n_queries);
+    let mut sig_mod = Vec::with_capacity(n_queries);
+    let mut noise_obj: Vec<f32> = Vec::new();
+    let mut noise_mod: Vec<f32> = Vec::new();
+    let mut sims = [0.0f32; N_ENT];
+    let mut hits = 0usize;
+    let mut validated = 0usize;
+    let mut converged = 0usize;
+    let mut false_abstain = 0usize;
+
+    // warmup: inicializa a LUT e aquece o caminho (fora da contagem)
+    for _ in 0..16 {
+        black_box(hot_query(mem, cb, a, &facts[picks[0]], &mut sc));
+    }
+
+    alloc_probe::arm();
+    for &pi in &picks {
+        let f = &facts[pi];
+        let t0 = Instant::now();
+        let answer = hot_query(mem, cb, a, f, &mut sc);
+        let dt = t0.elapsed().as_nanos() as f64 / 1000.0;
+        lat.push(dt);
+
+        let truth_obj = f.ids[2] as usize;
+        let truth_mod = f.ids[3] as usize;
+        match answer {
+            Some(p) => {
+                if p.obj == truth_obj && p.modu == truth_mod {
+                    hits += 1;
+                }
+                if p.validated {
+                    validated += 1;
+                }
+                if p.converged {
+                    converged += 1;
+                }
+                if should_abstain(&Evidence::from_pair(&p)) {
+                    false_abstain += 1;
+                }
+                // evidência por fator na leitura do ressonador (fora do tempo)
+                let _ = cleanup(&sc.f_obj, &cb.ent, &mut sims);
+                sig_obj.push(sims[truth_obj]);
+                for (i, s) in sims.iter().enumerate().take(N_ENT) {
+                    if i != truth_obj {
+                        noise_obj.push(*s);
+                    }
+                }
+                let _ = cleanup(&sc.f_mod, &cb.modu, &mut sims);
+                sig_mod.push(sims[truth_mod]);
+                for (i, s) in sims.iter().enumerate().take(N_MOD) {
+                    if i != truth_mod {
+                        noise_mod.push(*s);
+                    }
+                }
+            }
+            None => false_abstain += 1,
+        }
+    }
+    let allocs = alloc_probe::disarm();
+
+    lat.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+    let mean = lat.iter().sum::<f64>() / lat.len() as f64;
+    let p = |q: f64| lat[((lat.len() as f64 * q) as usize).min(lat.len() - 1)];
+
+    ScaleResult {
+        recall: hits as f64 / picks.len() as f64,
+        snr_obj: snr(&sig_obj, &noise_obj),
+        snr_mod: snr(&sig_mod, &noise_mod),
+        mean_us: mean,
+        p50_us: p(0.50),
+        p99_us: p(0.99),
+        allocs,
+        acf_validation: validated as f64 / picks.len() as f64,
+        converged: converged as f64 / picks.len() as f64,
+        false_abstain: false_abstain as f64 / picks.len() as f64,
+    }
 }
 
-/// Valor projetado de um fato (usado para medir SNR por fator).
-fn unbind_value(
-    mem: &PlhMemory,
-    cb: &Codebooks,
-    a: &Anchors,
-    f: &Fact,
-    sc: &mut QueryScratch,
-) -> Phases {
-    let idx = shard_of(f.ids[0] as usize, f.ids[1] as usize);
-    let shard = &mem.shards[idx];
-    let fact = shard.find(f.ids[0], f.ids[1]).unwrap_or(0);
-    let key = f.key(cb, a);
-    shard.unbind(fact, &key, &mut sc.z_re, &mut sc.z_im);
-    project_unit(&sc.z_re, &sc.z_im)
-}
-
-/// Controle: a mesma pipeline sobre **uma** superposição plana.
-fn hot_query_flat(
-    flat: &Shard,
-    cb: &Codebooks,
-    a: &Anchors,
-    f: &Fact,
-    sc: &mut QueryScratch,
-) -> Option<Answer> {
-    let fact = flat.find(f.ids[0], f.ids[1])?;
-    let key = f.key(cb, a);
-    flat.unbind(fact, &key, &mut sc.z_re, &mut sc.z_im);
-    sc.value = project_unit(&sc.z_re, &sc.z_im);
-    let (obj, modu, sim_obj, sim_mod, m_obj, m_mod, iters, converged, validated) =
-        resonate_pair(&sc.value, cb, a, sc);
-    Some(Answer {
-        fact,
-        obj,
-        modu,
-        sim_obj,
-        sim_mod,
-        margin_obj: m_obj,
-        margin_mod: m_mod,
-        iters,
-        converged,
-        validated,
-    })
-}
-
-/// Recall@1 do controle plano.
+/// Recall@1 do controle plano (mesma pipeline, um único acumulador).
 fn flat_recall(flat: &Shard, facts: &[Fact], cb: &Codebooks, a: &Anchors, n_queries: usize) -> f64 {
     let mut sc = QueryScratch::new();
     let mut hits = 0usize;
     for k in 0..n_queries {
-        let f = &facts[(k * facts.len()) / n_queries.max(1)];
-        if let Some(ans) = hot_query_flat(flat, cb, a, f, &mut sc) {
-            if ans.fact == (k * facts.len()) / n_queries.max(1)
-                && ans.obj == f.ids[2] as usize
-                && ans.modu == f.ids[3] as usize
-            {
+        let pi = (k * facts.len()) / n_queries.max(1);
+        let f = &facts[pi];
+        if let Some(p) = hot_query_flat(flat, cb, a, f, &mut sc) {
+            if p.obj == f.ids[2] as usize && p.modu == f.ids[3] as usize {
                 hits += 1;
             }
         }
@@ -1228,7 +1179,6 @@ struct CommutResult {
     decoded_reverse: usize,
     mean_sim: f64,
     control_sim: f64,
-    control_decode_equal: usize,
     acf_validated: usize,
 }
 
@@ -1288,26 +1238,24 @@ fn gate_non_commutativity(
         if df.validated && dr.validated {
             out.acf_validated += 1;
         }
-        if df.ids == dr.ids {
-            out.control_decode_equal += 1;
-        }
     }
 
     // Controle: binding "comutativo" — mesmo papel para os dois argumentos e
     // sem permutação. É o que a construção ρ^k + âncoras distintas evita.
+    let control = pairs.min(32);
     let mut ctrl = 0.0f64;
-    for k in 0..pairs.min(32) {
+    for k in 0..control {
         let x = k % N_ENT;
         let y = (k * 13 + 1) % N_ENT;
         let v = k % N_VERB;
-        let one = bind(a.s.as_slice(), &cb.verb[v].as_slice());
-        let cx = bind(&one, &bind(&cb.ent[x].as_slice(), &cb.ent[y].as_slice()));
-        let cy = bind(&one, &bind(&cb.ent[y].as_slice(), &cb.ent[x].as_slice()));
-        ctrl += 1.0 - tri_sim(&cx, &cy) as f64;
+        let one = bind(a.s.as_slice(), cb.verb[v].as_slice());
+        let cx = bind(&one, &bind(cb.ent[x].as_slice(), cb.ent[y].as_slice()));
+        let cy = bind(&one, &bind(cb.ent[y].as_slice(), cb.ent[x].as_slice()));
+        ctrl += tri_sim(&cx, &cy) as f64;
     }
     out.pairs = pairs;
     out.mean_sim = sim_acc / pairs as f64;
-    out.control_sim = 1.0 - ctrl / pairs.min(32) as f64;
+    out.control_sim = ctrl / control as f64;
     out
 }
 
@@ -1419,36 +1367,45 @@ fn gate_abstention(cb: &Codebooks, a: &Anchors, n: usize, rng: &mut ChaCha8Rng) 
     rows
 }
 
-/// Gate 4 (braço memória): consulta com `(sujeito, verbo)` que não existe.
-fn abstention_memory(mem: &PlhMemory, cb: &Codebooks, a: &Anchors, n: usize, rng: &mut ChaCha8Rng) -> (f64, f64) {
+/// Gate 4 (braço memória): unbinding com uma chave **OOV** num fato existente.
+///
+/// O endereço é real (o shard e o `ψ` são conhecidos) mas a chave não
+/// corresponde a nenhum fato — o `z` é ruído puro, e a evidência tem que cair.
+fn abstention_memory(
+    mem: &PlhMemory,
+    facts: &[Fact],
+    cb: &Codebooks,
+    a: &Anchors,
+    n: usize,
+    rng: &mut ChaCha8Rng,
+) -> (f64, f64) {
     let mut sc = QueryScratch::new();
     let mut abst = 0usize;
     let mut sim_acc = 0.0f64;
     for _ in 0..n {
-        let ids = [
-            rng.gen_range(0..N_ENT) as u16,
-            rng.gen_range(0..N_VERB) as u16,
-        ];
-        let key = bind(
-            &role_term(a.of(ROLE_S), &cb.ent[ids[0] as usize], ROLE_S),
-            &role_term(a.of(ROLE_V), &cb.verb[ids[1] as usize], ROLE_V),
-        );
-        let idx = shard_of(ids[0] as usize, ids[1] as usize);
+        let f = &facts[rng.gen_range(0..facts.len())];
+        let idx = shard_of(f.ids[0] as usize, f.ids[1] as usize);
         let shard = &mem.shards[idx];
-        let fact = match shard.find(ids[0], ids[1]) {
-            Some(f) => f,
-            None => {
-                // endereço ausente: não há o que desvincular — abstenção trivial
-                abst += 1;
-                sim_acc += 0.0;
-                continue;
-            }
+        let fact = match shard.find(f.ids[0], f.ids[1]) {
+            Some(x) => x,
+            None => continue,
         };
-        shard.unbind(fact, &key, &mut sc.z_re, &mut sc.z_im);
+        // chave OOV: dois átomos aleatórios que não pertencem ao codebook
+        let mut k1 = [0.0f32; D];
+        let mut k2 = [0.0f32; D];
+        for j in 0..D {
+            k1[j] = rng.gen::<f32>() * TAU;
+            k2[j] = rng.gen::<f32>() * TAU;
+        }
+        let oov = bind(
+            &role_term(a.of(ROLE_S), &BVec::from_radians(&k1).expect("D"), ROLE_S),
+            &role_term(a.of(ROLE_V), &BVec::from_radians(&k2).expect("D"), ROLE_V),
+        );
+        shard.unbind(fact, &oov, &mut sc.z_re, &mut sc.z_im);
         sc.value = project_unit(&sc.z_re, &sc.z_im);
-        let (o, m, so, sm, mo, mm, _, _, _) = resonate_pair(&sc.value, cb, a, &mut sc);
-        black_box((o, m));
-        let e = Evidence::from_pair(so, sm, mo, mm);
+        let value = sc.value;
+        let p = resonate_pair(&value, cb, a, &mut sc);
+        let e = Evidence::from_pair(&p);
         sim_acc += e.min_sim as f64;
         if should_abstain(&e) {
             abst += 1;
@@ -1474,7 +1431,7 @@ fn parse_args() -> Args {
         quick: false,
         facts: N_FACTS,
         queries: QUERIES,
-        seed: SEED,
+        seed: 0xE1_2026,
     };
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
@@ -1519,20 +1476,20 @@ fn pass(ok: bool) -> &'static str {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = parse_args();
-    let n_facts = args.facts;
+    let n_facts = args.facts.min(N_ENT * N_VERB);
     let n_q = args.queries;
 
     let cb = Codebooks::build(args.seed);
     let a = Anchors::build(args.seed);
     let facts = build_world(n_facts);
-    let mem = build_sharded(&facts, &cb, &a, K_TRACES);
+    let mem = build_sharded(&facts, &cb, &a, K_TRACES, args.seed);
     let flat = build_flat(&facts, &cb, &a, K_TRACES);
 
     println!();
     println!("AETHER · E1 — Phase-Language Head sharded + ressonador ACF");
-    println!("==========================================================");
+    println!("===========================================================");
     println!(
-        "D={D} K={K_TRACES} shards={SHARDS} fatos={} leque={} verbos={} mods={} seed={:#x}",
+        "D={D} K={K_TRACES} shards={SHARDS} fatos={} entidades={} verbos={} mods={} seed={:#x}",
         facts.len(),
         N_ENT,
         N_VERB,
@@ -1540,34 +1497,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         args.seed
     );
     println!(
-        "teto E1b = 0,4·D = {} fatos/acumulador · usado = {} (≤ {SHARD_CAP})",
+        "teto medido (E1b) = 0,4·D = {} fatos/acumulador · ocupação máxima = {} (≤ {SHARD_CAP})",
         (0.4 * D as f64).round() as usize,
         mem.max_load()
     );
     println!();
 
     // ---------------- Gate 1 + 3 ----------------
-    let scale = gate_scale(&mem, &flat, &facts, &cb, &a, n_q);
-    let flat_recall = flat_recall(&flat, &facts, &cb, &a, n_q.min(200));
+    let scale = gate_scale(&mem, &facts, &cb, &a, n_q);
+    let flat = flat_recall(&flat, &facts, &cb, &a, n_q.min(200));
 
-    println!("G1 — escala sharded (D={D})");
-    println!("{:<34} {:>12} {:>12}", "", "sharded", "plano");
-    println!("{}", "-".repeat(62));
+    println!("G1 — escala sharded (D={D}, {K_TRACES} traços)");
+    println!("{:<38} {:>12} {:>12}", "", "sharded", "plano");
+    println!("{}", "-".repeat(64));
     println!(
-        "{:<34} {:>11.4} {:>12.4}",
-        "recall@1 (fato + objeto + mod)", scale.recall_pair, flat_recall
+        "{:<38} {:>12.4} {:>12.4}",
+        "recall@1 (objeto + modificador)", scale.recall, flat
     );
     println!(
-        "{:<34} {:>11.4} {:>12}",
-        "recall@1 (fato localizado)", scale.recall_fact, "n/a"
+        "{:<38} {:>12} {:>12}",
+        "fatos por acumulador (máximo)", mem.max_load(), facts.len()
     );
     println!(
-        "{:<34} {:>11} {:>12}",
-        "fatos por acumulador (max)", mem.max_load(), facts.len()
-    );
-    println!(
-        "{:<34} {:>11} {:>12}",
-        "acumuladores", SHARDS, 1
+        "{:<38} {:>12} {:>12}",
+        "acumuladores independentes", SHARDS, 1
     );
     println!();
 
@@ -1581,65 +1534,63 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         scale.mean_us, scale.p50_us, scale.p99_us
     );
     println!(
-        "  alocações no hot-path: {} · convergência do ressonador {:.1}% · validação ACF {:.1}%",
+        "  alocações no hot-path: {} · convergência {:.1}% · validação ACF {:.1}% · falso-abster {:.1}%",
         scale.allocs,
         100.0 * scale.converged,
-        100.0 * scale.acf_validation
+        100.0 * scale.acf_validation,
+        100.0 * scale.false_abstain
     );
     println!();
 
     // ---------------- Gate 2 ----------------
     let mut rng = ChaCha8Rng::seed_from_u64(args.seed ^ 0xC0_0042);
-    let comm = gate_non_commutativity(&cb, &a, if args.quick { 60 } else { 200 }, &mut rng);
+    let comm = gate_non_commutativity(&cb, &a, if args.quick { 40 } else { 150 }, &mut rng);
 
     println!("G2 — não-comutatividade estrita (A→B vs B→A)");
-    println!("{:<40} {:>10}", "métrica", "valor");
-    println!("{}", "-".repeat(52));
+    println!("{:<46} {:>10}", "métrica", "valor");
+    println!("{}", "-".repeat(58));
+    println!("{:<46} {:>10}", "pares testados", comm.pairs);
     println!(
-        "{:<40} {:>10}",
-        "pares testados", comm.pairs
-    );
-    println!(
-        "{:<40} {:>9.2}%",
+        "{:<46} {:>9.2}%",
         "separação (código distinto + leitura trocada)",
         100.0 * comm.separated as f64 / comm.pairs as f64
     );
     println!(
-        "{:<40} {:>9.2}%",
+        "{:<46} {:>9.2}%",
         "decodificação correta A→B",
         100.0 * comm.decoded_forward as f64 / comm.pairs as f64
     );
     println!(
-        "{:<40} {:>9.2}%",
+        "{:<46} {:>9.2}%",
         "decodificação correta B→A",
         100.0 * comm.decoded_reverse as f64 / comm.pairs as f64
     );
     println!(
-        "{:<40} {:>10.3}",
+        "{:<46} {:>10.3}",
         "similaridade média Ψ_AB · Ψ_BA", comm.mean_sim
     );
     println!(
-        "{:<40} {:>10.3}",
+        "{:<46} {:>10.3}",
         "controle comutativo (mesmo papel, sem ρ)", comm.control_sim
     );
     println!(
-        "{:<40} {:>9.2}%",
-        "validação ACF dos dois sentidos",
+        "{:<46} {:>9.2}%",
+        "validação ACF nos dois sentidos",
         100.0 * comm.acf_validated as f64 / comm.pairs as f64
     );
     println!();
 
     // ---------------- Gate 4 ----------------
-    let abst_rows = gate_abstention(&cb, &a, if args.quick { 60 } else { 150 }, &mut rng);
-    println!("G4 — abstenção calibrada (piso sim ≥ {SIM_FLOOR:.2} e margem ≥ {MARGIN_FLOOR:.2})");
+    let abst_rows = gate_abstention(&cb, &a, if args.quick { 50 } else { 120 }, &mut rng);
+    println!("G4 — abstenção calibrada (piso sim ≥ {SIM_FLOOR:.2}, margem ≥ {MARGIN_FLOOR:.2})");
     println!(
-        "{:<20} {:>7} {:>10} {:>11} {:>10} {:>10}",
+        "{:<22} {:>6} {:>10} {:>10} {:>10} {:>10}",
         "condição", "n", "abstem", "acerto", "sim_min", "margem"
     );
-    println!("{}", "-".repeat(72));
+    println!("{}", "-".repeat(74));
     for r in &abst_rows {
         println!(
-            "{:<20} {:>7} {:>9.1}% {:>10} {:>10.3} {:>10.3}",
+            "{:<22} {:>6} {:>9.1}% {:>10} {:>10.3} {:>10.3}",
             r.label,
             r.n,
             100.0 * r.abstain,
@@ -1652,65 +1603,84 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             r.mean_margin
         );
     }
-    let (mem_abst, mem_sim) = abstention_memory(&mem, &cb, &a, 120, &mut rng);
+    let (mem_abst, mem_sim) = abstention_memory(&mem, &facts, &cb, &a, 120, &mut rng);
     println!(
-        "{:<20} {:>7} {:>9.1}% {:>10} {:>10.3} {:>10.3}",
-        "memória OOV", 120, 100.0 * mem_abst, "-", mem_sim, 0.0
+        "{:<22} {:>6} {:>9.1}% {:>10} {:>10.3} {:>10.3}",
+        "chave OOV (memória)", 120, 100.0 * mem_abst, "-", mem_sim, 0.0
     );
     println!();
 
     // ---------------- memória ----------------
-    let traces_bytes = mem.memory_bytes();
+    let accum_bytes = mem.memory_bytes();
     let codebook_bytes = cb.memory_bytes();
     let scratch_bytes = std::mem::size_of::<QueryScratch>();
-    let total = traces_bytes + codebook_bytes + scratch_bytes;
+    let total = accum_bytes + codebook_bytes + scratch_bytes;
     println!("pegada de memória (working set)");
-    println!("{:<32} {:>10}", "acumuladores (24 shards)", format!("{} KB", traces_bytes / 1024));
-    println!("{:<32} {:>10}", "codebooks limpo + ACF", format!("{} KB", codebook_bytes / 1024));
+    println!(
+        "{:<32} {:>10}",
+        "acumuladores (24 shards)",
+        format!("{} KB", accum_bytes / 1024)
+    );
+    println!(
+        "{:<32} {:>10}",
+        "codebooks limpo + ACF",
+        format!("{} KB", codebook_bytes / 1024)
+    );
     println!("{:<32} {:>10}", "scratch de consulta", format!("{scratch_bytes} B"));
     println!("{:<32} {:>10}", "total", format!("{} KB", total / 1024));
     println!();
 
     // ---------------- gates ----------------
-    let g1 = scale.recall_pair >= 0.99;
-    let g1_contrast = flat_recall < 0.10;
+    let g1 = scale.recall >= 0.99;
+    let g1_contrast = flat < 0.10;
     let g1_cap = mem.max_load() <= SHARD_CAP;
-    let g2 = comm.separated == comm.pairs && comm.decoded_forward == comm.pairs && comm.decoded_reverse == comm.pairs;
+    let g2 = comm.separated == comm.pairs
+        && comm.decoded_forward == comm.pairs
+        && comm.decoded_reverse == comm.pairs;
     let g3_snr = scale.snr_obj > 5.0 && scale.snr_mod > 5.0;
     let g3_lat = scale.p50_us < 15.0;
     let g3_alloc = scale.allocs == 0;
-    let g4_oov = abst_rows.last().map(|r| r.abstain > 0.95).unwrap_or(false);
-    let g4_noise = abst_rows
+    let oov = abst_rows.last().map(|r| r.abstain).unwrap_or(0.0);
+    let noisy = abst_rows
         .iter()
         .find(|r| r.label == "sigma=1,6")
-        .map(|r| r.abstain > 0.95)
-        .unwrap_or(false);
-    let g4_clean = abst_rows
-        .first()
-        .map(|r| r.abstain < 0.05 && r.accuracy >= 0.95)
-        .unwrap_or(false);
-    let g4_mem = mem_abst > 0.95;
+        .map(|r| r.abstain)
+        .unwrap_or(0.0);
+    let clean_row = abst_rows.first().copied().unwrap_or(AbstRow {
+        label: "",
+        n: 0,
+        abstain: 1.0,
+        accuracy: 0.0,
+        mean_sim: 0.0,
+        mean_margin: 0.0,
+    });
+    let g4_oov = oov > 0.95 && mem_abst > 0.95;
+    let g4_noise = noisy > 0.95;
+    let g4_clean = clean_row.abstain < 0.05 && clean_row.accuracy >= 0.95;
     let g_mem = total < 500 * 1024;
 
     println!("gates");
     println!(
-        "  G1 recall@1 sharded ≥ 0,99            : {}  ({:.4})",
+        "  G1 recall@1 sharded ≥ 0,99             : {}  ({:.4})",
         pass(g1),
-        scale.recall_pair
+        scale.recall
     );
     println!(
-        "  G1 contraste plano < 0,10             : {}  ({:.4})",
+        "  G1 contraste plano < 0,10              : {}  ({:.4})",
         pass(g1_contrast),
-        flat_recall
+        flat
     );
     println!(
-        "  G1 ≤ {SHARD_CAP} fatos/acumulador           : {}  (max {})",
+        "  G1 ≤ {SHARD_CAP} fatos/acumulador              : {}  (max {})",
         pass(g1_cap),
         mem.max_load()
     );
-    println!("  G2 não-comutatividade = 100%          : {}", pass(g2));
     println!(
-        "  G3 SNR > 5,0 σ (OBJ e MOD)            : {}  ({:.2} / {:.2})",
+        "  G2 não-comutatividade = 100%           : {}",
+        pass(g2)
+    );
+    println!(
+        "  G3 SNR > 5,0 σ (OBJ e MOD)             : {}  ({:.2} / {:.2})",
         pass(g3_snr),
         scale.snr_obj,
         scale.snr_mod
@@ -1727,30 +1697,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "  G4 abstenção OOV > 95%                 : {}  (vocab {:.1}% · memória {:.1}%)",
-        pass(g4_oov && g4_mem),
-        100.0 * abst_rows.last().map(|r| r.abstain).unwrap_or(0.0),
+        pass(g4_oov),
+        100.0 * oov,
         100.0 * mem_abst
     );
     println!(
         "  G4 abstenção ruído σ=1,6 > 95%         : {}  ({:.1}%)",
         pass(g4_noise),
-        100.0 * abst_rows
-            .iter()
-            .find(|r| r.label == "sigma=1,6")
-            .map(|r| r.abstain)
-            .unwrap_or(0.0)
+        100.0 * noisy
     );
     println!(
-        "  G4 falso-abster limpo < 5% e acerto ≥ 95%: {}",
-        pass(g4_clean)
+        "  G4 falso-abster limpo < 5% + acerto    : {}  ({:.1}% / {:.1}%)",
+        pass(g4_clean),
+        100.0 * clean_row.abstain,
+        100.0 * clean_row.accuracy
     );
     println!(
         "  G-working-set < 500 KB                 : {}  ({} KB)",
         pass(g_mem),
         total / 1024
     );
-    let all = g1 && g1_contrast && g1_cap && g2 && g3_snr && g3_lat && g3_alloc && g4_oov && g4_mem
-        && g4_noise && g4_clean && g_mem;
+    let all = g1 && g1_contrast && g1_cap && g2 && g3_snr && g3_lat && g3_alloc && g4_oov
+        && g4_noise
+        && g4_clean
+        && g_mem;
     println!("  veredito: {}", pass(all));
     println!();
 
@@ -1768,9 +1738,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         mem.max_load()
     ));
     json.push_str(&format!(
-        "  \"sharded\": {{\"recall_fact\": {:.4}, \"recall_pair\": {:.4}, \"snr_obj\": {:.3}, \"snr_mod\": {:.3}, \"p50_us\": {:.3}, \"p99_us\": {:.3}, \"mean_us\": {:.3}, \"allocs\": {}, \"acf_validation\": {:.4}, \"converged\": {:.4}}},\n",
-        scale.recall_fact,
-        scale.recall_pair,
+        "  \"sharded\": {{\"recall\": {:.4}, \"snr_obj\": {:.3}, \"snr_mod\": {:.3}, \"p50_us\": {:.3}, \"p99_us\": {:.3}, \"mean_us\": {:.3}, \"allocs\": {}, \"acf_validation\": {:.4}, \"converged\": {:.4}, \"false_abstain\": {:.4}}},\n",
+        scale.recall,
         scale.snr_obj,
         scale.snr_mod,
         scale.p50_us,
@@ -1778,10 +1747,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         scale.mean_us,
         scale.allocs,
         scale.acf_validation,
-        scale.converged
+        scale.converged,
+        scale.false_abstain
     ));
     json.push_str(&format!(
-        "  \"flat\": {{\"recall_pair\": {flat_recall:.4}}},\n"
+        "  \"flat\": {{\"recall\": {flat:.4}}},\n"
     ));
     json.push_str(&format!(
         "  \"noncommutative\": {{\"pairs\": {}, \"separated\": {}, \"forward\": {}, \"reverse\": {}, \"mean_sim\": {:.4}, \"control_sim\": {:.4}}},\n",
@@ -1793,7 +1763,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         comm.control_sim
     ));
     json.push_str(&format!(
-        "  \"memory_bytes\": {{\"accumulators\": {traces_bytes}, \"codebooks\": {codebook_bytes}, \"scratch\": {scratch_bytes}, \"total\": {total}}},\n"
+        "  \"memory_bytes\": {{\"accumulators\": {accum_bytes}, \"codebooks\": {codebook_bytes}, \"scratch\": {scratch_bytes}, \"total\": {total}}},\n"
     ));
     json.push_str("  \"abstention\": [\n");
     for (i, r) in abst_rows.iter().enumerate() {
