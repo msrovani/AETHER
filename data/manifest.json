@@ -8,10 +8,10 @@
   "count": 372,
   "labels": 372,
   "facts": 205,
-  "whitened": false,
-  "sha256_whitening": null,
-  "sha256_embeds": "94255a4d1b2be3b182965695a82b9330eef48a18a8e27b12f969e7c22ab879f4",
-  "sha256_bank": "a525a19e4573b3dac623f8b30b1a605dde2eaec5707895ec0e334aa07539e1db",
+  "whitened": true,
+  "sha256_whitening": "257ac419dfb662afe1f59d71e5653bc4d125817d930954caf5ddf82d4689490e",
+  "sha256_embeds": "49ff040c8d7576ee853a8640e1ae52c33b8fc0aa940c07b703caa5bca1217a0e",
+  "sha256_bank": "2d2cb5a2d04509c764375a599725587b4e3255118b231ec3dc8a96c3ac33d191",
   "shards": [
     {
       "relation": "capital",

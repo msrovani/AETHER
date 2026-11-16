@@ -33,6 +33,7 @@
 //! Gates: `tests/f1_knowledge_bridge_gate.rs` (4) e
 //! `tests/alloc_invariants.rs` (zero alocação em `record`).
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -573,9 +574,50 @@ impl<const N: usize> KnowledgePhaseConsumer<N> {
 #[derive(Debug, Default)]
 pub struct ScopeLedger {
     entries: Vec<DraftRecord>,
+    /// Índice por escopo (posições em `entries`): `cue` e `scoped` deixam de
+    /// varrer o ledger inteiro. Sem ele, cada consulta era O(n) global — com
+    /// 20 mil fatos, o custo virava latência de todo mundo (o estado é único).
+    by_scope: HashMap<ScopeId, Vec<usize>>,
     queries: u64,
     cross_scope_hits: u64,
     cross_scope_skipped: u64,
+}
+
+impl ScopeLedger {
+    /// Remove o fato `key` do escopo `scope`. `true` se existia.
+    ///
+    /// A remoção em memória é o lado "quente"; o disco recebe uma **linha
+    /// túmulo** (`op=forget`) pelo chamador, para que o reinício não ressuscite
+    /// o fato. `O(n)` — esquecer é raro, responder não.
+    pub fn forget(&mut self, scope: ScopeId, key: u128) -> bool {
+        let Some(indices) = self.by_scope.get(&scope) else {
+            return false;
+        };
+        let Some(&pos) = indices.iter().find(|&&i| self.entries[i].key == key) else {
+            return false;
+        };
+        self.entries.remove(pos);
+        self.reindex();
+        true
+    }
+
+    /// Reconstrói o índice (após remoção, que desloca posições).
+    fn reindex(&mut self) {
+        self.by_scope.clear();
+        for (i, r) in self.entries.iter().enumerate() {
+            self.by_scope.entry(r.scope).or_default().push(i);
+        }
+    }
+
+    /// Todos os fatos vivos, na ordem de inserção (usado pela compactação).
+    pub fn records(&self) -> impl Iterator<Item = &DraftRecord> {
+        self.entries.iter()
+    }
+
+    /// Quantos fatos vivos existem no escopo.
+    pub fn scoped_len(&self, scope: ScopeId) -> usize {
+        self.by_scope.get(&scope).map_or(0, Vec::len)
+    }
 }
 
 impl ScopeLedger {
@@ -586,7 +628,12 @@ impl ScopeLedger {
 
     /// Persiste um envelope drenado.
     pub fn append(&mut self, record: DraftRecord) {
+        let scope = record.scope;
         self.entries.push(record);
+        self.by_scope
+            .entry(scope)
+            .or_default()
+            .push(self.entries.len() - 1);
     }
 
     /// Número de registros no escopo do organismo dado.
@@ -599,7 +646,7 @@ impl ScopeLedger {
 
     /// Número de registros que casam **exatamente** com o escopo.
     pub fn hits_for_scope(&self, scope: ScopeId) -> usize {
-        self.entries.iter().filter(|r| r.scope == scope).count()
+        self.scoped_len(scope)
     }
 
     /// Total de registros.
@@ -634,7 +681,11 @@ impl ScopeLedger {
 
     /// Registros do escopo pedido, na ordem de inserção.
     pub fn scoped(&self, scope: ScopeId) -> impl Iterator<Item = &DraftRecord> {
-        self.entries.iter().filter(move |r| r.scope == scope)
+        self.by_scope
+            .get(&scope)
+            .into_iter()
+            .flatten()
+            .map(move |&i| &self.entries[i])
     }
 
     /// Interpreta o payload como pares complexos intercalados (`re, im`).
@@ -685,14 +736,16 @@ impl ScopeLedger {
         if self.entries.is_empty() {
             return Err(BridgeError::EmptyScope);
         }
+        let Some(indices) = self.by_scope.get(&scope).filter(|v| !v.is_empty()) else {
+            self.cross_scope_skipped += self.entries.len() as u64;
+            return Err(BridgeError::EmptyScope);
+        };
+        // Tudo que está fora do escopo é "skipped" sem ser visitado.
+        let skipped = self.entries.len().saturating_sub(indices.len()) as u64;
         let mut best: Option<(f32, usize)> = None;
         let mut consulted = 0usize;
-        let mut skipped = 0u64;
-        for (idx, record) in self.entries.iter().enumerate() {
-            if record.scope != scope {
-                skipped += 1;
-                continue;
-            }
+        for &idx in indices {
+            let record = &self.entries[idx];
             let phases = Self::payload_phases(record);
             if phases.is_empty() || phases.len() != query.len() {
                 continue;

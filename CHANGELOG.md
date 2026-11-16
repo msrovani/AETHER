@@ -3,6 +3,23 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.118] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 9 arquivo(s) (.:1, data:3, docs:1, src:2, tests:1, tools:1).
+- Gate: ok (6s).
+
+- `Cargo.lock`
+- `data/emb/bank.f32`
+- `data/hv/bank.bin`
+- `data/manifest.json`
+- `docs/CORPO3_ERRATA.md`
+- `src/api/mod.rs`
+- `src/core/knowledge_bridge_f1.rs`
+- `tests/api_integrity.rs`
+- `tools/harvest_transplant.py`
+
 ## [0.0.117] - 2026-11-16
 
 ### Changed

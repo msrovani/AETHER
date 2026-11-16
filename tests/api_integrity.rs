@@ -152,23 +152,19 @@ fn nao_finitos_sao_recusados() {
     let (st, resp) = request(addr, "POST", "/v1/aether/remember", &body);
     assert_eq!(st, 400, "{resp}");
 
-    let solve = format!(
-        r#"{{"n":2,"j":[[0,1e999],[1e999,0]],"h":[0,0]}}"#
-    );
-    let (st, resp) = request(addr, "POST", "/v1/aether/solve", &solve);
+    let solve = r#"{"n":2,"j":[[0,1e999],[1e999,0]],"h":[0,0]}"#;
+    let (st, resp) = request(addr, "POST", "/v1/aether/solve", solve);
     assert_eq!(st, 400, "{resp}");
 }
 
 #[test]
 fn bom_utf8_e_aceito() {
     let addr = start();
-    let body = format!(
-        "\u{feff}{}",
-        format!(
-            r#"{{"key":"5","phases":{},"scope":{{"organism":1,"run":1,"app":1}}}}"#,
-            phases_text(160)
-        )
+    let inner = format!(
+        r#"{{"key":"5","phases":{},"scope":{{"organism":1,"run":1,"app":1}}}}"#,
+        phases_text(160)
     );
+    let body = format!("\u{feff}{inner}");
     let (st, resp) = request(addr, "POST", "/v1/aether/remember", &body);
     assert_eq!(st, 200, "{resp}");
     assert!(resp.contains("\"stored\":true"), "{resp}");

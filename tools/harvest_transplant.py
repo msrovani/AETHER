@@ -125,22 +125,16 @@ def unique_labels(facts: list[dict]) -> list[str]:
 
 
 def embed_synthetic(labels: list[str], dim: int, seed: int) -> list[list[float]]:
-    """Embeddings com estrutura de clusters (necessário para Spearman≥0.95 no dry-run)."""
-    n_clusters = max(8, min(32, len(labels) // 4 or 1))
-    _, g0 = make_prng(seed ^ 0xC1A55E)
-    centers = []
-    for _ in range(n_clusters):
-        c = [g0() for _ in range(dim)]
-        nrm = math.sqrt(sum(x * x for x in c)) or 1.0
-        centers.append([x / nrm for x in c])
+    """Embeddings com eixos de cluster ortogonais + ruído fraco (Spearman JL)."""
+    n_clusters = max(8, min(64, dim // 4, len(labels) // 3 or 1))
     mats: list[list[float]] = []
     for lab in labels:
         h = int.from_bytes(hashlib.sha256(lab.encode("utf-8")).digest()[:8], "little")
         cid = h % n_clusters
         _, g = make_prng(seed ^ h ^ 0xE11B)
-        # sinal = centro + ruído pequeno (norma ~0.15)
-        noise_scale = 0.15 / math.sqrt(dim)
-        v = [centers[cid][j] + g() * noise_scale for j in range(dim)]
+        noise_scale = 0.05 / math.sqrt(dim)
+        v = [g() * noise_scale for _ in range(dim)]
+        v[cid] += 1.0  # eixo do cluster
         nrm = math.sqrt(sum(x * x for x in v)) or 1.0
         mats.append([x / nrm for x in v])
     return mats

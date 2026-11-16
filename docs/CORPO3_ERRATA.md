@@ -100,7 +100,7 @@ baseline conjunto por **40 passadas** de busca sobre `(ρ, α, input_scale)`.
 | Frozen, Mackey–Glass, 10^6 | **2,33 × 10⁻⁵** | **1,57 s** | **1.733.418 pred/s** |
 | Frozen, NARMA-10, 16k | **0,1286** | 0,24 s | 237.044 pred/s |
 | RLS online, Mackey–Glass 20k | 0,00655 | 0,24 s | — |
-| Joint (40 passadas), Mackey–Glass 4k | 1,31 × 10⁻⁴ | **45,7× mais lento** | — |
+| Joint (40 passadas), Mackey–Glass 4k | 1,31 × 10⁻⁴ | **39,6–45,7× mais lento** | — |
 
 * Regressão de acurácia do congelado: **0%** (no teste, 1,22 × 10⁻⁴ vs
   1,31 × 10⁻⁴ do melhor candidato conjunto). ✅

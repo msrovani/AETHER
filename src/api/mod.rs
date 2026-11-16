@@ -81,6 +81,8 @@ pub struct ApiConfig {
     pub token: Option<String>,
     /// Organismo permitido para o token. Requisições com outro escopo recebem 403.
     pub organism: Option<u64>,
+    /// Teto do arquivo JSONL em bytes (`0` = sem compactação).
+    pub max_ledger_bytes: u64,
     /// Workers de conexão (mínimo 1).
     pub threads: usize,
 }
@@ -92,6 +94,7 @@ impl Default for ApiConfig {
             ledger_path: None,
             token: None,
             organism: None,
+            max_ledger_bytes: 0,
             threads: 4,
         }
     }
@@ -104,20 +107,32 @@ struct AuthPolicy {
     organism: Option<u64>,
 }
 
-/// Ledger em disco: uma linha JSON por fato, append-only.
+/// Ledger em disco: uma linha JSON por operação, append-only.
+///
+/// `op=remember` grava o fato; `op=forget` grava o **túmulo**. Ao carregar, os
+/// túmulos são aplicados em ordem, então um fato esquecido não ressuscita com
+/// o reinício. Com `max_bytes > 0`, o arquivo é **compactado** (só vivos)
+/// quando passa do teto.
 #[derive(Clone, Debug)]
 pub struct LedgerStore {
     path: PathBuf,
+    max_bytes: u64,
+    size: u64,
 }
 
 impl LedgerStore {
-    /// Abre (ou cria) o arquivo do ledger.
-    pub fn new(path: PathBuf) -> std::io::Result<Self> {
-        std::fs::OpenOptions::new()
+    /// Abre (ou cria) o arquivo do ledger. `max_bytes = 0` desliga a compactação.
+    pub fn new(path: PathBuf, max_bytes: u64) -> std::io::Result<Self> {
+        let f = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&path)?;
-        Ok(Self { path })
+        let size = f.metadata().map(|m| m.len()).unwrap_or(0);
+        Ok(Self {
+            path,
+            max_bytes,
+            size,
+        })
     }
 
     /// Caminho do arquivo.
@@ -125,25 +140,65 @@ impl LedgerStore {
         &self.path
     }
 
-    /// Grava um fato (uma linha). Erro de I/O é do chamador decidir.
-    pub fn append(&self, record: &DraftRecord) -> std::io::Result<()> {
+    /// Tamanho corrente (bytes).
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+
+    /// Teto configurado (`0` = sem teto).
+    pub fn max_bytes(&self) -> u64 {
+        self.max_bytes
+    }
+
+    /// `true` se o arquivo passou do teto e precisa de compactação.
+    pub fn should_compact(&self) -> bool {
+        self.max_bytes > 0 && self.size >= self.max_bytes
+    }
+
+    /// Grava um fato (`op=remember`).
+    pub fn append(&mut self, record: &DraftRecord) -> std::io::Result<()> {
+        self.append_line(&record_to_json(record))
+    }
+
+    /// Grava o túmulo de `key` no escopo (o fato deixa de ser citável no boot).
+    pub fn tombstone(
+        &mut self,
+        scope: ScopeId,
+        key: u128,
+        reason: &str,
+        wall_ms: u64,
+    ) -> std::io::Result<()> {
+        let line = Json::obj([
+            ("op", Json::str("forget")),
+            ("key", Json::str(key.to_string())),
+            ("scope", scope_json(scope)),
+            ("reason", Json::str(reason)),
+            ("wall_ms", Json::num(wall_ms as f64)),
+        ]);
+        self.append_line(&line)
+    }
+
+    fn append_line(&mut self, line: &Json) -> std::io::Result<()> {
+        let text = line.to_text();
         let mut f = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)?;
-        f.write_all(record_to_json(record).to_text().as_bytes())?;
+        f.write_all(text.as_bytes())?;
         f.write_all(b"\n")?;
-        f.flush()
+        f.flush()?;
+        self.size += text.len() as u64 + 1;
+        Ok(())
     }
 
-    /// Lê o arquivo inteiro (linhas inválidas são ignoradas e contadas).
+    /// Lê o arquivo inteiro, aplicando túmulos em ordem.
     pub fn load(&self) -> std::io::Result<(Vec<DraftRecord>, usize)> {
         let f = match std::fs::File::open(&self.path) {
             Ok(f) => f,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((Vec::new(), 0)),
             Err(e) => return Err(e),
         };
-        let mut out = Vec::new();
+        let mut alive: Vec<DraftRecord> = Vec::new();
         let mut bad = 0usize;
         for line in BufReader::new(f).lines() {
             let line = line?;
@@ -151,12 +206,43 @@ impl LedgerStore {
             if t.is_empty() || t.starts_with('#') {
                 continue;
             }
-            match Json::parse(t).ok().as_ref().and_then(record_from_json) {
-                Some(r) => out.push(r),
-                None => bad += 1,
+            let Some(doc) = Json::parse(t).ok() else {
+                bad += 1;
+                continue;
+            };
+            match doc.get("op").and_then(Json::as_str) {
+                Some("forget") => {
+                    let scope = scope_from(doc.get("scope"));
+                    let key = key_from(doc.get("key"));
+                    match (scope, key) {
+                        (Some(s), Some(k)) => alive.retain(|r| !(r.scope == s && r.key == k)),
+                        _ => bad += 1,
+                    }
+                }
+                Some("remember") | None => match record_from_json(&doc) {
+                    Some(r) => alive.push(r),
+                    None => bad += 1,
+                },
+                Some(_) => bad += 1,
             }
         }
-        Ok((out, bad))
+        Ok((alive, bad))
+    }
+
+    /// Reescreve o arquivo só com os vivos (atômico: tmp + rename).
+    pub fn compact(&mut self, records: &[DraftRecord]) -> std::io::Result<()> {
+        let tmp = self.path.with_extension("jsonl.tmp");
+        {
+            let mut f = std::fs::File::create(&tmp)?;
+            for r in records {
+                f.write_all(record_to_json(r).to_text().as_bytes())?;
+                f.write_all(b"\n")?;
+            }
+            f.sync_all()?;
+        }
+        std::fs::rename(&tmp, &self.path)?;
+        self.size = std::fs::metadata(&self.path).map(|m| m.len()).unwrap_or(0);
+        Ok(())
     }
 }
 
@@ -180,12 +266,16 @@ impl ApiState {
     pub fn load(cfg: &ApiConfig) -> std::io::Result<Self> {
         let mut state = Self::default();
         if let Some(path) = &cfg.ledger_path {
-            let store = LedgerStore::new(path.clone())?;
+            let mut store = LedgerStore::new(path.clone(), cfg.max_ledger_bytes)?;
             let (records, bad) = store.load()?;
             for r in records {
                 state.ledger.append(r);
             }
             state.bad_lines = bad;
+            if store.should_compact() {
+                let all: Vec<DraftRecord> = state.ledger.records().cloned().collect();
+                store.compact(&all)?;
+            }
             state.store = Some(store);
         }
         state.auth = cfg.token.clone().map(|token| AuthPolicy {
