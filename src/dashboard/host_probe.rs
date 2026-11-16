@@ -199,8 +199,7 @@ pub fn load_host_report() -> Result<HostReport> {
     let path = host_report_path();
     let raw = fs::read_to_string(&path)
         .map_err(|e| AetherError::Config(format!("host_report read {}: {e}", path.display())))?;
-    serde_json::from_str(&raw)
-        .map_err(|e| AetherError::Config(format!("host_report parse: {e}")))
+    serde_json::from_str(&raw).map_err(|e| AetherError::Config(format!("host_report parse: {e}")))
 }
 
 /// Executa a sonda e grava `target/aether_host_report.json`.

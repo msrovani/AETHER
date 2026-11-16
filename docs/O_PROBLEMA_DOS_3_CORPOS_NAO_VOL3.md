@@ -383,11 +383,11 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | **E1-2** ✅ | I | `FhrrStore::query_phasor_into` (fasor de papel pré-computado) | API + teste de equivalência bit-a-bit; remove `sin_cos` por consulta | R2 |
 | **E1b** ✅ | II | capacidade do store e da memória de fase — **executado** | **D=160: 64 fatos (K=6)** · lei **linear ~0,4·D** (não D²) · fase: ~4 padrões aleatórios | R2 |
 | **E1b-2** ✅ | II | memória de fase estruturada (harmônica) — **executado** | **M_harm = 8** vs 4 aleatório a erro < 0,15 rad · fronteira real **5× abaixo** do declarado (40) | R2 |
-| **E2** | I | lógica como Ising + certificado | 3-SAT n≤20 = força bruta | R1 |
+| **E2** ✅ | I | lógica como Ising + certificado — **executado** | **3-SAT n=20: 169/169 satisfatíveis (100%)** vs BSB puro 9/169 (5,3%) · decisivas **100% precisas** · **0 decisivas em 31 UNSAT** · **0 alloc** · simbólico p50 **94,1 µs** · G3b **FAIL declarado** (23× o teto de 4,07 µs) | R1, R3, R10 |
 | **E2b** ✅ | II | presolve simbólico antes do BSB — **executado** | **0 insound** · **64,8% redução** (+39,8 pp de cascata) · **200/200** resolvidas vs 183/200 | R1, R3 |
 | **E2c** ✅ | II | persistência de 1ª ordem (dominância) — **executado** | **0/600 ótimos alterados** · 0% sem viés (controle) · 42,9% com viés 45% | R1, R3 |
 | **E2c-2** ✅ | II | roof dual completo (max-flow) — **executado** | **0/600 ótimos alterados** · **52,0%** em 45% (vs 42,9%) · 28,9% em 25% · **0% no controle = teto ℤ₂** · 199/200 | R1 |
-| **E3** | I | transplantação de embeddings | analogia medida, sem alvo de marketing | R3 |
+| **E3** ✅ | I | transplantação de embeddings — **executado** | **JL ρ=0,9528** (499.500 pares) · **1,28 KB/átomo** (1,28 MB/1.000) · relação **0,9990** (≤ 48 fatos/shard) · analogia **R@1 0,9549** (sem alvo) · proveniência **100%** · OOD **100%** abstido · verificador **0,004 ms / 0 alloc** | R3, R10 |
 | **E3b** ✅ | II/III | verificador de coerência + proveniência | **spins: nulo (AUC 0,46–0,55)** · **2-SAT: precisão 100%** | R3, R10 |
 | **E4** | I | self-field + ablação | ECE melhora; T01 não regride | K5 |
 | **E5** | I | currículo por progresso | readaptação < 150 ciclos (T03) | R5 |
@@ -402,19 +402,19 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | Código | Vol. | Sev. | Remediação |
 |---|---|---|---|
 | `NO_BINDING_HEAD` | I | ✅ **resolvido (E1)** | 1.000 fatos sharded · recall@1 **1,0000** · p50 **5,80 µs** · **0 alloc** | — |
-| `NO_ENERGY_CERT` | I | crítico | E2 → E3b |
-| `NO_ISING_CONSTRAINTS` | I | alto | E2b |
+| `NO_ENERGY_CERT` | I | ✅ **resolvido (E2)** | resposta sempre com `(E, ΔE, violações, proveniência)`; 169/169 testemunhas válidas | — |
+| `NO_ISING_CONSTRAINTS` | I | ✅ **resolvido (E2)** | gadget exato de 3-SAT (2 spins aux) + multiplicadores de Lagrange; 100% vs 5,3% do BSB puro | — |
 | `NO_SELF_FIELD` | I | alto | E4 |
 | `NO_PROGRESS_CURRICULUM` | I | médio | E5 |
 | `CACHE_METRIC_ABSENT` | I | médio | sonda LLC |
 | `CAPACITY_CLIFF_UNDOC` | I | médio | `docs/HW_TARGET.md` |
-| `TRANSPLANT_UNVALIDATED` | I | alto | E3 |
+| `TRANSPLANT_UNVALIDATED` | I | ✅ **resolvido (E3)** | JL ρ=0,9528 · 1,28 KB/átomo · relação 0,9990 · analogia R@1 0,9549 | — |
 | `PREPRINT_RISK` | I/II | info | protocolo §7 Vol. II |
 | `NO_PROFILE_BREAKDOWN` | II | ✅ **resolvido (E6)** | medido 2026-11-15: solver 84,4% | — |
 | `SOLVER_KERNEL_SCALAR` | II | ✅ **resolvido (E6b)** | 16 acumuladores safe: 7,44 → 17,10 GFLOP/s | — |
 | `NO_ROOF_DUAL` | II | ✅ **resolvido (E2c-2)** | max-flow Dinic + SCC: 42,9% → **52,0%** em 45%, 0/600 insound | — |
 | `NO_LIMIT_CYCLE_GUARD` | II | alto | E1b |
-| `NO_PROVENANCE` | II | ✅ **resolvido (F1)** | `KnowledgeEvent` carrega `Certificate` + `authority` + `ScopeId` | — |
+| `NO_PROVENANCE` | II | ✅ **resolvido (F1 + E3)** | evento F1 carrega `Certificate`+`authority`+`ScopeId`; E3 carimba 100% das respostas e abstém 100% fora do domínio | — |
 | `D_CAPACITY_UNMEASURED` | II | ✅ **resolvido (E1b → E1)** | lei linear **0,4·D** medida; 1.000 fatos via 24 shards | — |
 | `NO_ACTUATOR_LOOP` | II | alto | E7 |
 | `CERT_SEMANTICS` | II | médio | §6 (vocabulário) |
@@ -546,7 +546,8 @@ alocação, sem violar a lei do E1b em nenhum acumulador.
 9º  ✅ E2c-2 roof dual (max-flow)         ← FEITO: 52,0% em 45% · 0/600 insound · teto 0% no controle
 10º ✅ E1b-2 memória de fase estruturada  ← FEITO: harmônico 8 vs aleatório 4 (erro < 0,15 rad)
 11º ✅ F1   ponte read-only               ← FEITO: 0 alloc no T0 · 0 chamadas ao ledger · R8 = 0
-12º E2/E3 os outros dois "NÃO"         ← o programa científico
+12º ✅ E2    lógica como Ising + certificado ← FEITO: 169/169 (100%) vs 5,3% · 0 alloc · G3b FAIL declarado
+12º ✅ E3    transplantação JL + proveniência ← FEITO: ρ=0,9528 · 1,28 KB/átomo · R@1 0,9549 · OOD 100%
 13º E4/E5/E7/E8  self, currículo, corpo, treino
 14º F2/F3  consolidação e fusão 2D
 ```

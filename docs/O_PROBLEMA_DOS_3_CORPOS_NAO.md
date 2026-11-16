@@ -506,8 +506,8 @@ Todos com: `--release`, seed fixa (`ChaCha8Rng`), `alloc_invariants` verde,
 | # | Entrega | Arquivo sugerido | Gate |
 |---|---|---|---|
 | **E1** | probe de linguagem em fase | `examples/phase_language_probe.rs` | recuperação papel–filler com SNR > 5σ, 0 alloc |
-| **E2** | lógica como Ising + certificado | `examples/ising_logic_probe.rs` | 3-SAT `n ≤ 20` = força bruta; ECE do gap < 0,1 |
-| **E3** | transplantação de embeddings | `examples/transplant_probe.rs` | analogia Top-1 > 0,7; relação > 0,6 |
+| **E2** ✅ | lógica como Ising + certificado | `examples/ising_logic_probe.rs` | **169/169** satisfatíveis `n = 20` (100%) · decisivas **100%** · **0 alloc** · G3b **FAIL declarado** (23× o teto) |
+| **E3** ✅ | transplantação de embeddings | `examples/transplant_probe.rs` | **ρ = 0,9528** · relação **0,9990** · analogia R@1 **0,9549** · proveniência **100%** |
 | **E4** | self-field + ablação | `tests/self_field_audit.rs` | ECE melhora; T01 **não** regride |
 | **E5** | currículo por progresso | `tests/curriculum_audit.rs` | readaptação pós-ruptura < T03 (150 ciclos) |
 
@@ -516,8 +516,8 @@ demonstrativo; E2 é o de maior valor científico (certificado de factibilidade)
 de maior risco e maior potencial de ruptura.
 
 > **Plano revisado (pós-E3b, 2026-11-15):** a ordem vigente é a do **Vol. III §12.4**:
-> E6 ✅ → E6b ✅ → **E3b ✅** → **E2b (agora condição de existência do certificado)** →
-> E1b → E1/E2/E3 → E4/E5/E7/E8 → F1–F3.
+> E6 ✅ → E6b ✅ → **E3b ✅** → **E2b ✅** → E2c ✅ → E1b ✅ → E1 ✅ →
+> **E2 ✅** (169/169, 0 alloc) → **E3 ✅** (ρ=0,9528, OOD 100%) → E4/E5/E7/E8 → F2/F3.
 
 ### 8.1 Critério de "revolução"
 

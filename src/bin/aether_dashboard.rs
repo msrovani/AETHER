@@ -152,9 +152,7 @@ mod aether_dashboard_win {
                 );
                 return;
             }
-            if !self.last_job_done
-                && matches!(snap.phase, JobPhase::Done | JobPhase::Failed)
-            {
+            if !self.last_job_done && matches!(snap.phase, JobPhase::Done | JobPhase::Failed) {
                 self.last_job_done = true;
                 self.status = format!("[{}] {}", snap.phase.label(), snap.log);
                 if snap.kind == Some(JobKind::HostProbe) && snap.phase == JobPhase::Done {
@@ -286,14 +284,8 @@ mod aether_dashboard_win {
         fn section_header(&self, ui: &mut egui::Ui, title: &str) {
             ui.horizontal(|ui| {
                 let (rect, _) = ui.allocate_exact_size(Vec2::new(4.0, 18.0), Sense::hover());
-                ui.painter()
-                    .rect_filled(rect, 1.0, theme::BRAND);
-                ui.label(
-                    RichText::new(title)
-                        .strong()
-                        .size(15.0)
-                        .color(theme::TEXT),
-                );
+                ui.painter().rect_filled(rect, 1.0, theme::BRAND);
+                ui.label(RichText::new(title).strong().size(15.0).color(theme::TEXT));
             });
             ui.add_space(6.0);
         }
@@ -308,12 +300,7 @@ mod aether_dashboard_win {
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let chip = self.detail.mode_label();
-                    ui.label(
-                        RichText::new(chip)
-                            .small()
-                            .strong()
-                            .color(theme::BRAND),
-                    );
+                    ui.label(RichText::new(chip).small().strong().color(theme::BRAND));
                 });
             });
             ui.add_space(4.0);
@@ -338,12 +325,7 @@ mod aether_dashboard_win {
                         }
                     }
                     DetailPane::Hover { title, body } => {
-                        ui.label(
-                            RichText::new(title)
-                                .strong()
-                                .size(15.0)
-                                .color(theme::TEXT),
-                        );
+                        ui.label(RichText::new(title).strong().size(15.0).color(theme::TEXT));
                         ui.add_space(6.0);
                         for para in body.split('\n') {
                             if para.is_empty() {
@@ -370,7 +352,11 @@ mod aether_dashboard_win {
                             }
                         }
                         ui.separator();
-                        ui.label(RichText::new("Como interpretar").strong().color(theme::ACCENT));
+                        ui.label(
+                            RichText::new("Como interpretar")
+                                .strong()
+                                .color(theme::ACCENT),
+                        );
                         ui.label(RichText::new(ficha.interpret).color(theme::TEXT));
                         ui.add_space(4.0);
                         ui.label(
@@ -693,8 +679,7 @@ mod aether_dashboard_win {
             self.section_header(ui, "Vazão (cycles/s · eq-t/s · SOP/s · TOP/s)");
             let Some(tp) = self.view.throughput.clone() else {
                 ui.label(
-                    RichText::new("Sem throughput. Use “Benchmark de vazão”.")
-                        .color(theme::MUTED),
+                    RichText::new("Sem throughput. Use “Benchmark de vazão”.").color(theme::MUTED),
                 );
                 return;
             };
@@ -710,12 +695,7 @@ mod aether_dashboard_win {
                         "Pico de heap do processo durante o bench de vazão.",
                     );
                 }
-                if meter_card(
-                    ui,
-                    "RSS MB",
-                    format!("{:.2}", tp.peak_rss_mb),
-                    theme::MUTED,
-                ) {
+                if meter_card(ui, "RSS MB", format!("{:.2}", tp.peak_rss_mb), theme::MUTED) {
                     self.note_hover("RSS MB", "Pico de memória residente (RSS) do processo.");
                 }
                 if meter_card(
@@ -758,20 +738,11 @@ mod aether_dashboard_win {
                             );
                         }
                         ui.horizontal_wrapped(|ui| {
-                            if meter_card(
-                                ui,
-                                "p50 µs",
-                                format!("{:.1}", r.p50_us),
-                                theme::BRAND,
-                            ) {
+                            if meter_card(ui, "p50 µs", format!("{:.1}", r.p50_us), theme::BRAND) {
                                 self.note_hover("p50 µs", throughput_tooltip("p50"));
                             }
-                            if meter_card(
-                                ui,
-                                "p99.9 µs",
-                                format!("{:.1}", r.p99_9_us),
-                                theme::WARN,
-                            ) {
+                            if meter_card(ui, "p99.9 µs", format!("{:.1}", r.p99_9_us), theme::WARN)
+                            {
                                 self.note_hover("p99.9 µs", throughput_tooltip("p99.9"));
                             }
                             if meter_card(
@@ -801,8 +772,10 @@ mod aether_dashboard_win {
             self.section_header(ui, "Máquina hospedeira");
             let Some(h) = self.host.clone() else {
                 ui.label(
-                    RichText::new("Ainda sem sonda. Use “Sondar hardware” (ou recarregue se já houver JSON).")
-                        .color(theme::MUTED),
+                    RichText::new(
+                        "Ainda sem sonda. Use “Sondar hardware” (ou recarregue se já houver JSON).",
+                    )
+                    .color(theme::MUTED),
                 );
                 return;
             };

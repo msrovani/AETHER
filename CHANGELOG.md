@@ -3,6 +3,20 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.104] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 6 arquivo(s) (.:1, docs:2, src:3).
+- Gate: ok (4s).
+
+- `Cargo.lock`
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO.md`
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md`
+- `src/bin/aether_dashboard.rs`
+- `src/dashboard/host_probe.rs`
+- `src/api/`
+
 ## [0.0.103] - 2026-11-16
 
 ### Changed
