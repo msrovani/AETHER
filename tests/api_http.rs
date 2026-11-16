@@ -183,6 +183,7 @@ fn sse_entrega_chunks_e_done() {
     let (st, _) = request(addr, "POST", "/v1/aether/remember", &remember_body("1", 0));
     assert_eq!(st, 200);
     let chat = r#"{"model":"aether-phase-160","stream":true,
+                   "aether":{"scope":{"organism":0,"run":1,"app":1}},
                    "messages":[{"role":"user","content":"ola"}]}"#;
     let (st, resp) = request(addr, "POST", "/v1/chat/completions", chat);
     assert_eq!(st, 200, "{resp}");

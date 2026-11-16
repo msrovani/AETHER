@@ -124,7 +124,7 @@ fn eval_arm(
             puzzle,
             &mut core,
             restarts,
-            0xC2AMu64.wrapping_add(k as u64),
+            0xC2AB_u64.wrapping_add(k as u64),
             provenance,
         );
         viol_sum += u64::from(cert.violations);
@@ -153,7 +153,7 @@ fn eval_arm(
 fn main() {
     let args = parse_args();
     let shape = SudokuShape::new(4).expect("4×4");
-    let instances = shidoku_instances(args.instances, args.clues, 0xAETHER);
+    let instances = shidoku_instances(args.instances, args.clues, 0xAE77_u64);
     let train_sols = shidoku_solutions();
 
     println!("=== E2d CRAM→Logos (Shidoku 4×4) ===");
