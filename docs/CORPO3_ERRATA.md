@@ -97,22 +97,23 @@ baseline conjunto por **40 passadas** de busca sobre `(ρ, α, input_scale)`.
 
 | Braço / tarefa | NRMSE | Treino | Inferência |
 |---|---|---|---|
-| Frozen, Mackey–Glass, 10^6 | **2,33 × 10⁻⁵** | **2,02 s** | **955.782 pred/s** |
-| Frozen, NARMA-10, 16k | **0,1286** | 0,28 s | 141.977 pred/s |
+| Frozen, Mackey–Glass, 10^6 | **2,33 × 10⁻⁵** | **1,57 s** | **1.733.418 pred/s** |
+| Frozen, NARMA-10, 16k | **0,1286** | 0,24 s | 237.044 pred/s |
 | RLS online, Mackey–Glass 20k | 0,00655 | 0,24 s | — |
 | Joint (40 passadas), Mackey–Glass 4k | 1,31 × 10⁻⁴ | **45,7× mais lento** | — |
 
 * Regressão de acurácia do congelado: **0%** (no teste, 1,22 × 10⁻⁴ vs
   1,31 × 10⁻⁴ do melhor candidato conjunto). ✅
 * **5 sementes** (Mackey–Glass, 100k): NRMSE **2,00 × 10⁻⁵ ± 2,36 × 10⁻⁶**.
-* **Ablação de esparsidade** (100k): esparso 10/nó = **0,207 s / 2,32 × 10⁻⁵**;
-  denso (N−1) = 0,666 s / 1,14 × 10⁻⁵. O esparso é **3,2× mais rápido** por 2×
+* **Ablação de esparsidade** (100k): esparso 10/nó = **0,154 s / 2,32 × 10⁻⁵**;
+  denso (N−1) = 0,576 s / 1,14 × 10⁻⁵. O esparso é **3,75× mais rápido** por 2×
   de erro — ambos irrelevantes frente ao gate de 10⁻².
-* `10^6` amostras em **2,02 s** < 60 s. ✅
-* Throughput congelado **955.782/s**, ~7,6× o RLS e ~7× o baseline conjunto. ✅
-* **40× reproduzido**: 40 passadas completas de busca dinâmica = **45,7×** o
-  custo do readout congelado. É busca **sem gradiente** (não backprop), portanto
-  compatível com o invariante `0 backprop`.
+* `10^6` amostras em **1,57 s** < 60 s. ✅
+* Throughput congelado **1.733.418/s** (N=100 esparso), ~8× o RLS e ~7× o
+  baseline conjunto. ✅
+* **40× reproduzido**: 40 passadas completas de busca dinâmica = **39,6–45,7×**
+  o custo do readout congelado. É busca **sem gradiente** (não backprop),
+  portanto compatível com o invariante `0 backprop`.
 * Varredura de `λ` no mesmo `XᵀX`: `1e-10 → 2,45 × 10⁻⁵`; `1e-8 → 1,26 × 10⁻⁴`;
   `1e-6 → 1,22 × 10⁻³`. O melhor `λ` é escolhido por validação, não pelo teste.
 * **Caveat:** o “40×” agora é medido contra 40 passadas de busca de dinâmica,
@@ -143,7 +144,9 @@ Mudanças de engenharia:
    que o throughput mede.
 6. **Benchmarks padrão:** Mackey–Glass τ=17 e NARMA-10 (entradas e alvos
    separados).
-7. **Baseline conjunto honesto:** 40 passadas de busca sem gradiente.
+7. **`fast_tanh` (Padé):** remove a chamada transcendental do passo; +47% de
+   throughput sem mudar o NRMSE no regime saturado.
+8. **Baseline conjunto honesto:** 40 passadas de busca sem gradiente.
 
 Comparação RLS × ridge no mesmo trecho de Mackey–Glass (20k):
 

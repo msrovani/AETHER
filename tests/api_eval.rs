@@ -128,7 +128,8 @@ fn avaliacao_de_usabilidade() {
     }
 
     // ---- 4. generalização que NÃO deve existir ----------------------------
-    let variants: [(&str, fn(&str) -> String); 4] = [
+    type Variant = fn(&str) -> String;
+    let variants: [(&str, Variant); 4] = [
         ("paráfrase", |f| format!("{f}?")),
         ("maiúsculas", |f| f.to_uppercase()),
         ("1 caractere", |f| format!("{f}x")),
@@ -178,12 +179,12 @@ fn avaliacao_de_usabilidade() {
             r#"{{"n":12,"j":[[{}]],"h":[{}],"steps":80,"restarts":4,"seed":{seed}}}"#,
             (0..12)
                 .map(|i| (0..12)
-                    .map(|k| if i == k { "0".to_string() } else if i < k { "1".to_string() } else { "1".to_string() })
+                    .map(|k| if i == k { "0".to_string() } else { "1".to_string() })
                     .collect::<Vec<_>>()
                     .join(","))
                 .collect::<Vec<_>>()
                 .join("],["),
-            vec!["0"; 12].join(",")
+            ["0"; 12].join(",")
         );
         let t0 = Instant::now();
         let (st, resp) = request(addr, "POST", "/v1/aether/solve", &body);
