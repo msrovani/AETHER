@@ -32,6 +32,11 @@ pub const MCP_PROTOCOL: &str = "2025-06-18";
 pub trait Transport: std::fmt::Debug + Send {
     /// Envia uma requisição e devolve o `result` (erro JSON-RPC vira [`SgdbError`]).
     fn call(&mut self, request: &Json) -> Result<Json, SgdbError>;
+
+    /// Descrição curta do destino (usada por `doctor`/CLI).
+    fn describe(&self) -> String {
+        "transporte".to_string()
+    }
 }
 
 impl<T: Transport + ?Sized> Transport for Box<T> {
@@ -341,9 +346,16 @@ impl MockTransport {
             ));
         }
         hits.sort_by(|a, b| b.0.total_cmp(&a.0));
-        hits.truncate(k);
-        let mut json_hits = Vec::with_capacity(hits.len());
-        for (_, hit) in hits.iter() {
+        let total = hits.len();
+        let start = args
+            .get("cursor")
+            .and_then(|v| v.as_str())
+            .and_then(|c| c.parse::<usize>().ok())
+            .unwrap_or(0);
+        let page: Vec<&(f32, MemoryHit)> = hits.iter().skip(start).take(k).collect();
+        let next = (start + page.len() < total).then(|| (start + page.len()).to_string());
+        let mut json_hits = Vec::with_capacity(page.len());
+        for (_, hit) in page.iter() {
             json_hits.push(Json::obj([
                 (
                     "key",
@@ -355,11 +367,15 @@ impl MockTransport {
                 ("created_tick", Json::num(hit.doc.wall_ms as f64)),
             ]));
         }
-        Ok(Json::obj([
-            ("status", Json::str("ok")),
-            ("hit_count", Json::num(json_hits.len() as f64)),
-            ("hits", Json::Arr(json_hits)),
-        ]))
+        let mut result = vec![
+            ("status".to_string(), Json::str("ok")),
+            ("hit_count".to_string(), Json::num(total as f64)),
+            ("hits".to_string(), Json::Arr(json_hits)),
+        ];
+        if let Some(next) = next {
+            result.push(("cursor".to_string(), Json::Str(next)));
+        }
+        Ok(Json::Obj(result))
     }
 
     fn curate(&mut self, args: &Json) -> Result<Json, SgdbError> {
@@ -481,6 +497,10 @@ impl Transport for MockTransport {
             }
             other => Err(SgdbError::Protocol(format!("método sem resposta: {other}"))),
         }
+    }
+
+    fn describe(&self) -> String {
+        "mock (memória; não fala rede)".to_string()
     }
 }
 
@@ -725,6 +745,13 @@ impl Transport for HttpTransport {
         let _ = id;
         unwrap_response(&response)
     }
+
+    fn describe(&self) -> String {
+        format!(
+            "http://{}:{}{}",
+            self.endpoint.host, self.endpoint.port, self.endpoint.path
+        )
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -808,6 +835,10 @@ impl Transport for StdioTransport {
             }
             return unwrap_response(&response);
         }
+    }
+
+    fn describe(&self) -> String {
+        format!("stdio (pid {})", self.child.id())
     }
 }
 

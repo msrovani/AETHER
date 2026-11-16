@@ -1088,6 +1088,8 @@ pub struct LogicPipeline {
     touched: Vec<u32>,
     /// Literais verdadeiros por cláusula (contagem incremental do reparo).
     sat_count: Vec<u8>,
+    /// Bitset das cláusulas **violadas** (salto por palavra no reparo).
+    viol_bits: Vec<u64>,
     /// CSR do QUBO expandido (matvec esparso do BSB).
     csr_ptr: Vec<u32>,
     csr_col: Vec<u32>,
@@ -1109,7 +1111,6 @@ pub struct LogicPipeline {
     cursor: Vec<usize>,
     comp_vars: Vec<usize>,
 
-    jc: Vec<f64>,
     hc: Vec<f64>,
     sub_state: Vec<i8>,
     sub_best: Vec<i8>,
@@ -1169,6 +1170,7 @@ impl LogicPipeline {
             jabs: vec![0.0; n_exp_max],
             touched: Vec::with_capacity(18 * m_max + 8),
             sat_count: vec![0; m_max],
+            viol_bits: vec![0; m_max.div_ceil(64).max(1)],
             csr_ptr: vec![0; n_exp_max + 1],
             csr_col: vec![0; 18 * m_max + 8],
             csr_val: vec![0.0; 18 * m_max + 8],
@@ -1184,7 +1186,6 @@ impl LogicPipeline {
             offsets: vec![0; n_exp_max + 1],
             cursor: vec![0; n_exp_max],
             comp_vars: vec![0; n_exp_max],
-            jc: vec![0.0; n_exp_max * n_exp_max],
             hc: vec![0.0; n_exp_max],
             sub_state: vec![1; n_exp_max],
             sub_best: vec![1; n_exp_max],
@@ -1211,7 +1212,7 @@ impl LogicPipeline {
     }
     /// Bytes dos buffers grandes (diagnóstico de pegada).
     pub fn memory_bytes(&self) -> usize {
-        (self.jq.len() + self.jc.len() + self.hq.len() + self.hc.len()) * 8
+        (self.jq.len() + self.hq.len() + self.hc.len()) * 8
             + self.terms.capacity() * std::mem::size_of::<PoBTerm>()
             + self.fixed3.len() * std::mem::size_of::<Option<i8>>()
             + (self.prop.occ_start.len() + self.prop.occ_list.len() + self.prop.occ_pos.len())
@@ -1623,6 +1624,7 @@ impl LogicPipeline {
         let ttl = (n / 2 + 1) as u32;
         let m = clauses.len();
         let mut viol = 0u32;
+        self.viol_bits.fill(0);
         for (ci, c) in clauses.iter().enumerate() {
             let mut k = 0u8;
             for idx in 0..c.len() {
@@ -1634,6 +1636,7 @@ impl LogicPipeline {
             self.sat_count[ci] = k;
             if k == 0 {
                 viol += 1;
+                self.viol_bits[ci >> 6] |= 1u64 << (ci & 63);
             }
         }
         self.tabu[..n].fill(0);
@@ -1645,20 +1648,12 @@ impl LogicPipeline {
                 self.last.repair_moves += moves;
                 return viol;
             }
-            // primeira cláusula violada a partir do cursor
-            let mut chosen = usize::MAX;
-            for t in 0..m {
-                let idx = (cursor + t) % m;
-                if self.sat_count[idx] == 0 {
-                    chosen = idx;
-                    cursor = idx + 1;
-                    break;
-                }
-            }
-            if chosen == usize::MAX {
+            // primeira cláusula violada a partir do cursor (salta palavras zero)
+            let Some(chosen) = self.first_violated(m, cursor) else {
                 self.last.repair_moves += moves;
                 return 0;
-            }
+            };
+            cursor = chosen + 1;
             let c = clauses[chosen];
             let mut best_v = u32::MAX;
             let mut best_i = usize::MAX;
@@ -1693,6 +1688,40 @@ impl LogicPipeline {
         }
     }
 
+    /// Primeira cláusula violada em ordem **cíclica** a partir de `cursor`.
+    ///
+    /// Salta palavras de 64 bits inteiras: com `m` cláusulas o custo é
+    /// `O(m/64)` em vez de `O(m)`, e a cláusula escolhida é **a mesma** do
+    /// varredura linear (é o que mantém o reparo bit-idêntico).
+    fn first_violated(&self, m: usize, cursor: usize) -> Option<usize> {
+        let words = m.div_ceil(64);
+        if words == 0 {
+            return None;
+        }
+        let start = cursor % m;
+        let sw = start / 64;
+        let sb = start % 64;
+        let last_mask = if m % 64 == 0 {
+            u64::MAX
+        } else {
+            (1u64 << (m % 64)) - 1
+        };
+        for k in 0..words {
+            let w = (sw + k) % words;
+            let mut word = self.viol_bits[w];
+            if w == words - 1 {
+                word &= last_mask;
+            }
+            if k == 0 {
+                word &= u64::MAX << sb;
+            }
+            if word != 0 {
+                return Some(w * 64 + word.trailing_zeros() as usize);
+            }
+        }
+        None
+    }
+
     /// Atualiza `sat_count`/violações como se `v` (com valor `dir`) virasse.
     ///
     /// `clauses` não é tocada: só as **ocorrências** da variável mudam de
@@ -1718,10 +1747,12 @@ impl LogicPipeline {
                     *c -= 1;
                     if *c == 0 {
                         viol += 1;
+                        self.viol_bits[ci >> 6] |= 1u64 << (ci & 63);
                     }
                 } else {
                     if *c == 0 {
                         viol -= 1;
+                        self.viol_bits[ci >> 6] &= !(1u64 << (ci & 63));
                     }
                     *c += 1;
                 }

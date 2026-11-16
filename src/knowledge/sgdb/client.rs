@@ -12,11 +12,14 @@
 //! viaja na entidade de escopo (`aether/scope/<org>/<run>/<app>`).
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use crate::core::certificate::{Evidence, EvidenceSource};
 use crate::core::knowledge_bridge_f1::{DraftRecord, ScopeId};
 use crate::json::Json;
-use crate::knowledge::sgdb::transport::{self, tool_request, Transport};
+use crate::knowledge::sgdb::transport::{
+    self, tool_request, HttpTransport, MockTransport, StdioTransport, Transport,
+};
 use crate::knowledge::sgdb::wire::{
     self, hits_json, parse_hit, MemoryHit, PhaseDoc, RememberConfig, ENTITY_PHASE, MAX_BATCH,
 };
@@ -43,6 +46,14 @@ pub struct SgdbConfig {
     pub outbox: Option<PathBuf>,
     /// Hits padrão de leitura por consulta.
     pub recall_k: usize,
+    /// Tentativas extras em erro transitório (default 2).
+    pub retries: u32,
+    /// Base do backoff exponencial em ms (default 100; teto de 2 s).
+    pub retry_backoff_ms: u64,
+    /// Timeout de conexão/leitura do transporte HTTP em ms (default 2000).
+    pub timeout_ms: u64,
+    /// Token `Authorization: Bearer` (também lido de `AETHER_SGDB_TOKEN`).
+    pub token: Option<String>,
 }
 
 impl Default for SgdbConfig {
@@ -57,6 +68,10 @@ impl Default for SgdbConfig {
             audit: false,
             outbox: None,
             recall_k: 8,
+            retries: 2,
+            retry_backoff_ms: 100,
+            timeout_ms: 2_000,
+            token: None,
         }
     }
 }
@@ -70,6 +85,67 @@ impl SgdbConfig {
         }
     }
 
+    /// Lê os ajustes de ambiente (`AETHER_SGDB_*`), ignorando valores inválidos.
+    ///
+    /// | Variável | Campo |
+    /// |---|---|
+    /// | `AETHER_SGDB_SCOPE_APP` | [`Self::scope_app`] |
+    /// | `AETHER_SGDB_SCOPE_AGENT` | [`Self::scope_agent`] |
+    /// | `AETHER_SGDB_IF_EXISTS` | [`Self::if_exists`] |
+    /// | `AETHER_SGDB_OUTBOX` | [`Self::outbox`] |
+    /// | `AETHER_SGDB_TTL_MS` | [`Self::ttl_ms`] |
+    /// | `AETHER_SGDB_RECALL_K` | [`Self::recall_k`] |
+    /// | `AETHER_SGDB_RETRIES` | [`Self::retries`] |
+    /// | `AETHER_SGDB_TIMEOUT_MS` | [`Self::timeout_ms`] |
+    /// | `AETHER_SGDB_TOKEN` | [`Self::token`] |
+    /// | `AETHER_SGDB_AUDIT` (`1`/`true`) | [`Self::audit`] |
+    pub fn from_env() -> Self {
+        let mut cfg = Self::default();
+        if let Some(v) = env_nonempty("AETHER_SGDB_SCOPE_APP") {
+            cfg.scope_app = v;
+        }
+        if let Some(v) = env_nonempty("AETHER_SGDB_SCOPE_AGENT") {
+            cfg.scope_agent = v;
+        }
+        if let Some(v) = env_nonempty("AETHER_SGDB_IF_EXISTS") {
+            if matches!(v.as_str(), "add" | "reinforce" | "supersede" | "reject") {
+                cfg.if_exists = v;
+            }
+        }
+        if let Some(v) = env_nonempty("AETHER_SGDB_OUTBOX") {
+            cfg.outbox = Some(PathBuf::from(v));
+        }
+        if let Some(v) = env_nonempty("AETHER_SGDB_TTL_MS").and_then(|v| v.parse().ok()) {
+            cfg.ttl_ms = Some(v);
+        }
+        if let Some(v) = env_nonempty("AETHER_SGDB_RECALL_K").and_then(|v| v.parse().ok()) {
+            cfg.recall_k = v;
+        }
+        if let Some(v) = env_nonempty("AETHER_SGDB_RETRIES").and_then(|v| v.parse().ok()) {
+            cfg.retries = v;
+        }
+        if let Some(v) = env_nonempty("AETHER_SGDB_TIMEOUT_MS").and_then(|v| v.parse().ok()) {
+            cfg.timeout_ms = v;
+        }
+        if let Some(v) = env_nonempty("AETHER_SGDB_RETRY_BACKOFF_MS")
+            .and_then(|v| v.parse().ok())
+        {
+            cfg.retry_backoff_ms = v;
+        }
+        if let Some(v) = env_nonempty("AETHER_SGDB_TOKEN") {
+            cfg.token = Some(v);
+        }
+        if let Some(v) = env_nonempty("AETHER_SGDB_AUDIT") {
+            cfg.audit = matches!(v.as_str(), "1" | "true" | "TRUE" | "yes");
+        }
+        cfg
+    }
+
+    /// Timeout já como [`Duration`].
+    pub fn timeout(&self) -> Duration {
+        Duration::from_millis(self.timeout_ms.max(1))
+    }
+
     fn remember<'a>(&'a self) -> RememberConfig<'a> {
         RememberConfig {
             scope_app: &self.scope_app,
@@ -77,6 +153,123 @@ impl SgdbConfig {
             if_exists: &self.if_exists,
             key_prefix: self.key_prefix.as_deref(),
         }
+    }
+}
+
+fn env_nonempty(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|v| !v.trim().is_empty())
+}
+
+/// Primeira chave de armazenamento devolvida por `remember`.
+fn storage_key_of(result: &Json) -> Option<String> {
+    let payload = wire::payload_json(result);
+    payload
+        .get("key")
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .or_else(|| {
+            payload
+                .get("keys")
+                .and_then(|v| v.as_arr())
+                .and_then(|keys| keys.first())
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+        })
+}
+
+/// Abre o transporte a partir de uma especificação.
+///
+/// ```text
+/// mock
+/// http://host:porta/mcp
+/// stdio:programa args...
+/// ```
+///
+/// Aplica timeout e token da configuração ao HTTP.
+pub fn open_transport(spec: &str, cfg: &SgdbConfig) -> Result<Box<dyn Transport>, SgdbError> {
+    if spec == "mock" {
+        return Ok(Box::new(MockTransport::new()));
+    }
+    if spec.starts_with("http://") {
+        let mut transport = HttpTransport::new(spec)?.with_timeout(cfg.timeout());
+        if let Some(token) = &cfg.token {
+            transport = transport.with_token(token.clone());
+        }
+        return Ok(Box::new(transport));
+    }
+    if let Some(command) = spec.strip_prefix("stdio:") {
+        let mut parts = command.split_whitespace();
+        let program = parts
+            .next()
+            .ok_or_else(|| SgdbError::Config("stdio: exige um programa".into()))?;
+        let args: Vec<String> = parts.map(str::to_string).collect();
+        let transport = StdioTransport::spawn(program, &args)?;
+        return Ok(Box::new(transport));
+    }
+    Err(SgdbError::Config(format!(
+        "especificação desconhecida: {spec} (use mock, http://…/mcp ou stdio:programa args)"
+    )))
+}
+
+/// Abre um cliente a partir de uma especificação de transporte.
+pub fn open(spec: &str, cfg: SgdbConfig) -> Result<SgdbClient<Box<dyn Transport>>, SgdbError> {
+    let transport = open_transport(spec, &cfg)?;
+    Ok(SgdbClient::new(transport, cfg))
+}
+
+/// Página de `recall` (cursor do MCP).
+#[derive(Clone, Debug, Default)]
+pub struct RecallPage {
+    /// Hits decodificados (fase de documentos `aether-phase/v1`).
+    pub hits: Vec<MemoryHit>,
+    /// Cursor da próxima página (`None` = fim).
+    pub cursor: Option<String>,
+    /// Total informado pelo banco, quando disponível.
+    pub hit_count: usize,
+}
+
+/// Hit textual genérico (memórias que não são de fase).
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextHit {
+    /// Texto da memória.
+    pub text: String,
+    /// Chave de armazenamento (para `ttl`/`forget`).
+    pub storage_key: Option<String>,
+    /// Score de recuperação.
+    pub score: f32,
+    /// Autoridade efetiva.
+    pub authority: u8,
+    /// `true` se o texto é um documento de fase (namespace separado).
+    pub is_phase: bool,
+}
+
+impl TextHit {
+    /// Decodifica um hit cru.
+    pub fn parse(json: &Json) -> Option<Self> {
+        let text = json
+            .get("text")
+            .and_then(|v| v.as_str())
+            .or_else(|| json.as_str())?
+            .to_string();
+        Some(Self {
+            is_phase: PhaseDoc::parse(&text).is_some(),
+            text,
+            storage_key: json
+                .get("key")
+                .and_then(|v| v.as_str())
+                .or_else(|| json.get("storage_key").and_then(|v| v.as_str()))
+                .map(str::to_string),
+            score: json
+                .get("score")
+                .and_then(|v| v.as_f64())
+                .or_else(|| json.get("relevance").and_then(|v| v.as_f64()))
+                .unwrap_or(1.0) as f32,
+            authority: json
+                .get("authority")
+                .and_then(|v| v.as_u64())
+                .map(|v| v.min(255) as u8)
+                .unwrap_or(0),
+        })
     }
 }
 
@@ -175,15 +368,52 @@ impl<T: Transport> SgdbClient<T> {
     }
 
     /// Chama uma ferramenta MCP e devolve o `result`.
+    ///
+    /// Erros transitórios ([`SgdbError::is_transient`]) são tentados de novo
+    /// com backoff exponencial (`retries` + `retry_backoff_ms`). Escritas são
+    /// seguras para repetir porque o default é `if_exists=reinforce`.
     pub fn call_tool(&mut self, name: &str, arguments: Json) -> Result<Json, SgdbError> {
-        self.ensure_ready()?;
-        let id = self.id();
-        match self.transport.call(&tool_request(id, name, arguments)) {
-            Ok(result) => Ok(result),
-            Err(e) => {
+        let attempts = self.cfg.retries.saturating_add(1);
+        let mut last: Option<SgdbError> = None;
+        for attempt in 0..attempts {
+            if let Err(e) = self.ensure_ready() {
+                if e.is_transient() && attempt + 1 < attempts {
+                    self.backoff(attempt);
+                    last = Some(e);
+                    continue;
+                }
                 self.failures += 1;
-                Err(e)
+                return Err(e);
             }
+            let id = self.id();
+            match self
+                .transport
+                .call(&tool_request(id, name, arguments.clone()))
+            {
+                Ok(result) => return Ok(result),
+                Err(e) if e.is_transient() && attempt + 1 < attempts => {
+                    self.backoff(attempt);
+                    last = Some(e);
+                }
+                Err(e) => {
+                    self.failures += 1;
+                    return Err(e);
+                }
+            }
+        }
+        self.failures += 1;
+        Err(last.unwrap_or(SgdbError::Offline))
+    }
+
+    fn backoff(&self, attempt: u32) {
+        let factor = 1u64 << attempt.min(5);
+        let delay = self
+            .cfg
+            .retry_backoff_ms
+            .saturating_mul(factor)
+            .min(2_000);
+        if delay > 0 {
+            std::thread::sleep(Duration::from_millis(delay));
         }
     }
 
@@ -243,13 +473,17 @@ impl<T: Transport> SgdbClient<T> {
         self.remember_docs(&mut docs)
     }
 
-    /// `recall` escopada e decodificada.
-    pub fn recall(
+    /// Uma página de `recall` escopada e decodificada (cursor do MCP).
+    ///
+    /// `k` respeita o teto de 20 do banco; use [`Self::recall_all`] para
+    /// atravessar páginas.
+    pub fn recall_page(
         &mut self,
         scope: ScopeId,
         query: &str,
         k: usize,
-    ) -> Result<Vec<MemoryHit>, SgdbError> {
+        cursor: Option<&str>,
+    ) -> Result<RecallPage, SgdbError> {
         let mut args = vec![
             (
                 "entities".to_string(),
@@ -269,21 +503,175 @@ impl<T: Transport> SgdbClient<T> {
         if !query.is_empty() {
             args.push(("query".to_string(), Json::str(query)));
         }
+        if let Some(cursor) = cursor {
+            args.push(("cursor".to_string(), Json::str(cursor)));
+        }
         let result = self.call_tool("recall", Json::Obj(args))?;
         self.recalled += 1;
+        let payload = wire::payload_json(&result);
+        let hit_count = payload
+            .get("hit_count")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as usize;
+        let cursor = payload
+            .get("cursor")
+            .and_then(|v| v.as_str())
+            .or_else(|| payload.get("next_cursor").and_then(|v| v.as_str()))
+            .filter(|c| !c.is_empty())
+            .map(str::to_string);
         let mut hits: Vec<MemoryHit> = hits_json(&result)
             .iter()
             .filter_map(parse_hit)
             .filter(|hit| hit.doc.scope == scope)
             .collect();
         hits.sort_by(|a, b| b.score.total_cmp(&a.score));
-        hits.truncate(k.max(1));
-        Ok(hits)
+        hits.truncate(k.clamp(1, 20));
+        Ok(RecallPage {
+            hits,
+            cursor,
+            hit_count,
+        })
+    }
+
+    /// `recall` escopada (uma página).
+    pub fn recall(
+        &mut self,
+        scope: ScopeId,
+        query: &str,
+        k: usize,
+    ) -> Result<Vec<MemoryHit>, SgdbError> {
+        Ok(self.recall_page(scope, query, k, None)?.hits)
+    }
+
+    /// Atravessa páginas até `max` hits (ou até o cursor acabar).
+    ///
+    /// Corrige o teto de `k ≤ 20` sem mudar o contrato do banco.
+    pub fn recall_all(
+        &mut self,
+        scope: ScopeId,
+        query: &str,
+        max: usize,
+    ) -> Result<Vec<MemoryHit>, SgdbError> {
+        let mut out = Vec::new();
+        let mut cursor: Option<String> = None;
+        loop {
+            let page = self.recall_page(scope, query, 20, cursor.as_deref())?;
+            let before = out.len();
+            out.extend(page.hits.iter().cloned());
+            if out.len() >= max || page.hits.is_empty() || out.len() == before {
+                break;
+            }
+            match page.cursor {
+                Some(next) if Some(&next) != cursor.as_ref() => cursor = Some(next),
+                _ => break,
+            }
+        }
+        out.truncate(max);
+        Ok(out)
     }
 
     /// Todas as memórias de fase do escopo (sem consulta textual).
     pub fn recall_scope(&mut self, scope: ScopeId, k: usize) -> Result<Vec<MemoryHit>, SgdbError> {
         self.recall(scope, "", k)
+    }
+
+    /// Grava um fato **textual** (fora do namespace de fase).
+    ///
+    /// Usa `author=system` + `layer` explícita (exigência do banco para
+    /// escrita operacional) e marca as entidades `aether/scope/...` +
+    /// `aether/fact`. Devolve a chave de armazenamento, se o servidor informar.
+    pub fn remember_text(
+        &mut self,
+        scope: ScopeId,
+        text: &str,
+        entities: &[String],
+        layer: &str,
+        authority: u8,
+        ttl_ms: Option<u64>,
+    ) -> Result<Option<String>, SgdbError> {
+        let mut all_entities = vec![
+            wire::scope_entity(scope),
+            "aether/fact".to_string(),
+        ];
+        all_entities.extend(entities.iter().cloned());
+        let args = Json::obj([
+            ("author", Json::str("system")),
+            ("layer", Json::str(layer)),
+            ("text", Json::str(text)),
+            ("type", Json::str("text")),
+            (
+                "entities",
+                Json::Arr(all_entities.iter().cloned().map(Json::Str).collect()),
+            ),
+            (
+                "scope_app",
+                Json::str(self.cfg.scope_app.clone()),
+            ),
+            (
+                "scope_agent",
+                Json::str(self.cfg.scope_agent.clone()),
+            ),
+            ("scope_run", Json::str(wire::scope_run(scope))),
+            ("if_exists", Json::str(self.cfg.if_exists.clone())),
+        ]);
+        let result = self.call_tool("remember", args)?;
+        let key = storage_key_of(&result);
+        if let Some(key) = key.as_deref() {
+            if authority > 0 {
+                let _ = self.call_tool(
+                    "curate",
+                    Json::obj([
+                        ("op", Json::str("set_authority")),
+                        ("key", Json::str(key)),
+                        ("authority", Json::num(f64::from(authority))),
+                    ]),
+                );
+            }
+            if let Some(ttl) = ttl_ms.or(self.cfg.ttl_ms) {
+                let _ = self.set_ttl(key, ttl);
+            }
+        }
+        self.remembered += 1;
+        Ok(key)
+    }
+
+    /// Busca fatos textuais (inclui memórias de fase; veja [`TextHit::is_phase`]).
+    pub fn recall_text(
+        &mut self,
+        scope: ScopeId,
+        query: &str,
+        k: usize,
+    ) -> Result<Vec<TextHit>, SgdbError> {
+        let mut args = vec![
+            (
+                "entities".to_string(),
+                Json::Arr(vec![
+                    Json::str(wire::scope_entity(scope)),
+                    Json::str("aether/fact"),
+                ]),
+            ),
+            (
+                "scope_app".to_string(),
+                Json::str(self.cfg.scope_app.clone()),
+            ),
+            ("scope_run".to_string(), Json::str(wire::scope_run(scope))),
+            ("k".to_string(), Json::num(k.clamp(1, 20) as f64)),
+            ("format".to_string(), Json::str("json")),
+        ];
+        if !query.is_empty() {
+            args.push(("query".to_string(), Json::str(query)));
+        }
+        let result = self.call_tool("recall", Json::Obj(args))?;
+        self.recalled += 1;
+        Ok(wire::hits_json(&result)
+            .iter()
+            .filter_map(TextHit::parse)
+            .collect())
+    }
+
+    /// Descrição do transporte (endpoint/stdio/mock) para `doctor`.
+    pub fn describe(&self) -> String {
+        self.transport.describe()
     }
 
     /// Fecha a execução no banco (`curate(op=commit_run)`).
@@ -329,7 +717,24 @@ impl<T: Transport> SgdbClient<T> {
 
     /// Estado do banco (`health`).
     pub fn health(&mut self) -> Result<Json, SgdbError> {
-        self.call_tool("health", Json::obj([("view", Json::str("status"))]))
+        self.health_view("status")
+    }
+
+    /// Estado do banco em uma visão específica (`status`, `era`, `tensions`, …).
+    pub fn health_view(&mut self, view: &str) -> Result<Json, SgdbError> {
+        self.call_tool("health", Json::obj([("view", Json::str(view))]))
+    }
+
+    /// Proveniência completa de uma memória (`curate(op=explain, full)`).
+    pub fn explain(&mut self, storage_key: &str) -> Result<Json, SgdbError> {
+        self.call_tool(
+            "curate",
+            Json::obj([
+                ("op", Json::str("explain")),
+                ("key", Json::str(storage_key)),
+                ("full", Json::Bool(true)),
+            ]),
+        )
     }
 
     /// Evidência pronta para [`crate::core::certificate::Certificate`].

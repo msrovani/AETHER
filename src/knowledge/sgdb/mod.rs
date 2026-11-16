@@ -95,6 +95,33 @@ impl fmt::Display for SgdbError {
 
 impl std::error::Error for SgdbError {}
 
+impl SgdbError {
+    /// `true` se vale a pena tentar de novo (queda transitória de rede).
+    pub fn is_transient(&self) -> bool {
+        matches!(self, Self::Offline | Self::Timeout)
+    }
+
+    /// Dica acionável para o operador (não substitui a mensagem técnica).
+    pub fn hint(&self) -> &'static str {
+        match self {
+            Self::Offline => {
+                "verifique se o servidor MCP está no ar (aether-sgdb doctor) ou use --mock"
+            }
+            Self::Timeout => {
+                "aumente --timeout-ms ou verifique a carga do servidor; o outbox guarda o lote"
+            }
+            Self::Io(_) => "verifique permissão/caminho do --sgdb-outbox",
+            Self::Json(_) | Self::Protocol(_) => {
+                "o endpoint respondeu algo que não é MCP/JSON; confirme a URL (/mcp) e a versão"
+            }
+            Self::Rpc(_) => "o servidor recusou a chamada; veja a mensagem e o escopo",
+            Self::Tool(_) => "os argumentos não batem com a ferramenta; use --help",
+            Self::Config(_) => "corrija as flags/ambiente (aether-sgdb doctor mostra a configuração)",
+            Self::NotSupported(_) => "use http:// (sem TLS) ou o transporte stdio",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

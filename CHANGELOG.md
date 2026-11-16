@@ -3,6 +3,20 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.132] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 6 arquivo(s) (.:1, examples:1, src:4).
+- Gate: ok (12s).
+
+- `Cargo.lock`
+- `src/core/logic_pipeline.rs`
+- `src/knowledge/sgdb/client.rs`
+- `src/knowledge/sgdb/mod.rs`
+- `src/knowledge/sgdb/transport.rs`
+- `examples/e2_pipeline_digest.rs`
+
 ## [0.0.131] - 2026-11-16
 
 ### Changed
