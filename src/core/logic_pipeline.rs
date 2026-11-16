@@ -575,14 +575,7 @@ fn dot_i8_csr(ptr: &[u32], col: &[u32], val: &[f64], row: usize, s: &[i8], n: us
 }
 
 /// `H(s) = −½·sᵀJs − hᵀs` com `J` em CSR (mesma ordem do `row_energy`).
-fn row_energy_csr(
-    ptr: &[u32],
-    col: &[u32],
-    val: &[f64],
-    hb: &[f64],
-    n: usize,
-    s: &[i8],
-) -> f64 {
+fn row_energy_csr(ptr: &[u32], col: &[u32], val: &[f64], hb: &[f64], n: usize, s: &[i8]) -> f64 {
     let mut acc = 0.0;
     for i in 0..n {
         acc -= 0.5 * f64::from(s[i]) * dot_i8_csr(ptr, col, val, i, s, n);
@@ -603,8 +596,8 @@ fn descend_csr(
     s: &mut [i8],
     g: &mut [f64],
 ) -> f64 {
-    for i in 0..n {
-        g[i] = dot_i8_csr(ptr, col, val, i, s, n);
+    for (i, gi) in g.iter_mut().enumerate().take(n) {
+        *gi = dot_i8_csr(ptr, col, val, i, s, n);
     }
     let max_flips = 8 * n;
     for _ in 0..max_flips {
@@ -629,7 +622,6 @@ fn descend_csr(
     }
     row_energy_csr(ptr, col, val, hb, n, s)
 }
-
 
 #[inline]
 fn row_energy(jb: &[f64], n: usize, hb: &[f64], s: &[i8]) -> f64 {
@@ -1812,7 +1804,7 @@ impl LogicPipeline {
     /// reordenadas (o kernel esparso soma em ordem crescente de coluna local).
     fn gather_component(&mut self, start: usize, s: usize) -> usize {
         for a in 0..s {
-            self.local_of[self.comp_vars[start + a] as usize] = a as u32;
+            self.local_of[self.comp_vars[start + a]] = a as u32;
         }
         let mut write = 0u32;
         self.loc_ptr[0] = 0;
@@ -1843,7 +1835,7 @@ impl LogicPipeline {
             self.loc_ptr[a + 1] = write;
         }
         for a in 0..s {
-            self.local_of[self.comp_vars[start + a] as usize] = u32::MAX;
+            self.local_of[self.comp_vars[start + a]] = u32::MAX;
         }
         write as usize
     }

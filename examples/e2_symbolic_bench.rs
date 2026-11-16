@@ -191,7 +191,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "estágio", "min (µs)", "mediana (µs)"
     );
     println!("{}", "-".repeat(52));
-    println!("{:>28} {:>10.3} {:>10.3}", "simbólico (1)-(3)", sym_min_v, sym_med_v);
+    println!(
+        "{:>28} {:>10.3} {:>10.3}",
+        "simbólico (1)-(3)", sym_min_v, sym_med_v
+    );
     println!("{:>28} {:>10.3} {:>10}", "  presolve", pre_min_v, "—");
     println!("{:>28} {:>10.3} {:>10}", "  persistência", pers_min_v, "—");
     println!("{:>28} {:>10.3} {:>10}", "  decomposição", dec_min_v, "—");
