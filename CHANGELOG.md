@@ -3,6 +3,22 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.129] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 8 arquivo(s) (.:2, examples:1, src:4, tests:1).
+- Gate: ok (22s).
+
+- `Cargo.lock`
+- `Cargo.toml`
+- `src/bin/aether_daemon.rs`
+- `src/knowledge/sgdb/ledger.rs`
+- `src/knowledge/sgdb/transport.rs`
+- `src/knowledge/sgdb/worker.rs`
+- `tests/f4_sgdb_gate.rs`
+- `examples/sgdb_roundtrip.rs`
+
 ## [0.0.128] - 2026-11-16
 
 ### Changed

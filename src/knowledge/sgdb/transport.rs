@@ -34,6 +34,12 @@ pub trait Transport: std::fmt::Debug + Send {
     fn call(&mut self, request: &Json) -> Result<Json, SgdbError>;
 }
 
+impl<T: Transport + ?Sized> Transport for Box<T> {
+    fn call(&mut self, request: &Json) -> Result<Json, SgdbError> {
+        (**self).call(request)
+    }
+}
+
 /// Envelope de requisição (`id` já resolvido pelo cliente).
 pub fn request(id: u64, method: &str, params: Json) -> Json {
     Json::obj([

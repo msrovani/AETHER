@@ -29,9 +29,16 @@ use std::time::{Duration, Instant};
 
 use ndarray::Array2;
 
+use aether_engine::core::knowledge_bridge_f1::{Certificate, ScopeId};
 use aether_engine::core::kuramoto_field::{KuramotoConfig, KuramotoPhaseNode, NodeHandle};
 use aether_engine::core::wave_interference::WaveInterferenceBlock;
 use aether_engine::error::Result;
+use aether_engine::knowledge::sgdb::ledger::{
+    encode_phases, phase_key, ORGANISM_AUTHORITY, ORGANISM_LAYER,
+};
+use aether_engine::knowledge::sgdb::{
+    HttpTransport, MockTransport, SgdbConfig, StdioTransport, T2Worker, Transport,
+};
 use aether_engine::morphogenesis::{MorphogenesisConfig, MorphogeneticField};
 use aether_engine::phase_memory::{ComplexPhaseMemory, PhaseMemoryConfig};
 use aether_engine::thermodynamic_dreamer::{DreamEnsemble, DreamerConfig, ThermodynamicDreamer};
@@ -64,6 +71,14 @@ pub struct DaemonConfig {
     pub dream_samples: usize,
     /// Passos do sonhador.
     pub dream_steps: usize,
+    /// Especificação do SGDB (`mock`, `http://…` ou `stdio:programa args`).
+    pub sgdb: Option<String>,
+    /// Diário local de replay (offline).
+    pub sgdb_outbox: Option<std::path::PathBuf>,
+    /// Emite um padrão a cada N ciclos (`0` desliga).
+    pub sgdb_every: u64,
+    /// Identidade durável da linhagem (`run` no escopo do SGDB).
+    pub sgdb_run: u64,
 }
 
 impl Default for DaemonConfig {
@@ -79,6 +94,10 @@ impl Default for DaemonConfig {
             cognition_dim: 32,
             dream_samples: 16,
             dream_steps: 120,
+            sgdb: None,
+            sgdb_outbox: None,
+            sgdb_every: 60,
+            sgdb_run: 0,
         }
     }
 }
@@ -265,6 +284,14 @@ pub struct AetherDaemon {
     bias_buf: Vec<f32>,
     /// Padrão a gravar na memória de fase (buffer pré-alocado).
     pattern_buf: Vec<f32>,
+    /// Payload de fase do SGDB (buffer pré-alocado, reusado por emissão).
+    payload_buf: Vec<u8>,
+    /// Worker `T2` (quando `--sgdb` está ligado).
+    t2: Option<T2Worker>,
+    /// Escopo durável do organismo no SGDB.
+    scope: ScopeId,
+    /// Cadência de emissão em ciclos.
+    sgdb_every: u64,
     /// Conjunto de sonhos reutilizado por `imagine_futures_into` — evita as
     /// ~18 alocações por ciclo de `imagine_futures` (outer + 16 amostras +
     /// energias).
@@ -296,6 +323,8 @@ impl AetherDaemon {
         let c_in = 2;
         let c_out = 4;
         let modes = 32;
+        let scope = ScopeId::new(cfg.seed, cfg.sgdb_run, 1);
+        let sgdb_every = cfg.sgdb_every;
 
         // Validação estrutural (panic=abort não perdoa config inválida).
         if hz <= 0.0 || !hz.is_finite() {
@@ -337,7 +366,7 @@ impl AetherDaemon {
             }
         }
 
-        Ok(Self {
+        let mut daemon = Self {
             cfg,
             node,
             wave: WaveInterferenceBlock::with_max_len(c_in, c_out, modes, window, seed),
@@ -369,11 +398,77 @@ impl AetherDaemon {
             spins_buf: vec![0.0; cognition_dim],
             bias_buf: vec![0.0; cognition_dim],
             pattern_buf: vec![0.0; cognition_dim],
+            payload_buf: Vec::with_capacity(cognition_dim * 8),
+            t2: None,
+            scope,
+            sgdb_every,
             ensemble: DreamEnsemble::with_capacity(cognition_dim, dream_samples),
             cycles: 0,
             baseline_nmse: 0.0,
             dropped_frames: 0,
-        })
+        };
+        daemon.attach_sgdb()?;
+        Ok(daemon)
+    }
+
+    /// Liga o `T2` ao SGDB, se `--sgdb` foi passado, e reacende a memória.
+    fn attach_sgdb(&mut self) -> Result<()> {
+        let Some(spec) = self.cfg.sgdb.clone() else {
+            return Ok(());
+        };
+        let transport = build_transport(&spec)?;
+        let mut cfg = SgdbConfig::default();
+        cfg.outbox = self.cfg.sgdb_outbox.clone();
+        cfg.recall_k = 16;
+        let worker = T2Worker::start(transport, cfg, self.scope)
+            .map_err(|e| aether_engine::error::AetherError::Config(e.to_string()))?;
+        // Reacende os atratores que o banco guardou (o ledger não substitui a
+        // fase: ele a reacende).
+        let mut revived = 0usize;
+        for seed in worker.seeds() {
+            if seed.len() == self.cfg.cognition_dim {
+                self.memory.imprint(&seed, 1);
+                revived += 1;
+            }
+        }
+        self.t2 = Some(worker);
+        println!(
+            "  sgdb: {} | escopo org={} run={} | sementes reacendidas={revived} | a cada {} ciclos",
+            spec, self.scope.organism_id, self.scope.run_id, self.sgdb_every
+        );
+        Ok(())
+    }
+
+    /// Emite o padrão estável do ciclo para o `T2` (não bloqueia).
+    fn emit_pattern(&mut self, energy: f32) {
+        let Some(t2) = self.t2.as_mut() else {
+            return;
+        };
+        if self.sgdb_every == 0 || self.cycles % self.sgdb_every != 0 {
+            return;
+        }
+        encode_phases(&self.pattern_buf, &mut self.payload_buf);
+        let key = phase_key(&self.payload_buf);
+        let wall_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        // gap = 1.0: o organismo não tem prova de mínimo local para um padrão
+        // observado; a matriz 2D o trata como "plausível, não atuável".
+        t2.record_scoped(
+            key,
+            ORGANISM_LAYER,
+            Certificate {
+                energy,
+                gap: 1.0,
+                violations: 0,
+            },
+            ORGANISM_AUTHORITY,
+            self.scope,
+            self.cycles,
+            wall_ms,
+            &self.payload_buf,
+        );
     }
 
     /// Um ciclo cognitivo completo.
@@ -466,6 +561,7 @@ impl AetherDaemon {
         }
         self.memory.imprint(&self.pattern_buf, 2);
         let memory_energy = self.memory.phase_energy();
+        self.emit_pattern(memory_energy);
 
         // 5) telemetria
         self.cycles += 1;
@@ -518,6 +614,9 @@ impl AetherDaemon {
 
     /// Encerra o nó de fase (o `Drop` de `NodeHandle` faz o join).
     pub fn shutdown(&mut self) {
+        if let Some(mut t2) = self.t2.take() {
+            t2.shutdown();
+        }
         if let Some(node) = self.node.take() {
             let _ = node.stop();
         }
@@ -576,6 +675,10 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
                 println!("  --dim <n>        dimensão cognitiva [2, 256]");
                 println!("  --samples <n>    amostras do sonhador (>0)");
                 println!("  --steps <n>      passos do sonhador (>0)");
+                println!("  --sgdb <spec>    liga o T2: mock | http://host:porta/mcp | stdio:programa args");
+                println!("  --sgdb-outbox <arquivo>  diário local de replay quando o banco está fora");
+                println!("  --sgdb-every <n> emite um padrão a cada n ciclos (padrão 60; 0 desliga)");
+                println!("  --sgdb-run <id>  linhagem durável no escopo (padrão 0)");
                 println!("  --help           esta ajuda");
                 std::process::exit(0);
             }
@@ -645,6 +748,36 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
                     return Err("--dim fora de [2, 256]".into());
                 }
             }
+            "--sgdb" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --sgdb")?;
+                if !(v == "mock" || v.starts_with("http://") || v.starts_with("stdio:")) {
+                    return Err(
+                        "--sgdb aceita mock, http://host:porta/mcp ou stdio:programa args".into(),
+                    );
+                }
+                cfg.sgdb = Some(v.clone());
+            }
+            "--sgdb-outbox" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --sgdb-outbox")?;
+                cfg.sgdb_outbox = Some(std::path::PathBuf::from(v));
+            }
+            "--sgdb-every" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --sgdb-every")?;
+                cfg.sgdb_every = v
+                    .parse()
+                    .map_err(|e| format!("--sgdb-every inválido: {e}"))?;
+                if cfg.sgdb_every > 86_400 {
+                    return Err("--sgdb-every fora de [0, 86400]".into());
+                }
+            }
+            "--sgdb-run" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --sgdb-run")?;
+                cfg.sgdb_run = v.parse().map_err(|e| format!("--sgdb-run inválido: {e}"))?;
+            }
             other => return Err(format!("flag desconhecida: {other} (use --help)")),
         }
         i += 1;
@@ -671,6 +804,29 @@ fn phases_from_spins(s: &[i8], n: usize) -> Vec<f32> {
             }
         })
         .collect()
+}
+
+/// Constrói o transporte do SGDB a partir da especificação de CLI.
+fn build_transport(spec: &str) -> Result<Box<dyn Transport>> {
+    let config = |msg: String| aether_engine::error::AetherError::Config(msg);
+    if spec == "mock" {
+        return Ok(Box::new(MockTransport::new()));
+    }
+    if spec.starts_with("http://") {
+        let transport = HttpTransport::new(spec).map_err(|e| config(e.to_string()))?;
+        return Ok(Box::new(transport));
+    }
+    if let Some(cmd) = spec.strip_prefix("stdio:") {
+        let mut parts = cmd.split_whitespace();
+        let program = parts
+            .next()
+            .ok_or_else(|| config("stdio: exige um programa".into()))?;
+        let args: Vec<String> = parts.map(str::to_string).collect();
+        let transport =
+            StdioTransport::spawn(program, &args).map_err(|e| config(e.to_string()))?;
+        return Ok(Box::new(transport));
+    }
+    Err(config(format!("especificação de SGDB desconhecida: {spec}")))
 }
 
 fn main() -> Result<()> {

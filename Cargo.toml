@@ -1,6 +1,6 @@
 ﻿[package]
 name = "aether_engine"
-version = "0.0.128"
+version = "0.0.129"
 edition = "2021"
 rust-version = "1.78"
 description = "AETHER ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
@@ -50,7 +50,7 @@ tui = ["m4"]
 m5 = []
 m6 = ["m1"]
 m7 = ["m1"]
-m8 = ["m1", "m2", "m3", "m4", "m5", "m6", "m7"]
+m8 = ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "sgdb"]
 # Borda externa HTTP/JSON (T2) para apps de IA — OpenAI-compat e llama.cpp.
 # Sem dependência nova: HTTP/1.1 mínimo sobre std::net.
 api = ["m1"]
@@ -135,6 +135,11 @@ required-features = ["m4", "m5", "affinity"]
 name = "cram_logos_probe"
 path = "examples/cram_logos_probe.rs"
 required-features = ["m1"]
+
+[[example]]
+name = "sgdb_roundtrip"
+path = "examples/sgdb_roundtrip.rs"
+required-features = ["sgdb"]
 
 [[example]]
 name = "transplant_hv_probe"

@@ -16,6 +16,7 @@
 //! durabilidade além de um quarto de segundo.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::mpsc::{self, Receiver};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -68,6 +69,7 @@ pub struct T2Worker {
     stop: Arc<AtomicBool>,
     handle: Option<JoinHandle<()>>,
     runtime: Arc<T2Runtime>,
+    seeds: Receiver<Vec<Vec<f32>>>,
 }
 
 impl std::fmt::Debug for T2Worker {
@@ -88,12 +90,26 @@ impl T2Worker {
         let (tx, mut rx) = SpscKnowledgePhaseBridge::<T2_RING>::new();
         let stop = Arc::new(AtomicBool::new(false));
         let runtime = Arc::new(T2Runtime::default());
+        let (seed_tx, seed_rx) = mpsc::channel();
         let flag = Arc::clone(&stop);
         let shared = Arc::clone(&runtime);
         let handle = thread::Builder::new()
             .name("aether-t2-sgdb".to_string())
             .spawn(move || {
                 let mut ledger = SgdbLedger::new(transport, cfg, scope);
+                // Reacende: o que o banco já sabe volta como semente de fase
+                // para o organismo que está nascendo.
+                let mut warm = Vec::new();
+                if let Ok(hits) = ledger.client_mut().recall_scope(scope, 16) {
+                    for hit in hits {
+                        let phases =
+                            crate::knowledge::sgdb::ledger::phases_from_payload(&hit.doc.payload);
+                        if !phases.is_empty() {
+                            warm.push(phases);
+                        }
+                    }
+                }
+                let _ = seed_tx.send(warm);
                 let mut last = Instant::now();
                 let mut batch: Vec<crate::core::knowledge_bridge_f1::DraftRecord> =
                     Vec::with_capacity(DRAIN_MAX);
@@ -144,7 +160,18 @@ impl T2Worker {
             stop,
             handle: Some(handle),
             runtime,
+            seeds: seed_rx,
         })
+    }
+
+    /// Sementes de fase recuperadas do banco no início da thread.
+    ///
+    /// Espera até 2 s (o handshake MCP é `T2`; o organismo ainda não começou a
+    /// ciclar). Devolve vazio se o banco estava fora — o organismo segue.
+    pub fn seeds(&self) -> Vec<Vec<f32>> {
+        self.seeds
+            .recv_timeout(Duration::from_millis(2_000))
+            .unwrap_or_default()
     }
 
     /// Enfileira um padrão de fase (0 alloc, 0 syscall na thread chamadora).

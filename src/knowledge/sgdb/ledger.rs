@@ -195,13 +195,13 @@ impl<T: Transport> SgdbLedger<T> {
             Ok(written) => {
                 self.last_error = None;
                 let remaining = docs.split_off(written.min(docs.len()));
-                self.store_pending(remaining);
+                self.replace_pending(remaining);
                 written
             }
             Err(e) => {
                 self.metrics.errors += 1;
                 self.last_error = Some(e.to_string());
-                self.store_pending(docs);
+                self.replace_pending(docs);
                 0
             }
         }
@@ -326,6 +326,17 @@ impl<T: Transport> SgdbLedger<T> {
         }
     }
 
+    fn replace_pending(&mut self, docs: Vec<PhaseDoc>) {
+        if let Some(outbox) = &self.outbox {
+            if let Err(e) = outbox.rewrite(&docs) {
+                self.last_error = Some(e.to_string());
+                self.pending = docs;
+            }
+        } else {
+            self.pending = docs;
+        }
+    }
+
     fn drain_pending(&mut self) -> Vec<PhaseDoc> {
         if let Some(outbox) = &self.outbox {
             let mut docs = outbox.read();
@@ -403,6 +414,21 @@ pub fn encode_phases(phases: &[f32], out: &mut Vec<u8>) {
 /// Chave de conteúdo de um payload (reexport para o chamador do `T0`).
 pub fn phase_key(payload: &[u8]) -> u128 {
     wire::content_key(payload)
+}
+
+/// Decodifica um payload complexo (`re, im`) em fases (`atan2`).
+///
+/// Inverso de [`encode_phases`]; usado no *warm start* para reacender a
+/// `ComplexPhaseMemory` a partir do que o SGDB devolveu.
+pub fn phases_from_payload(payload: &[u8]) -> Vec<f32> {
+    payload
+        .chunks_exact(8)
+        .map(|chunk| {
+            let re = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+            let im = f32::from_le_bytes([chunk[4], chunk[5], chunk[6], chunk[7]]);
+            im.atan2(re)
+        })
+        .collect()
 }
 
 /// Camada usada para padrões estáveis do organismo.
