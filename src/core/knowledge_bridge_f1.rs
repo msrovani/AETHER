@@ -340,7 +340,8 @@ pub struct BridgeMetrics {
     pub ledger_calls: AtomicU64,
     /// Eventos aceitos pelo anel.
     pub recorded_events: AtomicU64,
-    /// Eventos descartados por anel cheio.
+    /// Eventos descartados: anel cheio **ou** payload acima de
+    /// [`MAX_PHASE_BYTES`]. Perder telemetria é preferível a atrasar o sinal.
     pub dropped_ring_full: AtomicU64,
     /// Eventos drenados pelo `T1`.
     pub drained_events: AtomicU64,

@@ -268,12 +268,17 @@ fn wrap_signed(x: f32) -> f32 {
     v
 }
 
-/// Capacidade da janela de padrões: `min(N/4, 64)`.
+/// Capacidade da **janela de armazenamento**: `min(N/4, 64)`.
 ///
 /// Armazenar/zerar o crosstalk vale para `P ≤ N−1` (os `P` fasores precisam
 /// ser independentes), mas a **bacia de atração** encolhe com `P`: medido em
 /// `N = 32` com fases aleatórias, erro médio `0.0002` (P=4), `0.003` (P=6),
 /// `0.02` (P=8) e `0.17` (P=10). Por isso a janela usa `N/4`.
+///
+/// **Não confundir com capacidade de recall.** A janela diz quantos padrões
+/// cabem sem crosstalk; com pista a 20% oculta e erro < 0,15 rad, o medido
+/// (E1b-2, `target/aether_e1b.json`) é ~4 padrões aleatórios e ~8 harmônicos
+/// em `N=160` — ~5× abaixo da janela declarada aqui.
 fn pattern_capacity(n: usize) -> usize {
     (n / 4).clamp(2, PATTERN_CAP_MAX)
 }
@@ -369,7 +374,11 @@ impl ComplexPhaseMemory {
         self.pat_count
     }
 
-    /// Capacidade da janela de padrões (`min(N−1, 64)`).
+    /// Capacidade da **janela de armazenamento** (`min(N/4, 64)`).
+    ///
+    /// Não é a capacidade de recall: em `N=160`, com pista a 20% oculta e
+    /// erro < 0,15 rad, mediu-se ~4 padrões aleatórios e ~8 harmônicos
+    /// (E1b-2). O valor aqui é o teto de armazenamento sem crosstalk.
     pub fn pattern_capacity(&self) -> usize {
         self.pat_cap
     }

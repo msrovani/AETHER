@@ -535,7 +535,7 @@ mod tests {
         let deep = "[".repeat(MAX_DEPTH + 5);
         assert_eq!(
             Json::parse(&deep).unwrap_err().kind,
-            JsonErrorKind::UnexpectedEnd
+            JsonErrorKind::TooDeep
         );
     }
 

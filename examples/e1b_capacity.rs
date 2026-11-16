@@ -395,6 +395,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     json.push_str("  ],\n");
     json.push_str(&format!("  \"slope_loglog\": {slope:.4},\n"));
     json.push_str(&format!(
+        "  \"arm_a_skipped\": {},\n",
+        args.phase_only
+    ));
+    json.push_str(&format!(
         "  \"phase_capacity_error_0_15\": {{\"random\": {m_random}, \"harmonic\": {m_harm}}},\n"
     ));
     json.push_str("  \"phase_memory\": [\n");

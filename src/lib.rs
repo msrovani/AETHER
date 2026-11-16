@@ -46,6 +46,10 @@ pub mod transducer_io;
 #[cfg(feature = "dashboard")]
 pub mod dashboard;
 
+/// Borda externa HTTP/JSON (T2) para apps de IA — `feature = "api"`.
+#[cfg(feature = "api")]
+pub mod api;
+
 pub use error::{AetherError, Result};
 
 /// Versao do protocolo de pacotes de fase (UDP, 40 bytes, little-endian).
