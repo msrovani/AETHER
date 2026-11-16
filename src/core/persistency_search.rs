@@ -267,31 +267,18 @@ mod tests {
         }
     }
 
-    /// `h = 0` puro: root fixa 0 (teorema Z2), mas a busca continua exata.
+    /// `h = 0` puro e **denso**: root fixa 0 (teorema Z2), mas a busca é exata.
+    /// (Variáveis isoladas seriam trivialmente persistentes — qualquer valor
+    /// aparece em algum ótimo — por isso o teste usa o grafo denso.)
     #[test]
     fn vidro_puro_root_zero_mas_solucao_exata() {
         let n = 10usize;
-        let mut j = vec![0.0f64; n * n];
-        // Um ciclo ímpar frustrado (triângulo com uma aresta +) + ruído.
-        j[0 * n + 1] = 1.0;
-        j[1 * n + 0] = 1.0;
-        j[1 * n + 2] = -1.0;
-        j[2 * n + 1] = -1.0;
-        j[2 * n + 0] = -1.0;
-        j[0 * n + 2] = -1.0;
-        let h = vec![0.0f64; n];
+        let (j, h) = make_instance(n, 0, DELTA, SEED0);
         let mut s = ExactSearch::new(u32::MAX);
         let r = s.solve(n, &j, &h);
-        assert_eq!(r.root_fixed, 0, "h=0 não tem persistência no root");
+        assert_eq!(r.root_fixed, 0, "h=0 denso não tem persistência no root");
         assert!(!r.exhausted);
-        let mut bf = f64::INFINITY;
-        let mut st = vec![0i8; n];
-        for mask in 0..(1u64 << n) {
-            for (i, si) in st.iter_mut().enumerate() {
-                *si = if (mask >> i) & 1 == 0 { -1 } else { 1 };
-            }
-            bf = bf.min(energy(&j, &h, n, &st));
-        }
+        let bf = brute_force(n, &j, &h);
         assert!((r.energy - bf).abs() < 1e-9);
     }
 }

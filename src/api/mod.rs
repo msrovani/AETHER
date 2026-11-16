@@ -48,8 +48,12 @@ use crate::error::AetherError;
 
 use json::Json;
 
-/// Dimensão de fase exposta pela borda.
+/// Dimensão de fase exposta pela borda (**fasores**).
 pub const PHASE_DIMS: usize = 160;
+
+/// Floats no payload: cada fasor é `(re, im)` ⇒ `2 × PHASE_DIMS = 320`
+/// (1280 bytes, exatamente `MAX_PHASE_BYTES` do F1).
+pub const PHASE_FLOATS: usize = 2 * PHASE_DIMS;
 
 /// Corpo máximo aceito (1 MiB) — acima disso a conexão é fechada com 413.
 pub const MAX_BODY: usize = 1 << 20;
@@ -556,8 +560,8 @@ fn remember(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
     if !scope_allowed(scope, bound) {
         return forbidden(scope, bound);
     }
-    let Some(phases) = phases_from(doc.get("phases"), PHASE_DIMS) else {
-        return bad("phases ausente ou com mais de 160 elementos");
+    let Some(phases) = phases_from(doc.get("phases"), PHASE_FLOATS) else {
+        return bad("phases ausente, ímpar ou com mais de 320 floats");
     };
     let key = match key_from(doc.get("key")) {
         Some(k) => k,
@@ -627,8 +631,8 @@ fn cue(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
     if !scope_allowed(scope, bound) {
         return forbidden(scope, bound);
     }
-    let Some(query) = phases_from(doc.get("query"), PHASE_DIMS) else {
-        return bad("query ausente (fases [f32])");
+    let Some(query) = phases_from(doc.get("query"), PHASE_FLOATS) else {
+        return bad("query ausente, ímpar ou com mais de 320 floats");
     };
     let mut out = vec![0.0f32; query.len()];
     match state.ledger.cue_scored(scope, &query, &mut out) {
@@ -979,7 +983,11 @@ fn decision_name(d: Decision) -> &'static str {
     }
 }
 
-/// Texto → fases: hash FNV-1a + xorshift **determinístico**.
+/// Texto → fasores: hash FNV-1a + xorshift **determinístico**.
+///
+/// Devolve `2 × PHASE_DIMS` floats — pares `(re, im)` de **fasores unitários**
+/// (`cos φ, sin φ`), que é o que o F1 espera. A correlação complexa entre dois
+/// conjuntos aleatórios é ~0; entre o mesmo texto, é 1.
 ///
 /// Não é embedding: é a borda lossy documentada. Dois textos diferentes geram
 /// fases diferentes; o mesmo texto gera sempre as mesmas fases.
@@ -990,12 +998,14 @@ pub fn text_to_phases(text: &str) -> Vec<f32> {
         h = h.wrapping_mul(0x0000_0100_0000_01b3);
     }
     let mut st = h | 1;
-    let mut out = Vec::with_capacity(PHASE_DIMS);
+    let mut out = Vec::with_capacity(PHASE_FLOATS);
     for _ in 0..PHASE_DIMS {
         st ^= st << 13;
         st ^= st >> 7;
         st ^= st << 17;
-        out.push((st as f64 / u64::MAX as f64) as f32 * std::f32::consts::TAU);
+        let phi = (st as f64 / u64::MAX as f64) as f32 * std::f32::consts::TAU;
+        out.push(phi.cos());
+        out.push(phi.sin());
     }
     out
 }
@@ -1046,7 +1056,7 @@ fn record_to_json(r: &DraftRecord) -> Json {
 fn record_from_json(v: &Json) -> Option<DraftRecord> {
     let key = key_from(v.get("key"))?;
     let scope = scope_from(v.get("scope"))?;
-    let phases = phases_from(v.get("phases"), PHASE_DIMS)?;
+    let phases = phases_from(v.get("phases"), PHASE_FLOATS)?;
     let layer = match v.get("layer").and_then(Json::as_u64).unwrap_or(4) {
         2 => Layer::L2Episodic,
         6 => Layer::L6Graph,
@@ -1070,7 +1080,8 @@ fn record_from_json(v: &Json) -> Option<DraftRecord> {
 
 fn phases_from(value: Option<&Json>, max: usize) -> Option<Vec<f32>> {
     let arr = value?.as_arr()?;
-    if arr.is_empty() || arr.len() > max {
+    // Fasores vêm em pares (re, im): comprimento ímpar é erro de borda.
+    if arr.is_empty() || arr.len() > max || arr.len() % 2 != 0 {
         return None;
     }
     let mut out = Vec::with_capacity(arr.len());
