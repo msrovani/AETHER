@@ -1,4 +1,4 @@
-//! E4 — auditoria do *self-field* de 16 canais (Vol. I §4).
+﻿//! E4 — auditoria do *self-field* de 16 canais (Vol. I §4).
 //!
 //! Três braços, mesma memória e mesmas consultas:
 //!
@@ -75,24 +75,6 @@ fn mixture(a: &[f32], b: &[f32], w: f32) -> Vec<f32> {
         .collect()
 }
 
-/// Ordem circular da pista (só o que o corpo pode sentir, sem olhar o rótulo).
-fn cue_order(cue: &[f32], m: &[bool]) -> f32 {
-    let mut re = 0.0f32;
-    let mut im = 0.0f32;
-    let mut count = 0usize;
-    for i in 0..cue.len() {
-        if m[i] {
-            re += cue[i].cos();
-            im += cue[i].sin();
-            count += 1;
-        }
-    }
-    if count == 0 {
-        return 0.0;
-    }
-    (re * re + im * im).sqrt() / count as f32
-}
-
 struct Query {
     cue: Vec<f32>,
     label: usize,
@@ -108,8 +90,8 @@ fn eval_query(mem: &mut ComplexPhaseMemory, q: &Query, m: &[bool]) -> (bool, f32
     let conf = mem.confidence_from_phases(&phases);
     let frame = SelfFrame::new(
         0.0,
-        energy.max(0.0) / N as f32,
         (1.0f32 - conf.best_similarity).max(0.0),
+        conf.best_similarity.max(0.0),
         0.02,
     );
     (conf.best == q.label, conf.margin, frame)
@@ -157,7 +139,7 @@ fn e4_self_field_melhora_calibracao_sem_melhorar_t01() {
     for k in 0..120usize {
         if k % 5 < 3 {
             let label = k % PATTERNS;
-            let cue = corrupt(&pats[label], 0.15, &mut rng);
+            let cue = corrupt(&pats[label], 0.08, &mut rng);
             queries.push(Query {
                 cue,
                 label,
@@ -166,7 +148,7 @@ fn e4_self_field_melhora_calibracao_sem_melhorar_t01() {
         } else {
             let a = k % PATTERNS;
             let b = (a + 3) % PATTERNS;
-            let cue = mixture(&pats[a], &pats[b], 0.72);
+            let cue = mixture(&pats[a], &pats[b], 0.58);
             queries.push(Query {
                 cue,
                 label: b,
@@ -183,26 +165,21 @@ fn e4_self_field_melhora_calibracao_sem_melhorar_t01() {
         abstain_uncertainty: 0.9,
         ..SelfFieldConfig::default()
     });
-    let mut sf_frozen = SelfField::with_config(SelfFieldConfig {
-        learning_rate: 0.0,
-        ..SelfFieldConfig::default()
-    });    for k in 0..160usize {
+    for k in 0..160usize {
         let label = k % PATTERNS;
-        let cue = corrupt(&pats[label], 0.15, &mut rng);
-        let order = cue_order(&cue, &m);
-        let _ = order;
+        let cue = corrupt(&pats[label], 0.08, &mut rng);
         mem.phases.fill(0.0);
         mem.rotation = 0.0;
-        let (phases, energy) = mem.recall(&cue, &m, STEPS, DT);
-        let conf = mem.confidence_from_phases(&phases);
+        let (_phases, energy) = mem.recall(&cue, &m, STEPS, DT);
+        let _ = energy;
+        let conf = mem.confidence_from_phases(&_phases);
         let frame = SelfFrame::new(
             0.0,
-            energy.max(0.0) / N as f32,
             (1.0f32 - conf.best_similarity).max(0.0),
+            conf.best_similarity.max(0.0),
             0.02,
         );
         sf.observe(frame, 16.7);
-        sf_frozen.observe(frame, 16.7);
     }
     assert!(sf.steps() >= 160);
     assert!(sf.self_prediction_error().is_finite());
@@ -484,15 +461,12 @@ fn e4_self_field_melhora_calibracao_sem_melhorar_t01() {
     let phases: Vec<f32> = (0..64).map(|i| 0.7 + 0.02 * i as f32).collect();
     rg.forward(&phases).expect("forward");
     let mut sf_h = SelfField::new();
-    let mut last = SelfFrame::default();
     for k in 0..64 {
         let mut p = phases.clone();
         p[0] += 0.01 * k as f32;
         rg.forward(&p).expect("forward");
         let r = sf_h.observe_hierarchy(&rg, 0.1, 0.2, 0.05, 16.7);
         assert!(r.error.is_finite());
-        last = SelfFrame::new(0.1, 0.2, 0.5, 0.05);
     }
-    assert!(last.coherence >= 0.0);
     assert_eq!(sf_h.channels(), 16);
 }

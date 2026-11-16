@@ -99,16 +99,16 @@ artefato — são o "tamanho" do problema dual.
 
 Construa a rede de implicação padrão do roof dual (Boros–Hammer; implementação
 de referência: `dwave-preprocessing::fix_variables_roof_duality`), com um nó por
-**literal** (`x_i` e `x̄_i`), mais `s` e `t`, e uma aresta por termo da posiform
-com capacidade `a_k`; resolva com **Dinic** determinístico (BFS com ordem fixa
-de vértices e arestas — nada de `HashMap` na iteração).
+**literal** (`x_i` e `x̄_i`), mais `s` e `t`, o **par simétrico** de arestas por
+termo da posiform (capacidade `a_k`); resolva com **Dinic** determinístico (BFS
+com ordem fixa de vértices e arestas — nada de `HashMap` na iteração).
 
 **A orientação exata das arestas é o ponto onde implementações divergem.**
 Não confie na memória: ancore em dois testes, nesta ordem:
 
 * **T-exato (submodular).** Para `J_ij ≥ 0` (ferromagnético) todos os `Q_ij ≤ 0`
   ⇒ a função é submodular ⇒ o min-cut é **exato**:
-  `a0 + maxflow == min_s H` por força bruta (`n = 10`, 20 instâncias, `1e-9`).
+  `a0 + maxflow/2 == min_s H` por força bruta (`n = 10`, 20 instâncias, `1e-9`).
   Se falhar, a construção da rede está errada — não siga.
 * **T-persistência.** Com a rede validada, a regra é: seja `S` o lado da fonte
   no min-cut (`s ∈ S`, `t ∉ S`);
@@ -158,6 +158,29 @@ gate — e use o roof onde o LP é tenso (CNF/circuito estruturado, não vidro d
 > **dobrada do QPBO** (outra rota, com `roof_weights`); o protótipo acima não a
 > exercita porque a `lib` estava vermelha (`E0583`) na hora da medição.
 
+#### 1.3.2 Controle positivo — copiar para o teste do dono
+
+Instância que **separa** “implementação correta com LP fraco” de “implementação
+incompleta”. Centro não dominado, constante em **todos** os ótimos:
+
+```rust
+// n = 4 (k = 3 folhas) — centro 0 com J_0i = +1, folhas com h_i = −10
+let j: [f64; 16] = [
+    0.0, 1.0, 1.0, 1.0,
+    1.0, 0.0, 0.0, 0.0,
+    1.0, 0.0, 0.0, 0.0,
+    1.0, 0.0, 0.0, 0.0,
+];
+let h: [f64; 4] = [0.0, -10.0, -10.0, -10.0];
+// esperado: ótimo = −33; TODAS as variáveis fixas; centro x_0 = 0 (s_0 = −1)
+// dominância NÃO fixa o centro: h_0 + Σ|J_0i| = 3 > 0
+// roof DEVE fixar o centro; bound = a0 + fluxo/2 = −33 (exato)
+```
+
+Generalize com `k = 2..12` (a mesma família): o centro continua não dominado e o
+roof continua fixando. Se a sua implementação **não** fixar o centro, o erro é de
+construção — não de teoria.
+
 ### 1.4 API (sem alocação no caminho de aplicação)
 
 ```rust
@@ -193,6 +216,7 @@ importando) e três braços:
 | A | 200 | 14 | 0,25 | roof ≥ dominância? |
 | B | 200 | 14 | 0,0 | roof > 0% onde a dominância é 0%? |
 | C | 50 | 18 | 0,25 e 0,0 | soundness em `n` maior (força bruta `2^18`) |
+| D | 1 (+ `k=2..12`) | 4..13 | — | **controle positivo** (§1.3.2): tem de fixar o centro |
 
 Registre por instância: `reduction`, `bound`, `opt` (bruto), `gap = opt − bound`,
 `fixed_roof`, `fixed_dom`, `containment = |dom ∩ roof| / |dom|`, `ms`.
@@ -205,6 +229,7 @@ Saída: tabela no stdout + `target/aether_e2c2.json` (mesmo estilo de
 | # | Gate | Falha ⇒ |
 |---|---|---|
 | **G0** | `posiform` bate `energy` em 1e-12 (256×, `n ≤ 8`) | bug de álgebra: corrija |
+| **G0b** | controle positivo (§1.3.2): o centro da estrela é fixado e a dominância não o fixa | erro de **construção**, não de teoria |
 | **G1** | **0** ótimos alterados em 600 instâncias (`n=14`, dois braços) e 0/50 em `n=18` | **reverta** a persistência; não negocie |
 | **G2** | `reduction(plant=0) > 0%` (dominância: 0%) | registre como **falsificação** e escale no fórum — o argumento do `E2c-2` cai |
 | **G3** | `reduction(plant=0,25) ≥ reduction_dom + 5 pp` | reporte o delta real; `< 5 pp` significa que o roof dual não paga o custo e **isso é o achado** — vá para o fórum |
@@ -322,7 +347,7 @@ Registre as três decisões num post `PROPOSTA` → `CONFIRMACAO` antes do merge
 pub struct KnowledgeEvent {
     pub key: u128,          //  0..16  hash endereçável por conteúdo do padrão de fase
     pub tick: u64,          // 16..24  relógio interno (dinâmica; ordem causal)
-    pub wall_ms: u64,       // 24..32  relógio externo (TTL/decay; é o created_tick do SGDB)
+    pub wall_ms: u64,       // 24..32  relógio externo; 0 em T0, carimbado no dreno (T1)
     pub energy: f32,        // 32..36  H(s*) (conversão de f64 do Certificate)
     pub gap: f32,           // 36..40  ΔE local (0 = atestado inválido)
     pub violations: u32,    // 40..44  restrições violadas
@@ -355,11 +380,13 @@ T2 (host/MCP)     escreve as linhas no neural-sgdb (fora do crate)
 ```
 
 * **Duplo carimbo:** `tick` vem do contador de ciclos do organismo (monotônico,
-  base da dinâmica); `wall_ms` vem de um `AtomicU64` atualizado **1×/s** por uma
-  thread de serviço. `SystemTime::now()` **não** é chamado em T0 (é syscall e
-  quebra o determinismo). Documente o atraso de até 1 s.
+  base da dinâmica, ordem causal); `wall_ms` é carimbado **no dreno (T1)**, uma
+  vez por lote. T0 **nunca** toca em relógio — nem `SystemTime::now()`, nem
+  `AtomicU64` de serviço. Trade-off declarado: o carimbo é batelado (skew de até
+  um intervalo de dreno), o que é irrelevante para TTL/decay e elimina a
+  dependência de uma thread de relógio.
 * **`created_tick` do SGDB = `wall_ms`** (doutrina do ledger: a base é
-  wall-clock). O `tick` interno fica no payload da linha para causalidade.
+  wall-clock). O `tick` interno vai na linha como causalidade.
 * **Backpressure:** política *drop-newest* + contador + bit `flags` no próximo
   evento. Gate: 0 drops em 10 000 ciclos simulados a 60 Hz com drenagem de 32
   por ciclo.
@@ -412,10 +439,37 @@ rede no crate: zero; a feature `knowledge` não puxa dependência nova).
 | **F1-G1** | `size_of == 704`, `align_of == 64`, `Copy` | `const` assert + teste |
 | **F1-G2** | `record()` = **0 allocs** (10 000 chamadas) | allocador contador por thread (padrão de `tests/alloc_invariants.rs`) |
 | **F1-G3** | **0 drops** em 10 000 ciclos (60 Hz, drain 32/ciclo) | simulação do padrão de produção |
-| **F1-G4** | FIFO + `tick` estritamente crescente + `wall_ms` não decrescente | teste de sequência |
+| **F1-G4** | FIFO + `tick` estritamente crescente + `wall_ms` não decrescente **entre lotes** de dreno | teste de sequência |
 | **F1-G5** | **R7 estrutural**: `cargo test --release --no-default-features --features "m1,knowledge"` verde; nenhum módulo do crate importa cliente SGDB | CI + `grep` |
-| **F1-G6** | linha JSONL válida e round-trip completo (payload de 160 fases, `authority`, `provenance`, `layer`, `certificate`) | `serde_json` em `dev-dependencies` |
-| **F1-G7** | p99 de `record` `< 1 µs` (alvo `< 0,1 µs`) | laço de 10 000 amostras com `Instant` |
+| **F1-G6** | linha JSONL válida e round-trip completo (payload de 160 fases, `authority`, `provenance`, `layer`, `certificate`, `tick` e `wall_ms`) | `serde_json` em `dev-dependencies` |
+| **F1-G7** | p99 de `record` `< 1 µs` com o **anel cheio** e o alocador armado | §3.5.1 |
+
+#### 3.5.1 Receita dos testes que separam gate de fachada
+
+**R8 (escopo) — não pode ser vazio.** Duas `ScopeId` distintas (`orgA/run1/app`,
+`orgB/run2/app`), 3 fatos em cada. O teste tem de **chamar `cue_into`**, não só
+ler o contador:
+
+```text
+1. cue_into(scope=A, query=B)  -> retorno 0 hits  E cross_scope_hits == 0
+2. cue_into(scope=A, query=A)  -> retorno 3 hits  E cross_scope_hits segue 0
+3. injetar um fato com scope=B no store de A (se o store permitir)
+   -> cue_into(A, B) -> cross_scope_hits == 1 (caso positivo do contador)
+```
+
+Sem o passo 3 o contador nunca incrementa e o gate é vacuidade (`R9`).
+
+**`ScopeId` — colisão e estabilidade.** `hash("orgA/run1/app") !=
+hash("orgA/run2/app")`; `hash(x) == hash(x)` entre execuções (FNV-1a é estável);
+e dois organismos não compartilham escopo.
+
+**p99 sem alocação.** Encher o anel até `capacidade − 1`, armar o alocador
+contador, medir 10 000 `record()` com `Instant`, e só então desarmar:
+`allocs == 0` **e** `p99 < 1 µs`. Medir o dreno separado (pode alocar no warmup,
+não por evento).
+
+**Payload grande não é “ring cheio”.** `payload_dims > 160` deve incrementar um
+contador próprio; somar em `dropped` esconde a causa.
 
 ### 3.6 Entregáveis
 

@@ -215,6 +215,9 @@ donos dos experimentos confirmaram ou corrigiram os pontos abertos:
 | Build v0.0.95 | 3 erros de tipo corrigidos; **lib compila**, mas `--lib` tem **1 falha**: `emissao_de_termos_preserva_penalidade` (mask=0 → e=−1, want=+1; offset de 2 no QUBO). Gate mantido, não relaxado. | MSG 0125/0136/0145 |
 | F1 — R8 | `cue_into` itera **todos** os registros sem filtrar escopo; `scope_filter` existe só em comentário; `cross_scope_hits` nunca é incrementado; o teste de R8 **não chama `cue_into`** → gate vacuamente verde. Roteado ao dono. | MSG 0140 |
 | F2 — overflow | Drop-oldest é **inviável em SPSC** (quebraria o invariante lock-free). Condição revisada para **drop-newest + contador + bit no próximo evento**; "0 eventos perdidos" só vale com `drops=0` medido. | MSG 0141/0144 |
+| F1 — receita de R8 | Receita aceita: 2 escopos, consulta cruzada deve dar 0; **passo positivo** (injetar B no store de A e esperar 1) é o que impede o gate vazio; P99 com anel cheio; contador separado para payload grande. | MSG 0148/0154 |
+| E2c-2 — fecho | Controle positivo **PASS** (estrela K=2..12; 13/13 fixings). No vidro denso n=12: 2.259 variáveis constantes não dominadas, roof fixa **0** → 0,000 é **fraqueza do LP**, não bug de construção. Resultado negativo legítimo. | MSG 0142/0149/0153 |
+| E1 v2 — gates | `tests/e1_language_gate.rs`: **2 passam, 3 falham** — recall sharded **0,0**; SNR **0,05σ / −0,11σ**; p50 **51,7 µs**. O desenho de 4 papéis + ACF ainda não fecha o gate. | MSG 0152 |
 
 **Regra operacional que ficou acordada:** o auditor é *read-only*; cada erro é
 roteado ao dono do claim (0106 = example/docs E1; 0107 = E2/E3; 0110 = roof

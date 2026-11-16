@@ -164,7 +164,7 @@ impl Default for SelfFieldConfig {
             warmup_steps: 24,
             recall_margin_min: 0.20,
             coherence_drop: 0.30,
-            surprise_ratio: 1.25,
+            surprise_ratio: 2.0,
         }
     }
 }
@@ -475,8 +475,7 @@ impl SelfField {
 
     /// Z-score de novidade do erro corrente contra a linha de base lenta.
     pub fn novelty_z(&self) -> f32 {
-        let var = (self.err_var - self.err_slow * self.err_slow).max(0.0);
-        let sd = var.sqrt().max(1e-4);
+        let sd = self.err_var.max(0.0).sqrt().max(1e-4);
         (self.err_ema - self.err_slow) / sd
     }
 
@@ -503,12 +502,13 @@ impl SelfField {
             .observe(arr, &mut self.scale, alpha, self.cfg.learning_rate, self.cfg.min_weight);
 
         let e = reading.error;
-        self.err_ema = (1.0 - alpha) * self.err_ema + alpha * e;
+        let delta = e - self.err_ema;
+        self.err_ema += alpha * delta;
+        // Variância da EMA em torno da média corrente (E[(e−μ)²]).
+        self.err_var += alpha * (delta * delta - self.err_var);
         // Linha de base lenta (τ ≈ 8× a rápida) para o z-score de novidade.
         let slow_alpha = Self::alpha(dt_ms, self.cfg.ema_tau_ms * 8.0);
         self.err_slow = (1.0 - slow_alpha) * self.err_slow + slow_alpha * e;
-        let e2 = (1.0 - alpha) * (self.err_var + self.err_ema * self.err_ema) + alpha * e * e;
-        self.err_var = (e2 - self.err_ema * self.err_ema).max(0.0);
         self.plasticity_ema = (1.0 - alpha) * self.plasticity_ema + alpha * reading.plasticity;
         self.surprise_ema = (1.0 - alpha) * self.surprise_ema + alpha * frame.surprise;
         self.coherence_ema = (1.0 - alpha) * self.coherence_ema + alpha * frame.coherence;
@@ -565,7 +565,7 @@ impl SelfField {
             || recall_margin.is_nan()
             || coherence_drop
             || surprise_novel
-            || (error > self.err_ema && novelty > self.cfg.abstain_error_z)
+            || (error > self.err_ema * 1.3 && novelty > self.cfg.abstain_error_z)
             || uncertainty > self.cfg.abstain_uncertainty;
         if abstain {
             self.abstained = self.abstained.wrapping_add(1);
@@ -587,7 +587,7 @@ impl SelfField {
             || recall_margin.is_nan()
             || coherence_drop
             || surprise_novel
-            || (error > self.err_ema && novelty > self.cfg.abstain_error_z)
+            || (error > self.err_ema * 1.3 && novelty > self.cfg.abstain_error_z)
             || uncertainty > self.cfg.abstain_uncertainty
     }
 
