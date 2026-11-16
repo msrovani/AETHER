@@ -44,6 +44,7 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::core::bam_phase::{poly_sin_q14, BamHolographicVector, BamLut, BamPhase};
+#[cfg(feature = "m1")]
 use crate::core::renormalization::RenormalizationHierarchy;
 use crate::core::silicon_entropy::splitmix64;
 
@@ -59,9 +60,10 @@ const Q14: f32 = 16_384.0;
 const Q15: f32 = 32_767.0;
 
 /// Traços por acumulador. O bundle de 2 fasores por fato dobra os termos
-/// interferentes; `K=17` mantém o SNR > 5σ com 43 fatos (86 termos) e ainda
-/// cabe no orçamento de working set (485 KB < 500 KB).
-pub const K_TRACES: usize = 17;
+/// interferentes; `K=20` mantém SNR > 5σ com 43 fatos (86 termos). A tabela
+/// de fases por traço foi substituída por hash determinístico, então o
+/// working set fica abaixo de 500 KB mesmo com mais traços.
+pub const K_TRACES: usize = 20;
 /// Shards (relações sintáticas endereçáveis).
 pub const SHARDS: usize = 24;
 /// Teto absoluto de fatos por acumulador (75% de `0,4·D = 64`).
@@ -80,7 +82,7 @@ pub const JITTER_FRAC: f32 = 0.04;
 /// Passos máximos do ressonador de sentença (4 fatores).
 pub const RES_ITERS: usize = 4;
 /// Passos máximos do ressonador do predicado (2 fatores).
-pub const PAIR_ITERS: usize = 2;
+pub const PAIR_ITERS: usize = 1;
 /// Piso de evidência para abstenção (escolhido *a priori*, não no teste).
 pub const SIM_FLOOR: f32 = 0.55;
 /// Piso de margem (1º − 2º) para abstenção.
@@ -527,12 +529,25 @@ pub struct Shard {
     acc_re: Vec<[i32; D]>,
     acc_im: Vec<[i32; D]>,
     shift: u32,
-    psi: Vec<u16>,
     subj: Vec<u16>,
     verb: Vec<u16>,
     obj: Vec<u16>,
     modu: Vec<u16>,
     rng: u64,
+}
+
+/// Fase de traço derivada de `(seed, fato, termo, traço)`.
+///
+/// Antes era um `Vec<u16>` de `M·termos·K` entradas (~70 KB no total). Derivar
+/// do seed elimina essa tabela e mantém o mesmo determinismo.
+#[inline]
+fn psi_of(seed: u64, fact: usize, term: usize, trace: usize, traces: usize) -> u16 {
+    let mut x = seed
+        ^ (fact as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        ^ (term as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9)
+        ^ (trace as u64).wrapping_mul(0x94D0_49BB_1331_11EB)
+        ^ (traces as u64).wrapping_mul(0xD6E8_FEB8_6659_FD93);
+    (splitmix64(&mut x) >> 48) as u16
 }
 
 impl Shard {
@@ -545,7 +560,6 @@ impl Shard {
             acc_re: vec![[0i32; D]; traces],
             acc_im: vec![[0i32; D]; traces],
             shift: 0,
-            psi: Vec::new(),
             subj: Vec::new(),
             verb: Vec::new(),
             obj: Vec::new(),
@@ -595,6 +609,7 @@ impl Shard {
     pub fn add_terms(&mut self, key: &Phases, values: &[Phases], ids: (u16, u16, u16, u16)) {
         debug_assert_eq!(values.len(), self.terms);
         let lut = BamLut::global();
+        let fact = self.subj.len();
         for (ti, value) in values.iter().enumerate() {
             for t in 0..self.traces {
                 // O primeiro termo/traço é a referência de fase; os demais são
@@ -602,9 +617,8 @@ impl Shard {
                 let psi = if ti == 0 && t == 0 {
                     0u16
                 } else {
-                    (splitmix64(&mut self.rng) >> 48) as u16
+                    psi_of(self.rng, fact, ti, t, self.traces)
                 };
-                self.psi.push(psi);
                 for j in 0..D {
                     let th = key[j].wrapping_add(value[j]).wrapping_add(psi);
                     let (s, c) = lut.sin_cos_q15(BamPhase(th));
@@ -644,7 +658,6 @@ impl Shard {
         self.verb.shrink_to_fit();
         self.obj.shrink_to_fit();
         self.modu.shrink_to_fit();
-        self.psi.shrink_to_fit();
     }
 
     /// Índice do fato com `(subj, verb)` — o endereço sintático do shard.
@@ -663,7 +676,11 @@ impl Shard {
         let inv = 1.0 / Q14;
         for term in 0..self.terms {
             for t in 0..self.traces {
-                let psi = self.psi[(fact * self.terms + term) * self.traces + t];
+                let psi = if term == 0 && t == 0 {
+                    0u16
+                } else {
+                    psi_of(self.rng, fact, term, t, self.traces)
+                };
                 let tr = &self.tre[t];
                 let ti = &self.tim[t];
                 for lane in 0..D / LANES {
@@ -693,7 +710,6 @@ impl Shard {
     pub fn memory_bytes(&self) -> usize {
         self.tre.capacity() * std::mem::size_of::<[i16; D]>()
             + self.tim.capacity() * std::mem::size_of::<[i16; D]>()
-            + self.psi.capacity() * 2
             + (self.subj.capacity()
                 + self.verb.capacity()
                 + self.obj.capacity()
@@ -898,9 +914,12 @@ pub fn resonate_pair(sc: &mut QueryScratch, cb: &Codebooks, a: &Anchors) -> Pair
     // Re-encode: subtract the clean atom of the other factor, unbind own role,
     // cleanup on the ACF copy. The subtraction is exact because the value is a
     // sum (bundle), not a product of phases.
+    //
+    // Early exit: a pair already resolved with high evidence on both roles
+    // does not need the iterative pass (the ACF remains for ambiguous cases).
     let mut iters = 0u8;
-    let mut converged = false;
-    for _ in 0..PAIR_ITERS {
+    let mut converged = co.sim > 0.70 && cm.sim > 0.70;
+    while !converged && iters < PAIR_ITERS as u8 {
         iters = iters.saturating_add(1);
         let prev = (o, m);
 
@@ -1384,6 +1403,7 @@ pub fn hot_query_flat(
 // ---------------------------------------------------------------------------
 
 /// Resultado do torque top-down macro → micro.
+#[cfg(feature = "m1")]
 #[derive(Clone, Copy, Debug)]
 pub struct RgResult {
     pub before: f32,
@@ -1393,6 +1413,7 @@ pub struct RgResult {
     pub goal: f32,
 }
 
+#[cfg(feature = "m1")]
 #[inline]
 fn wrap_signed(x: f32) -> f32 {
     let mut v = x % TAU;
@@ -1404,6 +1425,7 @@ fn wrap_signed(x: f32) -> f32 {
     v
 }
 
+#[cfg(feature = "m1")]
 fn mean_abs_error(a: &[f32], b: &[f32]) -> f32 {
     let mut acc = 0.0f32;
     for (&x, &y) in a.iter().zip(b) {
@@ -1418,6 +1440,7 @@ fn mean_abs_error(a: &[f32], b: &[f32]) -> f32 {
 /// hierarquia extrai o objetivo macro de `clean` e o impõe a `noisy`; o erro
 /// angular micro deve cair. É a demonstração de que a intenção macro
 /// desambigua a micro — não uma promessa de ganho ilimitado.
+#[cfg(feature = "m1")]
 pub fn rg_topdown(clean: &[f32], noisy: &[f32], gain: f32) -> RgResult {
     assert_eq!(clean.len(), 64);
     assert_eq!(noisy.len(), 64);

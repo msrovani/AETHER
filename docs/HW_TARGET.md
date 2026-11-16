@@ -234,7 +234,7 @@ continua **N=512**.
 ### Validação (E6b)
 
 * `ACQ = 100.00` · **12/12 MEASURED** · `hot_path_bytes = 0` (auditoria cognitiva).
-* `cargo test --release`: **24 alvos, 0 falhas**.
+* `cargo test --release`: **40 alvos, 0 falhas** (2026-11-16).
 * `clippy --all-targets -D warnings` e `fmt --check`: verdes.
 * Alocações na janela de 10.000 quadros: **0**.
 * A associação de ponto flutuante mudou (~1 ULP): nenhum atrator mudou de Bacia.
@@ -243,5 +243,39 @@ continua **N=512**.
 > do arquivo (`Set-Content -Encoding UTF8` releu UTF-8 como cp1252). O `clippy`
 > acusou 9 caracteres invisíveis; o arquivo foi restaurado do git e a reversão
 > cp1252→UTF-8 aplicada. **Nunca editar `.rs` com `Set-Content` no PowerShell 5.1.**
+
+## 9. Penhasco de capacidade e métrica de cache (2026-11-16)
+
+Fecha `CAPACITY_CLIFF_UNDOC` e `CACHE_METRIC_ABSENT` por **aritmética declarada**,
+não por leitura de PMU. O "penhasco N≈512" é layout, não anomalia:
+
+| N | `J` (`N²·f64`) | `x+y+hx` (`3N·f64`) | working set | cabe na L2 (1,25 MB)? |
+|---|---|---|---|---|
+| 128 | 131 KB | 3 KB | 134 KB | sim |
+| 256 | 524 KB | 6 KB | 530 KB | sim |
+| 512 | **2,10 MB** | 12 KB | 2,11 MB | **não** (1,7×) |
+| 1024 | 8,39 MB | 25 KB | 8,41 MB | não |
+
+Com `f32` no lugar de `f64`, o penhasco anda para `N ≈ 724`
+(`2·N²·4 B ≤ 1,25 MB`). Medido no E1b: capacidade ∝ **D^0,90**; em `D=160, K=6`
+a recall@1 cai de **1,000** (64 fatos) para **0,891** (128) e **0,415** (256) —
+o mesmo regime, uma década abaixo do penhasco de `J`.
+
+**Métrica de cache (proxy declarado):** sem driver de PMU no Windows,
+`LLC-misses/ciclo` não é legível. O contrato exige o proxy
+`bytes_tocados/ciclo = N²·8 (solver) + D·K·8 (FHRR) + estágios` comparado com
+1,25 MB. **Nenhum número deste repositório se apresenta como leitura de PMU.**
+
+## 10. Envelope do passe lógico (E2, 2026-11-16)
+
+O gate `G3b` pedia "passe simbólico + Lagrange ≤ 5% do ciclo" (4,07 µs de 81,3 µs).
+Medido em `n=20`: **48,2 µs** (presolve 15,6 · persistência 13,2 · decomposição
+3,1 · montagem 16,3). O envelope mostra que o teto é **inatingível por
+construção**: mesmo `n=6` custa **5,9 µs** (26 cláusulas; ~1,5 µs por variável).
+
+Decisão registrada: a consulta lógica é **batch, fora do hot path** — a mesma
+classe do verificador estrutural do E3 (`0,007 ms`, 0 alloc). O orçamento de
+4,07 µs continua valendo para o **laço do organismo**, não para uma consulta SAT.
+O que o E2 garante no caminho quente é **0 alocação** (medido: 0).
 
 

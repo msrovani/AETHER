@@ -196,6 +196,10 @@ fn probe_fixed(n: usize, j: &[f64], h: &[f64], max_rounds: usize) -> usize {
 }
 
 fn main() {
+    if std::env::args().any(|a| a == "--scale") {
+        scale_table();
+        return;
+    }
     println!("E2c-3 probe | n={N} inst={INSTANCES} delta={DELTA} seed={SEED0:#x}");
     println!(
         "{:>6} {:>9} {:>10} {:>7} {:>10} {:>9} {:>9} {:>7} {:>8}",

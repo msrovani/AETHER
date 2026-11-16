@@ -75,9 +75,13 @@ curl -s -X POST http://127.0.0.1:8787/v1/aether/cue -d '{
 }'
 ```
 ```json
-{"abstain":false,"hits":1,"key":"42","authority":255,
+{"abstain":false,"hits":1,"key":"42","authority":255,"score":1.0,
  "phases":[...],"isolation":{"cross_scope_hits":0,"cross_scope_skipped":0}}
 ```
+
+`score` é a correlação complexa (`0..1`) com o melhor fato do escopo. Abaixo de
+`0,5` a resposta **abstém** com `reason: "low_similarity"` — parecido com o
+`argmax` sem limiar, que transformaria toda pergunta em resposta errada.
 
 Consulta em **outro** organismo devolve `{"abstain":true,"reason":"empty_scope"}`
 — nunca o fato de outro escopo (R8).
@@ -171,7 +175,8 @@ Para o llama.cpp, aponte o cliente para `/completion`; o payload é
 | Limite | Valor |
 |---|---|
 | corpo da requisição | 1 MiB (`413` acima) |
-| dimensão de fase | 160 (f32) |
+| dimensão de fase | 160 **fasores** = 320 `f32` (1280 B) |
+| score mínimo para responder | `0,5` (abaixo disso: `abstain` / `low_similarity`) |
 | `n` em `solve` | 1..=256 |
 | passos / reinícios | 1..=4096 / 1..=32 |
 | conexões | `--threads` workers (padrão 4), `Connection: close` |

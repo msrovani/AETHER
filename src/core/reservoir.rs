@@ -684,6 +684,108 @@ impl FrozenModel {
     pub fn reset(&mut self) {
         self.reservoir.reset();
     }
+
+    /// Re-resolve o readout com outro `λ` **sem repetir** a simulação.
+    ///
+    /// É o truque de Lukoševičius (2012): `XᵀX` e `Xᵀy` já estão acumulados;
+    /// trocar a regularização custa só `O(dim³)` uma vez.
+    pub fn recalibrate(&mut self, lambda: f64) -> Result<()> {
+        self.ridge.solve(lambda)
+    }
+}
+
+/// Modelo com readout RLS (online, não-estacionário).
+#[derive(Clone, Debug)]
+pub struct RlsModel {
+    reservoir: Reservoir,
+    readout: RlsReadout,
+}
+
+impl RlsModel {
+    /// Cria o par reservatório + RLS.
+    pub fn new(cfg: ReservoirConfig, lambda: f32, forget: f32) -> Result<Self> {
+        let reservoir = Reservoir::new(cfg)?;
+        let readout = RlsReadout::new(cfg.n, lambda, forget)?;
+        Ok(Self { reservoir, readout })
+    }
+
+    /// Treina o RLS numa passada supervisionada.
+    pub fn train_supervised(
+        cfg: ReservoirConfig,
+        inputs: &[f32],
+        targets: &[f32],
+        start: usize,
+        len: usize,
+        washout: usize,
+        lambda: f32,
+        forget: f32,
+    ) -> Result<(Self, f64)> {
+        if start + len > inputs.len() || start + len > targets.len() || len <= washout + 1 {
+            return Err(AetherError::Config(
+                "RlsModel: janela supervisionada invalida".into(),
+            ));
+        }
+        let t0 = Instant::now();
+        let mut model = Self::new(cfg, lambda, forget)?;
+        for t in start..(start + len) {
+            model.reservoir.step(inputs[t]);
+            if t >= start + washout {
+                let s = model.reservoir.state();
+                model.readout.observe(s, targets[t])?;
+            }
+        }
+        Ok((model, t0.elapsed().as_secs_f64()))
+    }
+
+    /// Avança o reservatório.
+    pub fn step(&mut self, u: f32) -> &[f32] {
+        self.reservoir.step(u)
+    }
+
+    /// Prediz a partir do estado corrente.
+    pub fn predict_into(&self, out: &mut [f32]) -> Result<()> {
+        self.readout.predict_into(self.reservoir.state(), out)
+    }
+
+    /// Reinicia o estado.
+    pub fn reset(&mut self) {
+        self.reservoir.reset();
+    }
+}
+
+/// Avalia o RLS congelado (sem mais atualizações) num trecho supervisionado.
+pub fn evaluate_rls(
+    model: &mut RlsModel,
+    inputs: &[f32],
+    targets: &[f32],
+    start: usize,
+    len: usize,
+) -> Result<(f32, f64)> {
+    if start + len > inputs.len() || start + len > targets.len() {
+        return Err(AetherError::Config(
+            "evaluate_rls: janela de teste invalida".into(),
+        ));
+    }
+    model.reset();
+    let warm = 8usize.min(len / 4).max(1);
+    for t in start..(start + warm) {
+        model.step(inputs[t]);
+    }
+    let mut pred = [0.0f32; 1];
+    let mut se = 0.0f64;
+    let mut count = 0usize;
+    let begin = Instant::now();
+    for t in (start + warm)..(start + len) {
+        model.step(inputs[t]);
+        model.predict_into(&mut pred)?;
+        let d = f64::from(pred[0] - targets[t]);
+        se += d * d;
+        count += 1;
+    }
+    let secs = begin.elapsed().as_secs_f64().max(1e-9);
+    let rmse = (se / count.max(1) as f64).sqrt();
+    let (_, std) = mean_std(&targets[(start + warm)..(start + len)]);
+    Ok(((rmse / std) as f32, count as f64 / secs))
 }
 
 /// Resultado de um braço do benchmark.

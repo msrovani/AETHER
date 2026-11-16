@@ -363,3 +363,21 @@ de persistência muda isso. A métrica útil é **tamanho da árvore** e
 
 **Não fazer:** implementar strong persistency/BHS como “extensão do E2c-2” — o
 teorema de 2026 garante que o ganho é zero.
+
+### 8.5 E2c-3A implementado (2026-11-16)
+
+| Artefato | Conteúdo |
+|---|---|
+| `src/core/persistency_search.rs` | `ExactSearch` (workspace 0-alloc após `new`), `solve` exato com roof dual como propagador, `SearchReport{nodes,leaves,root_fixed,exhausted}` |
+| `tests/e2c3_exact_search.rs` | 4 gates: soundness 150 casos vs força bruta; root 0 em vidro denso; árvore pequena sob viés; **n=20** |
+| `examples/e2c3_probe.rs` | probe (root vs probing) + busca exata via o módulo |
+| `target/aether_e2c3_probe.json` | artefato dos três regimes |
+
+Números verificados: `n=14` — **420/420 sound**, nós médios **1.017 / 59 / 16**
+(plant 0/25/45), folhas 2,0% / 0,12% / 0,032% de `2¹⁴`; `n=20` sob viés —
+**66 nós** contra `2²⁰ = 1.048.576` (fator ≈16.000×). Probing por persistência
+continua **0 extra** em 600 instâncias.
+
+**Limite:** o pior caso é exponencial; `n=64` exige o bound (E2c-3C) para podar
+por energia. O que está fechado é o Q4 **como medido**: em `n=14–20`, o roof
+dual deixa de ser um redutor e passa a ser um propagador exato.

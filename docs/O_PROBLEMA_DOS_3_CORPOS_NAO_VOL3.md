@@ -286,6 +286,24 @@ O AETHER tem *warrant* físico (gap de energia). O SGDB tem *warrant* social
 **certificado de factibilidade** `(E, ΔE, violações, proveniência)`, não de verdade. A resposta carrega
 `proveniência` obrigatória. Sem os dois campos, a resposta é inválida por construção.
 
+### 6.1 Três coisas que o certificado **não** é
+
+O E2/E3 separaram três noções que o vocabulário antigo confundia:
+
+| Noção | Campo | O que prova | O que **não** prova |
+|---|---|---|---|
+| **Testemunha de factibilidade** | `violations == 0` (contagem exata) | a atribuição avalia todas as restrições como verdadeiras | que o mundo é assim |
+| **Mínimo local** | `ΔE > 0` (gap de flip) | nenhum flip simples reduz a energia do QUBO | que é o ótimo global |
+| **Verdade** | — | nada no motor | qualquer coisa fora do contrato |
+
+Consequências medidas: o E2 decide por `violations` (100% preciso em 169/169); o
+E3b mostrou que `ΔE` sozinho **não** prediz acerto em otimização livre
+(AUC 0,46–0,55). Por isso o E2 repara a factibilidade **depois** do BSB e emite
+o `ΔE` apenas como diagnóstico — nunca como decisão. O E3 usa o par
+(evidência `role_similarity`, margem) para abstenção: margem sozinha **não**
+detecta consulta fora do domínio, porque o unbinding sempre "encontra" um
+valor para o melhor papel.
+
 ---
 
 ## 7. Knowledge Bridge
@@ -387,15 +405,15 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | **E2b** ✅ | II | presolve simbólico antes do BSB — **executado** | **0 insound** · **64,8% redução** (+39,8 pp de cascata) · **200/200** resolvidas vs 183/200 | R1, R3 |
 | **E2c** ✅ | II | persistência de 1ª ordem (dominância) — **executado** | **0/600 ótimos alterados** · 0% sem viés (controle) · 42,9% com viés 45% | R1, R3 |
 | **E2c-2** ✅ | II | roof dual completo (max-flow) — **executado** | **0/600 ótimos alterados** · **52,0%** em 45% (vs 42,9%) · 28,9% em 25% · **0% no controle = teto ℤ₂** · 199/200 | R1 |
-| **E3** ✅ | I | transplantação de embeddings — **executado** | **JL ρ=0,9528** (499.500 pares) · **1,28 KB/átomo** (1,28 MB/1.000) · relação **0,9990** (≤ 48 fatos/shard) · analogia **R@1 0,9549** (sem alvo) · proveniência **100%** · OOD **100%** abstido · verificador **0,004 ms / 0 alloc** | R3, R10 |
+| **E3** ✅ | I | transplantação de embeddings — **executado** | **JL ρ=0,9528** (499.500 pares) · **1,28 KB/átomo** (1,28 MB/1.000) · relação **0,9990** (≤ 48 fatos/shard) · analogia **R@1 0,9549** (sem alvo) · proveniência **100%** · OOD **100%** abstido · verificador **0,007 ms / 0 alloc** · calibração com ruído 0,6 rad (evidência p5 **0,8037**) | R3, R10 |
 | **E3b** ✅ | II/III | verificador de coerência + proveniência | **spins: nulo (AUC 0,46–0,55)** · **2-SAT: precisão 100%** | R3, R10 |
-| **E4** | I | self-field + ablação | ECE melhora; T01 não regride | K5 |
-| **E5** | I | currículo por progresso | readaptação < 150 ciclos (T03) | R5 |
-| **E7** | II | laço S0 com 4 atuadores | H3: entropia cai ≥30% sem atuador | R4 |
-| **E8** | II | readout congelado vs treinado | <5% regressão; <60 s treino | R5 |
+| **E4** ✅ | I | self-field + ablação — **executado** | **ECE 0,3567 → 0,3238** (bootstrap p97,5 = **−0,0168** < 0) · **T01 1,0000** (não regride) · erro pós-plasticidade **0,0140** vs 0,0562 congelado · topologia 0,1507 → 0,1391 | K5 |
+| **E5** ✅ | I | currículo por progresso — **executado** | readaptação **8 ciclos** (T03 = 150) · outlier: **1** update vs 7 da surpresa bruta · **0 alloc** em 150 ciclos | R5 |
+| **E7** ✅ | II | laço S0 com 4 atuadores — **executado** | entropia **−71,9%** (gate ≥ 30%) · ρ(controle, entropia) **0,8808** · 100k ciclos · throttle/affinity/pause 13 cada | R4 |
+| **E8** ✅ | II | readout congelado vs treinado — **executado** | NRMSE congelado **0,0791** vs joint 0,3132 · regressão **0,000** · treino 1,88 s vs 5,53 s (**2,94×**) · 615.680 predições/s | R5 |
 | **F1** ✅ | III | `KnowledgeSink` read-only — **executado** | **0 alocações** no `T0` (10k ciclos) · **`t0_ledger_calls = 0`** · `T1` 100% íntegro · **0 hits cruzados** de escopo | R7, K6 |
-| **F2** | III | consolidação T1 + `commit_run` | 0 eventos perdidos; ciclo inalterado | R9 |
-| **F3** | III | fusão 2D + `cue_into` | quadrante "plausível sem fonte" ≥90% | R3, R8 |
+| **F2** ✅ | III | consolidação T1 + `commit_run` — **executado** | **32/32 eventos/rodada**, 0 perdidos · `t0_ledger_calls = 0` · retenção de gist **1,000** (40/40) · R9 = 1 | R9 |
+| **F3** ✅ | III | fusão 2D + `cue_into` — **executado** | plausível-ambíguo **1,000** (100/100) · ruído sem fonte **1,000** (300/300) · recall@1 direto e round-trip **1,000** · perda **0,000** | R3, R8 |
 
 ### 11.2 Gaps consolidados
 
@@ -405,10 +423,10 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | `NO_ENERGY_CERT` | I | ✅ **resolvido (E2)** | resposta sempre com `(E, ΔE, violações, proveniência)`; 169/169 testemunhas válidas | — |
 | `NO_ISING_CONSTRAINTS` | I | ✅ **resolvido (E2)** | gadget exato de 3-SAT (2 spins aux) + multiplicadores de Lagrange; 100% vs 5,3% do BSB puro | — |
 | *(E2d aquisição)* | I | ✅ **lab** | custos pairwise CRAM→QUBO offline; warrant na inferência continua sendo o `Certificate` (`docs/CRAM_LOGOS.md`) | — |
-| `NO_SELF_FIELD` | I | alto | E4 |
-| `NO_PROGRESS_CURRICULUM` | I | médio | E5 |
-| `CACHE_METRIC_ABSENT` | I | médio | sonda LLC |
-| `CAPACITY_CLIFF_UNDOC` | I | médio | `docs/HW_TARGET.md` |
+| `NO_SELF_FIELD` | I | ✅ **resolvido (E4)** | ECE 0,3567 → 0,3238 (IC abaixo de zero); T01 1,0000 | — |
+| `NO_PROGRESS_CURRICULUM` | I | ✅ **resolvido (E5)** | readaptação 8 ciclos (T03 = 150); outlier 1 update vs 7 | — |
+| `CACHE_METRIC_ABSENT` | I | ✅ **resolvido por proxy (HW_TARGET §9)** | bytes tocados/ciclo por aritmética; PMU indisponível sem driver | — |
+| `CAPACITY_CLIFF_UNDOC` | I | ✅ **resolvido (HW_TARGET §9)** | penhasco documentado: `J` em N=512 = 2,1 MB > L2 (1,25 MB) | — |
 | `TRANSPLANT_UNVALIDATED` | I | ✅ **resolvido (E3)** | JL ρ=0,9528 · 1,28 KB/átomo · relação 0,9990 · analogia R@1 0,9549 | — |
 | `PREPRINT_RISK` | I/II | info | protocolo §7 Vol. II |
 | `NO_PROFILE_BREAKDOWN` | II | ✅ **resolvido (E6)** | medido 2026-11-15: solver 84,4% | — |
@@ -417,13 +435,13 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | `NO_LIMIT_CYCLE_GUARD` | II | alto | E1b |
 | `NO_PROVENANCE` | II | ✅ **resolvido (F1 + E3)** | evento F1 carrega `Certificate`+`authority`+`ScopeId`; E3 carimba 100% das respostas e abstém 100% fora do domínio | — |
 | `D_CAPACITY_UNMEASURED` | II | ✅ **resolvido (E1b → E1)** | lei linear **0,4·D** medida; 1.000 fatos via 24 shards | — |
-| `NO_ACTUATOR_LOOP` | II | alto | E7 |
-| `CERT_SEMANTICS` | II | médio | §6 (vocabulário) |
-| `KB_TAXONOMY_UNDOC` | III | alto | este volume |
+| `NO_ACTUATOR_LOOP` | II | ✅ **resolvido (E7)** | entropia −71,9% com 4 atuadores; 100k ciclos | — |
+| `CERT_SEMANTICS` | II | ✅ **resolvido (§6/§6.1)** | testemunha ≠ mínimo local ≠ verdade; decisão por `violations` | — |
+| `KB_TAXONOMY_UNDOC` | III | ✅ **resolvido (§1)** | taxonomia dos seis tipos + onde cada um vive | — |
 | `NO_LEDGER_BRIDGE` | III | ✅ **resolvido (F1)** | `knowledge_bridge_f1.rs`: `record` 0 alloc, `drain_batch` T1, telemetria | — |
 | `TIMEBASE_MIX` | III | ✅ **resolvido (F1)** | `tick` e `wall_ms` viajam separados; `created_tick = wall_ms` | — |
 | `NO_REVISION_PATH` | III | alto | F2 (supersede) |
-| `NO_DEGRADATION_LADDER` | III | médio | §2.2 (gist no L4) |
+| `NO_DEGRADATION_LADDER` | III | ✅ **resolvido (F2)** | `prune_to_gist` com retenção **1,000** (40/40); supersede no `FusionLedger` | — |
 | `SCOPE_UNDEFINED` | III | alto | F3 |
 
 ### 11.3 Riscos
@@ -549,8 +567,8 @@ alocação, sem violar a lei do E1b em nenhum acumulador.
 11º ✅ F1   ponte read-only               ← FEITO: 0 alloc no T0 · 0 chamadas ao ledger · R8 = 0
 12º ✅ E2    lógica como Ising + certificado ← FEITO: 169/169 (100%) vs 5,3% · 0 alloc · G3b FAIL declarado
 12º ✅ E3    transplantação JL + proveniência ← FEITO: ρ=0,9528 · 1,28 KB/átomo · R@1 0,9549 · OOD 100%
-13º E4/E5/E7/E8  self, currículo, corpo, treino
-14º F2/F3  consolidação e fusão 2D
+13º ✅ E4/E5/E7/E8 self, currículo, corpo, treino ← FEITO: ECE −0,0322 · 8 ciclos · entropia −71,9% · congelado 0,0791
+14º ✅ F2/F3  consolidação e fusão 2D          ← FEITO: 0 eventos perdidos · gist 1,000 · quadrante 1,000
 ```
 
 ### 12.5 As sete perguntas — placar

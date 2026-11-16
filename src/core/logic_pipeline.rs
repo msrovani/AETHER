@@ -510,71 +510,64 @@ impl PoBTerm {
 }
 
 // ---------------------------------------------------------------------------
-// Presolve simbólico de 3-SAT (unidades + literais falhos)
+// Presolve simbólico de 3-SAT — versão dirigida por ocorrências
 // ---------------------------------------------------------------------------
 
-/// Propaga unidades até o fixpoint. `true` = conflito.
+/// Estado de uma cláusula sob as fixações correntes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CState {
+    /// Já satisfeita por um literal fixado.
+    Sat,
+    /// Tautologia (`(x ∨ ¬x ∨ …)`): sempre satisfeita.
+    Taut,
+    /// Duas ou mais variáveis livres distintas.
+    Free,
+    /// Exatamente uma variável livre: `(v, s)` é unidade.
+    Unit(usize, i8),
+    /// Nenhuma livre e nenhuma verdadeira.
+    Conflict,
+}
+
+/// Estado de `c` sob `fixed` (mesma semântica de `propagate3`, escrita uma vez).
 ///
 /// Conta **variáveis livres distintas** (não ocorrências): uma cláusula com o
 /// mesmo literal repetido é uma unidade, e `(x ∨ ¬x ∨ …)` é tautologia.
-fn propagate3(n: usize, clauses: &[Clause3], fixed: &mut [Option<i8>]) -> bool {
-    let mut changed = true;
-    while changed {
-        changed = false;
-        for c in clauses {
-            let mut sat = false;
-            let mut taut = false;
-            let mut nfree = 0usize;
-            let mut seen_v = [usize::MAX; 3];
-            let mut seen_s = [0i8; 3];
-            for idx in 0..c.len() {
-                let (v, s) = c.lit(idx);
-                debug_assert!(v < n);
-                match fixed[v] {
-                    Some(val) => {
-                        if val == s {
-                            sat = true;
-                            break;
-                        }
-                    }
-                    None => {
-                        let mut dup = false;
-                        for k in 0..nfree {
-                            if seen_v[k] == v {
-                                dup = true;
-                                if seen_s[k] != s {
-                                    taut = true;
-                                }
-                            }
-                        }
-                        if !dup {
-                            seen_v[nfree] = v;
-                            seen_s[nfree] = s;
-                            nfree += 1;
+#[inline]
+fn clause_state(c: &Clause3, fixed: &[Option<i8>]) -> CState {
+    let mut nfree = 0usize;
+    let mut seen_v = [usize::MAX; 3];
+    let mut seen_s = [0i8; 3];
+    for idx in 0..c.len() {
+        let (v, s) = c.lit(idx);
+        match fixed[v] {
+            Some(val) => {
+                if val == s {
+                    return CState::Sat;
+                }
+            }
+            None => {
+                let mut dup = false;
+                for k in 0..nfree {
+                    if seen_v[k] == v {
+                        dup = true;
+                        if seen_s[k] != s {
+                            return CState::Taut;
                         }
                     }
                 }
-            }
-            if sat || taut {
-                continue;
-            }
-            if nfree == 0 {
-                return true;
-            }
-            if nfree == 1 {
-                let (v, s) = (seen_v[0], seen_s[0]);
-                match fixed[v] {
-                    Some(x) if x != s => return true,
-                    Some(_) => {}
-                    None => {
-                        fixed[v] = Some(s);
-                        changed = true;
-                    }
+                if !dup {
+                    seen_v[nfree] = v;
+                    seen_s[nfree] = s;
+                    nfree += 1;
                 }
             }
         }
     }
-    false
+    match nfree {
+        0 => CState::Conflict,
+        1 => CState::Unit(seen_v[0], seen_s[0]),
+        _ => CState::Free,
+    }
 }
 
 /// Orçamento de sondagens de literal falho por consulta.
@@ -585,83 +578,221 @@ fn propagate3(n: usize, clauses: &[Clause3], fixed: &mut [Option<i8>]) -> bool {
 /// limiar não há candidatas, então o custo cai para a propagação de unidades.
 pub const PROBE_MAX: usize = 24;
 
-/// Presolve de 3-SAT: unidades + **literais falhos** (`l ⇒ conflito` ⇒ `¬l`).
+/// Workspace do presolve simbólico: **listas de ocorrências** + *trail*.
 ///
-/// Toda fixação é consequência lógica, logo é *sound* por construção. Retorna
-/// `(conflito, rodadas, sondagens)`.
-fn presolve3_into(
-    n: usize,
-    clauses: &[Clause3],
-    fixed: &mut [Option<i8>],
-    probe: &mut [Option<i8>],
-    cand: &mut [bool],
-    max_probes: usize,
-) -> (bool, usize, usize) {
-    for f in fixed[..n].iter_mut() {
-        *f = None;
-    }
-    let mut rounds = 0usize;
-    let mut probes = 0usize;
-    loop {
-        rounds += 1;
-        if propagate3(n, clauses, fixed) {
-            return (true, rounds, probes);
+/// Substitui a varredura completa por rodada (`O(m)` por rodada, `O(m·fixações)`
+/// no total) por uma propagação dirigida: ao fixar `v`, só as cláusulas que
+/// contêm `v` ou `¬v` são reexaminadas. A sondagem de literal falho usa
+/// *trail* — desfaz apenas o que a suposição tocou, em vez de copiar o estado
+/// inteiro e repropagar do zero.
+///
+/// Tudo é alocado em [`Prop3::new`]; [`Prop3::presolve_into`] não aloca.
+#[derive(Debug)]
+struct Prop3 {
+    /// Início da lista de ocorrências de cada literal (`2*v + (s>0)`).
+    occ_start: Vec<usize>,
+    /// Índices de cláusula por literal.
+    occ_list: Vec<usize>,
+    /// Cursor de construção da CSR.
+    occ_pos: Vec<usize>,
+    /// Variáveis fixadas (para desfazer sondagens).
+    trail: Vec<usize>,
+    /// Fila de propagação (variáveis cujo valor mudou).
+    pq: Vec<usize>,
+    /// Candidatas a sondagem.
+    cand: Vec<bool>,
+}
+
+impl Prop3 {
+    fn new(n_max: usize, m_max: usize) -> Self {
+        Self {
+            occ_start: vec![0; 2 * n_max + 1],
+            occ_list: vec![0; 3 * m_max],
+            occ_pos: vec![0; 2 * n_max],
+            trail: Vec::with_capacity(2 * n_max),
+            pq: Vec::with_capacity(n_max),
+            cand: vec![false; n_max],
         }
-        // candidatas: variáveis livres em cláusulas com exatamente 2 livres
-        cand[..n].fill(false);
+    }
+
+    #[inline]
+    fn lit_of(v: usize, s: i8) -> usize {
+        2 * v + usize::from(s > 0)
+    }
+
+    /// Constrói a CSR de ocorrências (uma passada `O(m)`), sem alocar.
+    fn build(&mut self, n: usize, clauses: &[Clause3]) {
+        for k in 0..=2 * n {
+            self.occ_start[k] = 0;
+        }
         for c in clauses {
-            let mut nfree = 0usize;
-            let mut ids = [usize::MAX; 3];
-            let mut sat = false;
             for idx in 0..c.len() {
                 let (v, s) = c.lit(idx);
-                match fixed[v] {
-                    Some(val) => {
-                        if val == s {
-                            sat = true;
-                            break;
-                        }
-                    }
-                    None => {
-                        if !ids[..nfree].contains(&v) {
-                            ids[nfree] = v;
-                            nfree += 1;
-                        }
-                    }
-                }
-            }
-            if !sat && nfree == 2 {
-                cand[ids[0]] = true;
-                cand[ids[1]] = true;
+                self.occ_start[Self::lit_of(v, s) + 1] += 1;
             }
         }
-        let mut changed = false;
-        for v in 0..n {
-            if fixed[v].is_some() || !cand[v] {
-                continue;
-            }
-            for try_val in [1i8, -1i8] {
-                if probes >= max_probes {
-                    break;
-                }
-                probes += 1;
-                probe[..n].copy_from_slice(&fixed[..n]);
-                probe[v] = Some(try_val);
-                if propagate3(n, clauses, probe) {
-                    let forced = -try_val;
-                    if fixed[v] != Some(forced) {
-                        fixed[v] = Some(forced);
-                        changed = true;
-                    }
-                    break;
-                }
-            }
+        for k in 1..=2 * n {
+            self.occ_start[k] += self.occ_start[k - 1];
         }
-        if !changed || rounds > 64 {
-            break;
+        for k in 0..2 * n {
+            self.occ_pos[k] = self.occ_start[k];
+        }
+        for (ci, c) in clauses.iter().enumerate() {
+            for idx in 0..c.len() {
+                let (v, s) = c.lit(idx);
+                let l = Self::lit_of(v, s);
+                let at = self.occ_pos[l];
+                self.occ_list[at] = ci;
+                self.occ_pos[l] = at + 1;
+            }
         }
     }
-    (false, rounds, probes)
+
+    /// Fixa `v = s`, registra no *trail* e agenda a propagação.
+    ///
+    /// `None` = conflito (já estava no valor oposto).
+    #[inline]
+    fn fix(&mut self, fixed: &mut [Option<i8>], v: usize, s: i8) -> Option<bool> {
+        match fixed[v] {
+            Some(x) if x == s => Some(false),
+            Some(_) => None,
+            None => {
+                fixed[v] = Some(s);
+                self.trail.push(v);
+                self.pq.push(v);
+                Some(true)
+            }
+        }
+    }
+
+    /// Propaga unidades até o fixpoint, **só** pelas ocorrências afetadas.
+    ///
+    /// `true` = conflito. Precisa de uma varredura inicial `O(m)` (não há fila
+    /// na entrada), depois `O(ocorrências das variáveis fixadas)`.
+    fn propagate(&mut self, clauses: &[Clause3], fixed: &mut [Option<i8>]) -> bool {
+        self.pq.clear();
+        for c in clauses.iter() {
+            match clause_state(c, fixed) {
+                CState::Conflict => return true,
+                CState::Unit(v, s) => {
+                    if self.fix(fixed, v, s).is_none() {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        while let Some(v) = self.pq.pop() {
+            for s in [1i8, -1i8] {
+                let l = Self::lit_of(v, s);
+                let mut k = self.occ_start[l];
+                let end = self.occ_start[l + 1];
+                while k < end {
+                    let ci = self.occ_list[k];
+                    match clause_state(&clauses[ci], fixed) {
+                        CState::Conflict => return true,
+                        CState::Unit(w, sw) => {
+                            if self.fix(fixed, w, sw).is_none() {
+                                return true;
+                            }
+                        }
+                        _ => {}
+                    }
+                    k += 1;
+                }
+            }
+        }
+        false
+    }
+
+    /// Desfaz até o checkpoint (sondagem).
+    fn rollback(&mut self, fixed: &mut [Option<i8>], checkpoint: usize) {
+        for i in (checkpoint..self.trail.len()).rev() {
+            let v = self.trail[i];
+            fixed[v] = None;
+        }
+        self.trail.truncate(checkpoint);
+        self.pq.clear();
+    }
+
+    /// Presolve de 3-SAT: unidades + **literais falhos** (`l ⇒ conflito` ⇒ `¬l`).
+    ///
+    /// Toda fixação é consequência lógica, logo é *sound* por construção.
+    /// Retorna `(conflito, rodadas, sondagens)`.
+    fn presolve_into(
+        &mut self,
+        n: usize,
+        clauses: &[Clause3],
+        fixed: &mut [Option<i8>],
+        max_probes: usize,
+    ) -> (bool, usize, usize) {
+        for f in fixed[..n].iter_mut() {
+            *f = None;
+        }
+        self.trail.clear();
+        self.build(n, clauses);
+
+        let mut rounds = 0usize;
+        let mut probes = 0usize;
+        loop {
+            rounds += 1;
+            if self.propagate(clauses, fixed) {
+                return (true, rounds, probes);
+            }
+            // candidatas: variáveis livres em cláusulas com exatamente 2 livres
+            self.cand[..n].fill(false);
+            for c in clauses {
+                match clause_state(c, fixed) {
+                    CState::Free => {
+                        let mut ids = [usize::MAX; 2];
+                        let mut nfree = 0usize;
+                        for idx in 0..c.len() {
+                            let (v, _s) = c.lit(idx);
+                            if fixed[v].is_none() && !ids[..nfree].contains(&v) {
+                                ids[nfree] = v;
+                                nfree += 1;
+                            }
+                        }
+                        if nfree == 2 {
+                            self.cand[ids[0]] = true;
+                            self.cand[ids[1]] = true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let mut changed = false;
+            for v in 0..n {
+                if fixed[v].is_some() || !self.cand[v] {
+                    continue;
+                }
+                for try_val in [1i8, -1i8] {
+                    if probes >= max_probes {
+                        break;
+                    }
+                    probes += 1;
+                    let checkpoint = self.trail.len();
+                    let conflict = match self.fix(fixed, v, try_val) {
+                        None => true,
+                        Some(_) => self.propagate(clauses, fixed),
+                    };
+                    self.rollback(fixed, checkpoint);
+                    if conflict {
+                        let forced = -try_val;
+                        if fixed[v] != Some(forced) {
+                            fixed[v] = Some(forced);
+                            changed = true;
+                        }
+                        break;
+                    }
+                }
+            }
+            if !changed || rounds > 64 {
+                break;
+            }
+        }
+        (false, rounds, probes)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -680,8 +811,8 @@ pub struct LogicPipeline {
     lambda0: f64,
 
     fixed3: Vec<Option<i8>>,
-    probe: Vec<Option<i8>>,
-    cand: Vec<bool>,
+    /// Presolve simbólico dirigido por ocorrências (buffers próprios).
+    prop: Prop3,
     res_of: Vec<usize>,
     res_var: Vec<usize>,
     res_clauses: Vec<Clause3>,
@@ -697,6 +828,10 @@ pub struct LogicPipeline {
     lin: Vec<f64>,
     qsum: Vec<f64>,
     g: Vec<f64>,
+    /// `Σ_j |J_ij|` do último emissão (teste esparso de dominância).
+    jabs: Vec<f64>,
+    /// Índices de `jq` escritos na última emissão (limpeza esparsa).
+    touched: Vec<u32>,
     residual: Vec<usize>,
     exp_state: Vec<i8>,
 
@@ -750,8 +885,7 @@ impl LogicPipeline {
             },
             lambda0: 1.0,
             fixed3: vec![None; n_max],
-            probe: vec![None; n_max],
-            cand: vec![false; n_max],
+            prop: Prop3::new(n_max, m_max),
             res_of: vec![usize::MAX; n_max],
             res_var: vec![0; n_max],
             res_clauses: vec![Clause3::new3(0, 1, 0, 1, 0, 1); m_max],
@@ -765,6 +899,8 @@ impl LogicPipeline {
             lin: vec![0.0; n_exp_max],
             qsum: vec![0.0; n_exp_max],
             g: vec![0.0; n_exp_max],
+            jabs: vec![0.0; n_exp_max],
+            touched: Vec::with_capacity(2 * n_exp_max),
             residual: Vec::with_capacity(n_exp_max),
             exp_state: vec![1; n_exp_max],
             parent: vec![0; n_exp_max],
@@ -801,7 +937,9 @@ impl LogicPipeline {
     pub fn memory_bytes(&self) -> usize {
         (self.jq.len() + self.jc.len() + self.hq.len() + self.hc.len()) * 8
             + self.terms.capacity() * std::mem::size_of::<PoBTerm>()
-            + (self.fixed3.len() + self.probe.len()) * std::mem::size_of::<Option<i8>>()
+            + self.fixed3.len() * std::mem::size_of::<Option<i8>>()
+            + (self.prop.occ_start.len() + self.prop.occ_list.len() + self.prop.occ_pos.len())
+                * std::mem::size_of::<usize>()
     }
 
     /// Resolve `clauses` (sobre `n` variáveis) e emite `(resposta, certificado)`.
@@ -831,14 +969,10 @@ impl LogicPipeline {
 
         // ---------- (1) presolve simbólico ----------
         let t_pre = Instant::now();
-        let (conflict, _, probes) = presolve3_into(
-            n,
-            clauses,
-            &mut self.fixed3,
-            &mut self.probe,
-            &mut self.cand,
-            PROBE_MAX,
-        );
+        // `mem::take` é O(1) e evita dois empréstimos mutáveis de `self`.
+        let mut fixed3 = std::mem::take(&mut self.fixed3);
+        let (conflict, _, probes) = self.prop.presolve_into(n, clauses, &mut fixed3, PROBE_MAX);
+        self.fixed3 = fixed3;
         self.last.presolve_us = t_pre.elapsed().as_secs_f64() * 1e6;
         self.last.probes = probes;
         if conflict {
@@ -971,16 +1105,23 @@ impl LogicPipeline {
 
         // ---------- (2) persistência de 1ª ordem (λ = 1) ----------
         self.lambda[..m].fill(self.lambda0);
-        self.emit_qubo(n_exp);
+        // Estado limpo: nenhuma fixação da instância anterior pode contaminar
+        // a posiform desta (soundness entre chamadas do mesmo pipeline).
+        self.fixed_exp[..n_exp].fill(None);
         let t_pers = Instant::now();
-        let _ = persistency_qumo_into(
-            n_exp,
-            &self.jq[..n_exp * n_exp],
-            &self.hq[..n_exp],
-            &mut self.fixed_exp,
-            &mut self.lin,
-            &mut self.residual,
-        );
+        // Teste esparso primeiro: se nenhuma dominância é possível, a etapa
+        // densa é pulada com resultado idêntico (zero fixações).
+        if self.dominance_may_fire(n_exp) {
+            self.emit_qubo(n_exp);
+            let _ = persistency_qumo_into(
+                n_exp,
+                &self.jq[..n_exp * n_exp],
+                &self.hq[..n_exp],
+                &mut self.fixed_exp,
+                &mut self.lin,
+                &mut self.residual,
+            );
+        }
         self.last.persistency_us = t_pers.elapsed().as_secs_f64() * 1e6;
         for v in 0..n_exp {
             self.free[v] = self.fixed_exp[v].is_none();
@@ -1007,10 +1148,14 @@ impl LogicPipeline {
                 aux += 2;
                 cnt = 5;
             }
-            for a in 0..cnt {
-                for b in (a + 1)..cnt {
-                    union(&mut self.parent, ids[a], ids[b]);
-                }
+            // Cadeia conecta o mesmo que o produto cartesiano, com bem menos
+            // `union` (2 ou 3 em vez de 1 ou 10).
+            if cnt == 2 {
+                union(&mut self.parent, ids[0], ids[1]);
+            } else {
+                union(&mut self.parent, ids[0], ids[1]);
+                union(&mut self.parent, ids[2], ids[3]);
+                union(&mut self.parent, ids[4], ids[0]);
             }
         }
 
@@ -1250,23 +1395,33 @@ impl LogicPipeline {
     }
 
     /// Emite o QUBO expandido (spin) com os pesos correntes de `lambda`.
+    ///
+    /// A limpeza é **esparsa**: só os índices escritos na emissão anterior são
+    /// zerados (`touched`). Para o QUBO expandido (≈ `5m` spins) isso troca um
+    /// `fill` de `n_exp²` doubles por `O(#termos)`.
     fn emit_qubo(&mut self, n_exp: usize) {
         let nn = n_exp * n_exp;
-        self.jq[..nn].fill(0.0);
+        for &idx in self.touched.iter() {
+            self.jq[idx as usize] = 0.0;
+        }
+        self.touched.clear();
         self.hq[..n_exp].fill(0.0);
         self.lin[..n_exp].fill(0.0);
         self.qsum[..n_exp].fill(0.0);
 
-        for t in &self.terms {
+        for ti in 0..self.terms.len() {
+            let t = self.terms[ti];
             let w = self.lambda[t.clause as usize];
             let c = t.coeff * w;
             if t.deg == 1 {
                 emit_bit1(&mut self.lin[..n_exp], &self.fixed_exp[..n_exp], t.a, c);
             } else {
                 emit_bit2(
-                    &mut self.jq[..nn],
+                    Some(&mut self.jq[..nn]),
                     &mut self.lin[..n_exp],
                     &mut self.qsum[..n_exp],
+                    &mut self.jabs[..n_exp],
+                    Some(&mut self.touched),
                     &self.fixed_exp[..n_exp],
                     n_exp,
                     t.a,
@@ -1278,6 +1433,52 @@ impl LogicPipeline {
         for v in 0..n_exp {
             self.hq[v] = -(self.lin[v] * 0.5 + self.qsum[v] * 0.25);
         }
+    }
+
+    /// Teste **esparso** de "a dominância pode disparar?" antes de densificar.
+    ///
+    /// A persistência de 1ª ordem só fixa `i` se `h_i + Σ_j|J_ij| < 0` (ou o
+    /// simétrico). Como `h_i` e `Σ_j|J_ij|` são **aditivos sobre os termos**,
+    /// dá para calculá-los em `O(#termos)` — sem construir a matriz densa.
+    /// Se nenhum spin pode ser fixado, a etapa de persistência é pulada com
+    /// resultado **idêntico** (ela fixaria zero) e sem o custo `O(n_exp²)`.
+    fn dominance_may_fire(&mut self, n_exp: usize) -> bool {
+        self.lin[..n_exp].fill(0.0);
+        self.qsum[..n_exp].fill(0.0);
+        self.jabs[..n_exp].fill(0.0);
+        for ti in 0..self.terms.len() {
+            let t = self.terms[ti];
+            let c = t.coeff * self.lambda[t.clause as usize];
+            if t.deg == 1 {
+                let x = t.a.var as usize;
+                if t.a.neg {
+                    self.lin[x] -= c;
+                } else {
+                    self.lin[x] += c;
+                }
+            } else {
+                emit_bit2(
+                    None,
+                    &mut self.lin[..n_exp],
+                    &mut self.qsum[..n_exp],
+                    &mut self.jabs[..n_exp],
+                    None,
+                    &self.fixed_exp[..n_exp],
+                    n_exp,
+                    t.a,
+                    t.b,
+                    c,
+                );
+            }
+        }
+        for v in 0..n_exp {
+            let h = -(self.lin[v] * 0.5 + self.qsum[v] * 0.25);
+            let s = self.jabs[v];
+            if h + s < 0.0 || h - s > 0.0 {
+                return true;
+            }
+        }
+        false
     }
 }
 
@@ -1297,11 +1498,16 @@ fn emit_bit1(lin: &mut [f64], fixed: &[Option<i8>], a: BitRef, c: f64) {
 ///
 /// `(1−b_i)·b_j` etc. são distribuídos; o resultado são monômios de grau ≤ 2
 /// em bits **positivos**, convertidos para spin em [`LogicPipeline::emit_qubo`].
+///
+/// `jq`/`touched` são opcionais: sem eles a função só acumula `lin/qsum/jabs`
+/// (é o caminho do teste esparso de dominância, sem construir a matriz densa).
 #[allow(clippy::too_many_arguments)]
 fn emit_bit2(
-    jq: &mut [f64],
+    mut jq: Option<&mut [f64]>,
     lin: &mut [f64],
     qsum: &mut [f64],
+    jabs: &mut [f64],
+    mut touched: Option<&mut Vec<u32>>,
     fixed: &[Option<i8>],
     n: usize,
     a: BitRef,
@@ -1310,9 +1516,11 @@ fn emit_bit2(
 ) {
     match (a.neg, b.neg) {
         (false, false) => add_b_monomial(
-            jq,
+            jq.as_deref_mut(),
             lin,
             qsum,
+            jabs,
+            touched.as_deref_mut(),
             fixed,
             n,
             a.var as usize,
@@ -1326,16 +1534,71 @@ fn emit_bit2(
             } else {
                 (b.var as usize, a.var as usize)
             };
-            add_b_monomial(jq, lin, qsum, fixed, n, pos_var, None, c);
-            add_b_monomial(jq, lin, qsum, fixed, n, neg_var, Some(pos_var), -c);
+            add_b_monomial(
+                jq.as_deref_mut(),
+                lin,
+                qsum,
+                jabs,
+                touched.as_deref_mut(),
+                fixed,
+                n,
+                pos_var,
+                None,
+                c,
+            );
+            add_b_monomial(
+                jq.as_deref_mut(),
+                lin,
+                qsum,
+                jabs,
+                touched.as_deref_mut(),
+                fixed,
+                n,
+                neg_var,
+                Some(pos_var),
+                -c,
+            );
         }
         (true, true) => {
             // c·(1−x)(1−y) = c − c·x − c·y + c·x·y  (constante descartada)
             let x = a.var as usize;
             let y = b.var as usize;
-            add_b_monomial(jq, lin, qsum, fixed, n, x, None, -c);
-            add_b_monomial(jq, lin, qsum, fixed, n, y, None, -c);
-            add_b_monomial(jq, lin, qsum, fixed, n, x, Some(y), c);
+            add_b_monomial(
+                jq.as_deref_mut(),
+                lin,
+                qsum,
+                jabs,
+                touched.as_deref_mut(),
+                fixed,
+                n,
+                x,
+                None,
+                -c,
+            );
+            add_b_monomial(
+                jq.as_deref_mut(),
+                lin,
+                qsum,
+                jabs,
+                touched.as_deref_mut(),
+                fixed,
+                n,
+                y,
+                None,
+                -c,
+            );
+            add_b_monomial(
+                jq.as_deref_mut(),
+                lin,
+                qsum,
+                jabs,
+                touched.as_deref_mut(),
+                fixed,
+                n,
+                x,
+                Some(y),
+                c,
+            );
         }
     }
 }
@@ -1343,9 +1606,11 @@ fn emit_bit2(
 /// Acrescenta `c · b_x` (se `y == None`) ou `c · b_x b_y` já em spins.
 #[allow(clippy::too_many_arguments)]
 fn add_b_monomial(
-    jq: &mut [f64],
+    mut jq: Option<&mut [f64]>,
     lin: &mut [f64],
     qsum: &mut [f64],
+    jabs: &mut [f64],
+    mut touched: Option<&mut Vec<u32>>,
     fixed: &[Option<i8>],
     n: usize,
     x: usize,
@@ -1373,10 +1638,19 @@ fn add_b_monomial(
                 (Some(vx), None) => lin[y] += c * vx,
                 (None, Some(vy)) => lin[x] += c * vy,
                 (None, None) => {
-                    jq[x * n + y] -= c * 0.25;
-                    jq[y * n + x] -= c * 0.25;
+                    let (xy, yx) = (x * n + y, y * n + x);
+                    if let Some(j) = jq.as_deref_mut() {
+                        j[xy] -= c * 0.25;
+                        j[yx] -= c * 0.25;
+                    }
+                    if let Some(t) = touched.as_deref_mut() {
+                        t.push(xy as u32);
+                        t.push(yx as u32);
+                    }
                     qsum[x] += c;
                     qsum[y] += c;
+                    jabs[x] += c.abs() * 0.25;
+                    jabs[y] += c.abs() * 0.25;
                 }
             }
         }
@@ -1577,11 +1851,9 @@ mod tests {
             Clause3::new3(0, -1, 1, 1, 1, 1),
             Clause3::new3(1, -1, 1, -1, 1, -1),
         ];
+        let mut prop = Prop3::new(2, 3);
         let mut fixed = vec![None; 2];
-        let mut probe = vec![None; 2];
-        let mut cand = vec![false; 2];
-        let (conflict, _, _) =
-            presolve3_into(2, &clauses, &mut fixed, &mut probe, &mut cand, PROBE_MAX);
+        let (conflict, _, _) = prop.presolve_into(2, &clauses, &mut fixed, PROBE_MAX);
         assert!(conflict);
     }
 
