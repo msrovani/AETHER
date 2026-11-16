@@ -1315,7 +1315,9 @@ mod tests {
             p.fixed_exp[v] = None;
         }
         p.emit_qubo(n_exp);
-        // energia do QUBO == penalidade − 1 (offset do termo constante)
+        // O QUBO representa `P_termos − C`, onde `P_termos` omite a constante
+        // `1` do gadget e `C = ΣL/2 + ΣQ/4` é a constante da expansão bit→spin.
+        let c_const = (-1.0 - 1.0 + 2.0) / 2.0 + (1.0 + 2.0 + 2.0 - 1.0 - 2.0 + 2.0) / 4.0;
         for mask in 0..(1u32 << n_exp) {
             let mut s = [0i8; 5];
             let mut bits = [0i32; 5];
@@ -1325,14 +1327,17 @@ mod tests {
                 s[v] = if bit == 1 { 1 } else { -1 };
             }
             let e = qubo_energy(&p.jq[..n_exp * n_exp], &p.hq[..n_exp], n_exp, &s);
-            let want = f64::from(
-                1 - bits[0] - bits[1] + bits[0] * bits[1] + 2 * bits[0] * bits[3]
+            let p_terms = f64::from(
+                -bits[0] - bits[1]
+                    + 2 * bits[4]
+                    + bits[0] * bits[1]
+                    + 2 * bits[0] * bits[3]
                     + 2 * bits[1] * bits[3]
                     - bits[3] * bits[2]
                     - 2 * bits[3] * bits[4]
-                    + 2 * bits[4]
                     + 2 * bits[2] * bits[4],
             );
+            let want = p_terms - c_const;
             assert!((e - want).abs() < 1e-9, "mask={mask} e={e} want={want}");
         }
     }

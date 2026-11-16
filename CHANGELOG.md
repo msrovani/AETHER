@@ -3,6 +3,21 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.97] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 7 arquivo(s) (.:1, docs:1, examples:2, src:2, tests:1).
+- Gate: ok (8s).
+
+- `Cargo.lock`
+- `docs/AUDIT_CLAIMS_VOL3.md`
+- `examples/roof_scratch.rs`
+- `src/core/logic_pipeline.rs`
+- `src/core/self_field.rs`
+- `tests/self_field_audit.rs`
+- `examples/plh_debug.rs`
+
 ## [0.0.96] - 2026-11-16
 
 ### Changed

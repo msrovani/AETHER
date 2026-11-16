@@ -147,6 +147,10 @@ pub struct SelfFieldConfig {
     pub warmup_steps: u32,
     /// Margem mínima de recall (espelha `RecallConfidence::ABSTAIN_MARGIN`).
     pub recall_margin_min: f32,
+    /// Queda relativa de coerência que dispara abstenção (ex.: `0,15` = −15%).
+    pub coherence_drop: f32,
+    /// Razão de surpresa acima da EMA que caracteriza novidade (`1,25` = +25%).
+    pub surprise_ratio: f32,
 }
 
 impl Default for SelfFieldConfig {
@@ -159,6 +163,8 @@ impl Default for SelfFieldConfig {
             abstain_uncertainty: 0.45,
             warmup_steps: 24,
             recall_margin_min: 0.20,
+            coherence_drop: 0.30,
+            surprise_ratio: 1.25,
         }
     }
 }
@@ -552,8 +558,13 @@ impl SelfField {
         }
         let (error, uncertainty) = self.probe(frame);
         let novelty = self.novelty_z();
+        let coherence_drop =
+            frame.coherence + 1e-6 < self.coherence_ema * (1.0 - self.cfg.coherence_drop);
+        let surprise_novel = frame.surprise > self.surprise_ema * self.cfg.surprise_ratio;
         let abstain = recall_margin < self.cfg.recall_margin_min
             || recall_margin.is_nan()
+            || coherence_drop
+            || surprise_novel
             || (error > self.err_ema && novelty > self.cfg.abstain_error_z)
             || uncertainty > self.cfg.abstain_uncertainty;
         if abstain {
@@ -569,8 +580,13 @@ impl SelfField {
         }
         let (error, uncertainty) = self.probe(frame);
         let novelty = self.novelty_z();
+        let coherence_drop =
+            frame.coherence + 1e-6 < self.coherence_ema * (1.0 - self.cfg.coherence_drop);
+        let surprise_novel = frame.surprise > self.surprise_ema * self.cfg.surprise_ratio;
         recall_margin < self.cfg.recall_margin_min
             || recall_margin.is_nan()
+            || coherence_drop
+            || surprise_novel
             || (error > self.err_ema && novelty > self.cfg.abstain_error_z)
             || uncertainty > self.cfg.abstain_uncertainty
     }

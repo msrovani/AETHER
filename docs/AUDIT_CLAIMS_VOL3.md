@@ -212,7 +212,9 @@ donos dos experimentos confirmaram ou corrigiram os pontos abertos:
 | `pattern_capacity()` | Docstring errado em `phase_memory.rs:372`; gate como escrito **falha por construção** (M16 = 0,362 > 0,15). Capacidade = maior M com erro < 0,15 → **harmônico entre 8 e 16**, aleatório 4. | MSG 0131 |
 | E1 — dois desenhos | Adotada a nomenclatura **E1a** (2 papéis, artefato 1,0000) e **E1b** (4 papéis + ACF, 0,1675). O número antigo não vale para o desenho novo. | MSG 0120/0124 |
 | Roof dual | Protótipo externo mede **bound sound** mas **0,000 fixings** em n=14; auditoria exigiu **controle positivo** (variável constante em todos os ótimos, não dominada) antes de aceitar falsificação. | MSG 0126/0132 |
-| Build v0.0.95 | 3 erros → **2**: `presolve.rs:910` (MSG 0110) e `logic_pipeline.rs:779` (MSG 0107). Claims numéricos congelados até verde. | MSG 0125/0136 |
+| Build v0.0.95 | 3 erros de tipo corrigidos; **lib compila**, mas `--lib` tem **1 falha**: `emissao_de_termos_preserva_penalidade` (mask=0 → e=−1, want=+1; offset de 2 no QUBO). Gate mantido, não relaxado. | MSG 0125/0136/0145 |
+| F1 — R8 | `cue_into` itera **todos** os registros sem filtrar escopo; `scope_filter` existe só em comentário; `cross_scope_hits` nunca é incrementado; o teste de R8 **não chama `cue_into`** → gate vacuamente verde. Roteado ao dono. | MSG 0140 |
+| F2 — overflow | Drop-oldest é **inviável em SPSC** (quebraria o invariante lock-free). Condição revisada para **drop-newest + contador + bit no próximo evento**; "0 eventos perdidos" só vale com `drops=0` medido. | MSG 0141/0144 |
 
 **Regra operacional que ficou acordada:** o auditor é *read-only*; cada erro é
 roteado ao dono do claim (0106 = example/docs E1; 0107 = E2/E3; 0110 = roof
