@@ -136,6 +136,9 @@ Medições (protótipo fora do repo, 600 instâncias contra força bruta):
 | âncora posiform × energia | erro máx **8,9e-15** |
 | exatidão submodular (`J ≥ 0`), `n=10`, 30 inst. | `|a0 + fluxo/2 − ótimo|` máx **7,1e-15** |
 | `a0 + fluxo` (sem o `/2`) | erro **51,8** — “parece bound”, está errado |
+| **controle positivo** (estrela: centro `J=1` × folhas `h=−10`, `k=2..12`) | centro constante em **todos** os ótimos, **não** dominado por `h` ⇒ roof **fixa**, e `bound = ótimo` |
+| completude em submodular aleatório (`n=10`) | **390/390** variáveis constantes fixadas, 0 perdidas |
+| frustrado denso (`n=12`, 200 inst.) | **2259** casos “constante em todos os ótimos e não dominada” ⇒ roof fixa **0** |
 | persistência BHT completo, `n=14`, `plant ∈ {0; 0,25; 0,45}` | **0,0%** de redução, 0 conflitos, bound sempre válido |
 
 **Duas armadilhas medidas:**
@@ -144,9 +147,12 @@ Medições (protótipo fora do repo, 600 instâncias contra força bruta):
 2. alcançabilidade **sem** simetrizar o residual ⇒ **46/200 fixações unsound**
    com redução aparente de **14%**. Redução alta não é sinal de acerto.
 
-**Consequência para o gate de alcance:** “roof > dominância no `plant = 0`” pode
-ser **falsificado** em vidro de spin denso (`J = ±1`). Nesse caso o resultado é
-“o roof dual não vê o vidro” — reporte; não relaxe o gate.
+**Consequência para o gate de alcance:** o controle positivo **passa** — a
+construção está certa e o roof vê além da dominância (o centro da estrela não é
+dominado). O **0,0%** no vidro denso é propriedade do **LP** (gap do bound 61–176
+nessas instâncias), não bug de implementação. Portanto “roof > dominância no
+`plant = 0`” é **falsificável** nessa família: reporte o número, não relaxe o
+gate — e use o roof onde o LP é tenso (CNF/circuito estruturado, não vidro denso).
 
 > Em aberto: a implementação `RoofDualWorkspace` de MSG 0110 usa a rede
 > **dobrada do QPBO** (outra rota, com `roof_weights`); o protótipo acima não a

@@ -230,7 +230,7 @@ fn g2_order_matters_a_to_b_vs_b_to_a() {
     }
     let sep = separated as f64 / pairs as f64;
     assert_eq!(separated, pairs, "separação {sep:.3} < 1.0");
-    assert!(sim_acc / pairs as f64 < 0.75, "códigos deveriam ser distintos");
+    assert!(sim_acc / (pairs as f64) < 0.75, "códigos deveriam ser distintos");
     println!(
         "E1.G2 separacao={sep:.3} sim_media={:.3}",
         sim_acc / pairs as f64

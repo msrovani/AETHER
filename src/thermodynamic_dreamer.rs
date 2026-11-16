@@ -70,6 +70,147 @@ impl Default for DreamerConfig {
     }
 }
 
+/// Profundidade do histórico do currículo por progresso.
+pub const PROGRESS_HISTORY: usize = 64;
+
+/// Currículo por **progresso de aprendizado** (`d(erro)/dt`).
+///
+/// O E5 substitui a amostragem por surpresa bruta — que gera passeio caótico
+/// atrás de outliers — por uma recompensa intrínseca baseada na **derivada** do
+/// erro: só vale a pena reamostrar uma região enquanto o erro está caindo. A
+/// intuição é a de Schmidhuber (1991) e Oudeyer & Kaplan (2007): o sinal útil
+/// não é "quão surpreendente", mas "quão rápido estou aprendendo".
+///
+/// O tipo é POD (`Copy`), usa um anel fixo de [`PROGRESS_HISTORY`] erros e não
+/// aloca no caminho quente.
+#[derive(Clone, Copy, Debug)]
+pub struct ProgressCurriculum {
+    error_ema: f32,
+    prev_ema: f32,
+    progress_ema: f32,
+    history: [f32; PROGRESS_HISTORY],
+    head: usize,
+    filled: usize,
+    primed: bool,
+    progress_gain: f32,
+    surprise_penalty: f32,
+}
+
+impl Default for ProgressCurriculum {
+    fn default() -> Self {
+        Self {
+            error_ema: 0.0,
+            prev_ema: 0.0,
+            progress_ema: 0.0,
+            history: [0.0; PROGRESS_HISTORY],
+            head: 0,
+            filled: 0,
+            primed: false,
+            progress_gain: 2.0,
+            surprise_penalty: 0.5,
+        }
+    }
+}
+
+impl ProgressCurriculum {
+    /// Currículo com os ganhos do dossiê.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Currículo com ganho de progresso e penalidade de surpresa explícitos.
+    pub fn with_gains(progress_gain: f32, surprise_penalty: f32) -> Self {
+        let mut c = Self::default();
+        if progress_gain.is_finite() && progress_gain >= 0.0 {
+            c.progress_gain = progress_gain;
+        }
+        if surprise_penalty.is_finite() && surprise_penalty >= 0.0 {
+            c.surprise_penalty = surprise_penalty;
+        }
+        c
+    }
+
+    /// Reinicia o histórico.
+    pub fn reset(&mut self) {
+        *self = Self {
+            progress_gain: self.progress_gain,
+            surprise_penalty: self.surprise_penalty,
+            ..Self::default()
+        };
+    }
+
+    /// Erro suavizado corrente.
+    pub fn error(&self) -> f32 {
+        self.error_ema
+    }
+
+    /// Progresso `d(erro)/dt` suavizado (positivo = aprendendo).
+    pub fn progress(&self) -> f32 {
+        self.progress_ema
+    }
+
+    /// Histórico circular de erros (mais recente em `head-1`).
+    pub fn history(&self) -> &[f32; PROGRESS_HISTORY] {
+        &self.history
+    }
+
+    /// Observa um erro e devolve o progresso instantâneo limitado.
+    ///
+    /// `progress = clamp((erro_anterior − erro_atual) / dt, −1, 1)`. A EMA usa
+    /// um fator fixo de `0.2` para não oscilar com o ruído do mini-lote.
+    pub fn observe(&mut self, error: f32, dt: f32) -> f32 {
+        let e = if error.is_finite() {
+            error.max(0.0)
+        } else {
+            self.error_ema
+        };
+        let dt = if dt.is_finite() && dt > 0.0 { dt } else { 1.0 };
+        let instant = if self.primed {
+            ((self.prev_ema - e) / dt).clamp(-1.0, 1.0)
+        } else {
+            0.0
+        };
+        self.prev_ema = self.error_ema;
+        self.error_ema = if self.primed {
+            0.8 * self.error_ema + 0.2 * e
+        } else {
+            e
+        };
+        self.progress_ema = 0.8 * self.progress_ema + 0.2 * instant;
+        self.history[self.head] = e;
+        self.head = (self.head + 1) % PROGRESS_HISTORY;
+        self.filled = (self.filled + 1).min(PROGRESS_HISTORY);
+        self.primed = true;
+        instant
+    }
+
+    /// Peso de reamostragem de uma trajetória com surpresa `s`.
+    ///
+    /// `w = exp(gain · progress) / (1 + penalty · s)`. Progresso negativo reduz
+    /// o peso; surpresa alta sem progresso é descontada — o oposto do *surprise
+    /// sampling* que o baseline `T03` usa.
+    pub fn select_weight(&self, surprise: f32) -> f32 {
+        let s = if surprise.is_finite() { surprise.max(0.0) } else { 0.0 };
+        let g = (self.progress_gain * self.progress_ema).clamp(-4.0, 4.0);
+        g.exp() / (1.0 + self.surprise_penalty * s)
+    }
+
+    /// `true` quando a região ainda está rendendo progresso (e vale replay).
+    pub fn should_replay(&self, surprise: f32) -> bool {
+        self.primed && self.progress_ema > 0.0 && self.select_weight(surprise) > 0.5
+    }
+
+    /// Temperatura de amostragem modulada pelo progresso.
+    ///
+    /// Progresso positivo abre a exploração (`T` sobe até 2×); progresso
+    /// negativo a fecha (`T` cai até 0,5×). O limite mantém o sonhador dentro
+    /// da borda do caos.
+    pub fn temperature(&self, base: f64) -> f64 {
+        let g = (self.progress_gain * self.progress_ema).clamp(-1.0, 1.0) as f64;
+        (base * (1.0 + 0.5 * g)).clamp(0.0, base * 2.0)
+    }
+}
+
 /// Conjunto de futuros amostrados.
 #[derive(Clone, Debug)]
 pub struct DreamEnsemble {

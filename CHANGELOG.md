@@ -3,6 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.96] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 4 arquivo(s) (docs:1, src:1, tests:2).
+- Gate: ok (1s).
+
+- `docs/FASE1_PROMPT.md`
+- `src/thermodynamic_dreamer.rs`
+- `tests/e1_language_gate.rs`
+- `tests/self_field_audit.rs`
+
 ## [0.0.95] - 2026-11-16
 
 ### Changed
