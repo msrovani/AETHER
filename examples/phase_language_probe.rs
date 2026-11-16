@@ -258,12 +258,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         facts.push((subj, rel, i));
     }
     let total: usize = plh.shards.iter().map(|s| s.store.len()).sum();
-    let max_shard = plh
-        .shards
-        .iter()
-        .map(|s| s.store.len())
-        .max()
-        .unwrap_or(0);
+    let max_shard = plh.shards.iter().map(|s| s.store.len()).max().unwrap_or(0);
 
     // buffers pré-alocados do caminho quente
     let mut entity = vec![0.0f32; D];
@@ -296,7 +291,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let elapsed = t0.elapsed();
     let recall = hits as f64 / FACTS as f64;
     let latency_us = elapsed.as_secs_f64() * 1e6 / FACTS as f64;
-    let snr = if snr_n > 0 { snr_sum / snr_n as f32 } else { 0.0 };
+    let snr = if snr_n > 0 {
+        snr_sum / snr_n as f32
+    } else {
+        0.0
+    };
 
     // --- baseline: superposição plana de 1000 fatos em D=160 ---
     let mut flat = FhrrStore::with_traces(D, TRACES).expect("flat");
@@ -387,8 +386,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!();
     println!("  Gate 1  recall@1 sharded ({FACTS} fatos) : {:.4}", recall);
-    println!("          baseline plano (D=160)           : {:.4}", flat_recall);
-    println!("  Gate 2  não-comutatividade A→B vs B→A    : {}", pass(nc_ok));
+    println!(
+        "          baseline plano (D=160)           : {:.4}",
+        flat_recall
+    );
+    println!(
+        "  Gate 2  não-comutatividade A→B vs B→A    : {}",
+        pass(nc_ok)
+    );
     println!("  Gate 3  SNR                              : {snr:.2}σ");
     println!("          latência/consulta                : {latency_us:.2} µs");
     println!("          alocações no hot-path            : {hot_allocs}");

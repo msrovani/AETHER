@@ -3,6 +3,17 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.93] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 3 arquivo(s) (examples:2, tests:1).
+- Gate: ok (1s).
+
+- `examples/e1b_capacity.rs`
+- `examples/phase_language_probe.rs`
+- `tests/e1_plh.rs`
+
 ## [0.0.92] - 2026-11-16
 
 ### Changed

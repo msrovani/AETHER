@@ -351,9 +351,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!("  lei de escala (K=6)             : D^{slope:.2}");
     if let Some((k, er, eh)) = phase_errs.last() {
-        println!(
-            "  memória de fase (M={k})          : aleatório {er:.3} · harmônico {eh:.3} rad"
-        );
+        println!("  memória de fase (M={k})          : aleatório {er:.3} · harmônico {eh:.3} rad");
     }
     println!();
 
