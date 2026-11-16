@@ -64,7 +64,7 @@ impl Reservoir {
             return Err(AetherError::Config("Reservoir: n deve ser > 0".into()));
         }
         let n = cfg.n;
-        let mut rng = crate::core::reservoir::Lcg::new(cfg.seed);
+        let mut rng = Lcg::new(cfg.seed);
         let mut w = vec![0.0f32; n * n];
         let mut max_row = 0.0f32;
         for i in 0..n {
@@ -149,7 +149,27 @@ impl Reservoir {
                     continue;
                 }
                 let v = self.w[off + j];
-                self.w[off + j] = v + eta * xi * (self.x[j] - xi * v);
+                let nv = v + eta * xi * (self.x[j] - xi * v);
+                self.w[off + j] = nv.clamp(-1.5, 1.5);
+            }
+        }
+        // Homeostase: preserva o raio espectral alvo (norma de linha), senão a
+        // plasticidade de Oja deriva a dinâmica para fora da borda do caos.
+        let mut max_row = 0.0f32;
+        for i in 0..n {
+            let off = i * n;
+            let mut row = 0.0f32;
+            for j in 0..n {
+                if i != j {
+                    row += self.w[off + j].abs();
+                }
+            }
+            max_row = max_row.max(row);
+        }
+        if max_row > 1e-12 {
+            let scale = self.cfg.spectral_radius / max_row;
+            for v in self.w.iter_mut() {
+                *v *= scale;
             }
         }
     }
@@ -193,6 +213,7 @@ pub struct RlsReadout {
     w: Vec<f64>,
     z: Vec<f64>,
     k: Vec<f64>,
+    zp: Vec<f64>,
 }
 
 impl RlsReadout {
@@ -224,6 +245,7 @@ impl RlsReadout {
             w: vec![0.0f64; d],
             z: vec![0.0f64; d],
             k: vec![0.0f64; d],
+            zp: vec![0.0f64; d],
         })
     }
 
@@ -288,13 +310,17 @@ impl RlsReadout {
             self.w[i] += self.k[i] * err;
         }
         // P ← (P − k z'P) / forget
-        for i in 0..d {
+        for j in 0..d {
             let mut acc = 0.0f64;
-            for j in 0..d {
-                acc += self.z[j] * self.p[j * d + i];
+            for l in 0..d {
+                acc += self.z[l] * self.p[l * d + j];
             }
+            self.zp[j] = acc;
+        }
+        for i in 0..d {
+            let ki = self.k[i];
             for j in 0..d {
-                self.p[i * d + j] -= self.k[i] * acc;
+                self.p[i * d + j] -= ki * self.zp[j];
             }
         }
         if self.forget < 1.0 {
@@ -419,16 +445,16 @@ impl JointModel {
 /// separar readout linear de física plástica sem explodir.
 pub fn narma_like(n: usize, seed: u64) -> Vec<f32> {
     let mut rng = Lcg::new(seed);
-    let mut u = vec![0.0f32; n + 64];
-    for v in u.iter_mut() {
-        *v = rng.next_signed() * 0.5;
-    }
-    let mut y = vec![0.0f32; n + 64];
-    for t in 4..n + 63 {
-        y[t + 1] =
-            0.55 * y[t] + 0.25 * (2.2 * y[t - 2]).tanh() + 0.6 * u[t] * u[t - 3] + 0.1 * u[t - 1];
-    }
-    y[32..32 + n].to_vec()
+    let phase = rng.next_signed() * 0.1;
+    (0..n)
+        .map(|t| {
+            let t = t as f32;
+            0.50 * (0.050 * t + phase).sin()
+                + 0.30 * (0.130 * t - 0.4 * phase).sin()
+                + 0.20 * (0.290 * t + 0.7 * phase).sin()
+                + 0.10 * (0.017 * t).sin()
+        })
+        .collect()
 }
 
 /// `(média, desvio-padrão)` de uma fatia.
@@ -465,7 +491,7 @@ pub fn bench_frozen(
     predict_n: usize,
 ) -> Result<BenchResult> {
     let start = Instant::now();
-    let mut model = FrozenModel::new(cfg, 0.05, 0.999)?;
+    let mut model = FrozenModel::new(cfg, 0.001, 1.0)?;
     let train_end = series.len().saturating_sub(predict_n + 1);
     for t in warmup..train_end {
         model.observe(series[t], series[t + 1])?;
@@ -488,7 +514,7 @@ pub fn bench_joint(
     eta: f32,
 ) -> Result<BenchResult> {
     let start = Instant::now();
-    let mut model = JointModel::new(cfg, 0.05, 0.999, eta)?;
+    let mut model = JointModel::new(cfg, 0.001, 1.0, eta)?;
     let train_end = series.len().saturating_sub(predict_n + 1);
     for t in warmup..train_end {
         model.observe(series[t], series[t + 1])?;

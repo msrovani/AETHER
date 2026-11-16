@@ -27,7 +27,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 use std::time::Instant;
 
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
 use aether_engine::core::fhrr::FhrrStore;
@@ -292,15 +292,6 @@ fn pass(ok: bool) -> &'static str {
     } else {
         "FAIL"
     }
-}
-
-/// Percentil de um vetor já ordenado.
-fn percentile(sorted: &[f64], q: f64) -> f64 {
-    if sorted.is_empty() {
-        return f64::NAN;
-    }
-    let idx = ((sorted.len() - 1) as f64 * q).round() as usize;
-    sorted[idx.min(sorted.len() - 1)]
 }
 
 /// Correlação de Spearman entre cosseno (d) e Hamming (D bits), todos os pares.

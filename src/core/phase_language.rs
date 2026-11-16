@@ -474,16 +474,39 @@ pub fn cleanup_complex(
     book: &[Q15Atom],
     sims: &mut [f32; N_ENT],
 ) -> Cleanup {
-    let inv = 1.0 / (D as f32 * Q15);
+    // Q5 no cue: sinal ~32, ruído ~60; o produto com Q15 cabe em i32 em D=160.
+    // O ganho é a soma inteira (vetorizável) sem perda mensurável de recall.
+    const CUE_Q: f32 = 32.0;
+    let mut cr = [0i16; D];
+    let mut ci = [0i16; D];
+    for j in 0..D {
+        cr[j] = (cue_re[j] * CUE_Q).clamp(-256.0, 256.0) as i16;
+        ci[j] = (cue_im[j] * CUE_Q).clamp(-256.0, 256.0) as i16;
+    }
+    let inv = 1.0 / (D as f32 * Q15 * CUE_Q);
     let mut best = 0usize;
     let mut best_sim = f32::NEG_INFINITY;
     let mut second = f32::NEG_INFINITY;
     for (i, atom) in book.iter().enumerate() {
-        let mut acc = 0.0f32;
-        for j in 0..D {
-            acc += cue_re[j] * atom.re[j] as f32 + cue_im[j] * atom.im[j] as f32;
+        // Quatro acumuladores independentes: quebra a cadeia de dependência e
+        // deixa o LLVM emitir `vpmaddwd`/soma vetorial em vez de um `add` serial.
+        let mut a0 = 0i32;
+        let mut a1 = 0i32;
+        let mut a2 = 0i32;
+        let mut a3 = 0i32;
+        let mut j = 0usize;
+        while j + 4 <= D {
+            a0 += cr[j] as i32 * atom.re[j] as i32 + ci[j] as i32 * atom.im[j] as i32;
+            a1 += cr[j + 1] as i32 * atom.re[j + 1] as i32
+                + ci[j + 1] as i32 * atom.im[j + 1] as i32;
+            a2 += cr[j + 2] as i32 * atom.re[j + 2] as i32
+                + ci[j + 2] as i32 * atom.im[j + 2] as i32;
+            a3 += cr[j + 3] as i32 * atom.re[j + 3] as i32
+                + ci[j + 3] as i32 * atom.im[j + 3] as i32;
+            j += 4;
         }
-        let s = acc * inv;
+        let acc = a0 + a1 + a2 + a3;
+        let s = acc as f32 * inv;
         sims[i] = s;
         if s > best_sim {
             second = best_sim;
@@ -818,57 +841,76 @@ fn role_cue_into(
 /// (`re-encode`), desvincula o papel próprio e faz cleanup na **cópia ACF**;
 /// no fim valida o vencedor na **cópia limpa**.
 pub fn resonate_pair(sc: &mut QueryScratch, cb: &Codebooks, a: &Anchors) -> PairFactors {
-    let ao = a.o.as_slice();
-    let am = a.m.as_slice();
-
-    role_cue_into(
-        &sc.z_re,
-        &sc.z_im,
-        &a.o,
-        ROLE_O,
-        None,
-        &mut sc.cue_re,
-        &mut sc.cue_im,
-    );
-    let co = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.acf_q(ROLE_O), &mut sc.sims);
-    role_cue_into(
-        &sc.z_re,
-        &sc.z_im,
-        &a.m,
-        ROLE_M,
-        None,
-        &mut sc.cue_re,
-        &mut sc.cue_im,
-    );
-    let cm = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.acf_q(ROLE_M), &mut sc.sims);
-    let mut o = co.index;
-    let mut m = cm.index;
-
+    // O valor é um único fasor produto de dois fatores; sem conhecer nenhum
+    // deles, o cleanup de um papel isolado tem sinal ~1/√D (o outro fator é
+    // uma fase fixa por dimensão). A ressonância resolve isso enumerando o
+    // fator discreto menor (MOD, 8 candidatos) e pontuando o par completo.
+    let mut best_score = f32::NEG_INFINITY;
+    let mut best_o = 0usize;
+    let mut best_m = 0usize;
     let mut iters = 0u8;
-    let mut converged = false;
-    for it in 0..PAIR_ITERS {
-        iters = it as u8 + 1;
-        let prev = (o, m);
 
-        let re_m = bind(am, &rho(cb.modu.clean[m].as_slice(), ROLE_M));
+    for m_cand in 0..N_MOD {
+        iters = iters.saturating_add(1);
         role_cue_into(
             &sc.z_re,
             &sc.z_im,
-            &a.o,
+            &a.o_re,
+            &a.o_im,
             ROLE_O,
-            Some(&re_m),
+            Some((&cb.term_m_re[m_cand], &cb.term_m_im[m_cand])),
+            &mut sc.cue_re,
+            &mut sc.cue_im,
+        );
+        let co = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.acf_q(ROLE_O), &mut sc.sims);
+        let o_cand = co.index;
+
+        role_cue_into(
+            &sc.z_re,
+            &sc.z_im,
+            &a.m_re,
+            &a.m_im,
+            ROLE_M,
+            Some((&cb.term_o_re[o_cand], &cb.term_o_im[o_cand])),
+            &mut sc.cue_re,
+            &mut sc.cue_im,
+        );
+        let cm = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.acf_q(ROLE_M), &mut sc.sims);
+
+        let score = co.sim + cm.sim;
+        if score > best_score {
+            best_score = score;
+            best_o = o_cand;
+            best_m = m_cand;
+        }
+    }
+
+    let mut o = best_o;
+    let mut m = best_m;
+    let mut converged = false;
+    for _ in 0..PAIR_ITERS {
+        iters = iters.saturating_add(1);
+        let prev = (o, m);
+
+        role_cue_into(
+            &sc.z_re,
+            &sc.z_im,
+            &a.o_re,
+            &a.o_im,
+            ROLE_O,
+            Some((&cb.term_m_re[m], &cb.term_m_im[m])),
             &mut sc.cue_re,
             &mut sc.cue_im,
         );
         o = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.acf_q(ROLE_O), &mut sc.sims).index;
 
-        let re_o = bind(ao, &rho(cb.ent.clean[o].as_slice(), ROLE_O));
         role_cue_into(
             &sc.z_re,
             &sc.z_im,
-            &a.m,
+            &a.m_re,
+            &a.m_im,
             ROLE_M,
-            Some(&re_o),
+            Some((&cb.term_o_re[o], &cb.term_o_im[o])),
             &mut sc.cue_re,
             &mut sc.cue_im,
         );
@@ -881,25 +923,25 @@ pub fn resonate_pair(sc: &mut QueryScratch, cb: &Codebooks, a: &Anchors) -> Pair
     }
 
     // Projeção re-encode consistente com o MOD final.
-    let re_m = bind(am, &rho(cb.modu.clean[m].as_slice(), ROLE_M));
     role_cue_into(
         &sc.z_re,
         &sc.z_im,
-        &a.o,
+        &a.o_re,
+        &a.o_im,
         ROLE_O,
-        Some(&re_m),
+        Some((&cb.term_m_re[m], &cb.term_m_im[m])),
         &mut sc.cue_re,
         &mut sc.cue_im,
     );
     let co = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.clean_q(ROLE_O), &mut sc.sims);
 
-    let re_o = bind(ao, &rho(cb.ent.clean[o].as_slice(), ROLE_O));
     role_cue_into(
         &sc.z_re,
         &sc.z_im,
-        &a.m,
+        &a.m_re,
+        &a.m_im,
         ROLE_M,
-        Some(&re_o),
+        Some((&cb.term_o_re[o], &cb.term_o_im[o])),
         &mut sc.cue_re,
         &mut sc.cue_im,
     );
@@ -929,46 +971,41 @@ pub fn evidence_sims(
     obj_sims: &mut [f32; N_ENT],
     mod_sims: &mut [f32; N_MOD],
 ) {
-    let re_m = bind(
-        a.m.as_slice(),
-        &rho(cb.modu.clean[p.modu].as_slice(), ROLE_M),
-    );
     role_cue_into(
         &sc.z_re,
         &sc.z_im,
-        &a.o,
+        &a.o_re,
+        &a.o_im,
         ROLE_O,
-        Some(&re_m),
+        Some((&cb.term_m_re[p.modu], &cb.term_m_im[p.modu])),
         &mut sc.cue_re,
         &mut sc.cue_im,
     );
-    let co = cleanup_complex(
+    let _ = cleanup_complex(
         &sc.cue_re,
         &sc.cue_im,
         cb.ent.clean_q.as_slice(),
         &mut sc.sims,
     );
     obj_sims[..N_ENT].copy_from_slice(&sc.sims[..N_ENT]);
-    let _ = co;
 
-    let re_o = bind(a.o.as_slice(), &rho(cb.ent.clean[p.obj].as_slice(), ROLE_O));
     role_cue_into(
         &sc.z_re,
         &sc.z_im,
-        &a.m,
+        &a.m_re,
+        &a.m_im,
         ROLE_M,
-        Some(&re_o),
+        Some((&cb.term_o_re[p.obj], &cb.term_o_im[p.obj])),
         &mut sc.cue_re,
         &mut sc.cue_im,
     );
-    let cm = cleanup_complex(
+    let _ = cleanup_complex(
         &sc.cue_re,
         &sc.cue_im,
         cb.modu.clean_q.as_slice(),
         &mut sc.sims,
     );
     mod_sims[..N_MOD].copy_from_slice(&sc.sims[..N_MOD]);
-    let _ = cm;
 }
 
 // ---------------------------------------------------------------------------

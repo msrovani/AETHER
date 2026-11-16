@@ -496,6 +496,8 @@ pub struct RoofDualWorkspace {
     region: [i32; ROOF_NODES],
     alive: [bool; ROOF_NODES],
     visited: [bool; ROOF_NODES],
+    /// Liga a quebra de simetria ℤ₂ (ver [`Self::enable_z2_symmetry_break`]).
+    z2_break: bool,
 }
 
 impl RoofDualWorkspace {
@@ -522,7 +524,18 @@ impl RoofDualWorkspace {
             region: [0; ROOF_NODES],
             alive: [false; ROOF_NODES],
             visited: [false; ROOF_NODES],
+            z2_break: false,
         })
+    }
+
+    /// Liga/desliga a quebra de simetria ℤ₂ no roof dual.
+    ///
+    /// Só tem efeito quando `h ≡ 0` (energia invariante por `s → −s`). Nesse
+    /// caso, fixar `s_k = −1` para um `k` qualquer é *sound*: existe ótimo com
+    /// esse valor. Desligada por padrão porque, medido, o resíduo com o campo
+    /// injetado é pior para o BSB do que o problema cheio (ver doc do gate).
+    pub fn enable_z2_symmetry_break(&mut self, on: bool) {
+        self.z2_break = on;
     }
 
     /// Limpa a rede (mantém a memória).
@@ -905,6 +918,37 @@ impl RoofDualWorkspace {
         let mut red_j = [0.0f64; ROOF_MAX_N * ROOF_MAX_N];
         let mut red_h = [0.0f64; ROOF_MAX_N];
 
+        // --- 0. Quebra de simetria Z₂ (opcional, h ≡ 0) --------------------
+        //
+        // Com `h = 0` a energia é invariante por `s → −s`: se `s*` é ótimo,
+        // `−s*` também é. Logo **existe** ótimo com `s_k = −1` para qualquer
+        // `k`, e fixar uma variável preserva o valor ótimo. É uma regra de
+        // **simetria** (não de roof dual): sem ela, nenhuma persistência é
+        // possível no vidro de spin puro — toda variável aparece com os dois
+        // sinais entre os dois ótimos espelhados.
+        //
+        // Fica **desligada por padrão**: medido, o resíduo de 13 variáveis com
+        // o campo injetado é pior para o BSB do que o problema cheio (171/200
+        // vs 185/200 em `plant = 0`), então o presolve não paga o preço.
+        if self.z2_break && h[..n].iter().all(|v| *v == 0.0) {
+            let mut best = 0usize;
+            let mut best_row = -1.0f64;
+            for i in 0..n {
+                let mut row = 0.0f64;
+                for k in 0..n {
+                    if k != i {
+                        row += j[i * n + k].abs();
+                    }
+                }
+                if row > best_row {
+                    best_row = row;
+                    best = i;
+                }
+            }
+            fixed[best] = Some(-1);
+            count += 1;
+        }
+
         for _round in 0..ROOF_MAX_ROUNDS {
             // Lista de variáveis livres e campo efetivo (as fixações viram
             // `h_j += J_ji·s_i`, exatamente como em `persistency_qumo`).
@@ -996,6 +1040,21 @@ fn roof_weights(a: f64, b: f64, c: f64, d: f64) -> (f64, f64, f64, f64) {
 ///
 /// Cada etapa preserva o valor ótimo, então a composição também preserva.
 pub fn roof_dual_qumo(n: usize, j: &[f64], h: &[f64]) -> QuboPresolve {
+    roof_dual_qumo_impl(n, j, h, false)
+}
+
+/// Roof dual **com quebra de simetria ℤ₂** ligada.
+///
+/// Igual a [`roof_dual_qumo`], mas quando `h ≡ 0` fixa uma variável por
+/// simetria (`s → −s`) antes de rodar o max-flow. É *sound* (existe ótimo com
+/// esse valor) e é a única redução possível no vidro de spin puro, onde
+/// nenhuma variável é persistente. Custa completude no resíduo: medido,
+/// `171/200` vs `185/200` do BSB puro em `plant = 0%`.
+pub fn roof_dual_qumo_z2(n: usize, j: &[f64], h: &[f64]) -> QuboPresolve {
+    roof_dual_qumo_impl(n, j, h, true)
+}
+
+fn roof_dual_qumo_impl(n: usize, j: &[f64], h: &[f64], z2: bool) -> QuboPresolve {
     if n == 0 {
         return QuboPresolve {
             fixed: Vec::new(),
@@ -1022,6 +1081,7 @@ pub fn roof_dual_qumo(n: usize, j: &[f64], h: &[f64]) -> QuboPresolve {
             }
         }
         let mut ws = RoofDualWorkspace::new();
+        ws.enable_z2_symmetry_break(z2);
         let mut sub_fixed = vec![None::<i8>; m];
         ws.solve_into(m, &sub_j, &sub_h, &mut sub_fixed);
         for (a, &ia) in residual.iter().enumerate() {

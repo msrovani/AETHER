@@ -1,4 +1,4 @@
-//! E8 — benchmark do reservatório congelado contra física plástica.
+﻿//! E8 — benchmark do reservatório congelado contra física plástica.
 //!
 //! Uso: `cargo run --release --example reservoir_readout_bench`
 //!
@@ -23,8 +23,8 @@ fn main() {
         input_scale: 0.5,
         seed: 0xA37E_0E82,
     };
-    let frozen = bench_frozen(&series, cfg, 32, predict_n).expect("frozen");
-    let joint = bench_joint(&series, cfg, 32, predict_n, 1e-4).expect("joint");
+    let frozen = bench_frozen(&series, cfg, 64, predict_n).expect("frozen");
+    let joint = bench_joint(&series, cfg, 64, predict_n, 1e-5).expect("joint");
     let regression = ((frozen.nrmse - joint.nrmse) / joint.nrmse.max(1e-12)).max(0.0);
     let speedup = joint.train_secs / frozen.train_secs.max(1e-12);
     println!(

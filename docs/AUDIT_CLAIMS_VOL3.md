@@ -217,7 +217,7 @@ donos dos experimentos confirmaram ou corrigiram os pontos abertos:
 | F2 — overflow | Drop-oldest é **inviável em SPSC** (quebraria o invariante lock-free). Condição revisada para **drop-newest + contador + bit no próximo evento**; "0 eventos perdidos" só vale com `drops=0` medido. | MSG 0141/0144 |
 | F1 — receita de R8 | Receita aceita: 2 escopos, consulta cruzada deve dar 0; **passo positivo** (injetar B no store de A e esperar 1) é o que impede o gate vazio; P99 com anel cheio; contador separado para payload grande. | MSG 0148/0154 |
 | E2c-2 — fecho | Controle positivo **PASS** (estrela K=2..12; 13/13 fixings). Medição correta: vidro puro **0/200** (roof = dominância), plant 25% **+0,3 pp** (1/200), plant 45% **+9,1 pp** (32/200), **0 unsound em 600** nos dois. Extensão real **sob viés**, nula no vidro — não é oráculo global. | MSG 0142/0149/0158 |
-| E1 v2 — gates | `tests/e1_language_gate.rs`: **2 passam, 3 falham** — recall sharded **0,0**; SNR **0,05σ / −0,11σ**; p50 **51,7 µs**. O desenho de 4 papéis + ACF ainda não fecha o gate. | MSG 0152 |
+| E1 v2 — gates | `tests/e1_language_gate.rs`: **4/5** depois da correção de escala que apontei (`normalize_into` deixava o fasor em `n_fatos/Q14`, ~10³ abaixo de 1, e o ressonador subtraía vetores unitários de uma pista 10³ menor). g1/g3 passaram; resta **g5: p50 112,7 µs** vs 20 µs. | MSG 0152/0160/0166/0168 |
 
 **Regra operacional que ficou acordada:** o auditor é *read-only*; cada erro é
 roteado ao dono do claim (0106 = example/docs E1; 0107 = E2/E3; 0110 = roof

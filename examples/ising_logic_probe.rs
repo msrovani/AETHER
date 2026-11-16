@@ -23,7 +23,6 @@
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
-use std::time::Instant;
 
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -114,7 +113,7 @@ fn parse_args() -> Args {
     while i < argv.len() {
         let key = argv[i].as_str();
         let raw = argv.get(i + 1);
-        let mut take = |dst: &mut usize| {
+        let take = |dst: &mut usize| {
             if let Some(v) = raw.and_then(|v| v.parse::<usize>().ok()) {
                 *dst = v;
             }
@@ -214,7 +213,7 @@ fn planted_3sat(n: usize, m: usize, seed: u64) -> (Vec<Clause3>, Vec<i8>) {
         }
         let mut si = if rng.gen::<bool>() { 1 } else { -1 };
         let mut sj = if rng.gen::<bool>() { 1 } else { -1 };
-        let mut sk = if rng.gen::<bool>() { 1 } else { -1 };
+        let sk = if rng.gen::<bool>() { 1 } else { -1 };
         let sat = |s: i8, v: usize| s == star[v];
         if !(sat(si, i) || sat(sj, j) || sat(sk, k)) {
             // força o primeiro literal a ser verdadeiro
@@ -254,7 +253,7 @@ fn brute_force_sat(n: usize, clauses: &[Clause3]) -> bool {
 fn pair_penalty_qubo(n: usize, clauses: &[Clause3]) -> (Vec<f64>, Vec<f64>) {
     let mut j = vec![0.0f64; n * n];
     let mut h = vec![0.0f64; n];
-    let mut add_pair = |j: &mut [f64], h: &mut [f64], a: (usize, i8), b: (usize, i8)| {
+    let add_pair = |j: &mut [f64], h: &mut [f64], a: (usize, i8), b: (usize, i8)| {
         let (ia, sa) = (a.0, f64::from(a.1));
         let (ib, sb) = (b.0, f64::from(b.1));
         j[ia * n + ib] -= sa * sb;
@@ -279,7 +278,6 @@ fn arm_static(
     n: usize,
     clauses: &[Clause3],
     restarts: usize,
-    steps: usize,
     seed: u64,
     bsb: &mut BsbCore,
     states: &mut [i8],
@@ -415,7 +413,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             n,
             &clauses,
             args.restarts.max(4),
-            args.steps,
             args.seed.wrapping_add(inst as u64),
             &mut arm1_bsb,
             &mut off,

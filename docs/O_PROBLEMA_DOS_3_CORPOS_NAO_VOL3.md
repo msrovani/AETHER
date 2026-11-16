@@ -379,7 +379,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 |---|---|---|---|---|
 | **E6** ✅ | II | perfil por estágio — **executado** | cobertura **99,98%**; solver **84,4%** · 7,5 GFLOP/s | bloqueio transversal **removido** |
 | **E6b** ✅ | II | kernel do solver (16 acumuladores, Rust safe) | **17,10 GFLOP/s (2,30×)** · ACQ 100 · 24 suítes verdes | R1, R5 |
-| **E1** ✅ | I/II | PLH *sharded* + ressonador ACF (`phase_language_probe.rs`) — **executado** | **1.000 fatos · recall@1 1,0000** (plano 0,0725) · **SNR 5,88σ** · **p50 6,80 µs** · **0 alloc** · NC **100%** · abstenção **100%** | R2 |
+| **E1** ✅ | I/II | PLH *sharded* + ressonador ACF (`phase_language_probe.rs`) — **executado** | **1.000 fatos · recall@1 1,0000** (plano 0,0725) · **SNR 5,88σ** · **p50 5,80 µs** · **0 alloc** · NC **100%** · abstenção **100%** | R2 |
 | **E1-2** ✅ | I | `FhrrStore::query_phasor_into` (fasor de papel pré-computado) | API + teste de equivalência bit-a-bit; remove `sin_cos` por consulta | R2 |
 | **E1b** ✅ | II | capacidade do store e da memória de fase — **executado** | **D=160: 64 fatos (K=6)** · lei **linear ~0,4·D** (não D²) · fase: ~4 padrões aleatórios | R2 |
 | **E2** | I | lógica como Ising + certificado | 3-SAT n≤20 = força bruta | R1 |
@@ -400,7 +400,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 
 | Código | Vol. | Sev. | Remediação |
 |---|---|---|---|
-| `NO_BINDING_HEAD` | I | ✅ **resolvido (E1)** | 1.000 fatos sharded · recall@1 **1,0000** · p50 **6,80 µs** · **0 alloc** | — |
+| `NO_BINDING_HEAD` | I | ✅ **resolvido (E1)** | 1.000 fatos sharded · recall@1 **1,0000** · p50 **5,80 µs** · **0 alloc** | — |
 | `NO_ENERGY_CERT` | I | crítico | E2 → E3b |
 | `NO_ISING_CONSTRAINTS` | I | alto | E2b |
 | `NO_SELF_FIELD` | I | alto | E4 |
@@ -497,15 +497,15 @@ cópia **perturbada** do codebook (`±4% de π`) e validação na cópia **limpa
 | não-comutatividade A→B vs B→A | **100%** (150 pares) · sim Ψ_AB·Ψ_BA **0,501** |
 | controle comutativo (mesmo papel, sem ρ) | **1,000** — é o que a construção evita |
 | SNR do cleanup (OBJ / MOD) | **5,88σ / 5,89σ** |
-| latência por consulta (p50 / p99) | **6,80 / 12,70 µs** |
+| latência por consulta (p50 / p99) | **5,80 / 7,80 µs** (média 5,91) |
 | alocações no caminho quente | **0** |
 | abstenção OOV (vocabulário / memória) | **100% / 100%** |
 | abstenção com ruído de fase σ = 1,6 rad | **100%** (falso-abster no limpo: **0%**) |
 | validação ACF / convergência do ressonador | **100% / 100%** |
-| working set (acumuladores + codebooks + scratch) | **431 KB** (< 500 KB) |
+| working set (acumuladores + codebooks + scratch) | **436 KB** (< 500 KB) |
 
 Artefatos: `examples/phase_language_probe.rs`, `target/aether_e1_plh.json`, fórum
-**MSG 0106** (claim) e **MSG 0107** (relatório). Uma implementação irmã e independente
+**MSG 0106** (claim) e **MSG 0169** (relatório). Uma implementação irmã e independente
 (**MSG 0105**) mediu o mesmo recall com **17,35 µs** de p50 e falhou só no gate de
 latência (`sin_cos` por consulta); aqui a diferença é o cleanup **complexo** (nunca
 projetado) com `cos/sin` do codebook pré-computados.
@@ -540,7 +540,7 @@ alocação, sem violar a lei do E1b em nenhum acumulador.
 4º ✅ E2b  presolve simbólico          ← FEITO: 64,8% redução, 0 insound, 200/200
 5º ✅ E2c  persistência de 1ª ordem     ← FEITO: sound (0/600), míope por construção
 6º ✅ E1b  capacidade em D=160          ← FEITO: 64 fatos · lei linear ~0,4·D
-7º ✅ E1   PLH sharded                   ← FEITO: 1.000 fatos recall 1,000 · p50 6,80 µs · 0 alloc
+7º ✅ E1   PLH sharded                   ← FEITO: 1.000 fatos recall 1,000 · p50 5,80 µs · 0 alloc
 8º ✅ E1-2 fasor pré-computado + ressonador ← FEITO: latência fechada (E1)
 9º  E2c-2 roof dual (max-flow)         ← alcance além da dominância
 10º E1b-2 memória de fase estruturada  ← separar padrão aleatório de harmônico

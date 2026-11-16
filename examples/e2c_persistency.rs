@@ -250,6 +250,43 @@ struct Arm {
     deficit: f64,
 }
 
+impl Arm {
+    /// Avalia um presolve: soundness por força bruta e reconstrução com BSB.
+    #[allow(clippy::too_many_arguments)]
+    fn eval(
+        &mut self,
+        pre: &aether_engine::core::presolve::QuboPresolve,
+        n: usize,
+        j: &[f64],
+        h: &[f64],
+        e_star: f64,
+        steps: usize,
+        restarts: usize,
+        seed: u64,
+    ) {
+        self.reduction_sum += pre.reduction(n);
+        self.fixed_sum += pre.fixed_count();
+        let e_red = optimum_with_fixed(n, j, h, &pre.fixed, &pre.residual);
+        if (e_red - e_star).abs() > 1e-9 {
+            self.unsound += 1;
+            self.deficit += e_red - e_star;
+        }
+        let sol = solve_residual(&pre.residual, j, &pre.h_eff, n, steps, restarts, seed);
+        let mut s = vec![0i8; n];
+        for (i, f) in pre.fixed.iter().enumerate() {
+            if let Some(v) = f {
+                s[i] = *v;
+            }
+        }
+        for (new, &old) in pre.residual.iter().enumerate() {
+            s[old] = sol[new];
+        }
+        if (energy(j, h, n, &s) - e_star).abs() <= 1e-9 {
+            self.solved += 1;
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = parse_args();
     let n = args.n;
@@ -272,6 +309,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         plant: f64,
         dom: Arm,
         roof: Arm,
+        roof_z2: Arm,
         full_solved: usize,
     }
     let mut rows: Vec<RegimeRow> = Vec::new();
@@ -281,6 +319,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let k = (plant * n as f64).round() as usize;
         let mut dom = Arm::default();
         let mut roof = Arm::default();
+        let mut roof_z2 = Arm::default();
         let mut full_solved = 0usize;
 
         for inst in 0..args.instances {
@@ -289,68 +328,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let e_star = brute_force(n, &j, &h);
 
             // --- braço 1: dominância (E2c v1) ---
-            let pre = persistency_qumo(n, &j, &h);
-            dom.reduction_sum += pre.reduction(n);
-            dom.fixed_sum += pre.fixed_count();
-            let e_red = optimum_with_fixed(n, &j, &h, &pre.fixed, &pre.residual);
-            if (e_red - e_star).abs() > 1e-9 {
-                dom.unsound += 1;
-                dom.deficit += e_red - e_star;
-            }
-            let sol = solve_residual(
-                &pre.residual,
-                &j,
-                &pre.h_eff,
+            dom.eval(
+                &persistency_qumo(n, &j, &h),
                 n,
+                &j,
+                &h,
+                e_star,
                 args.steps,
                 args.restarts,
                 seed,
             );
-            let mut s = vec![0i8; n];
-            for (i, f) in pre.fixed.iter().enumerate() {
-                if let Some(v) = f {
-                    s[i] = *v;
-                }
-            }
-            for (new, &old) in pre.residual.iter().enumerate() {
-                s[old] = sol[new];
-            }
-            if (energy(&j, &h, n, &s) - e_star).abs() <= 1e-9 {
-                dom.solved += 1;
-            }
 
             // --- braço 2: roof dual (E2c-2) ---
-            let pre2 = roof_dual_qumo(n, &j, &h);
-            roof.reduction_sum += pre2.reduction(n);
-            roof.fixed_sum += pre2.fixed_count();
-            let e_red2 = optimum_with_fixed(n, &j, &h, &pre2.fixed, &pre2.residual);
-            if (e_red2 - e_star).abs() > 1e-9 {
-                roof.unsound += 1;
-                roof.deficit += e_red2 - e_star;
-            }
-            let sol2 = solve_residual(
-                &pre2.residual,
-                &j,
-                &pre2.h_eff,
+            roof.eval(
+                &roof_dual_qumo(n, &j, &h),
                 n,
+                &j,
+                &h,
+                e_star,
                 args.steps,
                 args.restarts,
                 seed,
             );
-            let mut s2 = vec![0i8; n];
-            for (i, f) in pre2.fixed.iter().enumerate() {
-                if let Some(v) = f {
-                    s2[i] = *v;
-                }
-            }
-            for (new, &old) in pre2.residual.iter().enumerate() {
-                s2[old] = sol2[new];
-            }
-            if (energy(&j, &h, n, &s2) - e_star).abs() <= 1e-9 {
-                roof.solved += 1;
-            }
 
-            // --- braço 3: BSB puro ---
+            // --- braço 3: roof dual + quebra de simetria Z2 ---
+            roof_z2.eval(
+                &roof_dual_qumo_z2(n, &j, &h),
+                n,
+                &j,
+                &h,
+                e_star,
+                args.steps,
+                args.restarts,
+                seed,
+            );
+
+            // --- braço 4: BSB puro ---
             let full = solve_residual(
                 &(0..n).collect::<Vec<_>>(),
                 &j,
@@ -369,7 +382,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let show = |label: &str, a: &Arm| {
             println!(
-                "{:>6.0}% {:>11} {:>8.1}% {:>9.1} {:>11} {:>7}/{:<4} {:>4}/{:<5}",
+                "{:>6.0}% {:>15} {:>8.1}% {:>9.2} {:>11} {:>7}/{:<4} {:>4}/{:<5}",
                 plant * 100.0,
                 label,
                 100.0 * a.reduction_sum / args.instances as f64,
@@ -383,26 +396,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         show("dominância", &dom);
         show("roof dual", &roof);
-        println!("{}", "-".repeat(74));
+        show("roof dual + z2", &roof_z2);
+        println!("{}", "-".repeat(78));
 
         rows.push(RegimeRow {
             plant,
             dom,
             roof,
+            roof_z2,
             full_solved,
         });
     }
 
     // ---------------- gates ----------------
-    let total_unsound: usize = rows.iter().map(|r| r.roof.unsound).sum();
+    let total_unsound: usize = rows.iter().map(|r| r.roof.unsound + r.roof_z2.unsound).sum();
     let mut reach_ok = true;
+    let mut reach_z2_ok = true;
     for r in &rows {
         let rd = r.dom.reduction_sum / args.instances as f64;
         let rr = r.roof.reduction_sum / args.instances as f64;
-        if rr <= rd + 1e-12 {
+        let rz = r.roof_z2.reduction_sum / args.instances as f64;
+        if rr + 1e-12 < rd {
             reach_ok = false;
         }
+        if rz <= rd + 1e-12 {
+            reach_z2_ok = false;
+        }
     }
+    let strict_all = rows.iter().all(|r| {
+        r.roof.reduction_sum > r.dom.reduction_sum + 1e-12
+    });
     let row45 = rows
         .iter()
         .min_by(|a, b| {
