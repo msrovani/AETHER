@@ -27,7 +27,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 use std::time::Instant;
 
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use aether_engine::core::fhrr::FhrrStore;
@@ -482,7 +482,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while start < n {
         let end = (start + SHARD_CAP).min(n);
         let mut store = FhrrStore::with_traces(FHRR_DIM, TRACES)?;
-        for (e, r, v) in ds.triples[start..end].iter().copied() {
+        for (i, &(e, r, _)) in ds.triples.iter().enumerate().take(end).skip(start) {
             store.add_fact(&entity_phase[e], &relation_phase[r], &value_phase[i])?;
         }
         shards += 1;
@@ -552,7 +552,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 // não-aditividade por entidade. Sem normalizar: normalizar é
                 // não-linear e quebraria a identidade linear a:b :: c:d.
-                add_assign(&mut x, &gauss_vec(&mut rng, D_IN, args.nonlin as f32));
+                add_assign(
+                    &mut x,
+                    &gauss_vec(&mut rng, D_IN, args.nonlin as f32 / (D_IN as f32).sqrt()),
+                );
                 bank_emb.push(x);
             }
         }
@@ -593,7 +596,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while shard_off < n && start < n {
         let end = (shard_off + SHARD_CAP).min(n);
         let mut store = FhrrStore::with_traces(FHRR_DIM, TRACES)?;
-        for (e, r, v) in ds.triples[shard_off..end].iter().copied() {
+        for (i, &(e, r, _)) in ds.triples.iter().enumerate().take(end).skip(shard_off) {
             store.add_fact(&entity_phase[e], &relation_phase[r], &value_phase[i])?;
         }
         for (i, &(_, _, _)) in ds
@@ -618,7 +621,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     // fora do domínio: pistas aleatórias
     let mut ood_store = FhrrStore::with_traces(FHRR_DIM, TRACES)?;
-    for (e, r, v) in ds.triples[..SHARD_CAP.min(n)].iter().copied() {
+    for (i, &(e, r, _)) in ds.triples.iter().enumerate().take(SHARD_CAP.min(n)) {
         ood_store.add_fact(&entity_phase[e], &relation_phase[r], &value_phase[i])?;
     }
     for _ in 0..200 {

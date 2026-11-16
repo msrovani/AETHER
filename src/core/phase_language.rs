@@ -61,7 +61,7 @@ const Q15: f32 = 32_767.0;
 /// Traços por acumulador. O bundle de 2 fasores por fato dobra os termos
 /// interferentes; `K=16` mantém o SNR > 5σ com 43 fatos (86 termos) e ainda
 /// cabe no orçamento de working set (< 500 KB).
-pub const K_TRACES: usize = 16;
+pub const K_TRACES: usize = 17;
 /// Shards (relações sintáticas endereçáveis).
 pub const SHARDS: usize = 24;
 /// Teto absoluto de fatos por acumulador (75% de `0,4·D = 64`).
@@ -210,21 +210,22 @@ pub struct AtomBook {
 }
 
 impl AtomBook {
-    fn random(n: usize, rng: &mut ChaCha8Rng) -> Self {
+    fn random(n: usize, rng: &mut ChaCha8Rng, with_q15: bool) -> Self {
         let clean = random_codebook(n, rng);
         let acf = jitter_codebook(&clean, rng, JITTER_FRAC);
-        Self::from_pair(clean, acf)
-    }
-
-    fn from_pair(clean: Vec<BVec>, acf: Vec<BVec>) -> Self {
-        let clean_q = clean
-            .iter()
-            .map(|v| Q15Atom::from_phases(v.as_slice()))
-            .collect();
-        let acf_q = acf
-            .iter()
-            .map(|v| Q15Atom::from_phases(v.as_slice()))
-            .collect();
+        let (clean_q, acf_q) = if with_q15 {
+            (
+                clean
+                    .iter()
+                    .map(|v| Q15Atom::from_phases(v.as_slice()))
+                    .collect(),
+                acf.iter()
+                    .map(|v| Q15Atom::from_phases(v.as_slice()))
+                    .collect(),
+            )
+        } else {
+            (Vec::new(), Vec::new())
+        };
         Self {
             clean,
             acf,
@@ -250,43 +251,17 @@ pub struct Codebooks {
     pub ent: AtomBook,
     pub verb: AtomBook,
     pub modu: AtomBook,
-    /// Fasores `A_O ⊗ ρ²(ent[o])` pré-computados (produto de fase = fasor).
-    pub term_o_re: Vec<[f32; D]>,
-    pub term_o_im: Vec<[f32; D]>,
-    /// Fasores `A_M ⊗ ρ³(mod[m])` pré-computados.
-    pub term_m_re: Vec<[f32; D]>,
-    pub term_m_im: Vec<[f32; D]>,
 }
 
 impl Codebooks {
     pub fn build(seed: u64) -> Self {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        let ent = AtomBook::random(N_ENT, &mut rng);
-        let verb = AtomBook::random(N_VERB, &mut rng);
-        let modu = AtomBook::random(N_MOD, &mut rng);
-        let a = Anchors::build(seed);
-        let mut term_o_re = Vec::with_capacity(N_ENT);
-        let mut term_o_im = Vec::with_capacity(N_ENT);
-        for atom in &ent.clean {
-            let (re, im) = unit_phasor(&role_term(a.of(ROLE_O), atom, ROLE_O));
-            term_o_re.push(re);
-            term_o_im.push(im);
-        }
-        let mut term_m_re = Vec::with_capacity(N_MOD);
-        let mut term_m_im = Vec::with_capacity(N_MOD);
-        for atom in &modu.clean {
-            let (re, im) = unit_phasor(&role_term(a.of(ROLE_M), atom, ROLE_M));
-            term_m_re.push(re);
-            term_m_im.push(im);
-        }
+        // Só `ent` e `modu` participam do cleanup complexo; `verb` é usado no
+        // codec de sentença (fase), então dispensa a tabela Q15.
         Self {
-            ent,
-            verb,
-            modu,
-            term_o_re,
-            term_o_im,
-            term_m_re,
-            term_m_im,
+            ent: AtomBook::random(N_ENT, &mut rng, true),
+            verb: AtomBook::random(N_VERB, &mut rng, false),
+            modu: AtomBook::random(N_MOD, &mut rng, true),
         }
     }
 
@@ -428,6 +403,24 @@ impl Anchors {
 #[inline]
 pub fn role_term(anchor: &BVec, filler: &BVec, k: usize) -> Phases {
     bind(anchor.as_slice(), &rho(filler.as_slice(), k))
+}
+
+/// Fasor unitário do termo, escrito em buffers pré-alocados.
+#[inline]
+fn term_phasor_into(
+    anchor: &BVec,
+    filler: &BVec,
+    k: usize,
+    out_re: &mut [f32; D],
+    out_im: &mut [f32; D],
+) {
+    let ph = role_term(anchor, filler, k);
+    let lut = BamLut::global();
+    for j in 0..D {
+        let (s, c) = lut.sin_cos(BamPhase(ph[j]));
+        out_re[j] = c;
+        out_im[j] = s;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -777,6 +770,8 @@ pub struct QueryScratch {
     pub res_im: [f32; D],
     pub cue_re: [f32; D],
     pub cue_im: [f32; D],
+    pub term_re: [f32; D],
+    pub term_im: [f32; D],
     pub sims: [f32; N_ENT],
 }
 
@@ -789,6 +784,8 @@ impl QueryScratch {
             res_im: [0.0; D],
             cue_re: [0.0; D],
             cue_im: [0.0; D],
+            term_re: [0.0; D],
+            term_im: [0.0; D],
             sims: [0.0; N_ENT],
         }
     }
@@ -900,25 +897,39 @@ pub fn resonate_pair(sc: &mut QueryScratch, cb: &Codebooks, a: &Anchors) -> Pair
         iters = iters.saturating_add(1);
         let prev = (o, m);
 
+        term_phasor_into(
+            &a.m,
+            &cb.modu.clean[m],
+            ROLE_M,
+            &mut sc.term_re,
+            &mut sc.term_im,
+        );
         role_cue_into(
             &sc.z_re,
             &sc.z_im,
             &a.o_re,
             &a.o_im,
             ROLE_O,
-            Some((&cb.term_m_re[m], &cb.term_m_im[m])),
+            Some((&sc.term_re, &sc.term_im)),
             &mut sc.cue_re,
             &mut sc.cue_im,
         );
         o = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.acf_q(ROLE_O), &mut sc.sims).index;
 
+        term_phasor_into(
+            &a.o,
+            &cb.ent.clean[o],
+            ROLE_O,
+            &mut sc.term_re,
+            &mut sc.term_im,
+        );
         role_cue_into(
             &sc.z_re,
             &sc.z_im,
             &a.m_re,
             &a.m_im,
             ROLE_M,
-            Some((&cb.term_o_re[o], &cb.term_o_im[o])),
+            Some((&sc.term_re, &sc.term_im)),
             &mut sc.cue_re,
             &mut sc.cue_im,
         );
@@ -931,25 +942,39 @@ pub fn resonate_pair(sc: &mut QueryScratch, cb: &Codebooks, a: &Anchors) -> Pair
     }
 
     // Validation on the clean codebook.
+    term_phasor_into(
+        &a.m,
+        &cb.modu.clean[m],
+        ROLE_M,
+        &mut sc.term_re,
+        &mut sc.term_im,
+    );
     role_cue_into(
         &sc.z_re,
         &sc.z_im,
         &a.o_re,
         &a.o_im,
         ROLE_O,
-        Some((&cb.term_m_re[m], &cb.term_m_im[m])),
+        Some((&sc.term_re, &sc.term_im)),
         &mut sc.cue_re,
         &mut sc.cue_im,
     );
     let co = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.clean_q(ROLE_O), &mut sc.sims);
 
+    term_phasor_into(
+        &a.o,
+        &cb.ent.clean[o],
+        ROLE_O,
+        &mut sc.term_re,
+        &mut sc.term_im,
+    );
     role_cue_into(
         &sc.z_re,
         &sc.z_im,
         &a.m_re,
         &a.m_im,
         ROLE_M,
-        Some((&cb.term_o_re[o], &cb.term_o_im[o])),
+        Some((&sc.term_re, &sc.term_im)),
         &mut sc.cue_re,
         &mut sc.cue_im,
     );
@@ -979,13 +1004,20 @@ pub fn evidence_sims(
     obj_sims: &mut [f32; N_ENT],
     mod_sims: &mut [f32; N_MOD],
 ) {
+    term_phasor_into(
+        &a.m,
+        &cb.modu.clean[p.modu],
+        ROLE_M,
+        &mut sc.term_re,
+        &mut sc.term_im,
+    );
     role_cue_into(
         &sc.z_re,
         &sc.z_im,
         &a.o_re,
         &a.o_im,
         ROLE_O,
-        Some((&cb.term_m_re[p.modu], &cb.term_m_im[p.modu])),
+        Some((&sc.term_re, &sc.term_im)),
         &mut sc.cue_re,
         &mut sc.cue_im,
     );
@@ -997,13 +1029,20 @@ pub fn evidence_sims(
     );
     obj_sims[..N_ENT].copy_from_slice(&sc.sims[..N_ENT]);
 
+    term_phasor_into(
+        &a.o,
+        &cb.ent.clean[p.obj],
+        ROLE_O,
+        &mut sc.term_re,
+        &mut sc.term_im,
+    );
     role_cue_into(
         &sc.z_re,
         &sc.z_im,
         &a.m_re,
         &a.m_im,
         ROLE_M,
-        Some((&cb.term_o_re[p.obj], &cb.term_o_im[p.obj])),
+        Some((&sc.term_re, &sc.term_im)),
         &mut sc.cue_re,
         &mut sc.cue_im,
     );

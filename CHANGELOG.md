@@ -3,6 +3,23 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.100] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 9 arquivo(s) (docs:3, examples:2, src:1, tests:3).
+- Gate: ok (44s).
+
+- `docs/AUDIT_CLAIMS_VOL3.md`
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL2.md`
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md`
+- `examples/_e3_diag.rs`
+- `examples/transplant_probe.rs`
+- `src/core/phase_language.rs`
+- `tests/e1_language_gate.rs`
+- `tests/e1b_capacity.rs`
+- `tests/e3_transplant_gate.rs`
+
 ## [0.0.99] - 2026-11-16
 
 ### Changed

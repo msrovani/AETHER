@@ -336,7 +336,7 @@ fn g2_analogia_em_fase_e_medida_sem_alvo() {
                 // não-aditividade controlada (embedding real não é aditivo).
                 // Sem normalizar: normalizar é não-linear e destrói a identidade
                 // a:b :: c:d que a analogia em fase explora.
-                add_assign(&mut x, &gauss_vec(&mut rng, D_IN, 0.25));
+                add_assign(&mut x, &gauss_vec(&mut rng, D_IN, 0.25 / (D_IN as f32).sqrt()));
                 bank.push(x);
             }
         }
@@ -450,12 +450,17 @@ fn g3_bridge_emite_zero_alloc_quando_ativo() {
 
 #[test]
 fn g3_abstencao_por_margem_tem_poucos_falsos_confiaveis() {
-    // Consultas fora do domínio devem ter margem menor que as do domínio.
+    // Duas abstenções independentes:
+    //  · **evidência** (`role_similarity`) detecta pista fora do domínio;
+    //  · **margem** detecta cleanup ambíguo dentro do domínio.
+    // A margem sozinha não detecta OOD: o unbinding sempre "acha" um valor
+    // para o melhor papel, mesmo quando o papel não existe.
     let mut rng = ChaCha8Rng::seed_from_u64(0x0E34);
     let dim = FHRR_DIM;
     let mut store = FhrrStore::with_traces(dim, TRACES).expect("store");
     let mask = vec![true; dim];
     let mut in_domain = Vec::new();
+    let mut in_role = Vec::new();
     let mut region = Vec::new();
     for i in 0..SHARD_CAP {
         let mut e = vec![0.0f32; dim];
@@ -472,16 +477,18 @@ fn g3_abstencao_por_margem_tem_poucos_falsos_confiaveis() {
     for (e, r) in &region {
         let hit = store.query_match(e, r, &mask).expect("q");
         in_domain.push(hit.margin);
+        in_role.push(hit.role_similarity);
     }
     in_domain.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    println!("[dbg] in-domain margin min={:.4} med={:.4} max={:.4}", in_domain[0], in_domain[in_domain.len()/2], in_domain[in_domain.len()-1]);
-    let mut threshold = in_domain.clone();
-    threshold.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    // limiar de 50% de cobertura calibrado **no domínio** (treino)
-    let cut = threshold[threshold.len() / 2];
+    in_role.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    // limiar de ambiguidade: 50% de cobertura; evidência: percentil 5 do domínio
+    let cut = in_domain[in_domain.len() / 2];
+    let evidence_cut = in_role[in_role.len() / 20];
 
     let mut ood = 0usize;
     let mut abstained = 0usize;
+    let mut false_confident = 0usize;
+    let mut accepted = 0usize;
     for _ in 0..200 {
         let mut e = vec![0.0f32; dim];
         let mut r = vec![0.0f32; dim];
@@ -491,18 +498,27 @@ fn g3_abstencao_por_margem_tem_poucos_falsos_confiaveis() {
         }
         let hit = store.query_match(&e, &r, &mask).expect("q");
         ood += 1;
-        if hit.margin < cut {
+        if hit.role_similarity < evidence_cut || hit.margin < cut {
             abstained += 1;
+        } else {
+            accepted += 1;
+            // OOD aceito é, por definição, um "confiante e errado".
+            false_confident += 1;
         }
     }
-    println!("[dbg] cut={cut:.4} ood_abstained={abstained}/{ood}");
     let rate = abstained as f64 / ood as f64;
     assert!(
-        rate >= 0.90,
-        "abstenção fora do domínio = {:.1}% (esperado ≥ 90%)",
+        rate >= 0.95,
+        "abstenção fora do domínio = {:.1}% (esperado ≥ 95%)",
         100.0 * rate
     );
-    // dentro do domínio, o limiar aceita ~50% (por construção)
+    let false_conf = if accepted > 0 {
+        false_confident as f64 / accepted as f64
+    } else {
+        0.0
+    };
+    assert!(false_conf < 0.05, "falsos confiáveis = {:.1}%", 100.0 * false_conf);
+    // dentro do domínio, o limiar de margem aceita ~50% (por construção)
     let inside = in_domain.iter().filter(|m| **m >= cut).count();
     assert!(
         inside * 2 >= in_domain.len(),

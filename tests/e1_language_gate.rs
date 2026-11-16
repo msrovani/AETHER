@@ -196,9 +196,18 @@ fn g1_sharding_holds_1000_facts_and_flat_collapses() {
     let flat = build_flat(&facts, &cb, &a, K_TRACES);
     let fr = flat_recall(&flat, &facts, &cb, &a, 80);
     assert!(fr < 0.10, "superposição plana deveria colapsar, veio {fr}");
+    let working_set = cb.memory_bytes()
+        + mem.memory_bytes()
+        + std::mem::size_of::<QueryScratch>()
+        + std::mem::size_of::<Anchors>();
+    assert!(
+        working_set < 500 * 1024,
+        "working set {working_set} B >= 500 KB"
+    );
     println!(
-        "E1.G1 recall sharded={r:.4} plano={fr:.4} max_load={} cap={SHARD_CAP}",
-        mem.max_load()
+        "E1.G1 recall sharded={r:.4} plano={fr:.4} max_load={} cap={SHARD_CAP} working_set={} KB",
+        mem.max_load(),
+        working_set / 1024
     );
 }
 

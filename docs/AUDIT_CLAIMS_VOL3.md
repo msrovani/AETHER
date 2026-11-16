@@ -219,10 +219,27 @@ donos dos experimentos confirmaram ou corrigiram os pontos abertos:
 | E3 — transplant gates | `tests/e3_transplant_gate.rs`: 1 passa, **4 falham** — e os 4 são **de teste**: ρ esperado positivo contra Hamming (por construção é −0,954, logo |ρ| passa); `value_index` comparado a `local` com 40 valores em 200 fatos; OOB 48 vs 50 na analogia; OOD com pista degenerada (`sin·3`, não fasor unitário). | MSG 0186 |
 | E2c-2 — gate | Gate corrigido: **`ge` no h=0** (o roof parte do que a dominância fixa) + **estrito sob viés** (k6, δ=0,6, 200 inst). O truque z2 não entra: custa completude (171 vs 185). Soundness ×2 mantidas. | MSG 0172/0177 |
 | E2c-2 — fecho | Controle positivo **PASS** (estrela K=2..12; 13/13 fixings). Medição correta: vidro puro **0/200** (roof = dominância), plant 25% **+0,3 pp** (1/200), plant 45% **+9,1 pp** (32/200), **0 unsound em 600** nos dois. Extensão real **sob viés**, nula no vidro — não é oráculo global. | MSG 0142/0149/0158 |
-| E1 v2 — gates | `tests/e1_language_gate.rs`: **4/5** depois da correção de escala que apontei (`normalize_into` deixava o fasor em `n_fatos/Q14`, ~10³ abaixo de 1, e o ressonador subtraía vetores unitários de uma pista 10³ menor). g1/g3 passaram; resta **g5: p50 57,7 µs** vs 20 µs. | MSG 0152/0160/0166/0168 |
+| E1 v2 — gates | `tests/e1_language_gate.rs`: **5/5 PASS** (p50 13,9 µs / p99 35,7 µs) depois da correção de escala que apontei (`normalize_into` deixava o fasor em `n_fatos/Q14`, ~10³ abaixo de 1, e o ressonador subtraía vetores unitários de uma pista 10³ menor). | MSG 0152/0160/0166/0168/0182 |
 | E1a — exemplo | `examples/phase_language_probe.rs`: 1.000 fatos, recall **1,0000**, plano **0,0725**, SNR **5,88**, p50 **6,40 µs**, p99 **25,70 µs**, 0 alloc, 436 KiB (34% da L2), abstenção calibrada. O MSG 0169 publicou 5,80/7,80 µs, que **não batem** com o JSON. | MSG 0169/0170 + `target/aether_e1_plh.json` |
 
 **Regra operacional que ficou acordada:** o auditor é *read-only*; cada erro é
 roteado ao dono do claim (0106 = example/docs E1; 0107 = E2/E3; 0110 = roof
 dual; 0111 = E1b-2; 0121 = corpo 3; 0130 = F1). Nenhum arquivo de outro claim
 foi editado.
+
+### 6.1 Fecho — 2026-11-15 22:59, v0.0.99
+
+| Métrica | Valor |
+|---|---|
+| Alvos de teste verdes | **15** (139 testes somados) |
+| Único alvo vermelho | `e3_transplant_gate` — **4/6** |
+| Vermelhos restantes | 2 bugs **de teste**: OOB 48 vs 50 na analogia; pista in-domain degenerada no G3 |
+| Verificado por mim | E1 5/5 · F1 4/4 (filtro + `CueHit` + `skipped`) · E2c2 5/5 |
+| Não auditado por mim | E4/E5/E7/E8/F2/F3 do MSG 0190 (números de terceiros) |
+| Auditoria coberta | E6 · E6b · E1b · E2b · E2c · E3b · E1a · E1b-v2 · E2c-2 · F1 · E3 |
+
+O que mudou por causa desta auditoria: a curva da M5 (carry-over, 3,7×), a escala
+do PLH (recall 0 → 5/5), o gate de R8 do F1 (vácuo → controle positivo), o gate
+do E2c-2 (insatisfazível → `ge` no h=0), o offset do QUBO (−2, corrigido) e a
+triagem dos 4 gates do E3. Nenhum número do núcleo (E6/E6b/E2b/E2c/E3b/E1b)
+precisou ser refeito.
