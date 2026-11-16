@@ -3,6 +3,24 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.120] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 10 arquivo(s) (.:1, data:3, docs:2, examples:1, src:2, tests:1).
+- Gate: ok (4s).
+
+- `Cargo.lock`
+- `data/emb/bank.f32`
+- `data/hv/bank.bin`
+- `data/manifest.json`
+- `docs/API_EVALUATION.md`
+- `docs/EXTERNAL_API.md`
+- `examples/transplant_hv_probe.rs`
+- `src/api/mod.rs`
+- `src/core/presolve.rs`
+- `tests/e2c3_bound_gate.rs`
+
 ## [0.0.119] - 2026-11-16
 
 ### Changed

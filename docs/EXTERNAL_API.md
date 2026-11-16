@@ -23,6 +23,7 @@ cargo run --release --features api --bin aether-api -- 127.0.0.1:8787 `
 |---|---|
 | `--addr IP:PORTA` (ou posicional) | endereço de escuta (padrão `127.0.0.1:8787`) |
 | `--ledger arquivo.jsonl` | persiste o ledger em disco (append-only) e recarrega no boot |
+| `--ledger-max-bytes N` | compacta o arquivo quando passa de `N` bytes (`0` = sem teto) |
 | `--token T` | exige `Authorization: Bearer T` (ou `X-Aether-Token`) nas rotas com estado |
 | `--organism N` | amarra o token ao organismo `N`; escopo diferente recebe `403` |
 | `--threads N` | workers de conexão (padrão 4) |
@@ -41,6 +42,7 @@ exigem token quando `--token` é usado.
 | `GET` | `/v1/models` | catálogo OpenAI |
 | `POST` | `/v1/aether/remember` | grava um fato de fase no ledger (T2) |
 | `POST` | `/v1/aether/cue` | recall por fase, **dentro de um escopo** |
+| `POST` | `/v1/aether/forget` | apaga um fato (exige `authority ≥ 128`) e grava túmulo |
 | `POST` | `/v1/aether/solve` | QUBO/Ising → estado + certificado (`energy`, `gap`, `violations`) |
 | `POST` | `/v1/chat/completions` | dialeto OpenAI; devolve evidência certificada ou abstenção |
 | `POST` | `/completion` | dialeto llama.cpp; mesmo motor |
@@ -197,6 +199,42 @@ o arquivo no boot. Linhas inválidas são ignoradas e contadas em
 
 O arquivo é a **memória de longo prazo do escopo**, não o motor: apagar o
 arquivo não altera a física, só o que o app consegue citar.
+
+### 5.1.1 Esquecer (e por que o fato não ressuscita)
+
+```bash
+curl -s -X POST http://127.0.0.1:8787/v1/aether/forget -d '{
+  "key":"42",
+  "scope":{"organism":1,"run":1,"app":1},
+  "authority":255,
+  "reason":"fato incorreto"
+}'
+# {"forgot":true,"tombstoned":true,"key":"42","remaining":41,...}
+```
+
+* Exige `authority ≥ 128`: apagar memória é ato com **mandato** (`403` sem ele).
+* O disco recebe uma **linha túmulo** (`op=forget`) além de remover da memória;
+  no reinício os túmulos são reaplicados em ordem, então o fato **não volta**.
+* É **idempotente**: esquecer o que não existe devolve `forgot:false`, sem erro.
+* Escopo errado não alcança o fato de outro organismo (`forgot:false`).
+
+### 5.1.2 Compactação
+
+Com `--ledger-max-bytes N`, quando o arquivo passa de `N` ele é reescrito
+**só com os vivos** (tmp + rename atômico): túmulos e fatos apagados somem do
+disco. O teto é do arquivo, não do conjunto vivo — se os vivos sozinhos passarem
+de `N`, o arquivo fica do tamanho dos vivos (e isso é correto).
+
+> Um registro de 160 fasores ocupa ~6 KB. Use um teto de pelo menos ~24 KB;
+> abaixo disso a compactação roda a cada escrita (o binário avisa no boot).
+
+### 5.1.3 Índice por escopo
+
+`cue` e `scoped` usam um índice `ScopeId → posições`, então consultar um escopo
+**não varre** os fatos dos outros. Medido: 2.000 fatos em 20 escopos, `cue`
+p50 abaixo de 5 ms (com varredura global, o custo cresceria com o ledger
+inteiro). Esquecer reconstrói o índice (`O(n)`), o que é aceitável porque
+esquecer é raro.
 
 ## 5.2 Auth e escopo (R8)
 

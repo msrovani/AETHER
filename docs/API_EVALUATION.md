@@ -115,3 +115,15 @@ O endpoint responde no formato certo, mas o conteúdo é evidência — não con
    a consulta é serial. Para milhares de QPS, particionar por escopo.
 5. **`solve` é heurístico** (bSB): `coherent = true` significa mínimo local
    factível, não ótimo global garantido.
+
+## 8. Fechado depois desta avaliação
+
+| Item | Como |
+|---|---|
+| **Esquecer um fato** | `POST /v1/aether/forget` com `authority ≥ 128`; remove da memória e grava **túmulo** (`op=forget`) que é reaplicado no boot. Idempotente e restrito ao escopo. |
+| **Ledger sem teto** | `--ledger-max-bytes N` compacta (tmp + rename atômico) só com os vivos; túmulos e apagados saem do disco. |
+| **`cue` varrendo tudo** | índice `ScopeId → posições`; `cue`/`scoped` não visitam outros escopos. 2.000 fatos em 20 escopos: `p50 < 5 ms`. |
+
+Gates novos em `tests/api_lifecycle.rs` (5): esquecer, idempotência, escopo
+alheio, túmulo sobrevivendo ao reinício, compactação reduzindo o arquivo e
+índice aguentando 2.000 fatos.

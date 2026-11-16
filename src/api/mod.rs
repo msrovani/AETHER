@@ -717,12 +717,11 @@ fn remember(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
     let mut compact_error: Option<String> = None;
     if state.store.as_ref().map(LedgerStore::should_compact) == Some(true) {
         let all: Vec<DraftRecord> = state.ledger.records().cloned().collect();
-        match state.store.as_mut() {
-            Some(store) => match store.compact(&all) {
+        if let Some(store) = state.store.as_mut() {
+            match store.compact(&all) {
                 Ok(()) => compacted = true,
                 Err(e) => compact_error = Some(e.to_string()),
-            },
-            None => {}
+            }
         }
     }
 

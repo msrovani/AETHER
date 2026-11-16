@@ -358,9 +358,12 @@ fn main() {
         }
     }
     let rho = spearman(&cos_v, &ham_sim);
+    // Distorção: |H/D − (1−cos)/2| médio (escalas alinhadas)
     let mut abs_err = 0.0;
     for i in 0..cos_v.len() {
-        abs_err += (cos_v[i] - ham_sim[i]).abs();
+        let ham_n = ham_sim[i] / bank.dim as f64;
+        let ang = (cos_v[i] / 2.0).clamp(0.0, 1.0);
+        abs_err += (ham_n - ang).abs();
     }
     let jl_distortion = abs_err / cos_v.len().max(1) as f64;
 
