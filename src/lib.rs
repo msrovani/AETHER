@@ -22,6 +22,7 @@
 
 pub mod core;
 pub mod error;
+pub mod json;
 
 /// Ponte SGDB / intake (INTAKE_TRANSPLANT) — fora do hot path.
 #[cfg(feature = "m1")]

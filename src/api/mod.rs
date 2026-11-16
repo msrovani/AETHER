@@ -27,7 +27,9 @@
 //!                              └───► ledger.jsonl (persistência, T2)
 //! ```
 
-pub mod json;
+// O JSON mínimo vive no crate (sem features) porque o `sgdb` também precisa
+// dele; aqui ele continua exposto no mesmo caminho público `api::json`.
+pub use crate::json;
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};

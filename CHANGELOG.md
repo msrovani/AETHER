@@ -3,6 +3,17 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.127] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 3 arquivo(s) (src:3).
+- Gate: ok (3s).
+
+- `src/api/mod.rs`
+- `src/lib.rs`
+- `src/knowledge/sgdb/`
+
 ## [0.0.126] - 2026-11-16
 
 ### Added
