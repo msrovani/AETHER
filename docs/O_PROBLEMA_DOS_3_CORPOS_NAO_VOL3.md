@@ -379,7 +379,8 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 |---|---|---|---|---|
 | **E6** ✅ | II | perfil por estágio — **executado** | cobertura **99,98%**; solver **84,4%** · 7,5 GFLOP/s | bloqueio transversal **removido** |
 | **E6b** ✅ | II | kernel do solver (16 acumuladores, Rust safe) | **17,10 GFLOP/s (2,30×)** · ACQ 100 · 24 suítes verdes | R1, R5 |
-| **E1** ✅ | I | PLH sharded + binding não-comutativo — **executado** | **1.000 fatos: recall 1,000 vs 0,038 plano** · NC PASS · 6,75σ · 0 aloc · **latência 17,35 µs (FAIL, alvo 15)** · OOV 100%/FP 0% | R2 |
+| **E1** ⚠️ | I | PLH sharded + ACF (implementação em curso por outro agente) | p50 **9,90 µs** · NC **100%** · OOV **100%** · **recall 0,1675** · SNR 0,84σ · **25 allocs** | R2 |
+| **E1-2** ✅ | I | `FhrrStore::query_phasor_into` (fasor de papel pré-computado) | API + teste de equivalência bit-a-bit; remove `sin_cos` por consulta | R2 |
 | **E1b** ✅ | II | capacidade do store e da memória de fase — **executado** | **D=160: 64 fatos (K=6)** · lei **linear ~0,4·D** (não D²) · fase: ~4 padrões aleatórios | R2 |
 | **E2** | I | lógica como Ising + certificado | 3-SAT n≤20 = força bruta | R1 |
 | **E2b** ✅ | II | presolve simbólico antes do BSB — **executado** | **0 insound** · **64,8% redução** (+39,8 pp de cascata) · **200/200** resolvidas vs 183/200 | R1, R3 |

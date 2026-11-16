@@ -5,15 +5,28 @@ Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto
 
 ## [0.0.94] - 2026-11-16
 
+### Added
+
+- `FhrrStore::query_phasor_into` — consulta com o **fasor de papel
+  pré-computado** (`cue_re + i·cue_im`): não recalcula `sin/cos` em `D`
+  posições. O chamador compõe o fasor (ex.: produto de tabelas `exp(i·átomo)`).
+  Equivale a `query_into` quando `cue = exp(i·(entity + relation))`.
+- `tests/e1_plh.rs::phasor_cue_matches_phase_cue` — prova que os dois caminhos
+  devolvem o **mesmo** `value_index`, `fact_index` e similaridade (Δ < 1e-5).
+
 ### Changed
 
-- Ciclo automatico: 4 arquivo(s) (docs:1, examples:1, src:1, tests:1).
-- Gate: ok (4s).
+- `FhrrStore`: o núcleo (cleanup do papel + unbinding + similaridade) foi
+  extraído para `finish_into`, compartilhado por `query_into` e
+  `query_phasor_into` — sem duplicação e sem mudar o caminho antigo.
 
-- `examples/phase_language_probe.rs`
-- `src/core/fhrr.rs`
-- `tests/e1_plh.rs`
-- `docs/FASE1_PROMPT.md`
+### Nota de coordenação
+
+`examples/phase_language_probe.rs` está em **edição concorrente** por outro
+agente (versão de 1.647 linhas, 4 papéis + ressonador ACF). Ela já mede
+p50 **9,90 µs**, NC **100%**, abstenção **100%**, mas ainda falha em
+`recall@1` (0,1675), SNR (0,84σ) e **25 alocações** no hot-path. Este patch
+**não** altera esse arquivo; entrega apenas a API e o teste do E1-2.
 
 ## [0.0.93] - 2026-11-16
 
