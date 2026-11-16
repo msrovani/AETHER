@@ -16,7 +16,9 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use aether_engine::core::certificate::energy;
-use aether_engine::core::presolve::{persistency_qumo, roof_dual_qumo, RoofDualWorkspace};
+use aether_engine::core::presolve::{
+    persistency_qumo, roof_dual_qumo, roof_dual_qumo_z2, RoofDualWorkspace,
+};
 
 fn random_glass(n: usize, k: usize, delta: f64, seed: u64) -> (Vec<f64>, Vec<f64>) {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
@@ -109,22 +111,64 @@ fn roof_dual_ve_o_que_a_dominancia_nao_ve() {
     let n = 14usize;
     let mut total_roof = 0usize;
     let mut total_dom = 0usize;
+    let mut total_z2 = 0usize;
     let instances = 20usize;
     for inst in 0..instances {
         let (j, h) = random_glass(n, 0, 0.0, 0xE2C2_1000 + inst as u64);
         let roof = roof_dual_qumo(n, &j, &h);
+        let roof_z2 = roof_dual_qumo_z2(n, &j, &h);
         let dom = persistency_qumo(n, &j, &h);
         assert_eq!(dom.fixed_count(), 0, "controle: dominância não deve fixar");
         total_roof += roof.fixed_count();
         total_dom += dom.fixed_count();
-        // soundness do braço do controle
+        total_z2 += roof_z2.fixed_count();
+        // soundness dos dois braços do controle
         let e_star = brute_force(n, &j, &h);
-        let e_red = optimum_with_fixed(n, &j, &h, &roof.fixed, &roof.residual);
-        assert!((e_red - e_star).abs() < 1e-9, "roof dual insound com h=0");
+        for pre in [&roof, &roof_z2] {
+            let e_red = optimum_with_fixed(n, &j, &h, &pre.fixed, &pre.residual);
+            assert!((e_red - e_star).abs() < 1e-9, "braço insound com h=0");
+        }
+    }
+    // Com h = 0 a energia é invariante por s → −s: **nenhuma** variável é
+    // persistente (os dois sinais aparecem entre os dois ótimos espelhados).
+    // O roof dual atinge o teto (0%) e a quebra de simetria ℤ₂ é a única
+    // redução possível — exatamente 1 variável por instância.
+    assert_eq!(
+        total_roof, total_dom,
+        "roof dual não pode exceder o teto 0%"
+    );
+    assert_eq!(
+        total_z2, instances,
+        "quebra de simetria Z2 deveria fixar exatamente 1 variável"
+    );
+    assert!(
+        total_z2 > total_dom,
+        "roof+z2 ({total_z2}) deveria exceder dominância ({total_dom}) sem viés"
+    );
+}
+
+#[test]
+fn roof_dual_excede_dominancia_com_vies_forte() {
+    // plant = 45%: a dominância vê os 6 vieses plantados; o roof dual vê mais.
+    let n = 14usize;
+    let k = 6usize;
+    let instances = 30usize;
+    let mut dom_fix = 0usize;
+    let mut roof_fix = 0usize;
+    for inst in 0..instances {
+        let (j, h) = random_glass(n, k, 0.6, 0xE2C2_4000 + inst as u64);
+        let dom = persistency_qumo(n, &j, &h);
+        let roof = roof_dual_qumo(n, &j, &h);
+        assert!(
+            roof.fixed_count() >= dom.fixed_count(),
+            "roof dual precisa conter a dominância"
+        );
+        dom_fix += dom.fixed_count();
+        roof_fix += roof.fixed_count();
     }
     assert!(
-        total_roof > total_dom,
-        "roof dual ({total_roof}) deveria exceder dominância ({total_dom}) sem viés"
+        roof_fix > dom_fix,
+        "roof dual ({roof_fix}) deveria exceder dominância ({dom_fix}) com viés"
     );
 }
 

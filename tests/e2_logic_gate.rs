@@ -189,7 +189,7 @@ fn g1_g2_pipeline_iguala_forca_bruta_e_certificado_nunca_mente() {
 
     // warmup (statics lazy)
     {
-        let warm = random_3sat(8, 8, 0xE2_0);
+        let warm = random_3sat(8, 8, 0x0E20);
         let _ = pipe.resolve_into(8, &warm, 1, &mut states, &mut cert);
     }
 
@@ -214,13 +214,7 @@ fn g1_g2_pipeline_iguala_forca_bruta_e_certificado_nunca_mente() {
         let (j, h) = pair_penalty(n, &clauses);
         let mut best = u32::MAX;
         for r in 0..4 {
-            arm1.relax_into(
-                &j,
-                &h,
-                n,
-                0xE2_300 + (inst as u64) * 7 + r,
-                &mut states,
-            );
+            arm1.relax_into(&j, &h, n, 0xE2_300 + (inst as u64) * 7 + r, &mut states);
             let v = violations_3(&clauses, &states);
             if v < best {
                 best = v;
@@ -232,14 +226,8 @@ fn g1_g2_pipeline_iguala_forca_bruta_e_certificado_nunca_mente() {
         arm1_unsat_decisive += usize::from(!sat && v1 == 0);
 
         // braço 2 — pipeline
-        pipe.resolve_into(
-            n,
-            &clauses,
-            0xE2_400 + inst as u64,
-            &mut states,
-            &mut cert,
-        )
-        .expect("resolve");
+        pipe.resolve_into(n, &clauses, 0xE2_400 + inst as u64, &mut states, &mut cert)
+            .expect("resolve");
         let v2 = violations_3(&clauses, &states);
         assert_eq!(v2, cert.violations, "certificado não bate com a contagem");
         assert_eq!(v2, pipe.last.violations);
@@ -304,7 +292,10 @@ fn g2_abstencao_em_instancia_insatisfativel_por_construcao() {
         cert.violations > 0,
         "instância insatisfatível não pode ter 0 violações"
     );
-    assert!(!pipe.last.decisive, "decisão emitida em instância impossível");
+    assert!(
+        !pipe.last.decisive,
+        "decisão emitida em instância impossível"
+    );
     assert!(!cert.is_coherent(), "certificado coerente em impossível");
 }
 
@@ -365,7 +356,7 @@ fn clausulas_de_dois_e_um_literais_sao_exatas() {
     // (a ∨ b) e (a): o pipeline tem de resolver, e o certificado tem de valer.
     let clauses = [
         Clause3::new2(0, 1, 1, -1),
-        Clause3::new2(0, 1, 0, 1), // duplicada de propósito: (a)
+        Clause3::new2(0, 1, 0, 1),   // duplicada de propósito: (a)
         Clause3::new2(2, -1, 2, -1), // (¬c)
     ];
     let mut pipe = LogicPipeline::new(3, 3, 20, 3, 3, 0.5);

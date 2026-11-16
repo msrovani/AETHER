@@ -1,12 +1,10 @@
-﻿//! E8 — benchmark do reservatório congelado contra física plástica.
+//! E8 — benchmark do reservatório congelado contra física plástica.
 //!
 //! Uso: `cargo run --release --example reservoir_readout_bench`
 //!
 //! Escreve `target/aether_e8_reservoir.json` com os números medidos.
 
-use aether_engine::core::reservoir::{
-    bench_frozen, bench_joint, narma_like, ReservoirConfig,
-};
+use aether_engine::core::reservoir::{bench_frozen, bench_joint, narma_like, ReservoirConfig};
 
 fn main() {
     let samples = if cfg!(debug_assertions) {

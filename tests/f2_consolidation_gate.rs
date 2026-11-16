@@ -60,20 +60,15 @@ fn f2_consolidacao_sem_perda_e_gist_preserva_habilidade() {
         for (i, phases) in base.iter().enumerate() {
             let key = round * 32 + i as u64;
             let pl = payload(phases);
-            let ev = KnowledgeEvent::new(
-                u128::from(key),
-                Layer::L4Semantic,
-                scope,
-                key,
-                1_000 + key,
-            )
-            .with_certificate(Certificate {
-                energy: -1.0 - 0.01 * i as f32,
-                gap: 0.1,
-                violations: 0,
-            })
-            .with_authority(200)
-            .with_payload(&pl);
+            let ev =
+                KnowledgeEvent::new(u128::from(key), Layer::L4Semantic, scope, key, 1_000 + key)
+                    .with_certificate(Certificate {
+                        energy: -1.0 - 0.01 * i as f32,
+                        gap: 0.1,
+                        violations: 0,
+                    })
+                    .with_authority(200)
+                    .with_payload(&pl);
             tx.record(&ev).expect("record nominal");
             total += 1;
         }
@@ -140,11 +135,11 @@ fn f2_consolidacao_sem_perda_e_gist_preserva_habilidade() {
         }
     }
     let retention = hits as f32 / trials as f32;
-    println!("[F2] retencao_gist={retention:.3} ({hits}/{trials}) gists={}", ledger.gist_count());
-    assert!(
-        retention >= 0.95,
-        "retencao no gist {retention:.3} < 0.95"
+    println!(
+        "[F2] retencao_gist={retention:.3} ({hits}/{trials}) gists={}",
+        ledger.gist_count()
     );
+    assert!(retention >= 0.95, "retencao no gist {retention:.3} < 0.95");
 
     // Poda explícita de outro atrator também preserva gist.
     let pruned = ledger.prune_to_gist(scope, 5).expect("prune");
@@ -165,7 +160,10 @@ fn f2_consolidacao_sem_perda_e_gist_preserva_habilidade() {
         },
     );
     assert_eq!(d.action, FusionAction::Abstain);
-    println!("[F2] R9_abstencoes_proveniencia={}", ledger.provenance_abstentions());
+    println!(
+        "[F2] R9_abstencoes_proveniencia={}",
+        ledger.provenance_abstentions()
+    );
     assert!(ledger.provenance_abstentions() > 0, "R9 vazio");
 
     // Sanidade do formato do gist.

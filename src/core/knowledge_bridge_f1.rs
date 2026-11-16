@@ -215,10 +215,31 @@ pub trait KnowledgeSink {
 /// fase, ele a reacende. `out` é pré-alocado pelo chamador (nenhuma alocação
 /// no caminho de decisão).
 pub trait KnowledgeSource {
-    /// Escreve em `out` o padrão de fase mais próximo de `query`.
+    /// Escreve em `out` o padrão de fase mais próximo de `query`, **dentro de
+    /// `scope`**.
     ///
-    /// Devolve quantos candidatos foram consultados (`0` = escopo vazio).
-    fn cue_into(&mut self, query: &[f32], out: &mut [f32]) -> Result<usize, BridgeError>;
+    /// O escopo é argumento (não comentário): é ele que torna R8 verificável.
+    /// A resposta carrega a `key` e a `authority` do fato que casou — sem isso
+    /// o vetor volta sem proveniência (K6) e a resposta não é citável.
+    fn cue_into(
+        &mut self,
+        scope: ScopeId,
+        query: &[f32],
+        out: &mut [f32],
+    ) -> Result<CueHit, BridgeError>;
+}
+
+/// Proveniência de um `cue` bem-sucedido (`Copy`: 32 B, sem alocação).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CueHit {
+    /// Chave endereçável por conteúdo do registro que casou.
+    pub key: u128,
+    /// Escopo do registro que casou (igual ao escopo pedido).
+    pub scope: ScopeId,
+    /// Autoridade social do registro (0..=255).
+    pub authority: u8,
+    /// Candidatos **do escopo** consultados nesta busca.
+    pub hits: usize,
 }
 
 /// Slot POD do anel: todo o evento já é materializado aqui.
@@ -550,6 +571,7 @@ pub struct ScopeLedger {
     entries: Vec<DraftRecord>,
     queries: u64,
     cross_scope_hits: u64,
+    cross_scope_skipped: u64,
 }
 
 impl ScopeLedger {
@@ -595,6 +617,15 @@ impl ScopeLedger {
     /// Invariante R8: tem de permanecer `0`.
     pub fn cross_scope_hits(&self) -> u64 {
         self.cross_scope_hits
+    }
+
+    /// Registros de outro escopo **descartados pelo filtro**.
+    ///
+    /// É o controle positivo de R8: numa consulta cruzada este contador tem de
+    /// **subir**, provando que o filtro rodou. Sem ele, `cross_scope_hits == 0`
+    /// é vacuidade (R9) — um contador que nunca incrementa não prova nada.
+    pub fn cross_scope_skipped(&self) -> u64 {
+        self.cross_scope_skipped
     }
 
     /// Registros do escopo pedido, na ordem de inserção.

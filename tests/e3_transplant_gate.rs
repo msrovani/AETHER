@@ -21,7 +21,7 @@ use rand_chacha::ChaCha8Rng;
 
 use aether_engine::core::fhrr::FhrrStore;
 use aether_engine::core::knowledge_bridge::{
-    KnowledgeSink, NullSink, SpscKnowledgeBridge, SourceTag,
+    KnowledgeSink, NullSink, SourceTag, SpscKnowledgeBridge,
 };
 use aether_engine::core::transplant::{
     gaussian_vec_into, hamming, normalize_in_place, phase_analogy, phase_similarity, spearman,
@@ -117,14 +117,14 @@ fn add_assign(dst: &mut [f32], src: &[f32]) {
 #[test]
 fn g1_jl_preserva_metrico_e_orcamento_de_bytes() {
     let n = 160usize;
-    let mut rng = ChaCha8Rng::seed_from_u64(0xE3_1);
+    let mut rng = ChaCha8Rng::seed_from_u64(0x0E31);
     let mut emb: Vec<Vec<f32>> = Vec::with_capacity(n);
     for _ in 0..n {
         emb.push(unit(&mut rng, D_IN));
     }
     let flat: Vec<f32> = emb.iter().flatten().copied().collect();
 
-    let mut proj = JlProjector::new(D_IN, BITS, 512, 0xE3_11);
+    let mut proj = JlProjector::new(D_IN, BITS, 512, 0x0E311);
     assert_eq!(proj.words() * 8, BITS / 8);
     assert_eq!(proj.bytes_per_atom(), 1280, "1,28 KB por átomo");
     assert!(proj.scratch_bytes() <= 1_250_000, "bloco deve caber na L2");
@@ -180,14 +180,14 @@ fn value_of(entity: usize, relation: usize) -> usize {
 fn g2_recuperacao_de_relacao_em_shards() {
     let n_ent = 25usize; // 25 × 8 = 200 fatos
     let n_facts = n_ent * N_REL;
-    assert!(SHARD_CAP <= 64, "capacidade medida no E1b (D=160, K=6)");
+    const _: () = assert!(SHARD_CAP <= 64, "capacidade medida no E1b (D=160, K=6)");
 
-    let mut rng = ChaCha8Rng::seed_from_u64(0xE3_2);
+    let mut rng = ChaCha8Rng::seed_from_u64(0x0E32);
     let entity_emb: Vec<Vec<f32>> = (0..n_ent).map(|_| unit(&mut rng, D_IN)).collect();
     let relation_emb: Vec<Vec<f32>> = (0..N_REL).map(|_| unit(&mut rng, D_IN)).collect();
     let value_emb: Vec<Vec<f32>> = (0..N_VAL).map(|_| unit(&mut rng, D_IN)).collect();
 
-    let enc = PhaseEncoder::new(D_IN, FHRR_DIM, 0xE3_22, 2.0);
+    let enc = PhaseEncoder::new(D_IN, FHRR_DIM, 0x0E322, 2.0);
     let phase = |e: &[f32]| {
         let mut p = vec![0.0f32; FHRR_DIM];
         enc.encode_into(e, &mut p);
@@ -204,7 +204,7 @@ fn g2_recuperacao_de_relacao_em_shards() {
         }
     }
 
-    let mut rng = ChaCha8Rng::seed_from_u64(0xE3_23);
+    let mut rng = ChaCha8Rng::seed_from_u64(0x0E323);
     let (mut clean, mut noisy, mut total) = (0usize, 0usize, 0usize);
     let mut start = 0usize;
     while start < n_facts {
@@ -286,13 +286,16 @@ fn analogy_recall(bank_emb: &[Vec<f32>], enc: &PhaseEncoder, sigma: f32, seed: u
                         if v1 == v2 {
                             continue;
                         }
-                        let (a, b, c, d) = (idx(g, s, v1), idx(g, s, v2), idx(g2, s, v1), idx(g2, s, v2));
+                        let (a, b, c, d) =
+                            (idx(g, s, v1), idx(g, s, v2), idx(g2, s, v1), idx(g2, s, v2));
                         phase_analogy(&phases[a], &phases[b], &phases[c], &mut rec);
                         for (j, p) in phases.iter().enumerate() {
                             sims[j] = phase_similarity(&rec, p);
                         }
                         order.sort_by(|&x, &y| {
-                            sims[y].partial_cmp(&sims[x]).unwrap_or(std::cmp::Ordering::Equal)
+                            sims[y]
+                                .partial_cmp(&sims[x])
+                                .unwrap_or(std::cmp::Ordering::Equal)
                         });
                         total += 1;
                         r1 += usize::from(order[0] == d);
@@ -307,7 +310,7 @@ fn analogy_recall(bank_emb: &[Vec<f32>], enc: &PhaseEncoder, sigma: f32, seed: u
 
 #[test]
 fn g2_analogia_em_fase_e_medida_sem_alvo() {
-    let mut rng = ChaCha8Rng::seed_from_u64(0xE3_3);
+    let mut rng = ChaCha8Rng::seed_from_u64(0x0E33);
     let mut attr: Vec<Vec<Vec<f32>>> = Vec::with_capacity(N_SLOTS);
     for _ in 0..N_SLOTS {
         let mut slot = Vec::with_capacity(VALUES_PER_SLOT);
@@ -333,12 +336,12 @@ fn g2_analogia_em_fase_e_medida_sem_alvo() {
             }
         }
     }
-    let enc = PhaseEncoder::new(D_IN, FHRR_DIM, 0xE3_33, 2.0);
-    let (r1, r5) = analogy_recall(&bank, &enc, 0.0, 0xE3_34);
+    let enc = PhaseEncoder::new(D_IN, FHRR_DIM, 0x0E333, 2.0);
+    let (r1, r5) = analogy_recall(&bank, &enc, 0.0, 0x0E334);
     assert!(r1.is_finite() && r5 >= r1);
     assert!(r1 >= 0.80, "analogia Recall@1 = {r1:.4} (esperado ≥ 0,80)");
     // ruído alto degrada de forma mensurável, não explode
-    let (r1n, _) = analogy_recall(&bank, &enc, 1.2, 0xE3_35);
+    let (r1n, _) = analogy_recall(&bank, &enc, 1.2, 0x0E335);
     assert!(r1n <= r1 + 1e-9, "ruído não pode melhorar o recall");
 }
 
@@ -376,9 +379,8 @@ fn g3_verificador_zero_alloc_e_20ms() {
     // warmup
     let _ = verifier.verify_into(&facts, 0.1, None::<&mut NullSink>);
 
-    let (verdict, allocs) = count_allocs(|| {
-        verifier.verify_into(&facts, 0.1, None::<&mut NullSink>)
-    });
+    let (verdict, allocs) =
+        count_allocs(|| verifier.verify_into(&facts, 0.1, None::<&mut NullSink>));
     let t0 = Instant::now();
     let _ = verifier.verify_into(&facts, 0.1, None::<&mut NullSink>);
     let ms = t0.elapsed().as_secs_f64() * 1e3;
@@ -386,7 +388,10 @@ fn g3_verificador_zero_alloc_e_20ms() {
     assert_eq!(allocs, 0, "verificador alocou {allocs} vezes");
     assert!(ms <= 20.0, "G3: verificador levou {ms:.3} ms (> 20 ms)");
     assert_eq!(verdict.checked, 1000);
-    assert!(verdict.is_valid(), "grafo deveria ser consistente: {verdict:?}");
+    assert!(
+        verdict.is_valid(),
+        "grafo deveria ser consistente: {verdict:?}"
+    );
     assert_eq!(verdict.provenance_violations, 0);
     // 100% dos fatos têm tag válida por construção (enum) — confirma o inverso
     for f in &facts {
@@ -441,7 +446,7 @@ fn g3_bridge_emite_zero_alloc_quando_ativo() {
 #[test]
 fn g3_abstencao_por_margem_tem_poucos_falsos_confiaveis() {
     // Consultas fora do domínio devem ter margem menor que as do domínio.
-    let mut rng = ChaCha8Rng::seed_from_u64(0xE3_4);
+    let mut rng = ChaCha8Rng::seed_from_u64(0x0E34);
     let dim = FHRR_DIM;
     let mut store = FhrrStore::with_traces(dim, TRACES).expect("store");
     let mask = vec![true; dim];

@@ -114,8 +114,8 @@ fn pretrain_a() -> OnlineKoopmanOperator {
     let regime_a: Vec<f32> = xs.iter().map(|v| (*v / 2.5) as f32).collect();
     let mut op = OnlineKoopmanOperator::with_forgetting(EMB, 1, 0.05, 0.99).expect("koopman");
     let mut emb = DelayEmbedding::new(EMB).expect("delay");
-    for k in 0..EMB {
-        emb.push(regime_a[k]);
+    for v in regime_a.iter().take(EMB) {
+        emb.push(*v);
     }
     let mut z = [0.0f32; EMB];
     for t in EMB..(2500 - HORIZON) {
@@ -216,8 +216,8 @@ impl Replay {
                     let mean = self.cur_err.iter().sum::<f32>() / SLOTS as f32;
                     best = 0;
                     let mut best_d = f32::INFINITY;
-                    for i in 0..SLOTS {
-                        let d = (self.cur_err[i] - mean).abs();
+                    for (i, &ce) in self.cur_err.iter().enumerate().take(SLOTS) {
+                        let d = (ce - mean).abs();
                         if d < best_d {
                             best_d = d;
                             best = i;

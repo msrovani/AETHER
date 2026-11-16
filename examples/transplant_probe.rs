@@ -492,7 +492,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         shards += 1;
         max_shard = max_shard.max(end - start);
-        for (i, (e, r, _)) in ds.triples.iter().enumerate().take(end).skip(start) {
+        for (i, &(e, r, _)) in ds.triples.iter().enumerate().take(end).skip(start) {
             let local = i - start;
             for (si, sigma) in sigmas.iter().enumerate() {
                 let mut cue = entity_phase[e].clone();
@@ -601,7 +601,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for (e, r, v) in ds.triples[shard_off..end].iter().copied() {
             store.add_fact(&entity_phase[e], &relation_phase[r], &value_phase[v])?;
         }
-        for (i, (e, r, _)) in ds.triples.iter().enumerate().take(end).skip(shard_off.max(start)) {
+        for (i, &(_, _, _)) in ds
+            .triples
+            .iter()
+            .enumerate()
+            .take(end)
+            .skip(shard_off.max(start))
+        {
             let (e, r, _) = ds.triples[i];
             let local = i - shard_off;
             let hit = store.query_match(&entity_phase[e], &relation_phase[r], &mask)?;

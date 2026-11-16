@@ -112,7 +112,15 @@ fn main() {
             let (j, h) = glass(n, 0, 0.6, seed);
             let e_star = bf(n, &j, &h);
 
-            let s_full = solve_bsb(&(0..n).collect::<Vec<_>>(), &j, &h, n, steps, restarts, seed);
+            let s_full = solve_bsb(
+                &(0..n).collect::<Vec<_>>(),
+                &j,
+                &h,
+                n,
+                steps,
+                restarts,
+                seed,
+            );
             let mut sf = vec![0i8; n];
             sf.copy_from_slice(&s_full);
             if (energy(&j, &h, n, &sf) - e_star).abs() <= 1e-9 {

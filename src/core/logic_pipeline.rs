@@ -170,6 +170,8 @@ pub struct StageStats {
     pub lagrange_rounds: usize,
     /// Execuções do kernel BSB (componentes × reinícios × rodadas).
     pub bsb_runs: usize,
+    /// Movimentos do reparo de factibilidade (min-conflicts com tabu).
+    pub repair_moves: usize,
     /// Tempo dos estágios (1)–(3).
     pub symbolic_us: f64,
     /// Tempo do estágio (4).
@@ -615,6 +617,8 @@ pub struct LogicPipeline {
     res_of: Vec<usize>,
     res_var: Vec<usize>,
     res_clauses: Vec<Clause3>,
+    /// Índice da cláusula **original** de cada cláusula residual (para o λ).
+    res_orig: Vec<usize>,
     terms: Vec<PoBTerm>,
 
     n_exp: usize,
@@ -644,6 +648,8 @@ pub struct LogicPipeline {
 
     best_orig: Vec<i8>,
     cur_orig: Vec<i8>,
+    /// Marcas de tabu do reparo de factibilidade (1 por variável).
+    tabu: Vec<u32>,
 
     /// Estatísticas do último `resolve_into`.
     pub last: StageStats,
@@ -680,6 +686,7 @@ impl LogicPipeline {
             res_of: vec![usize::MAX; n_max],
             res_var: vec![0; n_max],
             res_clauses: vec![Clause3::new3(0, 1, 0, 1, 0, 1); m_max],
+            res_orig: vec![0; m_max],
             terms: Vec::with_capacity(9 * m_max + 4),
             n_exp: 0,
             fixed_exp: vec![None; n_exp_max],
@@ -704,6 +711,7 @@ impl LogicPipeline {
             bsb: BsbCore::new(n_exp_max, steps, 0.05),
             best_orig: vec![1; n_max],
             cur_orig: vec![1; n_max],
+            tabu: vec![0; n_max],
             last: StageStats::default(),
         }
     }
@@ -787,7 +795,7 @@ impl LogicPipeline {
 
         // cláusulas residuais (satisfeitas saem; literais fixos-falsos saem)
         let mut n_res_clauses = 0usize;
-        for c in clauses.iter() {
+        for (orig_ci, c) in clauses.iter().enumerate() {
             if c.satisfied_by_fixed(&self.fixed3[..n]) {
                 continue;
             }
@@ -824,6 +832,7 @@ impl LogicPipeline {
                 2 => Clause3::new2(kept[0], signs[0], kept[1], signs[1]),
                 _ => Clause3::new3(kept[0], signs[0], kept[1], signs[1], kept[2], signs[2]),
             };
+            self.res_orig[n_res_clauses] = orig_ci;
             n_res_clauses += 1;
         }
 
@@ -832,7 +841,7 @@ impl LogicPipeline {
         let mut aux_next = n_res;
         for r in 0..n_res_clauses {
             let c = self.res_clauses[r];
-            let ci = u32::try_from(r).unwrap_or(u32::MAX);
+            let ci = u32::try_from(self.res_orig[r]).unwrap_or(u32::MAX);
             let a = BitRef {
                 var: u32::try_from(c.i).unwrap_or(u32::MAX),
                 neg: c.si < 0,
@@ -1022,7 +1031,15 @@ impl LogicPipeline {
                     None => self.exp_state[self.res_of[v]],
                 };
             }
-            let viol = violations_3(clauses, &self.cur_orig[..n]);
+            // --- reparo de factibilidade (min-conflicts com tabu) ---
+            let viol = self.repair_into(n, clauses);
+            // devolve o reparo ao estado expandido (aux ficam como estão: E/ΔE
+            // passam a ser diagnóstico, a decisão é a contagem exata)
+            for v in 0..n {
+                if self.fixed3[v].is_none() {
+                    self.exp_state[self.res_of[v]] = self.cur_orig[v];
+                }
+            }
             let e = qubo_energy(
                 &self.jq[..n_exp * n_exp],
                 &self.hq[..n_exp],
@@ -1079,9 +1096,78 @@ impl LogicPipeline {
         Ok(())
     }
 
+    /// Reparo de factibilidade determinístico (min-conflicts com tabu).
+    ///
+    /// O estágio (4) do dossiê pede que os osciladores de Lagrange "escapem de
+    /// mínimos inviáveis". O solver devolve um mínimo local do QUBO que pode
+    /// ficar a 1–3 cláusulas da factibilidade; este passo curto usa a
+    /// **contagem exata** de violações (não a energia) para fechar essa
+    /// distância: escolhe uma cláusula violada, avalia o flip de cada literal e
+    /// aceita o que mais reduz violações, com tabu para não ciclar.
+    ///
+    /// É `O(movimentos · m)` com `movimentos ≤ 64·n` e não aloca. Devolve as
+    /// violações restantes.
+    fn repair_into(&mut self, n: usize, clauses: &[Clause3]) -> u32 {
+        let max_moves = (64 * n).max(16);
+        let ttl = (n / 2 + 1) as u32;
+        let m = clauses.len();
+        self.tabu[..n].fill(0);
+        let mut clock = 1u32;
+        let mut cursor = 0usize;
+        let mut moves = 0usize;
+        loop {
+            let viol = violations_3(clauses, &self.cur_orig[..n]);
+            if viol == 0 || moves >= max_moves {
+                self.last.repair_moves += moves;
+                return viol;
+            }
+            // primeira cláusula violada a partir do cursor
+            let mut chosen = usize::MAX;
+            for t in 0..m {
+                let idx = (cursor + t) % m;
+                if !clauses[idx].satisfied(&self.cur_orig[..n]) {
+                    chosen = idx;
+                    cursor = idx + 1;
+                    break;
+                }
+            }
+            if chosen == usize::MAX {
+                self.last.repair_moves += moves;
+                return 0;
+            }
+            let c = clauses[chosen];
+            let mut best_v = usize::MAX;
+            let mut best_i = usize::MAX;
+            for k in 0..c.len() {
+                let (v, _) = c.lit(k);
+                if self.tabu[v] >= clock {
+                    continue;
+                }
+                self.cur_orig[v] = -self.cur_orig[v];
+                let vv = violations_3(clauses, &self.cur_orig[..n]) as usize;
+                self.cur_orig[v] = -self.cur_orig[v];
+                if vv < best_v {
+                    best_v = vv;
+                    best_i = v;
+                }
+            }
+            if best_i == usize::MAX {
+                // todos tabu: libera o primeiro literal da cláusula
+                best_i = c.i;
+            }
+            self.cur_orig[best_i] = -self.cur_orig[best_i];
+            self.tabu[best_i] = clock + ttl;
+            clock = clock.wrapping_add(1);
+            if clock == 0 {
+                self.tabu[..n].fill(0);
+                clock = 1;
+            }
+            moves += 1;
+        }
+    }
+
     /// Emite o QUBO expandido (spin) com os pesos correntes de `lambda`.
-    fn emit_qubo(&mut self, n_exp: usize) {
-        let nn = n_exp * n_exp;
+    fn emit_qubo(&mut self, n_exp: usize) {        let nn = n_exp * n_exp;
         self.jq[..nn].fill(0.0);
         self.hq[..n_exp].fill(0.0);
         self.lin[..n_exp].fill(0.0);
@@ -1232,16 +1318,33 @@ fn union(parent: &mut [usize], a: usize, b: usize) {
     }
 }
 
-/// Gap local sobre um subconjunto de variáveis (`∞` se não houver nenhuma).
+/// Gap local sobre as variáveis livres **relevantes** (`∞` se não houver).
+///
+/// Uma variável sem campo e sem acoplamento não muda energia nem violações:
+/// incluí-la produziria `ΔE = 0` e uma abstenção falsa. Só variáveis com termo
+/// incidente entram no gap.
 fn gap_free(j: &[f64], h: &[f64], n: usize, s: &[i8], free: &[bool], g: &mut [f64]) -> f64 {
     fill_g(j, n, s, g);
     let mut best = f64::INFINITY;
     for i in 0..n {
-        if free[i] {
-            let d = 2.0 * f64::from(s[i]) * (g[i] + h[i]);
-            if d < best {
-                best = d;
+        if !free[i] {
+            continue;
+        }
+        let mut relevant = h[i].abs() > 1e-12;
+        if !relevant {
+            for k in 0..n {
+                if j[i * n + k].abs() > 1e-12 {
+                    relevant = true;
+                    break;
+                }
             }
+        }
+        if !relevant {
+            continue;
+        }
+        let d = 2.0 * f64::from(s[i]) * (g[i] + h[i]);
+        if d < best {
+            best = d;
         }
     }
     best

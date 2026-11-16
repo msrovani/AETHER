@@ -1,4 +1,4 @@
-﻿//! E8 — reservatório congelado × ajuste conjunto das dinâmicas.
+//! E8 — reservatório congelado × ajuste conjunto das dinâmicas.
 //!
 //! O Vol. II §6/§10 pergunta se é preciso treinar a física do campo ou apenas o
 //! *readout* linear. Este módulo implementa os dois lados do teste:
@@ -87,7 +87,9 @@ impl Reservoir {
         for v in w.iter_mut() {
             *v *= scale;
         }
-        let win = (0..n).map(|_| rng.next_signed() * cfg.input_scale).collect();
+        let win = (0..n)
+            .map(|_| rng.next_signed() * cfg.input_scale)
+            .collect();
         Ok(Self {
             cfg,
             w,
@@ -184,9 +186,7 @@ pub struct Lcg {
 impl Lcg {
     /// Semente.
     pub const fn new(seed: u64) -> Self {
-        Self {
-            state: seed | 1,
-        }
+        Self { state: seed | 1 }
     }
 
     /// Próximo `u64`.
@@ -355,10 +355,7 @@ impl FrozenModel {
 
     /// Passo de treino.
     pub fn observe(&mut self, u: f32, y: f32) -> Result<()> {
-        let Self {
-            reservoir,
-            readout,
-        } = self;
+        let Self { reservoir, readout } = self;
         let state = reservoir.step(u);
         readout.observe(state, y)
     }
@@ -405,7 +402,11 @@ impl JointModel {
         Ok(Self {
             reservoir,
             readout,
-            eta: if eta.is_finite() && eta > 0.0 { eta } else { 1e-3 },
+            eta: if eta.is_finite() && eta > 0.0 {
+                eta
+            } else {
+                1e-3
+            },
         })
     }
 

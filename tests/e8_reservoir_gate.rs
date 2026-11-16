@@ -1,4 +1,4 @@
-﻿//! E8 — gate do reservatório congelado (Vol. II §6/§10).
+//! E8 — gate do reservatório congelado (Vol. II §6/§10).
 //!
 //! Gates:
 //! 1. regressão de acurácia do readout congelado frente à física plástica
@@ -30,7 +30,10 @@ fn e8_reservatorio_congelado_bate_gates() {
     let joint = bench_joint(&series, cfg, 64, predict_n, 1e-6).expect("joint");
     let smin = series.iter().cloned().fold(f32::INFINITY, f32::min);
     let smax = series.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-    println!("[E8] serie min={smin:.4} max={smax:.4} len={}", series.len());
+    println!(
+        "[E8] serie min={smin:.4} max={smax:.4} len={}",
+        series.len()
+    );
     let regression = ((frozen.nrmse - joint.nrmse) / joint.nrmse.max(1e-12)).max(0.0);
     let speedup = joint.train_secs / frozen.train_secs.max(1e-12);
 

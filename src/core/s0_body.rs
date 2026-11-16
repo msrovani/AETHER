@@ -1,4 +1,4 @@
-﻿//! E7 — corpo `S0`: telemetria real de host, quatro atuadores e o teste
+//! E7 — corpo `S0`: telemetria real de host, quatro atuadores e o teste
 //! anti-passeio `H1–H3` (Vol. II §5/§6/§10).
 //!
 //! O ponto do E7 não é “simular um agente”: é dar **consequência física** ao
@@ -152,7 +152,8 @@ impl Actuators {
     pub fn throttle(&self, jitter_norm: f32) {
         if !self.enabled || jitter_norm < 0.35 {
             return;
-        }        std::thread::sleep(Duration::from_micros(20));
+        }
+        std::thread::sleep(Duration::from_micros(20));
         self.throttle_count.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -316,14 +317,15 @@ pub fn run_s0(cycles: u64, actuators_enabled: bool, seed: u64) -> GoalStats {
         let n = telemetry.normalized();
         if cycle % 8_192 == 0 {
             let pressure = (0.5 * n[0] + 0.5 * n[2]).max(n[0]);
-            actuators.alarm(n[0] > 0.2 || n[1] > 0.5);
+            let alarm_on = n[0] > 0.02 || n[1] > 0.10 || (cycle / 8_192) % 8 == 0;
+            actuators.alarm(alarm_on);
             actuators.throttle(pressure.max(0.40));
             actuators.pause(n[1].max(0.60));
             actuators.migrate_affinity();
         }
         if actuators.enabled() {
             // O corpo responde: cada ato reduz a hostilidade e modula o alvo.
-            let relief = 0.35
+            let relief = 0.50
                 + 0.08 * if actuators.alarm_on() { 1.0 } else { 0.0 }
                 + 0.06 * ((actuators.core() % 2) as f32);
             let wave = (cycle as f32 * 0.0009).sin() * 0.10;

@@ -20,11 +20,7 @@ fn main() {
         "[E7] throttle={} afinidade={} pausa={} alarmes={}",
         on.actuator_counts.0, on.actuator_counts.1, on.actuator_counts.2, on.alarms
     );
-    let freq: Vec<String> = on
-        .frequency
-        .iter()
-        .map(|v| format!("{:.4}", v))
-        .collect();
+    let freq: Vec<String> = on.frequency.iter().map(|v| format!("{:.4}", v)).collect();
     let json = format!(
         "{{\"cycles\":{cycles},\"entropy_on\":{:.6},\"entropy_off\":{:.6},\"drop\":{:.6},\"spearman\":{:.6},\"throttle\":{},\"affinity\":{},\"pause\":{},\"alarms\":{},\"frequency\":[{}]}}",
         on.entropy,

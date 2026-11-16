@@ -409,7 +409,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // ---------------- gates ----------------
-    let total_unsound: usize = rows.iter().map(|r| r.roof.unsound + r.roof_z2.unsound).sum();
+    let total_unsound: usize = rows
+        .iter()
+        .map(|r| r.roof.unsound + r.roof_z2.unsound)
+        .sum();
     let mut reach_ok = true;
     let mut reach_z2_ok = true;
     for r in &rows {
@@ -423,9 +426,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             reach_z2_ok = false;
         }
     }
-    let strict_all = rows.iter().all(|r| {
-        r.roof.reduction_sum > r.dom.reduction_sum + 1e-12
-    });
+    let strict_all = rows
+        .iter()
+        .all(|r| r.roof.reduction_sum > r.dom.reduction_sum + 1e-12);
     let row45 = rows
         .iter()
         .min_by(|a, b| {

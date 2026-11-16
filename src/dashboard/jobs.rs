@@ -263,8 +263,10 @@ fn run_organism_traced(shared: &Shared, trace: &Arc<Mutex<DemoTrace>>) -> Result
         t.begin("Demo organismo");
     }
 
-    let mut cfg = OrganismConfig::default();
-    cfg.hz = 30.0; // um pouco mais leve para a UI acompanhar
+    let cfg = OrganismConfig {
+        hz: 30.0,
+        ..OrganismConfig::default()
+    }; // um pouco mais leve para a UI acompanhar
     let steps = cfg.steps;
     let dim = cfg.decision_dim;
     let mut organism = ClosedLoopOrganism::new(cfg).map_err(|e| format!("organismo new: {e}"))?;

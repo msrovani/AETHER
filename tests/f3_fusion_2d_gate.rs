@@ -10,7 +10,9 @@
 
 use std::f32::consts::TAU;
 
-use aether_engine::core::knowledge_bridge_f1::{BridgeError, Certificate, DraftRecord, Layer, ScopeId};
+use aether_engine::core::knowledge_bridge_f1::{
+    BridgeError, Certificate, DraftRecord, Layer, ScopeId,
+};
 use aether_engine::core::knowledge_fusion::{FusionAction, FusionLedger, Quadrant};
 use aether_engine::phase_memory::ComplexPhaseMemory;
 
@@ -178,7 +180,7 @@ fn f3_matriz_2d_e_round_trip_escopado() {
             let (_consulted, key) = ledger
                 .cue_into_scoped(a, &q, &mut seed)
                 .expect("cue_into A");
-            assert!(key >= 100 && key < 110, "key fora do escopo A: {key}");
+            assert!((100..110).contains(&key), "key fora do escopo A: {key}");
             mem.phases.copy_from_slice(&seed);
             mem.rotation = 0.0;
             let (_v2, conf_r) = mem
@@ -200,7 +202,10 @@ fn f3_matriz_2d_e_round_trip_escopado() {
     println!(
         "[F3] recall@1 direto={direct_recall:.3} round-trip={round_recall:.3} perda={loss:.3}"
     );
-    assert!(direct_recall >= 0.95, "recall direto baixo: {direct_recall:.3}");
+    assert!(
+        direct_recall >= 0.95,
+        "recall direto baixo: {direct_recall:.3}"
+    );
     assert!(loss < 0.05, "perda no round-trip {loss:.3} >= 0.05");
 
     // ------------------------------------------------------------------
@@ -226,7 +231,7 @@ fn f3_matriz_2d_e_round_trip_escopado() {
 
     // A mesma consulta no escopo B devolve chave de B.
     let (_hits_b, key_b) = ledger.cue_into_scoped(b, &qb, &mut seed).expect("B");
-    assert!(key_b >= 200 && key_b < 210, "key fora do escopo B: {key_b}");
+    assert!((200..210).contains(&key_b), "key fora do escopo B: {key_b}");
     assert!(ledger.key_in_scope(b, key_b));
 
     // ------------------------------------------------------------------

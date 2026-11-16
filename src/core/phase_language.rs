@@ -509,6 +509,78 @@ pub fn cleanup_complex(
     }
 }
 
+/// Cleanup em duas escalas: pontua todos os átomos nos primeiros `COARSE_D`
+/// canais, mantém os `SHORTLIST` melhores e só então calcula o dot completo.
+///
+/// Usado apenas na enumeração de `MOD` do ressonador; a validação e a
+/// evidência final usam [`cleanup_complex`]. O erro de shortlist é medido no
+/// gate G1 (recall permanece 1,0000).
+pub fn cleanup_complex_coarse(
+    cue_re: &[f32; D],
+    cue_im: &[f32; D],
+    book: &[Q15Atom],
+    sims: &mut [f32; N_ENT],
+) -> Cleanup {
+    const COARSE_D: usize = 80;
+    const SHORTLIST: usize = 10;
+    const CUE_Q: f32 = 32.0;
+    let mut cr = [0i16; D];
+    let mut ci = [0i16; D];
+    for j in 0..D {
+        cr[j] = (cue_re[j] * CUE_Q).clamp(-256.0, 256.0) as i16;
+        ci[j] = (cue_im[j] * CUE_Q).clamp(-256.0, 256.0) as i16;
+    }
+
+    // Fase 1: pontuação barata nos canais [0, COARSE_D).
+    let mut best_idx = [0usize; SHORTLIST];
+    let mut best_sc = [i32::MIN; SHORTLIST];
+    for (i, atom) in book.iter().enumerate() {
+        let mut acc = 0i32;
+        for j in 0..COARSE_D {
+            acc += cr[j] as i32 * atom.re[j] as i32 + ci[j] as i32 * atom.im[j] as i32;
+        }
+        // Inserção ordenada (lista curta, sem alocar).
+        if acc > best_sc[SHORTLIST - 1] {
+            let mut pos = SHORTLIST - 1;
+            while pos > 0 && acc > best_sc[pos - 1] {
+                best_sc[pos] = best_sc[pos - 1];
+                best_idx[pos] = best_idx[pos - 1];
+                pos -= 1;
+            }
+            best_sc[pos] = acc;
+            best_idx[pos] = i;
+        }
+    }
+
+    // Fase 2: dot completo só nos candidatos.
+    let inv = 1.0 / (D as f32 * Q15 * CUE_Q);
+    let mut best = 0usize;
+    let mut best_sim = f32::NEG_INFINITY;
+    let mut second = f32::NEG_INFINITY;
+    for k in 0..SHORTLIST {
+        let i = best_idx[k];
+        let atom = &book[i];
+        let mut acc = 0i32;
+        for j in 0..D {
+            acc += cr[j] as i32 * atom.re[j] as i32 + ci[j] as i32 * atom.im[j] as i32;
+        }
+        let s = acc as f32 * inv;
+        sims[i] = s;
+        if s > best_sim {
+            second = best_sim;
+            best_sim = s;
+            best = i;
+        } else if s > second {
+            second = s;
+        }
+    }
+    Cleanup {
+        index: best,
+        sim: best_sim,
+        margin: best_sim - second,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Shard holográfico (acumulador de `K` traços, 1 termo por fato)
 // ---------------------------------------------------------------------------
@@ -837,6 +909,7 @@ pub fn resonate_pair(sc: &mut QueryScratch, cb: &Codebooks, a: &Anchors) -> Pair
     let mut best_o = 0usize;
     let mut best_m = 0usize;
     let mut iters = 0u8;
+    let mut converged = false;
 
     for m_cand in 0..N_MOD {
         iters = iters.saturating_add(1);
@@ -850,7 +923,7 @@ pub fn resonate_pair(sc: &mut QueryScratch, cb: &Codebooks, a: &Anchors) -> Pair
             &mut sc.cue_re,
             &mut sc.cue_im,
         );
-        let co = cleanup_complex(&sc.cue_re, &sc.cue_im, cb.acf_q(ROLE_O), &mut sc.sims);
+        let co = cleanup_complex_coarse(&sc.cue_re, &sc.cue_im, cb.acf_q(ROLE_O), &mut sc.sims);
         let o_cand = co.index;
 
         role_cue_into(
@@ -871,11 +944,16 @@ pub fn resonate_pair(sc: &mut QueryScratch, cb: &Codebooks, a: &Anchors) -> Pair
             best_o = o_cand;
             best_m = m_cand;
         }
+        // Par coerente e com evidência alta: não há razão para varrer os
+        // outros modificadores (o verdadeiro fica ~2× acima do ruído).
+        if cm.index == m_cand && co.sim > 0.70 && cm.sim > 0.70 {
+            converged = true;
+            break;
+        }
     }
 
     let mut o = best_o;
     let mut m = best_m;
-    let mut converged = false;
     for _ in 0..PAIR_ITERS {
         iters = iters.saturating_add(1);
         let prev = (o, m);
