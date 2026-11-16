@@ -5,3 +5,7 @@
 
 #[cfg(feature = "m1")]
 pub mod sgdb_bridge;
+
+/// Encaixe operacional do `neural-sgdb` (`T2`): MCP, outbox e leitura de fase.
+#[cfg(feature = "sgdb")]
+pub mod sgdb;

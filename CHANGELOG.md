@@ -3,6 +3,22 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.128] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 8 arquivo(s) (.:2, src:5, tests:1).
+- Gate: ok (3s).
+
+- `Cargo.lock`
+- `Cargo.toml`
+- `src/knowledge/mod.rs`
+- `src/knowledge/sgdb/ledger.rs`
+- `src/knowledge/sgdb/transport.rs`
+- `src/knowledge/sgdb/mod.rs`
+- `src/knowledge/sgdb/worker.rs`
+- `tests/f4_sgdb_gate.rs`
+
 ## [0.0.127] - 2026-11-16
 
 ### Changed

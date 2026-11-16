@@ -191,7 +191,7 @@ impl MockTransport {
                 .get("text")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| SgdbError::Protocol("remember sem text".into()))?;
-            let Some(mut doc) = PhaseDoc::parse(text) else {
+            let Some(doc) = PhaseDoc::parse(text) else {
                 return Err(SgdbError::Protocol(
                     "texto não é um documento aether-phase/v1".into(),
                 ));
@@ -580,7 +580,7 @@ impl HttpTransport {
 
     fn post(&mut self, body: &str) -> Result<(String, String), SgdbError> {
         let addr = format!("{}:{}", self.endpoint.host, self.endpoint.port);
-        let mut stream = TcpStream::connect(&addr).map_err(|e| SgdbError::Offline)?;
+        let mut stream = TcpStream::connect(&addr).map_err(|_| SgdbError::Offline)?;
         let _ = stream.set_read_timeout(Some(self.timeout));
         let _ = stream.set_write_timeout(Some(self.timeout));
         let mut headers = format!(
@@ -700,7 +700,6 @@ pub struct StdioTransport {
     child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
-    next_id: u64,
     calls: u64,
 }
 
@@ -726,7 +725,6 @@ impl StdioTransport {
             child,
             stdin,
             stdout: BufReader::new(stdout),
-            next_id: 1,
             calls: 0,
         })
     }

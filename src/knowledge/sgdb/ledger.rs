@@ -22,8 +22,7 @@
 //! para a fila em memória; o próximo commit tenta de novo **antes** do lote
 //! novo. O replay é idempotente por `(scope, key)` com `if_exists=reinforce`.
 
-use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::core::certificate::Evidence;
 use crate::core::knowledge_bridge_f1::{
@@ -33,7 +32,6 @@ use crate::core::knowledge_fusion::{Decision, FusionLedger};
 use crate::knowledge::sgdb::client::{SgdbClient, SgdbConfig};
 use crate::knowledge::sgdb::transport::{Outbox, Transport};
 use crate::knowledge::sgdb::wire::{self, MemoryHit, PhaseDoc};
-use crate::knowledge::sgdb::SgdbError;
 
 /// Telemetria acumulada do `T2` (inteiros; não ordena decisão).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
