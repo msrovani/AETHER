@@ -379,7 +379,7 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 |---|---|---|---|---|
 | **E6** ✅ | II | perfil por estágio — **executado** | cobertura **99,98%**; solver **84,4%** · 7,5 GFLOP/s | bloqueio transversal **removido** |
 | **E6b** ✅ | II | kernel do solver (16 acumuladores, Rust safe) | **17,10 GFLOP/s (2,30×)** · ACQ 100 · 24 suítes verdes | R1, R5 |
-| **E1** | I | linguagem em fase (papel–filler) | SNR > 5σ, 0 alloc | R2 |
+| **E1** ✅ | I | PLH sharded + binding não-comutativo — **executado** | **1.000 fatos: recall 1,000 vs 0,038 plano** · NC PASS · 6,75σ · 0 aloc · **latência 17,35 µs (FAIL, alvo 15)** · OOV 100%/FP 0% | R2 |
 | **E1b** ✅ | II | capacidade do store e da memória de fase — **executado** | **D=160: 64 fatos (K=6)** · lei **linear ~0,4·D** (não D²) · fase: ~4 padrões aleatórios | R2 |
 | **E2** | I | lógica como Ising + certificado | 3-SAT n≤20 = força bruta | R1 |
 | **E2b** ✅ | II | presolve simbólico antes do BSB — **executado** | **0 insound** · **64,8% redução** (+39,8 pp de cascata) · **200/200** resolvidas vs 183/200 | R1, R3 |
@@ -496,12 +496,14 @@ Gap novo: **`SOLVER_KERNEL_SCALAR`** → próximo experimento **E6b**.
 4º ✅ E2b  presolve simbólico          ← FEITO: 64,8% redução, 0 insound, 200/200
 5º ✅ E2c  persistência de 1ª ordem     ← FEITO: sound (0/600), míope por construção
 6º ✅ E1b  capacidade em D=160          ← FEITO: 64 fatos · lei linear ~0,4·D
-7º  E2c-2 roof dual (max-flow)         ← alcance além da dominância
-8º  E1b-2 memória de fase estruturada  ← separar padrão aleatório de harmônico
-9º  F1   ponte read-only               ← fecha K6 sem risco de drift
-10º E1/E2/E3  os três "NÃO"            ← o programa científico
-11º E4/E5/E7/E8  self, currículo, corpo, treino
-12º F2/F3  consolidação e fusão 2D
+7º ✅ E1   PLH sharded                   ← FEITO: 1.000 fatos recall 1,000 · latência 17,35 µs
+8º  E1-2 fasor pré-computado + ressonador ← fecha a latência e o caso sem fator
+9º  E2c-2 roof dual (max-flow)         ← alcance além da dominância
+10º E1b-2 memória de fase estruturada  ← separar padrão aleatório de harmônico
+11º F1   ponte read-only               ← fecha K6 sem risco de drift
+12º E2/E3 os outros dois "NÃO"         ← o programa científico
+13º E4/E5/E7/E8  self, currículo, corpo, treino
+14º F2/F3  consolidação e fusão 2D
 ```
 
 ### 12.5 As sete perguntas — placar

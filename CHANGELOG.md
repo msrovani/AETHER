@@ -14,6 +14,37 @@ Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto
 - `examples/phase_language_probe.rs`
 - `tests/e1_plh.rs`
 
+## [0.0.93] - 2026-11-16
+
+### Added
+
+- `examples/phase_language_probe.rs` — **Phase-Language Head sharded** em D=160:
+  24 shards por relação, ≤42 fatos cada, binding não-comutativo por permutação
+  `ρ¹` do valor, caminho de consulta zero-alocação (`query_into` + `FhrrScratch`).
+- `tests/e1_plh.rs` — 3 gates: sharding (480 fatos) vs superposição plana,
+  ordem A→B ≠ B→A, abstenção fora do vocabulário.
+
+### Measured
+
+| Gate | Resultado |
+|---|---|
+| G1 recall sharded (1.000 fatos) | **1,0000** (plano: **0,0380**) |
+| G2 não-comutatividade A→B vs B→A | **PASS** |
+| G3 SNR · latência · hot-path | 6,75σ · **17,35 µs** · **0 B** |
+| G4 abstenção OOV · falso-abster | **100%** · **0%** |
+
+### Changed
+
+- **G3 falha só na latência** (17,35 µs vs alvo 15 µs, +16%). Causa identificada:
+  `query_into` recalcula `sin_cos` em D=160 posições por consulta. Correção
+  proposta: API que aceite o fasor de papel pré-computado (**E1-2**).
+- **Achado de modelagem:** a memória endereça por papel `(e⊗r)`, então
+  `(sujeito, relação)` precisa ser **único** por shard. A primeira tentativa
+  reusava sujeitos e caía para recall 1/5 — corrigido e documentado.
+- **Ressonador ACF não foi necessário**: com papel e relação fornecidos, a
+  fatoração é um único unbinding. O caso sem nenhum fator conhecido é E1-2.
+- Vol. III §11/§12 atualizados.
+
 ## [0.0.92] - 2026-11-16
 
 ### Changed

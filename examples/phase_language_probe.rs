@@ -1,430 +1,1512 @@
-//! E1 — Phase-Language Head (PLH) sharded, `D = 160`.
+//! E1 — *Phase-Language Head* (PLH) na borda: memória **sharded** + ressonador ACF.
 //!
-//! A lei medida no E1b (`M_max ≈ 0,4·D` ⇒ 64 fatos em D=160) proíbe empilhar
-//! muito numa superposição plana. O PLH resolve com **shards por relação**:
-//! `24 shards × 41–42 fatos = 1.000 fatos` em D=160, cada shard bem abaixo do
-//! teto (≤48), com working set total < 500 KB (L2-residente).
+//! O E1b mediu a lei do acumulador holográfico: `M_max ≈ 0,4·D` fatos
+//! (`D=160, K=6` ⇒ 64 fatos, `recall@1 ≥ 99%`). Empilhar 1.000 fatos numa única
+//! superposição plana colapsa o `recall@1` para ~2%. Este experimento monta a
+//! cabeça de linguagem **em cima da lei**, não contra ela:
 //!
-//! # Binding não-comutativo
+//! 1. **Memória sharded por papel sintático** — 24 shards com `≤ 48` fatos cada
+//!    (75% do teto medido). O shard de um fato é função determinística do par
+//!    `(sujeito, verbo)`; cada shard é um acumulador de `K` traços em BAM
+//!    (`u16`, `|z| = 1` exato) com fase `ψ` por `(fato, traço)`.
+//! 2. **Binding não-comutativo com âncoras fixas** — `ρ^k` é um deslocamento
+//!    cíclico de posições (permutação), não uma rotação de fase: por isso
+//!    `ρ^a(x) ⊗ ρ^b(y) ≠ ρ^b(x) ⊗ ρ^a(y)`. O código de sentença é
+//!    `Ψ = A_S⊗ρ^0(s) ⊕ A_V⊗ρ^1(v) ⊕ A_O⊗ρ^2(o) ⊕ A_M⊗ρ^3(m)`.
+//! 3. **Ressonador ACF** (*Asymmetric Codebook Factorizer*) — fatora `Ψ` entre
+//!    os papéis por *cleanup* iterativo com projeção *re-encode* (átomo limpo):
+//!    decisões na cópia **perturbada** do codebook (`±4% de π`, `ChaCha8Rng`),
+//!    validação na cópia **limpa**.
 //!
-//! O `FhrrStore` liga `e ⊗ r ⊗ v` por **soma de fases** (comutativa). Para
-//! separar `A → B` de `B → A`, o **valor** é permutado ciclicamente por papel:
-//!
-//! ```text
-//! fato = (subj ⊕ ANCHOR_SUBJ, rel ⊕ ANCHOR_VERB, ρ¹(obj ⊕ ANCHOR_OBJ))
-//! ```
-//!
-//! `ρ¹` desloca as fases uma posição; trocar sujeito e objeto muda o vetor
-//! armazenado, então as duas ordens ocupam pontos diferentes do espaço.
-//!
-//! # Zero alocação no caminho de consulta
-//!
-//! As pistas `(subj ⊕ âncora, rel ⊕ âncora)` são escritas em buffers
-//! pré-alocados ([`add_into`]) e a consulta usa [`FhrrStore::query_into`] com
-//! `FhrrScratch` criado uma vez. O alocador contador fica armado durante as
-//! 1.000 consultas e deve marcar **0**.
-//!
-//! # O que **não** foi feito (e por quê)
-//!
-//! O spec pedia **ressonador ACF** entre fatores. Com âncoras de papel e a
-//! consulta `(sujeito, relação)` fornecida, a fatoração é **um único unbinding**
-//! — não há produto de fatores desconhecidos para iterar. O ressonador resolve
-//! o caso em que *nenhum* fator é conhecido; esse caso é **E1-2** e não foi
-//! simulado aqui para não apresentar um número que não mede o que promete.
+//! Gates medidos: escala sharded (1.000 fatos), não-comutatividade estrita
+//! (A→B vs B→A), SNR/latência/0-alloc e abstenção calibrada.
 //!
 //! ```text
 //! cargo run --release --example phase_language_probe
+//! cargo run --release --example phase_language_probe -- --quick
 //! ```
 //!
-//! Saída: gates + `target/aether_e1_plh.json`.
+//! Saída: tabelas + `target/aether_e1_plh.json`.
+//!
+//! ## Invariantes de borda
+//!
+//! * `#![deny(unsafe_code)]` — a única exceção é o `CountingAllocator`
+//!   (`#[allow(unsafe_code)]`), que é *instrumentação de medição* exigida pela
+//!   linguagem (`GlobalAlloc`); o caminho de inferência não tem `unsafe`.
+//! * `≤ 48` fatos por acumulador — **nunca** há superposição plana > 48.
+//! * `0 B` alocados no caminho de consulta (unbinding + ressonador + cleanup).
+//! * Fasores de magnitude unitária estrita: todo vetor guardado é fase `u16`
+//!   (`e^{iθ}`); o unbinding projeta o resultado de volta ao círculo unitário
+//!   com `arg(·)` antes de qualquer cleanup.
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
-use std::sync::atomic::{AtomicU64, Ordering};
+#![deny(unsafe_code)]
+#![allow(clippy::needless_range_loop)]
+
+use std::f32::consts::TAU;
+use std::hint::black_box;
 use std::time::Instant;
 
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use std::f32::consts::TAU;
 
-use aether_engine::core::fhrr::{FhrrHit, FhrrScratch, FhrrStore};
+use aether_engine::core::bam_phase::{poly_sin_q14, BamHolographicVector, BamLut, BamPhase};
+use aether_engine::core::silicon_entropy::splitmix64;
 
 // ---------------------------------------------------------------------------
-// Alocador contador
+// Instrumentação de alocação (única `unsafe` do arquivo, e é do medidor)
 // ---------------------------------------------------------------------------
 
-static HOT_ALLOCS: AtomicU64 = AtomicU64::new(0);
+#[allow(unsafe_code)]
+mod alloc_probe {
+    //! Contador de alocações por thread. `GlobalAlloc` exige `unsafe`; nada
+    //! aqui participa da inferência — só conta chamadas do alocador global.
 
-thread_local! {
-    static ARMED: Cell<bool> = const { Cell::new(false) };
+    use std::alloc::{GlobalAlloc, Layout, System};
+    use std::cell::Cell;
+
+    thread_local! {
+        static ARMED: Cell<bool> = const { Cell::new(false) };
+        static ALLOCS: Cell<usize> = const { Cell::new(0) };
+    }
+
+    struct CountingAllocator;
+
+    unsafe impl GlobalAlloc for CountingAllocator {
+        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            if ARMED.with(Cell::get) {
+                ALLOCS.with(|c| c.set(c.get() + 1));
+            }
+            unsafe { System.alloc(layout) }
+        }
+
+        unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+            if ARMED.with(Cell::get) {
+                ALLOCS.with(|c| c.set(c.get() + 1));
+            }
+            unsafe { System.alloc_zeroed(layout) }
+        }
+
+        unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+            if ARMED.with(Cell::get) {
+                ALLOCS.with(|c| c.set(c.get() + 1));
+            }
+            unsafe { System.realloc(ptr, layout, new_size) }
+        }
+
+        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+            unsafe { System.dealloc(ptr, layout) }
+        }
+    }
+
+    #[global_allocator]
+    static GLOBAL: CountingAllocator = CountingAllocator;
+
+    pub fn arm() {
+        ALLOCS.with(|c| c.set(0));
+        ARMED.with(|a| a.set(true));
+    }
+
+    pub fn disarm() -> usize {
+        ARMED.with(|a| a.set(false));
+        ALLOCS.with(Cell::get)
+    }
 }
 
-struct CountingAlloc;
-
-unsafe impl GlobalAlloc for CountingAlloc {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if ARMED.with(Cell::get) {
-            HOT_ALLOCS.fetch_add(1, Ordering::Relaxed);
-        }
-        unsafe { System.alloc(layout) }
-    }
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        if ARMED.with(Cell::get) {
-            HOT_ALLOCS.fetch_add(1, Ordering::Relaxed);
-        }
-        unsafe { System.alloc_zeroed(layout) }
-    }
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        if ARMED.with(Cell::get) {
-            HOT_ALLOCS.fetch_add(1, Ordering::Relaxed);
-        }
-        unsafe { System.realloc(ptr, layout, new_size) }
-    }
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        unsafe { System.dealloc(ptr, layout) }
-    }
-}
-
-#[global_allocator]
-static GLOBAL: CountingAlloc = CountingAlloc;
-
 // ---------------------------------------------------------------------------
-// Parâmetros
+// Constantes do experimento
 // ---------------------------------------------------------------------------
 
+/// Dimensão do espaço de fase (mesma do E1b).
 const D: usize = 160;
-const TRACES: usize = 6;
+/// Fasores por lote vetorizado (um `ymm` de `u16`).
+const LANES: usize = 16;
+/// Um quarto de volta em BAM.
+const QUARTER: u16 = 0x4000;
+/// Escala Q14 do seno polinomial (`1.0 = 16384`).
+const Q14: f32 = 16_384.0;
+
+/// Traços por acumulador (`K` do E1b).
+const K_TRACES: usize = 6;
+/// Shards (relações sintáticas endereçáveis).
 const SHARDS: usize = 24;
-const FACTS: usize = 1_000;
-const VOCAB: usize = 64;
-const MAX_PER_SHARD: usize = 48;
+/// Teto absoluto de fatos por acumulador (75% de `0,4·D = 64`).
+const SHARD_CAP: usize = 48;
+/// Fatos do gate de escala.
+const N_FACTS: usize = 1000;
+/// Vocabulário de entidades (sujeito **e** objeto — o mesmo codebook, para que
+/// `A→B` e `B→A` possam ser comparados com os mesmos átomos).
+const N_ENT: usize = 64;
+/// Verbos (= relação).
+const N_VERB: usize = 16;
+/// Modificadores.
+const N_MOD: usize = 8;
+/// Jitter angular da cópia ACF do codebook (`±4% de π`).
+const JITTER_FRAC: f32 = 0.04;
+/// Iterações do ressonador de sentença (4 fatores).
+const RES_ITERS: usize = 3;
+/// Iterações do ressonador do predicado (2 fatores), no caminho quente.
+const PAIR_ITERS: usize = 2;
+/// Consultas do gate de escala.
+const QUERIES: usize = 400;
+/// Semente determinística.
+const SEED: u64 = 0xE1_P1H_2026;
+/// Piso de evidência para abstenção (escolhido *a priori*, não no teste).
+const SIM_FLOOR: f32 = 0.55;
+/// Piso de margem (1º − 2º) para abstenção.
+const MARGIN_FLOOR: f32 = 0.08;
+
+/// Papéis sintáticos na ordem de `ρ^k`.
+const ROLE_S: usize = 0;
+const ROLE_V: usize = 1;
+const ROLE_O: usize = 2;
+const ROLE_M: usize = 3;
+const ROLE_NAMES: [&str; 4] = ["SUBJ", "VERB", "OBJ", "MOD"];
+
+/// Fase de um fasor (`u16`, `[0, 2π) ↔ [0, 65536)`).
+type Phases = [u16; D];
+/// Vetor holográfico BAM de `D` fasores unitários.
+type BVec = BamHolographicVector<D>;
 
 // ---------------------------------------------------------------------------
-// Fase: soma sem alocação, permutação, átomos
+// Ágebra de fase: ρ (permutação), binding, similaridade, projeção unitária
 // ---------------------------------------------------------------------------
 
-fn atom(seed: u64, n: usize) -> Vec<f32> {
-    let mut rng = ChaCha8Rng::seed_from_u64(seed);
-    (0..n).map(|_| rng.gen::<f32>() * TAU).collect()
-}
-
-/// `out = a ⊕ b` (soma de fases módulo 2π), sem alocar.
-fn add_into(a: &[f32], b: &[f32], out: &mut [f32]) {
-    for ((o, x), y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
-        *o = (x + y).rem_euclid(TAU);
+/// `ρ^k(v)[j] = v[(j+k) mod D]` — deslocamento cíclico **de posições**.
+///
+/// É uma permutação, não uma rotação global: `ρ` quebra a comutatividade do
+/// binding (`ρ^a(x) ⊗ ρ^b(y) ≠ ρ^b(x) ⊗ ρ^a(y)`) e não cancela no unbinding.
+#[inline]
+fn rho(v: &Phases, k: usize) -> Phases {
+    let mut out = [0u16; D];
+    for (j, o) in out.iter_mut().enumerate() {
+        *o = v[(j + k) % D];
     }
+    out
 }
 
-/// `ρ^k`: permutação cíclica das fases (quebra comutatividade).
-fn permute(v: &[f32], k: usize) -> Vec<f32> {
-    let n = v.len();
-    (0..n).map(|i| v[(i + n - (k % n)) % n]).collect()
-}
-
-/// SNR de uma consulta: `(melhor − média dos outros) / desvio`, sem alocar.
-fn snr_from_sims(sims: &[f32]) -> f32 {
-    if sims.len() < 2 {
-        return f32::INFINITY;
+/// `ρ^{-k}` — a inversa exata da permutação acima.
+#[inline]
+fn unrho(v: &Phases, k: usize) -> Phases {
+    let k = k % D;
+    let mut out = [0u16; D];
+    for (j, o) in out.iter_mut().enumerate() {
+        *o = v[(j + D - k) % D];
     }
-    let best = sims.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    out
+}
 
-    let (mut sum, mut n, mut skipped) = (0.0f32, 0usize, false);
-    for &s in sims {
-        if !skipped && (s - best).abs() < 1e-6 {
-            skipped = true;
-            continue;
+/// Binding FHRR: produto de Hadamard = soma de fases (`|z| = 1` preservado).
+#[inline]
+fn bind(a: &Phases, b: &Phases) -> Phases {
+    let mut out = [0u16; D];
+    for (j, o) in out.iter_mut().enumerate() {
+        *o = a[j].wrapping_add(b[j]);
+    }
+    out
+}
+
+/// Binding de três fatores.
+#[inline]
+fn bind3(a: &Phases, b: &Phases, c: &Phases) -> Phases {
+    let mut out = [0u16; D];
+    for (j, o) in out.iter_mut().enumerate() {
+        *o = a[j].wrapping_add(b[j]).wrapping_add(c[j]);
+    }
+    out
+}
+
+/// `(1/D)·Σ tri(θ_a − θ_b)` em Q14, com `tri(x) = 1 − 2|x|/π`.
+///
+/// Monotônica em `|Δθ|` e mais barata que o cosseno (só `sub`/`abs`/`add`);
+/// é a mesma métrica de *cleanup* do `BamHolographicStore`.
+#[inline]
+fn tri_sim(a: &Phases, b: &Phases) -> f32 {
+    let mut acc = [0i32; LANES];
+    for (ca, cb) in a.chunks_exact(LANES).zip(b.chunks_exact(LANES)) {
+        for l in 0..LANES {
+            let s = ca[l].wrapping_sub(cb[l]) as i16;
+            let ax = s ^ (s >> 15); // |s|
+            acc[l] += (Q14 as i16 - ax) as i32;
         }
-        sum += s;
-        n += 1;
     }
-    if n == 0 {
-        return f32::INFINITY;
-    }
-    let mean = sum / n as f32;
+    let sum: i32 = acc.iter().sum();
+    sum as f32 / (Q14 * D as f32)
+}
 
-    let (mut var, mut skipped2) = (0.0f32, false);
-    for &s in sims {
-        if !skipped2 && (s - best).abs() < 1e-6 {
-            skipped2 = true;
-            continue;
-        }
-        var += (s - mean) * (s - mean);
+/// Projeta um vetor complexo de volta ao círculo unitário: `θ = arg(z)`.
+#[inline]
+fn project_unit(re: &[f32; D], im: &[f32; D]) -> Phases {
+    let mut out = [0u16; D];
+    for (j, o) in out.iter_mut().enumerate() {
+        *o = BamPhase::from_radians(im[j].atan2(re[j])).0;
     }
-    let sd = (var / n as f32).sqrt().max(1e-9);
-    (best - mean) / sd
+    out
+}
+
+/// Fasor unitário `e^{iθ}` em `(re, im)` a partir de fases BAM.
+#[inline]
+fn unit_phasor(phases: &Phases, re: &mut [f32; D], im: &mut [f32; D]) {
+    let lut = BamLut::global();
+    for j in 0..D {
+        let (s, c) = lut.sin_cos(BamPhase(phases[j]));
+        re[j] = c;
+        im[j] = s;
+    }
 }
 
 // ---------------------------------------------------------------------------
-// PLH
+// Codebooks + âncoras (cópia limpa e cópia ACF perturbada)
 // ---------------------------------------------------------------------------
 
-struct Shard {
-    store: FhrrStore,
+/// Vocabulários de papel. `ent` serve sujeito **e** objeto; `verb` é a relação;
+/// `modu` é o modificador.
+#[derive(Debug)]
+struct Codebooks {
+    ent: Vec<BVec>,
+    verb: Vec<BVec>,
+    modu: Vec<BVec>,
+    ent_acf: Vec<BVec>,
+    verb_acf: Vec<BVec>,
+    modu_acf: Vec<BVec>,
 }
 
-struct Plh {
-    anchor_subj: Vec<f32>,
-    anchor_verb: Vec<f32>,
-    anchor_obj: Vec<f32>,
-    subjects: Vec<Vec<f32>>,
-    relations: Vec<Vec<f32>>,
-    shards: Vec<Shard>,
-}
-
-impl Plh {
-    fn new(seed: u64) -> Self {
-        let anchor_subj = atom(seed ^ 0xA1, D);
-        let anchor_verb = atom(seed ^ 0xA2, D);
-        let anchor_obj = atom(seed ^ 0xA3, D);
-        let subjects: Vec<Vec<f32>> = (0..VOCAB)
-            .map(|i| atom(seed ^ (0x1000 + i as u64), D))
-            .collect();
-        let relations: Vec<Vec<f32>> = (0..SHARDS)
-            .map(|i| atom(seed ^ (0x2000 + i as u64), D))
-            .collect();
-        let shards = (0..SHARDS)
-            .map(|_| Shard {
-                store: FhrrStore::with_traces(D, TRACES).expect("store"),
-            })
-            .collect();
-
+impl Codebooks {
+    fn build(seed: u64) -> Self {
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        let ent = random_codebook(N_ENT, &mut rng);
+        let verb = random_codebook(N_VERB, &mut rng);
+        let modu = random_codebook(N_MOD, &mut rng);
+        // ACF: cópia perturbada determinística (~4% de π por fasor).
+        let ent_acf = jitter_codebook(&ent, &mut rng, JITTER_FRAC);
+        let verb_acf = jitter_codebook(&verb, &mut rng, JITTER_FRAC);
+        let modu_acf = jitter_codebook(&modu, &mut rng, JITTER_FRAC);
         Self {
-            anchor_subj,
-            anchor_verb,
-            anchor_obj,
-            subjects,
-            relations,
-            shards,
+            ent,
+            verb,
+            modu,
+            ent_acf,
+            verb_acf,
+            modu_acf,
         }
     }
 
-    /// Grava `(subj, rel, obj)` no shard da relação. Devolve `(shard, posição)`.
-    fn insert(&mut self, subj: &[f32], rel_idx: usize, obj: &[f32]) -> (usize, usize) {
-        let mut entity = vec![0.0f32; D];
-        let mut relation = vec![0.0f32; D];
-        add_into(subj, &self.anchor_subj, &mut entity);
-        add_into(&self.relations[rel_idx], &self.anchor_verb, &mut relation);
-        let mut obj_role = vec![0.0f32; D];
-        add_into(obj, &self.anchor_obj, &mut obj_role);
-        let value = permute(&obj_role, 1);
-
-        let shard = rel_idx % SHARDS;
-        let pos = self.shards[shard].store.len();
-        self.shards[shard]
-            .store
-            .add_fact(&entity, &relation, &value)
-            .expect("add_fact");
-        (shard, pos)
+    fn clean(&self, role: usize) -> &[BVec] {
+        match role {
+            ROLE_S | ROLE_O => &self.ent,
+            ROLE_V => &self.verb,
+            _ => &self.modu,
+        }
     }
 
-    /// Escreve as pistas nas buffers pré-alocadas (zero alocação).
-    fn prepare_cue(&self, subj: &[f32], rel_idx: usize, entity: &mut [f32], relation: &mut [f32]) {
-        add_into(subj, &self.anchor_subj, entity);
-        add_into(&self.relations[rel_idx], &self.anchor_verb, relation);
+    fn acf(&self, role: usize) -> &[BVec] {
+        match role {
+            ROLE_S | ROLE_O => &self.ent_acf,
+            ROLE_V => &self.verb_acf,
+            _ => &self.modu_acf,
+        }
     }
 
-    fn query_prepared(
-        &self,
-        rel_idx: usize,
-        entity: &[f32],
-        relation: &[f32],
-        mask: &[bool],
-        sc: &mut FhrrScratch,
-    ) -> FhrrHit {
-        let shard = rel_idx % SHARDS;
-        self.shards[shard]
-            .store
-            .query_into(entity, relation, mask, sc)
-            .expect("query")
+    fn memory_bytes(&self) -> usize {
+        let one = std::mem::size_of::<BVec>();
+        (self.ent.len() + self.verb.len() + self.modu.len()) * one * 2
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let seed = 0xE1_0001u64;
-    let mut plh = Plh::new(seed);
-    let mask = vec![true; D];
+fn random_codebook(n: usize, rng: &mut ChaCha8Rng) -> Vec<BVec> {
+    (0..n)
+        .map(|_| {
+            let mut p = [0.0f32; D];
+            for x in p.iter_mut() {
+                *x = rng.gen::<f32>() * TAU;
+            }
+            BVec::from_radians(&p).expect("D")
+        })
+        .collect()
+}
 
-    // --- população: 1000 fatos, relações cicladas (≤42 por shard) ---
-    // A memória endereça por papel (e⊗r): dentro de um shard, (sujeito, relação)
-    // precisa ser ÚNICO, senão duas frases colidem no mesmo papel. Aqui o sujeito
-    // é `i / SHARDS`, único por shard (0..41 < VOCAB).
-    let mut facts: Vec<(usize, usize, usize)> = Vec::with_capacity(FACTS);
-    for i in 0..FACTS {
-        let rel = i % SHARDS;
-        let subj = i / SHARDS;
-        let obj = atom(seed ^ (0x9000 + i as u64), D);
-        let subject = plh.subjects[subj].clone();
-        plh.insert(&subject, rel, &obj);
-        facts.push((subj, rel, i));
-    }
-    let total: usize = plh.shards.iter().map(|s| s.store.len()).sum();
-    let max_shard = plh.shards.iter().map(|s| s.store.len()).max().unwrap_or(0);
+/// Perturba cada fasor uniformemente em `±frac·π` — a cópia "suja" do ACF.
+fn jitter_codebook(base: &[BVec], rng: &mut ChaCha8Rng, frac: f32) -> Vec<BVec> {
+    let amp = frac * std::f32::consts::PI;
+    base.iter()
+        .map(|v| {
+            let mut p = [0u16; D];
+            for (j, o) in p.iter_mut().enumerate() {
+                let d = rng.gen_range(-amp..amp);
+                *o = BamPhase::from_radians(BamPhase(v.as_slice()[j]).to_radians() + d).0;
+            }
+            BVec::from_phases(p)
+        })
+        .collect()
+}
 
-    // buffers pré-alocados do caminho quente
-    let mut entity = vec![0.0f32; D];
-    let mut relation = vec![0.0f32; D];
-    let mut sc = plh.shards[0].store.scratch(MAX_PER_SHARD);
+/// Âncoras fixas de papel.
+#[derive(Debug)]
+struct Anchors {
+    s: BVec,
+    v: BVec,
+    o: BVec,
+    m: BVec,
+}
 
-    // --- Gate 1: recall@1 sharded (zero alocação) ---
-    let mut hits = 0usize;
-    let mut snr_sum = 0.0f32;
-    let mut snr_n = 0usize;
-
-    let t0 = Instant::now();
-    let before = HOT_ALLOCS.load(Ordering::Relaxed);
-    ARMED.with(|a| a.set(true));
-    for &(subj, rel, obj_id) in &facts {
-        plh.prepare_cue(&plh.subjects[subj], rel, &mut entity, &mut relation);
-        let hit = plh.query_prepared(rel, &entity, &relation, &mask, &mut sc);
-        let expected = obj_id / SHARDS; // posição dentro do shard
-        if hit.value_index == expected {
-            hits += 1;
+impl Anchors {
+    fn build(seed: u64) -> Self {
+        let mut rng = ChaCha8Rng::seed_from_u64(seed ^ 0xA0C_4000);
+        let a = random_codebook(4, &mut rng);
+        Self {
+            s: a[0].clone(),
+            v: a[1].clone(),
+            o: a[2].clone(),
+            m: a[3].clone(),
         }
-        let s = snr_from_sims(sc.sims());
-        if s.is_finite() {
-            snr_sum += s;
-            snr_n += 1;
+    }
+
+    fn of(&self, role: usize) -> &BVec {
+        match role {
+            ROLE_S => &self.s,
+            ROLE_V => &self.v,
+            ROLE_O => &self.o,
+            _ => &self.m,
         }
     }
-    ARMED.with(|a| a.set(false));
-    let hot_allocs = HOT_ALLOCS.load(Ordering::Relaxed) - before;
-    let elapsed = t0.elapsed();
-    let recall = hits as f64 / FACTS as f64;
-    let latency_us = elapsed.as_secs_f64() * 1e6 / FACTS as f64;
-    let snr = if snr_n > 0 {
-        snr_sum / snr_n as f32
-    } else {
-        0.0
-    };
+}
 
-    // --- baseline: superposição plana de 1000 fatos em D=160 ---
-    let mut flat = FhrrStore::with_traces(D, TRACES).expect("flat");
-    for &(subj, rel, obj_id) in &facts {
-        let obj = atom(seed ^ (0x9000 + obj_id as u64), D);
-        let mut entity = vec![0.0f32; D];
-        let mut relation = vec![0.0f32; D];
-        add_into(&plh.subjects[subj], &plh.anchor_subj, &mut entity);
-        add_into(&plh.relations[rel], &plh.anchor_verb, &mut relation);
-        let mut obj_role = vec![0.0f32; D];
-        add_into(&obj, &plh.anchor_obj, &mut obj_role);
-        let value = permute(&obj_role, 1);
-        flat.add_fact(&entity, &relation, &value).expect("flat add");
+/// Termo `A_role ⊗ ρ^role(filler)` (uma fase pura).
+fn role_term(anchor: &BVec, filler: &BVec, k: usize) -> Phases {
+    bind(anchor.as_slice(), &rho(filler.as_slice(), k))
+}
+
+// ---------------------------------------------------------------------------
+// Cleanup
+// ---------------------------------------------------------------------------
+
+/// Resultado de um *cleanup memory*.
+#[derive(Clone, Copy, Debug)]
+struct Cleanup {
+    index: usize,
+    sim: f32,
+    margin: f32,
+}
+
+/// Varre o codebook inteiro (vetorizado) e devolve o vencedor + margem.
+fn cleanup(cue: &Phases, book: &[BVec], sims: &mut [f32; N_ENT]) -> Cleanup {
+    let mut best = 0usize;
+    let mut best_sim = f32::NEG_INFINITY;
+    let mut second = f32::NEG_INFINITY;
+    for (i, atom) in book.iter().enumerate() {
+        let s = tri_sim(cue, atom.as_slice());
+        sims[i] = s;
+        if s > best_sim {
+            second = best_sim;
+            best_sim = s;
+            best = i;
+        } else if s > second {
+            second = s;
+        }
     }
-    let mut flat_sc = flat.scratch(FACTS);
+    Cleanup {
+        index: best,
+        sim: best_sim,
+        margin: best_sim - second,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Shard holográfico (acumulador de `K` traços, 1 termo por fato)
+// ---------------------------------------------------------------------------
+
+/// Um acumulador: `≤ 48` fatos `key ⊗ value`, `K` traços com fase por
+/// `(fato, traço)`. Guarda-se a fase `key ⊗ value` (produto, 1 termo por fato)
+/// — é exatamente o regime que o E1b mediu; a forma em superposição
+/// (`⊕` de papéis) é reconstruída pelo ressonador na leitura.
+#[derive(Debug)]
+struct Shard {
+    traces: usize,
+    tre: Vec<[i16; D]>,
+    tim: Vec<[i16; D]>,
+    acc_re: Vec<[i32; D]>,
+    acc_im: Vec<[i32; D]>,
+    shift: u32,
+    psi: Vec<u16>,
+    subj: Vec<u16>,
+    verb: Vec<u16>,
+    obj: Vec<u16>,
+    modu: Vec<u16>,
+    rng: u64,
+}
+
+impl Shard {
+    fn new(traces: usize, seed: u64) -> Self {
+        Self {
+            traces,
+            tre: vec![[0i16; D]; traces],
+            tim: vec![[0i16; D]; traces],
+            acc_re: vec![[0i32; D]; traces],
+            acc_im: vec![[0i32; D]; traces],
+            shift: 0,
+            psi: Vec::new(),
+            subj: Vec::new(),
+            verb: Vec::new(),
+            obj: Vec::new(),
+            modu: Vec::new(),
+            rng: seed,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.subj.len()
+    }
+
+    fn add(&mut self, key: &Phases, value: &Phases, ids: (u16, u16, u16, u16)) {
+        let lut = BamLut::global();
+        for t in 0..self.traces {
+            let psi = if t == 0 {
+                0u16
+            } else {
+                (splitmix64(&mut self.rng) >> 48) as u16
+            };
+            self.psi.push(psi);
+            for j in 0..D {
+                let th = key[j].wrapping_add(value[j]).wrapping_add(psi);
+                let (s, c) = lut.sin_cos_q15(BamPhase(th));
+                self.acc_re[t][j] += c as i32;
+                self.acc_im[t][j] += s as i32;
+            }
+        }
+        self.subj.push(ids.0);
+        self.verb.push(ids.1);
+        self.obj.push(ids.2);
+        self.modu.push(ids.3);
+    }
+
+    /// Requantiza os traços para `i16` com 12 bits de folga e libera os
+    /// acumuladores de construção (fim da fase de escrita).
+    fn finalize(&mut self) {
+        let max = self
+            .acc_re
+            .iter()
+            .chain(self.acc_im.iter())
+            .flat_map(|a| a.iter())
+            .map(|v| v.unsigned_abs())
+            .max()
+            .unwrap_or(0);
+        let bits = 32 - max.leading_zeros();
+        self.shift = bits.saturating_sub(12);
+        for t in 0..self.traces {
+            for j in 0..D {
+                self.tre[t][j] = (self.acc_re[t][j] >> self.shift) as i16;
+                self.tim[t][j] = (self.acc_im[t][j] >> self.shift) as i16;
+            }
+        }
+        self.acc_re = Vec::new();
+        self.acc_im = Vec::new();
+        self.subj.shrink_to_fit();
+        self.verb.shrink_to_fit();
+        self.obj.shrink_to_fit();
+        self.modu.shrink_to_fit();
+        self.psi.shrink_to_fit();
+    }
+
+    /// Índice do fato com `(subj, verb)` — o endereço sintático do shard.
+    fn find(&self, subj: u16, verb: u16) -> Option<usize> {
+        self.subj
+            .iter()
+            .zip(&self.verb)
+            .position(|(&s, &v)| s == subj && v == verb)
+    }
+
+    /// Desvincula `key` do fato `fact` nos `K` traços (coerente) e devolve o
+    /// complexo `z` — ainda **não** projetado.
+    fn unbind(&self, fact: usize, key: &Phases, z_re: &mut [f32; D], z_im: &mut [f32; D]) {
+        z_re.fill(0.0);
+        z_im.fill(0.0);
+        let inv = 1.0 / Q14;
+        for t in 0..self.traces {
+            let psi = self.psi[fact * self.traces + t];
+            let tr = &self.tre[t];
+            let ti = &self.tim[t];
+            for lane in 0..D / LANES {
+                let base = lane * LANES;
+                let mut sa = [0i16; LANES];
+                let mut ca = [0i16; LANES];
+                for l in 0..LANES {
+                    let phi = key[base + l].wrapping_add(psi);
+                    sa[l] = phi as i16;
+                    ca[l] = phi.wrapping_add(QUARTER) as i16;
+                }
+                let s = poly_sin_q14(&sa);
+                let c = poly_sin_q14(&ca);
+                for l in 0..LANES {
+                    let cc = c[l] as f32 * inv;
+                    let ss = s[l] as f32 * inv;
+                    let mr = tr[base + l] as f32;
+                    let mi = ti[base + l] as f32;
+                    // (mr + i·mi)·(cc − i·ss)
+                    z_re[base + l] += mr * cc + mi * ss;
+                    z_im[base + l] += mi * cc - mr * ss;
+                }
+            }
+        }
+    }
+
+    fn memory_bytes(&self) -> usize {
+        let vec_used = |cap: usize, unit: usize| cap * unit;
+        vec_used(self.tre.capacity(), std::mem::size_of::<[i16; D]>())
+            + vec_used(self.tim.capacity(), std::mem::size_of::<[i16; D]>())
+            + self.psi.capacity() * 2
+            + (self.subj.capacity() + self.verb.capacity() + self.obj.capacity() + self.modu.capacity())
+                * 2
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Memória PLH: 24 shards roteados por (sujeito, verbo)
+// ---------------------------------------------------------------------------
+
+/// Roteador determinístico do papel de endereço: `(sujeito, verbo) → shard`.
+///
+/// Sem lookup: a mesma função é aplicada na escrita e na leitura, então a
+/// consulta só toca **um** shard (working set de 1 acumulador).
+#[inline]
+fn shard_of(subj: usize, verb: usize) -> usize {
+    (subj.wrapping_mul(7).wrapping_add(verb.wrapping_mul(5))) % SHARDS
+}
+
+#[derive(Debug)]
+struct PlhMemory {
+    shards: Vec<Shard>,
+    traces: usize,
+}
+
+impl PlhMemory {
+    fn new(traces: usize, seed: u64) -> Self {
+        Self {
+            shards: (0..SHARDS)
+                .map(|i| Shard::new(traces, seed ^ (i as u64 + 1).wrapping_mul(0x9E37_79B9)))
+                .collect(),
+            traces,
+        }
+    }
+
+    /// Grava um fato no shard endereçado por `(subj, verb)`.
+    fn add(&mut self, subj: u16, verb: u16, obj: u16, modu: u16, key: &Phases, value: &Phases) {
+        let idx = shard_of(subj as usize, verb as usize);
+        self.shards[idx].add(key, value, (subj, verb, obj, modu));
+    }
+
+    fn finalize(&mut self) {
+        for s in &mut self.shards {
+            s.finalize();
+        }
+    }
+
+    fn max_load(&self) -> usize {
+        self.shards.iter().map(Shard::len).max().unwrap_or(0)
+    }
+
+    fn memory_bytes(&self) -> usize {
+        self.shards.iter().map(Shard::memory_bytes).sum()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Ressonador ACF de 2 fatores (predicado OBJ ⊕ MOD do fato)
+// ---------------------------------------------------------------------------
+
+/// Scratch pré-alocado do caminho quente (nada aqui aloca depois do `new`).
+#[derive(Debug)]
+struct QueryScratch {
+    z_re: [f32; D],
+    z_im: [f32; D],
+    value: [u16; D],
+    f_obj: [u16; D],
+    f_mod: [u16; D],
+    sims: [f32; N_ENT],
+    tmp_re: [f32; D],
+    tmp_im: [f32; D],
+}
+
+impl QueryScratch {
+    fn new() -> Self {
+        Self {
+            z_re: [0.0; D],
+            z_im: [0.0; D],
+            value: [0u16; D],
+            f_obj: [0u16; D],
+            f_mod: [0u16; D],
+            sims: [0.0; N_ENT],
+            tmp_re: [0.0; D],
+            tmp_im: [0.0; D],
+        }
+    }
+}
+
+/// Resposta do caminho quente, sem alocação.
+#[derive(Clone, Copy, Debug)]
+struct Answer {
+    fact: usize,
+    obj: usize,
+    modu: usize,
+    sim_obj: f32,
+    sim_mod: f32,
+    margin_obj: f32,
+    margin_mod: f32,
+    iters: u8,
+    converged: bool,
+}
+
+/// `f[j] = ρ^{-k}( value[j] − anchor[j] − other[j] )` — desvincula um papel
+/// **subtraindo** o outro fator já re-codificado (`other` é o átomo limpo).
+fn unbind_role_sub(value: &Phases, anchor: &Phases, k: usize, other: Option<&Phases>) -> Phases {
+    let mut d = [0u16; D];
+    for (j, o) in d.iter_mut().enumerate() {
+        let mut t = value[j].wrapping_sub(anchor[j]);
+        if let Some(x) = other {
+            t = t.wrapping_sub(x[j]);
+        }
+        *o = t;
+    }
+    unrho(&d, k)
+}
+
+/// Ressonador de `(OBJ, MOD)` com projeção *re-encode* entre passos.
+///
+/// Cada passo subtrai do predicado o **átomo limpo** do outro fator
+/// (`re-encode`), desvincula o papel próprio e faz cleanup na **cópia ACF**;
+/// no fim valida o vencedor na **cópia limpa**.
+fn resonate_pair(
+    value: &Phases,
+    cb: &Codebooks,
+    a: &Anchors,
+    sc: &mut QueryScratch,
+) -> (usize, usize, f32, f32, f32, f32, u8, bool, bool) {
+    let ao = a.o.as_slice();
+    let am = a.m.as_slice();
+
+    sc.f_obj = unbind_role_sub(value, ao, ROLE_O, None);
+    sc.f_mod = unbind_role_sub(value, am, ROLE_M, None);
+    let mut o = cleanup(&sc.f_obj, &cb.ent_acf, &mut sc.sims).index;
+    let mut m = cleanup(&sc.f_mod, &cb.modu_acf, &mut sc.sims).index;
+
+    let mut iters = 0u8;
+    let mut converged = false;
+    for it in 0..PAIR_ITERS {
+        iters = it as u8 + 1;
+        // re-encode do MOD com o átomo limpo, subtrai, desvincula OBJ.
+        let re_m = bind3(am, &rho(cb.modu[m].as_slice(), ROLE_M), &[0u16; D]);
+        sc.f_obj = unbind_role_sub(value, ao, ROLE_O, Some(&re_m));
+        let no = cleanup(&sc.f_obj, &cb.ent_acf, &mut sc.sims).index;
+
+        let re_o = bind3(ao, &rho(cb.ent[o].as_slice(), ROLE_O), &[0u16; D]);
+        sc.f_mod = unbind_role_sub(value, am, ROLE_M, Some(&re_o));
+        let nm = cleanup(&sc.f_mod, &cb.modu_acf, &mut sc.sims).index;
+
+        if no == o && nm == m {
+            converged = true;
+            break;
+        }
+        o = no;
+        m = nm;
+    }
+
+    // Validação na cópia limpa (o certificado do fator).
+    let co = cleanup(&sc.f_obj, &cb.ent, &mut sc.sims);
+    let cm = cleanup(&sc.f_mod, &cb.modu, &mut sc.sims);
+    let validated = co.index == o && cm.index == m;
+    (
+        o, m, co.sim, cm.sim, co.margin, cm.margin, iters, converged, validated,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Codec de sentença (⊕ de 4 papéis) + ressonador ACF de 4 fatores
+// ---------------------------------------------------------------------------
+
+/// Superposição complexa de fasores unitários (o `⊕` do código de sentença).
+#[derive(Clone, Copy, Debug)]
+struct Bundle {
+    re: [f32; D],
+    im: [f32; D],
+}
+
+impl Bundle {
+    fn zero() -> Self {
+        Self {
+            re: [0.0; D],
+            im: [0.0; D],
+        }
+    }
+
+    fn add_term(&mut self, phases: &Phases) {
+        let lut = BamLut::global();
+        for j in 0..D {
+            let (s, c) = lut.sin_cos(BamPhase(phases[j]));
+            self.re[j] += c;
+            self.im[j] += s;
+        }
+    }
+
+    /// `arg(Ψ ⊗ conj(anchor))` — desvincula a âncora e projeta ao círculo.
+    fn project_role(&self, anchor: &BVec) -> Phases {
+        let lut = BamLut::global();
+        let mut re = [0.0f32; D];
+        let mut im = [0.0f32; D];
+        for j in 0..D {
+            let (s, c) = lut.sin_cos(BamPhase(anchor.as_slice()[j]));
+            // (re + i·im)·(c − i·s)
+            re[j] = self.re[j] * c + self.im[j] * s;
+            im[j] = self.im[j] * c - self.re[j] * s;
+        }
+        project_unit(&re, &im)
+    }
+}
+
+/// `Ψ = A_S⊗ρ^0(s) ⊕ A_V⊗ρ^1(v) ⊕ A_O⊗ρ^2(o) ⊕ A_M⊗ρ^3(m)`.
+fn encode_sentence(cb: &Codebooks, a: &Anchors, ids: [usize; 4]) -> Bundle {
+    let mut b = Bundle::zero();
+    b.add_term(&role_term(a.of(ROLE_S), &cb.ent[ids[0]], ROLE_S));
+    b.add_term(&role_term(a.of(ROLE_V), &cb.verb[ids[1]], ROLE_V));
+    b.add_term(&role_term(a.of(ROLE_O), &cb.ent[ids[2]], ROLE_O));
+    b.add_term(&role_term(a.of(ROLE_M), &cb.modu[ids[3]], ROLE_M));
+    b
+}
+
+/// Fatores de uma sentença decodificada.
+#[derive(Clone, Copy, Debug, Default)]
+struct Factors {
+    ids: [usize; 4],
+    sims: [f32; 4],
+    margins: [f32; 4],
+    iters: u8,
+    converged: bool,
+    validated: bool,
+}
+
+impl Factors {
+    fn min_sim(&self) -> f32 {
+        self.sims.iter().copied().fold(f32::INFINITY, f32::min)
+    }
+
+    fn min_margin(&self) -> f32 {
+        self.margins.iter().copied().fold(f32::INFINITY, f32::min)
+    }
+}
+
+/// Fatora `Ψ` nos quatro papéis.
+///
+/// * init: desvincula cada âncora e faz cleanup na cópia **ACF**;
+/// * itera: subtrai o `re-encode` (**átomo limpo**) dos outros três papéis,
+///   desvincula o papel próprio, projeta, e faz cleanup na cópia ACF —
+///   *re-encode projection* entre passos encadeados;
+/// * valida: o vencedor de cada papel tem que sobreviver ao cleanup na cópia
+///   **limpa**.
+fn factorize_sentence(psi: &Bundle, cb: &Codebooks, a: &Anchors) -> Factors {
+    let mut f = Factors::default();
+    let mut last: [Phases; 4] = [[0u16; D]; 4];
+    let mut sims = [0.0f32; N_ENT];
+
+    for r in 0..4 {
+        let cue = unrho(&psi.project_role(a.of(r)), r);
+        last[r] = cue;
+        let c = cleanup(&cue, cb.acf(r), &mut sims);
+        f.ids[r] = c.index;
+        f.sims[r] = c.sim;
+        f.margins[r] = c.margin;
+    }
+
+    let mut converged = false;
+    for it in 0..RES_ITERS {
+        f.iters = it as u8 + 1;
+        let mut changed = false;
+        for r in 0..4 {
+            // residual = Ψ − Σ_{r'≠r} reencode(átomo limpo, r')
+            let mut rr = [0.0f32; D];
+            let mut ri = [0.0f32; D];
+            for r2 in 0..4 {
+                if r2 == r {
+                    continue;
+                }
+                let term = role_term(a.of(r2), &cb.clean(r2)[f.ids[r2]], r2);
+                unit_phasor(&term, &mut f_reuse(&mut rr), &mut f_reuse(&mut ri));
+            }
+            let res = Bundle {
+                re: std::array::from_fn(|j| psi.re[j] - rr[j]),
+                im: std::array::from_fn(|j| psi.im[j] - ri[j]),
+            };
+            let cue = unrho(&res.project_role(a.of(r)), r);
+            last[r] = cue;
+            let c = cleanup(&cue, cb.acf(r), &mut sims);
+            if c.index != f.ids[r] {
+                changed = true;
+                f.ids[r] = c.index;
+            }
+            f.sims[r] = c.sim;
+            f.margins[r] = c.margin;
+        }
+        if !changed {
+            converged = true;
+            break;
+        }
+    }
+
+    let mut validated = true;
+    for r in 0..4 {
+        let c = cleanup(&last[r], cb.clean(r), &mut sims);
+        if c.index != f.ids[r] {
+            validated = false;
+        }
+    }
+    f.converged = converged;
+    f.validated = validated;
+    f
+}
+
+/// Empréstimo curto de um buffer `[f32; D]` para `unit_phasor` (evita `Vec`).
+fn f_reuse(buf: &mut [f32; D]) -> [f32; D] {
+    *buf
+}
+
+// ---------------------------------------------------------------------------
+// Abstenção calibrada
+// ---------------------------------------------------------------------------
+
+/// Evidência da leitura: pior similaridade e pior margem entre os fatores.
+#[derive(Clone, Copy, Debug)]
+struct Evidence {
+    min_sim: f32,
+    min_margin: f32,
+}
+
+impl Evidence {
+    fn from_factors(f: &Factors) -> Self {
+        Self {
+            min_sim: f.min_sim(),
+            min_margin: f.min_margin(),
+        }
+    }
+
+    fn from_pair(sim_obj: f32, sim_mod: f32, margin_obj: f32, margin_mod: f32) -> Self {
+        Self {
+            min_sim: sim_obj.min(sim_mod),
+            min_margin: margin_obj.min(margin_mod),
+        }
+    }
+}
+
+/// Abstenção seletiva: o readout só vale se a evidência observada o sustenta.
+#[inline]
+fn should_abstain(e: &Evidence) -> bool {
+    e.min_sim < SIM_FLOOR || e.min_margin < MARGIN_FLOOR
+}
+
+// ---------------------------------------------------------------------------
+// Construção do mundo
+// ---------------------------------------------------------------------------
+
+/// Um fato do mundo: `(sujeito, verbo, objeto, modificador)`.
+#[derive(Clone, Copy, Debug)]
+struct Fact {
+    ids: [u16; 4],
+}
+
+impl Fact {
+    fn key(&self, cb: &Codebooks, a: &Anchors) -> Phases {
+        let ks = role_term(a.of(ROLE_S), &cb.ent[self.ids[0] as usize], ROLE_S);
+        let kv = role_term(a.of(ROLE_V), &cb.verb[self.ids[1] as usize], ROLE_V);
+        bind(&ks, &kv)
+    }
+
+    fn value(&self, cb: &Codebooks, a: &Anchors) -> Phases {
+        let ko = role_term(a.of(ROLE_O), &cb.ent[self.ids[2] as usize], ROLE_O);
+        let km = role_term(a.of(ROLE_M), &cb.modu[self.ids[3] as usize], ROLE_M);
+        bind(&ko, &km)
+    }
+}
+
+/// Mundo determinístico de `n` fatos com `(sujeito, verbo)` únicos.
+fn build_world(n: usize) -> Vec<Fact> {
+    (0..n)
+        .map(|f| {
+            let s = f % N_ENT;
+            let v = (f / N_ENT) % N_VERB;
+            let o = (f * 37 + 11) % N_ENT;
+            let m = (f * 5 + 3) % N_MOD;
+            Fact {
+                ids: [s as u16, v as u16, o as u16, m as u16],
+            }
+        })
+        .collect()
+}
+
+/// Constrói a memória sharded a partir do mundo (≤ 48 fatos por acumulador).
+fn build_sharded(facts: &[Fact], cb: &Codebooks, a: &Anchors, traces: usize) -> PlhMemory {
+    let mut mem = PlhMemory::new(traces, SEED);
+    for f in facts {
+        mem.add(
+            f.ids[0],
+            f.ids[1],
+            f.ids[2],
+            f.ids[3],
+            &f.key(cb, a),
+            &f.value(cb, a),
+        );
+    }
+    mem.finalize();
+    mem
+}
+
+/// Constrói **uma** superposição plana com todos os fatos (o controle que o
+/// E1b mostrou colapsar) — o mesmo `Shard`, sem sharding.
+fn build_flat(facts: &[Fact], cb: &Codebooks, a: &Anchors, traces: usize) -> Shard {
+    let mut s = Shard::new(traces, SEED ^ 0xF1A7);
+    for f in facts {
+        s.add(
+            &f.key(cb, a),
+            &f.value(cb, a),
+            (f.ids[0], f.ids[1], f.ids[2], f.ids[3]),
+        );
+    }
+    s.finalize();
+    s
+}
+
+// ---------------------------------------------------------------------------
+// Gates
+// ---------------------------------------------------------------------------
+
+/// Resultado agregado do gate de escala.
+#[derive(Clone, Copy, Debug, Default)]
+struct ScaleResult {
+    recall_fact: f64,
+    recall_pair: f64,
+    snr_obj: f64,
+    snr_mod: f64,
+    mean_us: f64,
+    p50_us: f64,
+    p99_us: f64,
+    allocs: usize,
+    acf_validation: f64,
+    converged: f64,
+}
+
+/// Gate 1/3: 1.000 fatos sharded vs superposição plana, com SNR, latência e
+/// contagem de alocações no caminho quente.
+fn gate_scale(
+    mem: &PlhMemory,
+    flat: &Shard,
+    facts: &[Fact],
+    cb: &Codebooks,
+    a: &Anchors,
+    n_queries: usize,
+) -> ScaleResult {
+    let mut sc = QueryScratch::new();
+    let mut rng = ChaCha8Rng::seed_from_u64(SEED ^ 0x5151);
+
+    // amostra determinística de consultas
+    let mut picks = Vec::with_capacity(n_queries);
+    for k in 0..n_queries {
+        picks.push((k * facts.len()) / n_queries.max(1));
+    }
+
+    let mut lat = Vec::with_capacity(n_queries);
+    let mut sig_obj = Vec::with_capacity(n_queries);
+    let mut noise_obj: Vec<f32> = Vec::new();
+    let mut sig_mod = Vec::with_capacity(n_queries);
+    let mut noise_mod: Vec<f32> = Vec::new();
+    let mut hits_fact = 0usize;
+    let mut hits_pair = 0usize;
+    let mut validated = 0usize;
+    let mut converged = 0usize;
+
+    // warmup (inicializa LUT/codebook e aquece o caminho)
+    for _ in 0..16 {
+        let f = &facts[picks[0]];
+        let answer = hot_query(mem, cb, a, f, &mut sc);
+        black_box(answer);
+    }
+
+    alloc_probe::arm();
+    for &pi in &picks {
+        let f = &facts[pi];
+        let t0 = Instant::now();
+        let answer = hot_query(mem, cb, a, f, &mut sc);
+        let dt = t0.elapsed().as_nanos() as f64 / 1000.0;
+        let _ = &mut rng;
+        lat.push(dt);
+
+        let truth_obj = f.ids[2] as usize;
+        let truth_mod = f.ids[3] as usize;
+
+        // similaridades completas do fator OBJ (as do MOD estão no codebook)
+        if let Some(ans) = answer {
+            if ans.fact == pi {
+                hits_fact += 1;
+            }
+            if ans.obj == truth_obj && ans.modu == truth_mod {
+                hits_pair += 1;
+            }
+            if ans.validated {
+                validated += 1;
+            }
+            if ans.converged {
+                converged += 1;
+            }
+            // sinal vs ruído do fator OBJ
+            let cue = unbind_role_sub(&unbind_value(mem, cb, a, f, &mut sc), a.o.as_slice(), ROLE_O, None);
+            let mut sims = [0.0f32; N_ENT];
+            let _ = cleanup(&cue, &cb.ent, &mut sims);
+            sig_obj.push(sims[truth_obj]);
+            for (i, s) in sims.iter().enumerate().take(N_ENT) {
+                if i != truth_obj {
+                    noise_obj.push(*s);
+                }
+            }
+            sig_mod.push(ans.sim_mod);
+            let cue_m = unbind_role_sub(&unbind_value(mem, cb, a, f, &mut sc), a.m.as_slice(), ROLE_M, None);
+            let mut sims_m = [0.0f32; N_ENT];
+            let _ = cleanup(&cue_m, &cb.modu, &mut sims_m);
+            for (i, s) in sims_m.iter().enumerate().take(N_MOD) {
+                if i != truth_mod {
+                    noise_mod.push(*s);
+                }
+            }
+        }
+    }
+    let allocs = alloc_probe::disarm();
+
+    lat.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+    let mean = lat.iter().sum::<f64>() / lat.len() as f64;
+    let p = |q: f64| lat[((lat.len() as f64 * q) as usize).min(lat.len() - 1)];
+
+    // recall@1 plano: mesma pipeline, um único acumulador com 1.000 fatos
     let mut flat_hits = 0usize;
-    for (i, &(subj, rel, _)) in facts.iter().enumerate() {
-        let mut entity = vec![0.0f32; D];
-        let mut relation = vec![0.0f32; D];
-        add_into(&plh.subjects[subj], &plh.anchor_subj, &mut entity);
-        add_into(&plh.relations[rel], &plh.anchor_verb, &mut relation);
-        let hit = flat
-            .query_into(&entity, &relation, &mask, &mut flat_sc)
-            .expect("flat q");
-        if hit.value_index == i {
-            flat_hits += 1;
+    for &pi in &picks {
+        let f = &facts[pi];
+        if let Some(ans) = hot_query_flat(flat, cb, a, f, &mut sc) {
+            if ans.fact == pi && ans.obj == f.ids[2] as usize && ans.modu == f.ids[3] as usize {
+                flat_hits += 1;
+            }
         }
     }
-    let flat_recall = flat_hits as f64 / FACTS as f64;
+    let _ = flat_hits; // devolvido à parte por `gate_flat_recall`
 
-    // --- Gate 2: não-comutatividade estrita ---
-    let mut nc = Plh::new(seed ^ 0x0C);
-    let a = atom(seed ^ 0xAA, D);
-    let b = atom(seed ^ 0xBB, D);
-    let (_, pos_ab) = nc.insert(&a, 0, &b);
-    let (_, pos_ba) = nc.insert(&b, 0, &a);
-    let mut nc_sc = nc.shards[0].store.scratch(MAX_PER_SHARD);
-    let mut e1 = vec![0.0f32; D];
-    let mut r1 = vec![0.0f32; D];
-    nc.prepare_cue(&a, 0, &mut e1, &mut r1);
-    let ab = nc.query_prepared(0, &e1, &r1, &mask, &mut nc_sc);
-    nc.prepare_cue(&b, 0, &mut e1, &mut r1);
-    let ba = nc.query_prepared(0, &e1, &r1, &mask, &mut nc_sc);
-    let nc_ok = ab.value_index == pos_ab && ba.value_index == pos_ba && pos_ab != pos_ba;
+    ScaleResult {
+        recall_fact: hits_fact as f64 / picks.len() as f64,
+        recall_pair: hits_pair as f64 / picks.len() as f64,
+        snr_obj: snr(&sig_obj, &noise_obj),
+        snr_mod: snr(&sig_mod, &noise_mod),
+        mean_us: mean,
+        p50_us: p(0.50),
+        p99_us: p(0.99),
+        allocs,
+        acf_validation: validated as f64 / picks.len() as f64,
+        converged: converged as f64 / picks.len() as f64,
+    }
+}
 
-    // --- Gate 4: abstenção (in-vocab vs fora do vocabulário) ---
-    let mut sc2 = plh.shards[0].store.scratch(MAX_PER_SHARD);
-    let mut entity = vec![0.0f32; D];
-    let mut relation = vec![0.0f32; D];
+/// `(μ_sinal − μ_ruído) / σ_ruído`.
+fn snr(signal: &[f32], noise: &[f32]) -> f64 {
+    if signal.is_empty() || noise.is_empty() {
+        return f64::NAN;
+    }
+    let ms = signal.iter().map(|&x| x as f64).sum::<f64>() / signal.len() as f64;
+    let mn = noise.iter().map(|&x| x as f64).sum::<f64>() / noise.len() as f64;
+    let var = noise
+        .iter()
+        .map(|&x| {
+            let d = x as f64 - mn;
+            d * d
+        })
+        .sum::<f64>()
+        / noise.len() as f64;
+    let sd = var.sqrt();
+    if sd <= 1e-12 {
+        f64::INFINITY
+    } else {
+        (ms - mn) / sd
+    }
+}
 
-    let mut role_in = Vec::with_capacity(200);
-    for k in 0..200 {
-        // sujeitos 0..41 são os realmente armazenados (FACTS/SHARDS por shard)
-        let subj = k % (FACTS / SHARDS);
-        let rel = k % SHARDS;
-        plh.prepare_cue(&plh.subjects[subj], rel, &mut entity, &mut relation);
-        let hit = plh.query_prepared(rel, &entity, &relation, &mask, &mut sc2);
-        role_in.push(hit.role_similarity);
+/// Caminho quente sharded: resolve o fato no shard roteado, desvincula,
+/// projeta ao círculo e roda o ressonador ACF. **Zero alocação.**
+fn hot_query(
+    mem: &PlhMemory,
+    cb: &Codebooks,
+    a: &Anchors,
+    f: &Fact,
+    sc: &mut QueryScratch,
+) -> Option<Answer> {
+    let idx = shard_of(f.ids[0] as usize, f.ids[1] as usize);
+    let shard = &mem.shards[idx];
+    let fact = shard.find(f.ids[0], f.ids[1])?;
+    let key = f.key(cb, a);
+    shard.unbind(fact, &key, &mut sc.z_re, &mut sc.z_im);
+    sc.value = project_unit(&sc.z_re, &sc.z_im);
+    let (obj, modu, sim_obj, sim_mod, m_obj, m_mod, iters, converged, validated) =
+        resonate_pair(&sc.value, cb, a, sc);
+    Some(Answer {
+        fact,
+        obj,
+        modu,
+        sim_obj,
+        sim_mod,
+        margin_obj: m_obj,
+        margin_mod: m_mod,
+        iters,
+        converged,
+        validated,
+    })
+}
+
+/// Valor projetado de um fato (usado para medir SNR por fator).
+fn unbind_value(
+    mem: &PlhMemory,
+    cb: &Codebooks,
+    a: &Anchors,
+    f: &Fact,
+    sc: &mut QueryScratch,
+) -> Phases {
+    let idx = shard_of(f.ids[0] as usize, f.ids[1] as usize);
+    let shard = &mem.shards[idx];
+    let fact = shard.find(f.ids[0], f.ids[1]).unwrap_or(0);
+    let key = f.key(cb, a);
+    shard.unbind(fact, &key, &mut sc.z_re, &mut sc.z_im);
+    project_unit(&sc.z_re, &sc.z_im)
+}
+
+/// Controle: a mesma pipeline sobre **uma** superposição plana.
+fn hot_query_flat(
+    flat: &Shard,
+    cb: &Codebooks,
+    a: &Anchors,
+    f: &Fact,
+    sc: &mut QueryScratch,
+) -> Option<Answer> {
+    let fact = flat.find(f.ids[0], f.ids[1])?;
+    let key = f.key(cb, a);
+    flat.unbind(fact, &key, &mut sc.z_re, &mut sc.z_im);
+    sc.value = project_unit(&sc.z_re, &sc.z_im);
+    let (obj, modu, sim_obj, sim_mod, m_obj, m_mod, iters, converged, validated) =
+        resonate_pair(&sc.value, cb, a, sc);
+    Some(Answer {
+        fact,
+        obj,
+        modu,
+        sim_obj,
+        sim_mod,
+        margin_obj: m_obj,
+        margin_mod: m_mod,
+        iters,
+        converged,
+        validated,
+    })
+}
+
+/// Recall@1 do controle plano.
+fn flat_recall(flat: &Shard, facts: &[Fact], cb: &Codebooks, a: &Anchors, n_queries: usize) -> f64 {
+    let mut sc = QueryScratch::new();
+    let mut hits = 0usize;
+    for k in 0..n_queries {
+        let f = &facts[(k * facts.len()) / n_queries.max(1)];
+        if let Some(ans) = hot_query_flat(flat, cb, a, f, &mut sc) {
+            if ans.fact == (k * facts.len()) / n_queries.max(1)
+                && ans.obj == f.ids[2] as usize
+                && ans.modu == f.ids[3] as usize
+            {
+                hits += 1;
+            }
+        }
+    }
+    hits as f64 / n_queries as f64
+}
+
+/// Resultado do gate de não-comutatividade.
+#[derive(Clone, Copy, Debug, Default)]
+struct CommutResult {
+    pairs: usize,
+    separated: usize,
+    decoded_forward: usize,
+    decoded_reverse: usize,
+    mean_sim: f64,
+    control_sim: f64,
+    control_decode_equal: usize,
+    acf_validated: usize,
+}
+
+/// Gate 2: `A → B` vs `B → A` com o mesmo verbo e o mesmo modificador.
+fn gate_non_commutativity(
+    cb: &Codebooks,
+    a: &Anchors,
+    pairs: usize,
+    rng: &mut ChaCha8Rng,
+) -> CommutResult {
+    let mut out = CommutResult::default();
+    let mut sim_acc = 0.0f64;
+    for k in 0..pairs {
+        let x = k % N_ENT;
+        let mut y = rng.gen_range(0..N_ENT);
+        if y == x {
+            y = (y + 1) % N_ENT;
+        }
+        let v = rng.gen_range(0..N_VERB);
+        let m = rng.gen_range(0..N_MOD);
+
+        let fwd = encode_sentence(cb, a, [x, v, y, m]);
+        let rev = encode_sentence(cb, a, [y, v, x, m]);
+
+        let mut dot = 0.0f64;
+        let mut nx = 0.0f64;
+        let mut ny = 0.0f64;
+        for j in 0..D {
+            dot += (fwd.re[j] * rev.re[j] + fwd.im[j] * rev.im[j]) as f64;
+            nx += (fwd.re[j] * fwd.re[j] + fwd.im[j] * fwd.im[j]) as f64;
+            ny += (rev.re[j] * rev.re[j] + rev.im[j] * rev.im[j]) as f64;
+        }
+        let sim = dot / (nx.sqrt() * ny.sqrt()).max(1e-12);
+        sim_acc += sim;
+
+        let df = factorize_sentence(&fwd, cb, a);
+        let dr = factorize_sentence(&rev, cb, a);
+
+        let fwd_ok = df.ids[ROLE_S] == x
+            && df.ids[ROLE_V] == v
+            && df.ids[ROLE_O] == y
+            && df.ids[ROLE_M] == m;
+        let rev_ok = dr.ids[ROLE_S] == y
+            && dr.ids[ROLE_V] == v
+            && dr.ids[ROLE_O] == x
+            && dr.ids[ROLE_M] == m;
+        if fwd_ok {
+            out.decoded_forward += 1;
+        }
+        if rev_ok {
+            out.decoded_reverse += 1;
+        }
+        // separação operacional: código distinto **e** leitura trocada correta
+        if fwd_ok && rev_ok && sim < 0.75 {
+            out.separated += 1;
+        }
+        if df.validated && dr.validated {
+            out.acf_validated += 1;
+        }
+        if df.ids == dr.ids {
+            out.control_decode_equal += 1;
+        }
     }
 
-    let oov_entity = atom(seed ^ 0xDEAD, D);
-    let oov_relation = atom(seed ^ 0xBEEF, D);
-    let shard0 = &plh.shards[0].store;
-    let mut role_oov = Vec::with_capacity(200);
-    for _ in 0..200 {
-        let hit = shard0
-            .query_into(&oov_entity, &oov_relation, &mask, &mut sc2)
-            .expect("oov");
-        role_oov.push(hit.role_similarity);
+    // Controle: binding "comutativo" — mesmo papel para os dois argumentos e
+    // sem permutação. É o que a construção ρ^k + âncoras distintas evita.
+    let mut ctrl = 0.0f64;
+    for k in 0..pairs.min(32) {
+        let x = k % N_ENT;
+        let y = (k * 13 + 1) % N_ENT;
+        let v = k % N_VERB;
+        let one = bind(a.s.as_slice(), &cb.verb[v].as_slice());
+        let cx = bind(&one, &bind(&cb.ent[x].as_slice(), &cb.ent[y].as_slice()));
+        let cy = bind(&one, &bind(&cb.ent[y].as_slice(), &cb.ent[x].as_slice()));
+        ctrl += 1.0 - tri_sim(&cx, &cy) as f64;
+    }
+    out.pairs = pairs;
+    out.mean_sim = sim_acc / pairs as f64;
+    out.control_sim = 1.0 - ctrl / pairs.min(32) as f64;
+    out
+}
+
+/// Linha da tabela de abstenção.
+#[derive(Clone, Copy, Debug)]
+struct AbstRow {
+    label: &'static str,
+    n: usize,
+    abstain: f64,
+    accuracy: f64,
+    mean_sim: f64,
+    mean_margin: f64,
+}
+
+/// Gate 4: abstenção em OOV e sob ruído de fase crescente.
+fn gate_abstention(cb: &Codebooks, a: &Anchors, n: usize, rng: &mut ChaCha8Rng) -> Vec<AbstRow> {
+    let mut rows = Vec::new();
+    let noise_levels: [(f32, &'static str); 5] = [
+        (0.0, "limpo"),
+        (0.4, "sigma=0,4"),
+        (0.8, "sigma=0,8"),
+        (1.2, "sigma=1,2"),
+        (1.6, "sigma=1,6"),
+    ];
+
+    for (sigma, label) in noise_levels {
+        let mut abst = 0usize;
+        let mut correct = 0usize;
+        let mut decided = 0usize;
+        let mut sim_acc = 0.0f64;
+        let mut mar_acc = 0.0f64;
+        for _ in 0..n {
+            let ids = [
+                rng.gen_range(0..N_ENT),
+                rng.gen_range(0..N_VERB),
+                rng.gen_range(0..N_ENT),
+                rng.gen_range(0..N_MOD),
+            ];
+            let mut psi = encode_sentence(cb, a, ids);
+            if sigma > 0.0 {
+                // ruído de fase uniforme com o mesmo σ (amp = σ·√3)
+                let amp = sigma * 1.732_050_8;
+                for j in 0..D {
+                    let d = rng.gen_range(-amp..amp);
+                    let (s, c) = (d.sin(), d.cos());
+                    let (re, im) = (psi.re[j], psi.im[j]);
+                    psi.re[j] = re * c - im * s;
+                    psi.im[j] = re * s + im * c;
+                }
+            }
+            let f = factorize_sentence(&psi, cb, a);
+            let e = Evidence::from_factors(&f);
+            sim_acc += e.min_sim as f64;
+            mar_acc += e.min_margin as f64;
+            if should_abstain(&e) {
+                abst += 1;
+            } else {
+                decided += 1;
+                if f.ids == ids {
+                    correct += 1;
+                }
+            }
+        }
+        rows.push(AbstRow {
+            label,
+            n,
+            abstain: abst as f64 / n as f64,
+            accuracy: if decided > 0 {
+                correct as f64 / decided as f64
+            } else {
+                f64::NAN
+            },
+            mean_sim: sim_acc / n as f64,
+            mean_margin: mar_acc / n as f64,
+        });
     }
 
-    let threshold = 0.5f32;
-    let abstain_oov =
-        role_oov.iter().filter(|s| **s < threshold).count() as f64 / role_oov.len() as f64;
-    let false_abstain =
-        role_in.iter().filter(|s| **s < threshold).count() as f64 / role_in.len() as f64;
+    // OOV: Ψ montada com átomos que não existem em nenhum codebook.
+    let mut abst = 0usize;
+    let mut sim_acc = 0.0f64;
+    let mut mar_acc = 0.0f64;
+    for _ in 0..n {
+        let mut b = Bundle::zero();
+        for r in 0..4 {
+            let mut p = [0.0f32; D];
+            for x in p.iter_mut() {
+                *x = rng.gen::<f32>() * TAU;
+            }
+            let atom = BVec::from_radians(&p).expect("D");
+            b.add_term(&role_term(a.of(r), &atom, r));
+        }
+        let f = factorize_sentence(&b, cb, a);
+        let e = Evidence::from_factors(&f);
+        sim_acc += e.min_sim as f64;
+        mar_acc += e.min_margin as f64;
+        if should_abstain(&e) {
+            abst += 1;
+        }
+    }
+    rows.push(AbstRow {
+        label: "fora do vocabulario",
+        n,
+        abstain: abst as f64 / n as f64,
+        accuracy: f64::NAN,
+        mean_sim: sim_acc / n as f64,
+        mean_margin: mar_acc / n as f64,
+    });
 
-    // --- relatório ---
-    println!();
-    println!("AETHER · E1 — Phase-Language Head sharded (D={D})");
-    println!("=====================================================");
-    println!(
-        "shards={SHARDS} fatos={total} max/shard={max_shard} (teto {MAX_PER_SHARD}) traces={TRACES}"
-    );
-    println!(
-        "working set ≈ {:.1} KB",
-        (D * TRACES * 8 * SHARDS) as f64 / 1024.0
-    );
-    println!();
-    println!("  Gate 1  recall@1 sharded ({FACTS} fatos) : {:.4}", recall);
-    println!(
-        "          baseline plano (D=160)           : {:.4}",
-        flat_recall
-    );
-    println!(
-        "  Gate 2  não-comutatividade A→B vs B→A    : {}",
-        pass(nc_ok)
-    );
-    println!("  Gate 3  SNR                              : {snr:.2}σ");
-    println!("          latência/consulta                : {latency_us:.2} µs");
-    println!("          alocações no hot-path            : {hot_allocs}");
-    println!(
-        "  Gate 4  abstenção OOV                    : {:.1}% (limiar {threshold:.2})",
-        100.0 * abstain_oov
-    );
-    println!(
-        "          falso-abster em in-vocab         : {:.1}%",
-        100.0 * false_abstain
-    );
-    println!();
+    rows
+}
 
-    let g1 = recall >= 0.99;
-    let g2 = nc_ok;
-    let g3 = snr > 5.0 && latency_us < 15.0 && hot_allocs == 0;
-    let g4 = abstain_oov >= 0.95 && false_abstain <= 0.05;
-    println!("  G1 sharded recall ≥ 99%      : {}", pass(g1));
-    println!("  G2 não-comutatividade 100%   : {}", pass(g2));
-    println!("  G3 SNR > 5σ · <15 µs · 0 B   : {}", pass(g3));
-    println!("  G4 abstenção ≥ 95% · FP ≤ 5% : {}", pass(g4));
-    println!();
+/// Gate 4 (braço memória): consulta com `(sujeito, verbo)` que não existe.
+fn abstention_memory(mem: &PlhMemory, cb: &Codebooks, a: &Anchors, n: usize, rng: &mut ChaCha8Rng) -> (f64, f64) {
+    let mut sc = QueryScratch::new();
+    let mut abst = 0usize;
+    let mut sim_acc = 0.0f64;
+    for _ in 0..n {
+        let ids = [
+            rng.gen_range(0..N_ENT) as u16,
+            rng.gen_range(0..N_VERB) as u16,
+        ];
+        let key = bind(
+            &role_term(a.of(ROLE_S), &cb.ent[ids[0] as usize], ROLE_S),
+            &role_term(a.of(ROLE_V), &cb.verb[ids[1] as usize], ROLE_V),
+        );
+        let idx = shard_of(ids[0] as usize, ids[1] as usize);
+        let shard = &mem.shards[idx];
+        let fact = match shard.find(ids[0], ids[1]) {
+            Some(f) => f,
+            None => {
+                // endereço ausente: não há o que desvincular — abstenção trivial
+                abst += 1;
+                sim_acc += 0.0;
+                continue;
+            }
+        };
+        shard.unbind(fact, &key, &mut sc.z_re, &mut sc.z_im);
+        sc.value = project_unit(&sc.z_re, &sc.z_im);
+        let (o, m, so, sm, mo, mm, _, _, _) = resonate_pair(&sc.value, cb, a, &mut sc);
+        black_box((o, m));
+        let e = Evidence::from_pair(so, sm, mo, mm);
+        sim_acc += e.min_sim as f64;
+        if should_abstain(&e) {
+            abst += 1;
+        }
+    }
+    (abst as f64 / n as f64, sim_acc / n as f64)
+}
 
-    std::fs::create_dir_all("target").ok();
-    let path = "target/aether_e1_plh.json";
-    let json = format!(
-        "{{\n  \"dim\": {D}, \"traces\": {TRACES}, \"shards\": {SHARDS},\n  \"facts\": {total}, \"max_per_shard\": {max_shard},\n  \"recall_sharded\": {recall:.4},\n  \"recall_flat\": {flat_recall:.4},\n  \"non_commutative\": {nc_ok},\n  \"snr_sigma\": {snr:.3},\n  \"latency_us\": {latency_us:.3},\n  \"hot_allocs\": {hot_allocs},\n  \"abstain_oov\": {abstain_oov:.4},\n  \"false_abstain\": {false_abstain:.4}\n}}\n"
-    );
-    std::fs::write(path, json)?;
-    println!("artefato: {path}");
-    Ok(())
+// ---------------------------------------------------------------------------
+// main
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+struct Args {
+    quick: bool,
+    facts: usize,
+    queries: usize,
+    seed: u64,
+}
+
+fn parse_args() -> Args {
+    let mut a = Args {
+        quick: false,
+        facts: N_FACTS,
+        queries: QUERIES,
+        seed: SEED,
+    };
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    let mut i = 0;
+    while i < argv.len() {
+        match argv[i].as_str() {
+            "--quick" => {
+                a.quick = true;
+                a.queries = 120;
+            }
+            "--facts" => {
+                if let Some(v) = argv.get(i + 1).and_then(|v| v.parse().ok()) {
+                    a.facts = v;
+                    i += 1;
+                }
+            }
+            "--queries" => {
+                if let Some(v) = argv.get(i + 1).and_then(|v| v.parse().ok()) {
+                    a.queries = v;
+                    i += 1;
+                }
+            }
+            "--seed" => {
+                if let Some(v) = argv.get(i + 1).and_then(|v| v.parse().ok()) {
+                    a.seed = v;
+                    i += 1;
+                }
+            }
+            other => eprintln!("argumento ignorado: {other}"),
+        }
+        i += 1;
+    }
+    a
 }
 
 fn pass(ok: bool) -> &'static str {
@@ -433,4 +1515,307 @@ fn pass(ok: bool) -> &'static str {
     } else {
         "FAIL"
     }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = parse_args();
+    let n_facts = args.facts;
+    let n_q = args.queries;
+
+    let cb = Codebooks::build(args.seed);
+    let a = Anchors::build(args.seed);
+    let facts = build_world(n_facts);
+    let mem = build_sharded(&facts, &cb, &a, K_TRACES);
+    let flat = build_flat(&facts, &cb, &a, K_TRACES);
+
+    println!();
+    println!("AETHER · E1 — Phase-Language Head sharded + ressonador ACF");
+    println!("==========================================================");
+    println!(
+        "D={D} K={K_TRACES} shards={SHARDS} fatos={} leque={} verbos={} mods={} seed={:#x}",
+        facts.len(),
+        N_ENT,
+        N_VERB,
+        N_MOD,
+        args.seed
+    );
+    println!(
+        "teto E1b = 0,4·D = {} fatos/acumulador · usado = {} (≤ {SHARD_CAP})",
+        (0.4 * D as f64).round() as usize,
+        mem.max_load()
+    );
+    println!();
+
+    // ---------------- Gate 1 + 3 ----------------
+    let scale = gate_scale(&mem, &flat, &facts, &cb, &a, n_q);
+    let flat_recall = flat_recall(&flat, &facts, &cb, &a, n_q.min(200));
+
+    println!("G1 — escala sharded (D={D})");
+    println!("{:<34} {:>12} {:>12}", "", "sharded", "plano");
+    println!("{}", "-".repeat(62));
+    println!(
+        "{:<34} {:>11.4} {:>12.4}",
+        "recall@1 (fato + objeto + mod)", scale.recall_pair, flat_recall
+    );
+    println!(
+        "{:<34} {:>11.4} {:>12}",
+        "recall@1 (fato localizado)", scale.recall_fact, "n/a"
+    );
+    println!(
+        "{:<34} {:>11} {:>12}",
+        "fatos por acumulador (max)", mem.max_load(), facts.len()
+    );
+    println!(
+        "{:<34} {:>11} {:>12}",
+        "acumuladores", SHARDS, 1
+    );
+    println!();
+
+    println!("G3 — qualidade e latência (caminho quente sharded)");
+    println!(
+        "  SNR OBJ {:.2} σ · SNR MOD {:.2} σ",
+        scale.snr_obj, scale.snr_mod
+    );
+    println!(
+        "  latência/consulta  média {:.2} µs · p50 {:.2} µs · p99 {:.2} µs",
+        scale.mean_us, scale.p50_us, scale.p99_us
+    );
+    println!(
+        "  alocações no hot-path: {} · convergência do ressonador {:.1}% · validação ACF {:.1}%",
+        scale.allocs,
+        100.0 * scale.converged,
+        100.0 * scale.acf_validation
+    );
+    println!();
+
+    // ---------------- Gate 2 ----------------
+    let mut rng = ChaCha8Rng::seed_from_u64(args.seed ^ 0xC0_0042);
+    let comm = gate_non_commutativity(&cb, &a, if args.quick { 60 } else { 200 }, &mut rng);
+
+    println!("G2 — não-comutatividade estrita (A→B vs B→A)");
+    println!("{:<40} {:>10}", "métrica", "valor");
+    println!("{}", "-".repeat(52));
+    println!(
+        "{:<40} {:>10}",
+        "pares testados", comm.pairs
+    );
+    println!(
+        "{:<40} {:>9.2}%",
+        "separação (código distinto + leitura trocada)",
+        100.0 * comm.separated as f64 / comm.pairs as f64
+    );
+    println!(
+        "{:<40} {:>9.2}%",
+        "decodificação correta A→B",
+        100.0 * comm.decoded_forward as f64 / comm.pairs as f64
+    );
+    println!(
+        "{:<40} {:>9.2}%",
+        "decodificação correta B→A",
+        100.0 * comm.decoded_reverse as f64 / comm.pairs as f64
+    );
+    println!(
+        "{:<40} {:>10.3}",
+        "similaridade média Ψ_AB · Ψ_BA", comm.mean_sim
+    );
+    println!(
+        "{:<40} {:>10.3}",
+        "controle comutativo (mesmo papel, sem ρ)", comm.control_sim
+    );
+    println!(
+        "{:<40} {:>9.2}%",
+        "validação ACF dos dois sentidos",
+        100.0 * comm.acf_validated as f64 / comm.pairs as f64
+    );
+    println!();
+
+    // ---------------- Gate 4 ----------------
+    let abst_rows = gate_abstention(&cb, &a, if args.quick { 60 } else { 150 }, &mut rng);
+    println!("G4 — abstenção calibrada (piso sim ≥ {SIM_FLOOR:.2} e margem ≥ {MARGIN_FLOOR:.2})");
+    println!(
+        "{:<20} {:>7} {:>10} {:>11} {:>10} {:>10}",
+        "condição", "n", "abstem", "acerto", "sim_min", "margem"
+    );
+    println!("{}", "-".repeat(72));
+    for r in &abst_rows {
+        println!(
+            "{:<20} {:>7} {:>9.1}% {:>10} {:>10.3} {:>10.3}",
+            r.label,
+            r.n,
+            100.0 * r.abstain,
+            if r.accuracy.is_finite() {
+                format!("{:.1}%", 100.0 * r.accuracy)
+            } else {
+                "-".to_string()
+            },
+            r.mean_sim,
+            r.mean_margin
+        );
+    }
+    let (mem_abst, mem_sim) = abstention_memory(&mem, &cb, &a, 120, &mut rng);
+    println!(
+        "{:<20} {:>7} {:>9.1}% {:>10} {:>10.3} {:>10.3}",
+        "memória OOV", 120, 100.0 * mem_abst, "-", mem_sim, 0.0
+    );
+    println!();
+
+    // ---------------- memória ----------------
+    let traces_bytes = mem.memory_bytes();
+    let codebook_bytes = cb.memory_bytes();
+    let scratch_bytes = std::mem::size_of::<QueryScratch>();
+    let total = traces_bytes + codebook_bytes + scratch_bytes;
+    println!("pegada de memória (working set)");
+    println!("{:<32} {:>10}", "acumuladores (24 shards)", format!("{} KB", traces_bytes / 1024));
+    println!("{:<32} {:>10}", "codebooks limpo + ACF", format!("{} KB", codebook_bytes / 1024));
+    println!("{:<32} {:>10}", "scratch de consulta", format!("{scratch_bytes} B"));
+    println!("{:<32} {:>10}", "total", format!("{} KB", total / 1024));
+    println!();
+
+    // ---------------- gates ----------------
+    let g1 = scale.recall_pair >= 0.99;
+    let g1_contrast = flat_recall < 0.10;
+    let g1_cap = mem.max_load() <= SHARD_CAP;
+    let g2 = comm.separated == comm.pairs && comm.decoded_forward == comm.pairs && comm.decoded_reverse == comm.pairs;
+    let g3_snr = scale.snr_obj > 5.0 && scale.snr_mod > 5.0;
+    let g3_lat = scale.p50_us < 15.0;
+    let g3_alloc = scale.allocs == 0;
+    let g4_oov = abst_rows.last().map(|r| r.abstain > 0.95).unwrap_or(false);
+    let g4_noise = abst_rows
+        .iter()
+        .find(|r| r.label == "sigma=1,6")
+        .map(|r| r.abstain > 0.95)
+        .unwrap_or(false);
+    let g4_clean = abst_rows
+        .first()
+        .map(|r| r.abstain < 0.05 && r.accuracy >= 0.95)
+        .unwrap_or(false);
+    let g4_mem = mem_abst > 0.95;
+    let g_mem = total < 500 * 1024;
+
+    println!("gates");
+    println!(
+        "  G1 recall@1 sharded ≥ 0,99            : {}  ({:.4})",
+        pass(g1),
+        scale.recall_pair
+    );
+    println!(
+        "  G1 contraste plano < 0,10             : {}  ({:.4})",
+        pass(g1_contrast),
+        flat_recall
+    );
+    println!(
+        "  G1 ≤ {SHARD_CAP} fatos/acumulador           : {}  (max {})",
+        pass(g1_cap),
+        mem.max_load()
+    );
+    println!("  G2 não-comutatividade = 100%          : {}", pass(g2));
+    println!(
+        "  G3 SNR > 5,0 σ (OBJ e MOD)            : {}  ({:.2} / {:.2})",
+        pass(g3_snr),
+        scale.snr_obj,
+        scale.snr_mod
+    );
+    println!(
+        "  G3 p50 < 15 µs por consulta            : {}  ({:.2} µs)",
+        pass(g3_lat),
+        scale.p50_us
+    );
+    println!(
+        "  G3 0 bytes alocados no hot-path        : {}  ({} allocs)",
+        pass(g3_alloc),
+        scale.allocs
+    );
+    println!(
+        "  G4 abstenção OOV > 95%                 : {}  (vocab {:.1}% · memória {:.1}%)",
+        pass(g4_oov && g4_mem),
+        100.0 * abst_rows.last().map(|r| r.abstain).unwrap_or(0.0),
+        100.0 * mem_abst
+    );
+    println!(
+        "  G4 abstenção ruído σ=1,6 > 95%         : {}  ({:.1}%)",
+        pass(g4_noise),
+        100.0 * abst_rows
+            .iter()
+            .find(|r| r.label == "sigma=1,6")
+            .map(|r| r.abstain)
+            .unwrap_or(0.0)
+    );
+    println!(
+        "  G4 falso-abster limpo < 5% e acerto ≥ 95%: {}",
+        pass(g4_clean)
+    );
+    println!(
+        "  G-working-set < 500 KB                 : {}  ({} KB)",
+        pass(g_mem),
+        total / 1024
+    );
+    let all = g1 && g1_contrast && g1_cap && g2 && g3_snr && g3_lat && g3_alloc && g4_oov && g4_mem
+        && g4_noise && g4_clean && g_mem;
+    println!("  veredito: {}", pass(all));
+    println!();
+
+    // ---------------- artefato ----------------
+    std::fs::create_dir_all("target").ok();
+    let path = "target/aether_e1_plh.json";
+    let mut json = String::new();
+    json.push_str("{\n");
+    json.push_str(&format!(
+        "  \"dim\": {D}, \"traces\": {K_TRACES}, \"shards\": {SHARDS}, \"shard_cap\": {SHARD_CAP},\n"
+    ));
+    json.push_str(&format!(
+        "  \"facts\": {}, \"max_load\": {}, \"n_ent\": {N_ENT}, \"n_verb\": {N_VERB}, \"n_mod\": {N_MOD},\n",
+        facts.len(),
+        mem.max_load()
+    ));
+    json.push_str(&format!(
+        "  \"sharded\": {{\"recall_fact\": {:.4}, \"recall_pair\": {:.4}, \"snr_obj\": {:.3}, \"snr_mod\": {:.3}, \"p50_us\": {:.3}, \"p99_us\": {:.3}, \"mean_us\": {:.3}, \"allocs\": {}, \"acf_validation\": {:.4}, \"converged\": {:.4}}},\n",
+        scale.recall_fact,
+        scale.recall_pair,
+        scale.snr_obj,
+        scale.snr_mod,
+        scale.p50_us,
+        scale.p99_us,
+        scale.mean_us,
+        scale.allocs,
+        scale.acf_validation,
+        scale.converged
+    ));
+    json.push_str(&format!(
+        "  \"flat\": {{\"recall_pair\": {flat_recall:.4}}},\n"
+    ));
+    json.push_str(&format!(
+        "  \"noncommutative\": {{\"pairs\": {}, \"separated\": {}, \"forward\": {}, \"reverse\": {}, \"mean_sim\": {:.4}, \"control_sim\": {:.4}}},\n",
+        comm.pairs,
+        comm.separated,
+        comm.decoded_forward,
+        comm.decoded_reverse,
+        comm.mean_sim,
+        comm.control_sim
+    ));
+    json.push_str(&format!(
+        "  \"memory_bytes\": {{\"accumulators\": {traces_bytes}, \"codebooks\": {codebook_bytes}, \"scratch\": {scratch_bytes}, \"total\": {total}}},\n"
+    ));
+    json.push_str("  \"abstention\": [\n");
+    for (i, r) in abst_rows.iter().enumerate() {
+        let comma = if i + 1 == abst_rows.len() { "" } else { "," };
+        json.push_str(&format!(
+            "    {{\"label\": \"{}\", \"n\": {}, \"abstain\": {:.4}, \"accuracy\": {}, \"mean_sim\": {:.4}}}{comma}\n",
+            r.label,
+            r.n,
+            r.abstain,
+            if r.accuracy.is_finite() {
+                format!("{:.4}", r.accuracy)
+            } else {
+                "null".to_string()
+            },
+            r.mean_sim
+        ));
+    }
+    json.push_str("  ],\n");
+    json.push_str(&format!("  \"memory_oov_abstain\": {mem_abst:.4}\n"));
+    json.push_str("}\n");
+    std::fs::write(path, json)?;
+    println!("artefato: {path}");
+
+    Ok(())
 }
