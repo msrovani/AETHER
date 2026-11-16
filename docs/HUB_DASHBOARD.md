@@ -12,9 +12,11 @@ Superfície única de lab/usuário nesta fase (egui/eframe, feature `dashboard` 
 
 | Região | Conteúdo |
 |---|---|
-| Barra superior | Marca AETHER, jobs (auditoria / bench / HW / demos), status Idle/Running/Done/Failed |
-| Centro | ACQ, cobertura, hot-path, grade T01–T12, vazão, host + gaps |
-| Coluna direita **Detalhe** | Explicação no hover (sem tooltip flutuante); ficha T0x no clique; glossário no idle; **gráficos do demo** |
+| Barra superior | Marca **AETHER** + versão, jobs (auditoria / bench / HW / demos), faixa de status do job |
+| Centro | ACQ, cobertura, hot-path, grade T01–T12 (barra de score + seleção), vazão, host + gaps |
+| Coluna direita **Detalhe** | Chip de modo (glossário / hover / ficha); hover sem tooltip flutuante; ficha T0x **fixa** até limpar/outro clique; gráficos do demo |
+
+Tema: slate + teal (lab). Host report é relido do JSON após o job (sem re-sonda) e no arranque/`Recarregar` se existir.
 
 ## Jobs (single-flight)
 

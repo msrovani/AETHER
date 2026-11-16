@@ -16,7 +16,7 @@ cd C:\Users\msrov\Documents\AETHER
 .\scripts\cargo.ps1 run --release --bin aether-dashboard --features dashboard
 ```
 
-Layout: **centro** = medidores; **direita** = Detalhe (texto + gráficos).
+Layout: **centro** = medidores; **direita** = Detalhe (chip glossário/hover/ficha + gráficos). Ficha T0x fica fixa até **Limpar ficha** ou outro clique.
 
 ## 2) Rodar a auditoria cognitiva
 

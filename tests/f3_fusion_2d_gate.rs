@@ -177,10 +177,17 @@ fn f3_matriz_2d_e_round_trip_escopado() {
 
             // Round-trip: o ledger devolve a semente, o atrator a reacende.
             let q = interleaved(&cue);
-            let (_consulted, key) = ledger
+            let hit = ledger
                 .cue_into_scoped(a, &q, &mut seed)
                 .expect("cue_into A");
-            assert!((100..110).contains(&key), "key fora do escopo A: {key}");
+            assert!(
+                (100..110).contains(&hit.key),
+                "key fora do escopo A: {}",
+                hit.key
+            );
+            assert_eq!(hit.scope, a);
+            assert_eq!(hit.authority, 200);
+            assert!(hit.hits > 0, "CueHit.hits deve ser contagem, nao indice");
             mem.phases.copy_from_slice(&seed);
             mem.rotation = 0.0;
             let (_v2, conf_r) = mem
@@ -212,13 +219,15 @@ fn f3_matriz_2d_e_round_trip_escopado() {
     // Gate 3: R8 — isolamento cross-organism.
     // ------------------------------------------------------------------
     let qb = interleaved(&pb[0]);
-    let (_hits, key_foreign_query) = ledger
+    let hit_foreign = ledger
         .cue_into_scoped(a, &qb, &mut seed)
         .expect("consulta cruzada nao pode vazar");
     assert!(
-        ledger.key_in_scope(a, key_foreign_query),
-        "hit cruzado: {key_foreign_query} nao pertence ao escopo A"
+        ledger.key_in_scope(a, hit_foreign.key),
+        "hit cruzado: {} nao pertence ao escopo A",
+        hit_foreign.key
     );
+    assert_eq!(hit_foreign.scope, a);
     assert_eq!(ledger.cross_scope_hits(), 0, "R8 violado");
     assert!(
         ledger.foreign_candidates() > 0,
@@ -230,9 +239,14 @@ fn f3_matriz_2d_e_round_trip_escopado() {
     );
 
     // A mesma consulta no escopo B devolve chave de B.
-    let (_hits_b, key_b) = ledger.cue_into_scoped(b, &qb, &mut seed).expect("B");
-    assert!((200..210).contains(&key_b), "key fora do escopo B: {key_b}");
-    assert!(ledger.key_in_scope(b, key_b));
+    let hit_b = ledger.cue_into_scoped(b, &qb, &mut seed).expect("B");
+    assert!(
+        (200..210).contains(&hit_b.key),
+        "key fora do escopo B: {}",
+        hit_b.key
+    );
+    assert_eq!(hit_b.scope, b);
+    assert!(ledger.key_in_scope(b, hit_b.key));
 
     // ------------------------------------------------------------------
     // Poda para gist continua reconhecendo o padrão.

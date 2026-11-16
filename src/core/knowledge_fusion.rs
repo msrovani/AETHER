@@ -43,7 +43,9 @@
 //! devolve chave de outro, e o contador [`FusionLedger::cross_scope_hits`]
 //! permanece `0`.
 
-use crate::core::knowledge_bridge_f1::{BridgeError, Certificate, DraftRecord, ScopeId};
+use crate::core::knowledge_bridge_f1::{
+    BridgeError, Certificate, CueHit, DraftRecord, KnowledgeSource, ScopeId,
+};
 
 /// Dimensão da assinatura do *gist* (`L4`).
 pub const GIST_DIM: usize = 8;
@@ -284,7 +286,7 @@ impl FusionLedger {
         scope: ScopeId,
         query: &[f32],
         out: &mut [f32],
-    ) -> Result<(usize, u128), BridgeError> {
+    ) -> Result<CueHit, BridgeError> {
         if self.entries.is_empty() {
             return Err(BridgeError::EmptyScope);
         }
@@ -292,7 +294,7 @@ impl FusionLedger {
         if out.len() < dims || dims == 0 {
             return Err(BridgeError::BufTooSmall);
         }
-        let mut best: Option<(f32, u128)> = None;
+        let mut best: Option<(f32, u128, u8)> = None;
         let mut consulted = 0usize;
         for record in self.entries.iter() {
             if record.scope != scope {
@@ -307,13 +309,13 @@ impl FusionLedger {
             let score = Self::complex_score(&record.payload, query, dims);
             let better = match &best {
                 None => true,
-                Some((s, _)) => score > *s,
+                Some((s, _, _)) => score > *s,
             };
             if better {
-                best = Some((score, record.key));
+                best = Some((score, record.key, record.authority));
             }
         }
-        let Some((_, key)) = best else {
+        let Some((_, key, authority)) = best else {
             return Err(BridgeError::EmptyScope);
         };
         // Materializa a semente de fase no buffer do chamador.
@@ -327,7 +329,12 @@ impl FusionLedger {
                 *item = im.atan2(re);
             }
         }
-        Ok((consulted, key))
+        Ok(CueHit {
+            key,
+            scope,
+            authority,
+            hits: consulted,
+        })
     }
 
     /// Consulta pelo *gist* (após a poda do atrator completo).
@@ -498,6 +505,19 @@ impl FusionLedger {
             *item = im.atan2(re);
         }
         sig
+    }
+}
+
+impl KnowledgeSource for FusionLedger {
+    /// Contrato F1 (`CueHit`): o F2/F3 usa a mesma forma de resposta do dono da
+    /// ponte, evitando duas assinaturas divergentes (MSG 0159).
+    fn cue_into(
+        &mut self,
+        scope: ScopeId,
+        query: &[f32],
+        out: &mut [f32],
+    ) -> Result<CueHit, BridgeError> {
+        self.cue_into_scoped(scope, query, out)
     }
 }
 

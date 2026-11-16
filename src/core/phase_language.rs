@@ -591,6 +591,7 @@ pub fn cleanup_complex_coarse(
 #[derive(Clone, Debug)]
 pub struct Shard {
     traces: usize,
+    terms: usize,
     tre: Vec<[i16; D]>,
     tim: Vec<[i16; D]>,
     acc_re: Vec<[i32; D]>,
@@ -605,9 +606,10 @@ pub struct Shard {
 }
 
 impl Shard {
-    pub fn new(traces: usize, seed: u64) -> Self {
+    pub fn new(traces: usize, terms: usize, seed: u64) -> Self {
         Self {
             traces,
+            terms,
             tre: vec![[0i16; D]; traces],
             tim: vec![[0i16; D]; traces],
             acc_re: vec![[0i32; D]; traces],
@@ -634,6 +636,10 @@ impl Shard {
         self.traces
     }
 
+    pub fn terms(&self) -> usize {
+        self.terms
+    }
+
     /// Fator de escala entre o acumulador `i16` e o fasor Q15.
     pub fn unit_q15(&self) -> f32 {
         Q15 / (1u32 << self.shift) as f32
@@ -649,20 +655,32 @@ impl Shard {
         }
     }
 
-    pub fn add(&mut self, key: &Phases, value: &Phases, ids: (u16, u16, u16, u16)) {
+    /// Grava um fato como **bundle de `terms` fasores** (um por papel do
+    /// predicado), cada um com `K` traços coerentes.
+    ///
+    /// O valor não é o produto de fases dos papéis (isso exigiria busca sobre
+    /// o codebook); é a superposição `e^{i(term_o)} + e^{i(term_m)}`, que o
+    /// unbinding entrega como soma complexa e o cleanup separa com o ganho
+    /// `√D` do produto interno.
+    pub fn add_terms(&mut self, key: &Phases, values: &[Phases], ids: (u16, u16, u16, u16)) {
+        debug_assert_eq!(values.len(), self.terms);
         let lut = BamLut::global();
-        for t in 0..self.traces {
-            let psi = if t == 0 {
-                0u16
-            } else {
-                (splitmix64(&mut self.rng) >> 48) as u16
-            };
-            self.psi.push(psi);
-            for j in 0..D {
-                let th = key[j].wrapping_add(value[j]).wrapping_add(psi);
-                let (s, c) = lut.sin_cos_q15(BamPhase(th));
-                self.acc_re[t][j] += c as i32;
-                self.acc_im[t][j] += s as i32;
+        for (ti, value) in values.iter().enumerate() {
+            for t in 0..self.traces {
+                // O primeiro termo/traço é a referência de fase; os demais são
+                // fases independentes por `(fato, termo, traço)`.
+                let psi = if ti == 0 && t == 0 {
+                    0u16
+                } else {
+                    (splitmix64(&mut self.rng) >> 48) as u16
+                };
+                self.psi.push(psi);
+                for j in 0..D {
+                    let th = key[j].wrapping_add(value[j]).wrapping_add(psi);
+                    let (s, c) = lut.sin_cos_q15(BamPhase(th));
+                    self.acc_re[t][j] += c as i32;
+                    self.acc_im[t][j] += s as i32;
+                }
             }
         }
         self.subj.push(ids.0);
@@ -713,11 +731,12 @@ impl Shard {
         z_re.fill(0.0);
         z_im.fill(0.0);
         let inv = 1.0 / Q14;
-        for t in 0..self.traces {
-            let psi = self.psi[fact * self.traces + t];
-            let tr = &self.tre[t];
-            let ti = &self.tim[t];
-            for lane in 0..D / LANES {
+        for term in 0..self.terms {
+            for t in 0..self.traces {
+                let psi = self.psi[(fact * self.terms + term) * self.traces + t];
+                let tr = &self.tre[t];
+                let ti = &self.tim[t];
+                for lane in 0..D / LANES {
                 let base = lane * LANES;
                 let mut sa = [0i16; LANES];
                 let mut ca = [0i16; LANES];

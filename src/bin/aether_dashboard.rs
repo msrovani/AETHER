@@ -22,24 +22,59 @@ fn main() {
 
 #[cfg(all(windows, feature = "dashboard"))]
 mod aether_dashboard_win {
-    use eframe::egui::{self, Color32, RichText, Sense, Stroke, Vec2};
+    use eframe::egui::{self, Color32, FontId, RichText, Sense, Stroke, Vec2};
     use eframe::App;
 
     use aether_engine::dashboard::{
-        dimension_ficha, dimension_tooltip, global_tooltip, glossary_entries, load_scorecard,
-        probe_and_save, throughput_tooltip, DimFicha, HostReport, JobKind, JobRunner,
-        ScorecardView,
+        dimension_ficha, dimension_tooltip, fmt_compact, global_tooltip, glossary_entries,
+        load_host_report, load_scorecard, throughput_tooltip, DimFicha, HostReport, JobKind,
+        JobPhase, JobRunner, ScorecardView,
     };
+
+    /// Paleta do hub (lab slate + teal — sem glow/roxo).
+    mod theme {
+        use eframe::egui::Color32;
+
+        pub const BG: Color32 = Color32::from_rgb(14, 18, 22);
+        pub const PANEL: Color32 = Color32::from_rgb(20, 26, 32);
+        pub const PANEL_ALT: Color32 = Color32::from_rgb(24, 32, 38);
+        pub const CARD: Color32 = Color32::from_rgb(26, 34, 40);
+        pub const CARD_HOVER: Color32 = Color32::from_rgb(32, 42, 50);
+        pub const CARD_SEL: Color32 = Color32::from_rgb(28, 44, 48);
+        pub const STROKE: Color32 = Color32::from_rgb(48, 62, 72);
+        pub const MUTED: Color32 = Color32::from_rgb(130, 146, 156);
+        pub const TEXT: Color32 = Color32::from_rgb(224, 232, 236);
+        pub const BRAND: Color32 = Color32::from_rgb(56, 168, 148);
+        pub const ACCENT: Color32 = Color32::from_rgb(72, 148, 168);
+        pub const WARN: Color32 = Color32::from_rgb(188, 148, 56);
+        pub const BAD: Color32 = Color32::from_rgb(196, 84, 64);
+        pub const OK: Color32 = Color32::from_rgb(48, 152, 108);
+        pub const RUN: Color32 = Color32::from_rgb(72, 148, 188);
+    }
 
     /// Conteúdo da coluna direita (explicação).
     #[derive(Clone, Debug)]
     enum DetailPane {
-        /// Nada sob o mouse: glossário curto.
         Idle,
-        /// Hover sobre medidor/botão.
         Hover { title: String, body: String },
-        /// Clique em T0x: ficha fixa até outro clique/hover.
         Ficha(DimFicha),
+    }
+
+    impl DetailPane {
+        fn mode_label(&self) -> &'static str {
+            match self {
+                Self::Idle => "glossário",
+                Self::Hover { .. } => "hover",
+                Self::Ficha(_) => "ficha",
+            }
+        }
+
+        fn ficha_id(&self) -> Option<&str> {
+            match self {
+                Self::Ficha(f) => Some(f.id),
+                _ => None,
+            }
+        }
     }
 
     /// App do hub.
@@ -50,10 +85,10 @@ mod aether_dashboard_win {
         jobs: JobRunner,
         host: Option<HostReport>,
         detail: DetailPane,
-        /// Preenchido durante o frame se algo estiver sob o mouse.
         hover_scratch: Option<(String, String)>,
         confirm_daemon: bool,
         last_job_done: bool,
+        theme_ready: bool,
     }
 
     impl DashboardApp {
@@ -68,6 +103,12 @@ mod aether_dashboard_win {
                     self.status = format!("erro: {e}");
                     self.view.load_error = Some(e.to_string());
                 }
+            }
+        }
+
+        fn try_load_host(&mut self) {
+            if let Ok(r) = load_host_report() {
+                self.host = Some(r);
             }
         }
 
@@ -91,6 +132,10 @@ mod aether_dashboard_win {
 
         fn commit_hover(&mut self) {
             if let Some((title, body)) = self.hover_scratch.take() {
+                // Ficha fixa não cede a hover; limpa só no botão / novo clique T0x.
+                if matches!(self.detail, DetailPane::Ficha(_)) {
+                    return;
+                }
                 self.detail = DetailPane::Hover { title, body };
             } else if !matches!(self.detail, DetailPane::Ficha(_)) {
                 self.detail = DetailPane::Idle;
@@ -99,7 +144,7 @@ mod aether_dashboard_win {
 
         fn poll_jobs(&mut self) {
             let snap = self.jobs.snapshot();
-            if snap.phase == aether_engine::dashboard::JobPhase::Running {
+            if snap.phase == JobPhase::Running {
                 self.status = format!(
                     "[{}] {}",
                     snap.kind.map(|k| k.label()).unwrap_or("job"),
@@ -108,72 +153,101 @@ mod aether_dashboard_win {
                 return;
             }
             if !self.last_job_done
-                && matches!(
-                    snap.phase,
-                    aether_engine::dashboard::JobPhase::Done
-                        | aether_engine::dashboard::JobPhase::Failed
-                )
+                && matches!(snap.phase, JobPhase::Done | JobPhase::Failed)
             {
                 self.last_job_done = true;
                 self.status = format!("[{}] {}", snap.phase.label(), snap.log);
-                if snap.kind == Some(JobKind::HostProbe)
-                    && snap.phase == aether_engine::dashboard::JobPhase::Done
-                {
-                    if let Ok(r) = probe_and_save(Some(&self.view)) {
-                        self.host = Some(r);
-                    }
+                if snap.kind == Some(JobKind::HostProbe) && snap.phase == JobPhase::Done {
+                    // Job já gravou o JSON — só relê (não re-sonda).
+                    self.try_load_host();
                 }
                 if matches!(snap.kind, Some(JobKind::Audit) | Some(JobKind::Bench))
-                    && snap.phase == aether_engine::dashboard::JobPhase::Done
+                    && snap.phase == JobPhase::Done
                 {
                     self.reload();
                 }
             }
         }
+
+        fn ensure_theme(&mut self, ctx: &egui::Context) {
+            if self.theme_ready {
+                return;
+            }
+            let mut visuals = egui::Visuals::dark();
+            visuals.panel_fill = theme::PANEL;
+            visuals.window_fill = theme::PANEL_ALT;
+            visuals.extreme_bg_color = theme::BG;
+            visuals.widgets.noninteractive.bg_fill = theme::CARD;
+            visuals.widgets.inactive.bg_fill = theme::CARD;
+            visuals.widgets.hovered.bg_fill = theme::CARD_HOVER;
+            visuals.widgets.active.bg_fill = theme::CARD_SEL;
+            visuals.selection.bg_fill = Color32::from_rgb(40, 90, 100);
+            visuals.override_text_color = Some(theme::TEXT);
+            ctx.set_visuals(visuals);
+            self.theme_ready = true;
+        }
     }
 
     impl App for DashboardApp {
         fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+            self.ensure_theme(ctx);
             self.poll_jobs();
             self.hover_scratch = None;
             let demo_live = self.jobs.trace.lock().map(|t| t.running).unwrap_or(false);
-            if self.jobs.snapshot().phase == aether_engine::dashboard::JobPhase::Running
-                || demo_live
-            {
+            if self.jobs.snapshot().phase == JobPhase::Running || demo_live {
                 ctx.request_repaint_after(std::time::Duration::from_millis(50));
             }
 
-            egui::TopBottomPanel::top("top").show(ctx, |ui| {
-                self.draw_top_bar(ui);
-            });
+            egui::TopBottomPanel::top("top")
+                .frame(
+                    egui::Frame::none()
+                        .fill(theme::PANEL)
+                        .inner_margin(egui::Margin::symmetric(14.0, 10.0))
+                        .stroke(Stroke::new(1.0_f32, theme::STROKE)),
+                )
+                .show(ctx, |ui| {
+                    self.draw_top_bar(ui);
+                });
 
             egui::SidePanel::right("detail")
-                .default_width(360.0)
-                .min_width(280.0)
+                .default_width(380.0)
+                .min_width(300.0)
                 .resizable(true)
+                .frame(
+                    egui::Frame::none()
+                        .fill(theme::PANEL_ALT)
+                        .inner_margin(egui::Margin::same(12.0))
+                        .stroke(Stroke::new(1.0_f32, theme::STROKE)),
+                )
                 .show(ctx, |ui| {
                     self.draw_detail_pane(ui);
                 });
 
-            egui::CentralPanel::default().show(ctx, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    self.draw_globals(ui);
-                    ui.add_space(12.0);
-                    self.draw_dimensions(ui);
-                    ui.add_space(12.0);
-                    self.draw_throughput(ui);
-                    ui.add_space(12.0);
-                    self.draw_host(ui);
-                    ui.add_space(8.0);
-                    ui.label(
-                        RichText::new(
-                            "Passe o mouse nos medidores → coluna direita · clique em T0x = ficha.",
-                        )
-                        .small()
-                        .color(Color32::from_rgb(140, 150, 160)),
-                    );
+            egui::CentralPanel::default()
+                .frame(
+                    egui::Frame::none()
+                        .fill(theme::BG)
+                        .inner_margin(egui::Margin::same(14.0)),
+                )
+                .show(ctx, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        self.draw_globals(ui);
+                        ui.add_space(14.0);
+                        self.draw_dimensions(ui);
+                        ui.add_space(14.0);
+                        self.draw_throughput(ui);
+                        ui.add_space(14.0);
+                        self.draw_host(ui);
+                        ui.add_space(10.0);
+                        ui.label(
+                            RichText::new(
+                                "Hover → Detalhe · clique T0x = ficha fixa · demos → gráficos.",
+                            )
+                            .small()
+                            .color(theme::MUTED),
+                        );
+                    });
                 });
-            });
 
             self.commit_hover();
 
@@ -190,7 +264,15 @@ mod aether_dashboard_win {
                             if ui.button("Cancelar").clicked() {
                                 self.confirm_daemon = false;
                             }
-                            if ui.button("Confirmar e lançar").clicked() {
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        RichText::new("Confirmar e lançar").color(theme::TEXT),
+                                    )
+                                    .fill(theme::BRAND),
+                                )
+                                .clicked()
+                            {
                                 self.confirm_daemon = false;
                                 self.start_job(JobKind::DaemonDemo);
                             }
@@ -201,36 +283,73 @@ mod aether_dashboard_win {
     }
 
     impl DashboardApp {
+        fn section_header(&self, ui: &mut egui::Ui, title: &str) {
+            ui.horizontal(|ui| {
+                let (rect, _) = ui.allocate_exact_size(Vec2::new(4.0, 18.0), Sense::hover());
+                ui.painter()
+                    .rect_filled(rect, 1.0, theme::BRAND);
+                ui.label(
+                    RichText::new(title)
+                        .strong()
+                        .size(15.0)
+                        .color(theme::TEXT),
+                );
+            });
+            ui.add_space(6.0);
+        }
+
         fn draw_detail_pane(&mut self, ui: &mut egui::Ui) {
-            ui.heading(RichText::new("Detalhe").strong().size(18.0));
+            ui.horizontal(|ui| {
+                ui.heading(
+                    RichText::new("Detalhe")
+                        .strong()
+                        .size(18.0)
+                        .color(theme::TEXT),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let chip = self.detail.mode_label();
+                    ui.label(
+                        RichText::new(chip)
+                            .small()
+                            .strong()
+                            .color(theme::BRAND),
+                    );
+                });
+            });
+            ui.add_space(4.0);
             ui.separator();
             egui::ScrollArea::vertical().show(ui, |ui| {
                 match &self.detail {
                     DetailPane::Idle => {
                         ui.label(
                             RichText::new(
-                                "Passe o mouse sobre um medidor · clique T0x = ficha · \
-                                 demos organism/daemon desenham gráficos abaixo.",
+                                "Passe o mouse sobre um medidor. Clique T0x para fixar a ficha.",
                             )
                             .small()
-                            .color(Color32::from_rgb(160, 170, 180)),
+                            .color(theme::MUTED),
                         );
-                        ui.add_space(8.0);
-                        ui.label(RichText::new("Glossário").strong());
+                        ui.add_space(10.0);
+                        ui.label(RichText::new("Glossário").strong().color(theme::ACCENT));
+                        ui.add_space(4.0);
                         for (k, v) in glossary_entries() {
-                            ui.label(RichText::new(*k).strong().small());
-                            ui.label(RichText::new(*v).small());
-                            ui.add_space(4.0);
+                            ui.label(RichText::new(*k).strong().small().color(theme::TEXT));
+                            ui.label(RichText::new(*v).small().color(theme::MUTED));
+                            ui.add_space(6.0);
                         }
                     }
                     DetailPane::Hover { title, body } => {
-                        ui.label(RichText::new(title).strong().size(15.0));
+                        ui.label(
+                            RichText::new(title)
+                                .strong()
+                                .size(15.0)
+                                .color(theme::TEXT),
+                        );
                         ui.add_space(6.0);
                         for para in body.split('\n') {
                             if para.is_empty() {
                                 ui.add_space(4.0);
                             } else {
-                                ui.label(RichText::new(para).size(13.0));
+                                ui.label(RichText::new(para).size(13.0).color(theme::TEXT));
                             }
                         }
                     }
@@ -239,33 +358,43 @@ mod aether_dashboard_win {
                         ui.label(
                             RichText::new(format!("{} — {}", ficha.id, ficha.title))
                                 .strong()
-                                .size(15.0),
+                                .size(15.0)
+                                .color(theme::BRAND),
                         );
                         ui.add_space(6.0);
                         for para in ficha.tooltip.split('\n') {
                             if para.is_empty() {
                                 ui.add_space(4.0);
                             } else {
-                                ui.label(RichText::new(para).small());
+                                ui.label(RichText::new(para).small().color(theme::TEXT));
                             }
                         }
                         ui.separator();
-                        ui.label(RichText::new("Como interpretar").strong());
-                        ui.label(ficha.interpret);
+                        ui.label(RichText::new("Como interpretar").strong().color(theme::ACCENT));
+                        ui.label(RichText::new(ficha.interpret).color(theme::TEXT));
                         ui.add_space(4.0);
-                        ui.label(RichText::new("Se baixo, o que falha").strong());
-                        ui.label(ficha.if_low);
+                        ui.label(
+                            RichText::new("Se baixo, o que falha")
+                                .strong()
+                                .color(theme::ACCENT),
+                        );
+                        ui.label(RichText::new(ficha.if_low).color(theme::TEXT));
                         ui.add_space(4.0);
-                        ui.label(RichText::new("Proveniência").strong());
-                        ui.label(RichText::new(ficha.provenance).italics().small());
-                        ui.add_space(8.0);
+                        ui.label(RichText::new("Proveniência").strong().color(theme::ACCENT));
+                        ui.label(
+                            RichText::new(ficha.provenance)
+                                .italics()
+                                .small()
+                                .color(theme::MUTED),
+                        );
+                        ui.add_space(10.0);
                         if ui.button("Limpar ficha").clicked() {
                             self.detail = DetailPane::Idle;
                         }
                     }
                 }
 
-                ui.add_space(10.0);
+                ui.add_space(12.0);
                 ui.separator();
                 self.draw_demo_graphs(ui);
             });
@@ -279,12 +408,17 @@ mod aether_dashboard_win {
                 .map(|g| g.clone())
                 .unwrap_or_default();
 
-            ui.label(RichText::new("Gráficos do demo").strong().size(15.0));
+            ui.label(
+                RichText::new("Gráficos do demo")
+                    .strong()
+                    .size(15.0)
+                    .color(theme::TEXT),
+            );
             if trace.title.is_empty() && trace.samples.is_empty() {
                 ui.label(
                     RichText::new("Ainda sem série. Clique em “Demo organismo” ou “Demo daemon”.")
                         .small()
-                        .color(Color32::GRAY),
+                        .color(theme::MUTED),
                 );
                 return;
             }
@@ -302,7 +436,7 @@ mod aether_dashboard_win {
                     trace.samples.len()
                 ))
                 .small()
-                .color(Color32::from_rgb(120, 160, 180)),
+                .color(theme::ACCENT),
             );
             ui.add_space(4.0);
 
@@ -313,25 +447,14 @@ mod aether_dashboard_win {
                 let c = trace.series(|s| s.chatter);
                 let cost = trace.series(|s| s.cost_us);
 
-                // Legenda: organismo = R/H/S/chatter; daemon = R(LAN)/F/S
-                sparkline(ui, "R / R(LAN)", &r, Color32::from_rgb(60, 180, 140));
-                sparkline(
-                    ui,
-                    "H / F (energia ou surpresa)",
-                    &e,
-                    Color32::from_rgb(200, 140, 70),
-                );
-                sparkline(ui, "S (entropia)", &s, Color32::from_rgb(90, 140, 200));
+                sparkline(ui, "R / R(LAN)", &r, theme::BRAND);
+                sparkline(ui, "H / F (energia ou surpresa)", &e, theme::WARN);
+                sparkline(ui, "S (entropia)", &s, theme::ACCENT);
                 if c.iter().any(|v| *v > 0.0) {
-                    sparkline(ui, "chatter ‖Δu‖", &c, Color32::from_rgb(180, 90, 120));
+                    sparkline(ui, "chatter ‖Δu‖", &c, Color32::from_rgb(180, 96, 120));
                 }
                 if cost.iter().any(|v| *v > 0.0) {
-                    sparkline(
-                        ui,
-                        "custo quadro (µs)",
-                        &cost,
-                        Color32::from_rgb(140, 140, 160),
-                    );
+                    sparkline(ui, "custo quadro (µs)", &cost, theme::MUTED);
                 }
             }
 
@@ -341,27 +464,41 @@ mod aether_dashboard_win {
                     ui,
                     "H(t) último relaxamento",
                     &trace.energy_trace,
-                    Color32::from_rgb(100, 200, 160),
+                    Color32::from_rgb(100, 190, 150),
                 );
             }
         }
 
         fn draw_top_bar(&mut self, ui: &mut egui::Ui) {
             ui.horizontal(|ui| {
-                ui.heading(RichText::new("AETHER").strong().size(22.0));
-                ui.label(
-                    RichText::new("hub · métricas + testes")
-                        .color(Color32::from_rgb(120, 140, 150)),
+                ui.heading(
+                    RichText::new("AETHER")
+                        .strong()
+                        .size(24.0)
+                        .color(theme::BRAND),
                 );
+                ui.vertical(|ui| {
+                    ui.add_space(4.0);
+                    ui.label(
+                        RichText::new(format!(
+                            "hub · métricas + testes · v{}",
+                            env!("CARGO_PKG_VERSION")
+                        ))
+                        .small()
+                        .color(theme::MUTED),
+                    );
+                });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("Recarregar").clicked() {
                         self.reload();
+                        self.try_load_host();
                     }
                     if self.jobs.is_busy() && ui.button("Cancelar job").clicked() {
                         self.jobs.request_cancel();
                     }
                 });
             });
+            ui.add_space(6.0);
             ui.horizontal_wrapped(|ui| {
                 self.action_with_detail(
                     ui,
@@ -387,7 +524,7 @@ mod aether_dashboard_win {
                 self.action_with_detail(
                     ui,
                     "Demo organismo",
-                    "Lança aether-organism --duration 15s --plain.",
+                    "Organismo in-process 15 s @ 30 Hz → gráficos R/H/S.",
                     !self.jobs.is_busy(),
                     JobKind::OrganismDemo,
                 );
@@ -400,21 +537,30 @@ mod aether_dashboard_win {
                     self.confirm_daemon = true;
                 }
             });
+
             let snap = self.jobs.snapshot();
             let phase_color = match snap.phase {
-                aether_engine::dashboard::JobPhase::Idle => Color32::GRAY,
-                aether_engine::dashboard::JobPhase::Running => Color32::from_rgb(80, 160, 200),
-                aether_engine::dashboard::JobPhase::Done => Color32::from_rgb(40, 160, 100),
-                aether_engine::dashboard::JobPhase::Failed => Color32::from_rgb(200, 80, 60),
+                JobPhase::Idle => theme::MUTED,
+                JobPhase::Running => theme::RUN,
+                JobPhase::Done => theme::OK,
+                JobPhase::Failed => theme::BAD,
             };
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(format!("job: {}", snap.phase.label()))
-                        .strong()
-                        .color(phase_color),
-                );
-                ui.label(RichText::new(&self.status).small().color(Color32::GRAY));
-            });
+            ui.add_space(6.0);
+            egui::Frame::none()
+                .fill(Color32::from_rgb(18, 28, 34))
+                .stroke(Stroke::new(1.0_f32, phase_color))
+                .inner_margin(egui::Margin::symmetric(10.0, 6.0))
+                .rounding(3.0)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new(format!("job · {}", snap.phase.label()))
+                                .strong()
+                                .color(phase_color),
+                        );
+                        ui.label(RichText::new(&self.status).small().color(theme::MUTED));
+                    });
+                });
         }
 
         fn action_with_detail(
@@ -435,7 +581,11 @@ mod aether_dashboard_win {
         }
 
         fn draw_globals(&mut self, ui: &mut egui::Ui) {
-            ui.label(RichText::new("Visão global").strong().size(16.0));
+            self.section_header(ui, "Visão global");
+            if let Some(err) = &self.view.load_error {
+                ui.colored_label(theme::BAD, format!("Scorecard: {err}"));
+                ui.add_space(4.0);
+            }
             ui.horizontal_wrapped(|ui| {
                 if meter_card(
                     ui,
@@ -449,18 +599,18 @@ mod aether_dashboard_win {
                     ui,
                     "Cobertura",
                     format!("{:.2}", self.view.real_coverage),
-                    Color32::from_rgb(40, 140, 130),
+                    theme::BRAND,
                 ) {
                     self.note_hover("Cobertura", global_tooltip("coverage"));
                 }
                 if meter_card(
                     ui,
                     "Hot-path B",
-                    format!("{:.0}", self.view.hot_path_bytes),
+                    fmt_compact(self.view.hot_path_bytes),
                     if self.view.hot_path_bytes == 0.0 {
-                        Color32::from_rgb(40, 140, 90)
+                        theme::OK
                     } else {
-                        Color32::from_rgb(180, 90, 50)
+                        theme::WARN
                     },
                 ) {
                     self.note_hover("Hot-path B", global_tooltip("hot_path"));
@@ -469,7 +619,7 @@ mod aether_dashboard_win {
                     ui,
                     "Dimensões",
                     format!("{}", self.view.dimensions.len()),
-                    Color32::from_rgb(70, 110, 150),
+                    theme::ACCENT,
                 ) {
                     self.note_hover("Dimensões", global_tooltip("dims"));
                 }
@@ -477,19 +627,28 @@ mod aether_dashboard_win {
         }
 
         fn draw_dimensions(&mut self, ui: &mut egui::Ui) {
-            ui.label(
-                RichText::new("Inteligência cognitiva (T01–T12)")
-                    .strong()
-                    .size(16.0),
-            );
+            self.section_header(ui, "Inteligência cognitiva (T01–T12)");
             if self.view.dimensions.is_empty() {
-                ui.colored_label(
-                    Color32::from_rgb(180, 100, 60),
-                    "Nenhuma dimensão. Use “Rodar auditoria cognitiva”.",
-                );
+                egui::Frame::none()
+                    .fill(theme::PANEL)
+                    .stroke(Stroke::new(1.0_f32, theme::WARN))
+                    .inner_margin(12.0)
+                    .rounding(4.0)
+                    .show(ui, |ui| {
+                        ui.label(
+                            RichText::new("Nenhuma dimensão no scorecard.")
+                                .strong()
+                                .color(theme::WARN),
+                        );
+                        ui.label(
+                            RichText::new("Use “Rodar auditoria cognitiva” na barra superior.")
+                                .small()
+                                .color(theme::MUTED),
+                        );
+                    });
                 return;
             }
-            // Coleta hover/click sem emprestar self no loop.
+            let selected = self.detail.ficha_id().map(str::to_string);
             let mut hovered: Option<(String, String)> = None;
             let mut clicked: Option<DimFicha> = None;
             egui::Grid::new("dims")
@@ -500,9 +659,18 @@ mod aether_dashboard_win {
                         let tip = dimension_tooltip(&d.id);
                         let mut body = format!("{:.1}\n{}", d.score, d.status);
                         if let Some((k, v)) = d.metrics.first() {
-                            body.push_str(&format!("\n{k}={v:.3}"));
+                            body.push_str(&format!("\n{k}={}", fmt_compact(*v)));
                         }
-                        let (hov, clk) = dim_card(ui, &d.id, &d.name, &body, score_color(d.score));
+                        let is_sel = selected.as_deref() == Some(d.id.as_str());
+                        let (hov, clk) = dim_card(
+                            ui,
+                            &d.id,
+                            &d.name,
+                            &body,
+                            score_color(d.score),
+                            is_sel,
+                            d.score,
+                        );
                         if hov {
                             hovered = Some((d.id.clone(), tip.to_string()));
                         }
@@ -522,14 +690,11 @@ mod aether_dashboard_win {
         }
 
         fn draw_throughput(&mut self, ui: &mut egui::Ui) {
-            ui.label(
-                RichText::new("Vazão (cycles/s · eq-t/s · SOP/s · TOP/s)")
-                    .strong()
-                    .size(16.0),
-            );
+            self.section_header(ui, "Vazão (cycles/s · eq-t/s · SOP/s · TOP/s)");
             let Some(tp) = self.view.throughput.clone() else {
                 ui.label(
-                    RichText::new("Sem throughput. Use “Benchmark de vazão”.").color(Color32::GRAY),
+                    RichText::new("Sem throughput. Use “Benchmark de vazão”.")
+                        .color(theme::MUTED),
                 );
                 return;
             };
@@ -538,7 +703,7 @@ mod aether_dashboard_win {
                     ui,
                     "Heap MB",
                     format!("{:.2}", tp.peak_heap_mb),
-                    Color32::from_rgb(80, 100, 120),
+                    theme::MUTED,
                 ) {
                     self.note_hover(
                         "Heap MB",
@@ -549,7 +714,7 @@ mod aether_dashboard_win {
                     ui,
                     "RSS MB",
                     format!("{:.2}", tp.peak_rss_mb),
-                    Color32::from_rgb(80, 100, 120),
+                    theme::MUTED,
                 ) {
                     self.note_hover("RSS MB", "Pico de memória residente (RSS) do processo.");
                 }
@@ -558,9 +723,9 @@ mod aether_dashboard_win {
                     "Allocs",
                     format!("{}", tp.hot_path_allocations),
                     if tp.hot_path_allocations == 0 {
-                        Color32::from_rgb(40, 140, 90)
+                        theme::OK
                     } else {
-                        Color32::from_rgb(180, 90, 50)
+                        theme::BAD
                     },
                 ) {
                     self.note_hover("Allocs", throughput_tooltip("allocs"));
@@ -573,16 +738,17 @@ mod aether_dashboard_win {
                     "critico" | "crítico" => "critico",
                     _ => "basal",
                 };
-                egui::Frame::group(ui.style())
-                    .fill(Color32::from_rgb(28, 34, 40))
-                    .stroke(Stroke::new(1.0_f32, Color32::from_rgb(55, 70, 80)))
+                egui::Frame::none()
+                    .fill(theme::PANEL)
+                    .stroke(Stroke::new(1.0_f32, theme::STROKE))
                     .inner_margin(10.0)
+                    .rounding(4.0)
                     .show(ui, |ui| {
                         let title_resp = ui.horizontal(|ui| {
                             ui.label(
                                 RichText::new(format!("{} ({} passos)", r.name, r.steps))
                                     .strong()
-                                    .color(Color32::from_rgb(200, 210, 215)),
+                                    .color(theme::TEXT),
                             );
                         });
                         if title_resp.response.hovered() {
@@ -596,7 +762,7 @@ mod aether_dashboard_win {
                                 ui,
                                 "p50 µs",
                                 format!("{:.1}", r.p50_us),
-                                Color32::from_rgb(50, 130, 120),
+                                theme::BRAND,
                             ) {
                                 self.note_hover("p50 µs", throughput_tooltip("p50"));
                             }
@@ -604,7 +770,7 @@ mod aether_dashboard_win {
                                 ui,
                                 "p99.9 µs",
                                 format!("{:.1}", r.p99_9_us),
-                                Color32::from_rgb(150, 100, 60),
+                                theme::WARN,
                             ) {
                                 self.note_hover("p99.9 µs", throughput_tooltip("p99.9"));
                             }
@@ -612,32 +778,17 @@ mod aether_dashboard_win {
                                 ui,
                                 "cycles/s",
                                 fmt_compact(r.cycles_per_s),
-                                Color32::from_rgb(60, 120, 150),
+                                theme::ACCENT,
                             ) {
                                 self.note_hover("cycles/s", throughput_tooltip("cycles"));
                             }
-                            if meter_card(
-                                ui,
-                                "eq-t/s",
-                                fmt_compact(r.eq_t_per_s),
-                                Color32::from_rgb(70, 110, 160),
-                            ) {
+                            if meter_card(ui, "eq-t/s", fmt_compact(r.eq_t_per_s), theme::ACCENT) {
                                 self.note_hover("eq-t/s", throughput_tooltip("eq-t"));
                             }
-                            if meter_card(
-                                ui,
-                                "SOP/s",
-                                fmt_compact(r.sop_per_s),
-                                Color32::from_rgb(70, 100, 140),
-                            ) {
+                            if meter_card(ui, "SOP/s", fmt_compact(r.sop_per_s), theme::ACCENT) {
                                 self.note_hover("SOP/s", throughput_tooltip("sop"));
                             }
-                            if meter_card(
-                                ui,
-                                "TOP/s",
-                                fmt_compact(r.tops()),
-                                Color32::from_rgb(90, 90, 140),
-                            ) {
+                            if meter_card(ui, "TOP/s", fmt_compact(r.tops()), theme::ACCENT) {
                                 self.note_hover("TOP/s", throughput_tooltip("tops"));
                             }
                         });
@@ -647,10 +798,11 @@ mod aether_dashboard_win {
         }
 
         fn draw_host(&mut self, ui: &mut egui::Ui) {
-            ui.label(RichText::new("Máquina hospedeira").strong().size(16.0));
+            self.section_header(ui, "Máquina hospedeira");
             let Some(h) = self.host.clone() else {
                 ui.label(
-                    RichText::new("Ainda sem sonda. Use “Sondar hardware”.").color(Color32::GRAY),
+                    RichText::new("Ainda sem sonda. Use “Sondar hardware” (ou recarregue se já houver JSON).")
+                        .color(theme::MUTED),
                 );
                 return;
             };
@@ -659,7 +811,7 @@ mod aether_dashboard_win {
                     ui,
                     "CPU lógico",
                     format!("{}", h.logical_cpus),
-                    Color32::from_rgb(70, 120, 140),
+                    theme::ACCENT,
                 ) {
                     self.note_hover("CPU lógico", "Núcleos lógicos detectados (SMT incluso).");
                 }
@@ -667,7 +819,7 @@ mod aether_dashboard_win {
                     ui,
                     "CPU físico",
                     format!("{}", h.physical_cpus),
-                    Color32::from_rgb(70, 120, 140),
+                    theme::ACCENT,
                 ) {
                     self.note_hover(
                         "CPU físico",
@@ -678,9 +830,9 @@ mod aether_dashboard_win {
                     ui,
                     "RAM MB",
                     h.ram_total_mb
-                        .map(|v| format!("{v:.0}"))
+                        .map(fmt_compact)
                         .unwrap_or_else(|| "?".into()),
-                    Color32::from_rgb(90, 110, 130),
+                    theme::MUTED,
                 ) {
                     self.note_hover("RAM MB", "Memória física total (CIM).");
                 }
@@ -688,9 +840,9 @@ mod aether_dashboard_win {
                     ui,
                     "Livre MB",
                     h.ram_available_mb
-                        .map(|v| format!("{v:.0}"))
+                        .map(fmt_compact)
                         .unwrap_or_else(|| "?".into()),
-                    Color32::from_rgb(90, 110, 130),
+                    theme::MUTED,
                 ) {
                     self.note_hover("Livre MB", "Memória física disponível.");
                 }
@@ -707,35 +859,43 @@ mod aether_dashboard_win {
                     h.l1d_budget_bytes
                 ))
                 .small()
-                .color(Color32::from_rgb(150, 160, 170)),
+                .color(theme::MUTED),
             );
             ui.add_space(6.0);
-            ui.label(RichText::new("Gaps detectados").strong().size(14.0));
+            ui.label(
+                RichText::new("Gaps detectados")
+                    .strong()
+                    .size(13.0)
+                    .color(theme::TEXT),
+            );
             if h.gaps.is_empty() {
-                ui.colored_label(
-                    Color32::from_rgb(40, 150, 100),
-                    "Nenhum gap crítico nesta sonda.",
-                );
+                ui.colored_label(theme::OK, "Nenhum gap crítico nesta sonda.");
             } else {
                 for g in &h.gaps {
                     let color = match g.severity.as_str() {
-                        "crítico" => Color32::from_rgb(200, 80, 60),
-                        "aviso" => Color32::from_rgb(180, 140, 50),
-                        _ => Color32::from_rgb(120, 140, 160),
+                        "crítico" => theme::BAD,
+                        "aviso" => theme::WARN,
+                        _ => theme::MUTED,
                     };
-                    let resp = ui.group(|ui| {
-                        ui.label(
-                            RichText::new(format!("[{}] {} — {}", g.severity, g.code, g.title))
-                                .color(color)
-                                .strong(),
-                        );
-                        ui.label(RichText::new(&g.detail).small());
-                        ui.label(
-                            RichText::new(format!("→ {}", g.remediation))
-                                .small()
-                                .italics(),
-                        );
-                    });
+                    let resp = egui::Frame::none()
+                        .fill(theme::PANEL)
+                        .stroke(Stroke::new(1.0_f32, color))
+                        .inner_margin(8.0)
+                        .rounding(3.0)
+                        .show(ui, |ui| {
+                            ui.label(
+                                RichText::new(format!("[{}] {} — {}", g.severity, g.code, g.title))
+                                    .color(color)
+                                    .strong(),
+                            );
+                            ui.label(RichText::new(&g.detail).small().color(theme::TEXT));
+                            ui.label(
+                                RichText::new(format!("→ {}", g.remediation))
+                                    .small()
+                                    .italics()
+                                    .color(theme::MUTED),
+                            );
+                        });
                     if resp.response.hovered() {
                         self.note_hover(
                             format!("Gap {}", g.code),
@@ -755,14 +915,14 @@ mod aether_dashboard_win {
         }
     }
 
-    /// Sparkline simples (sem crate plot).
+    /// Sparkline com preenchimento sob a curva.
     fn sparkline(ui: &mut egui::Ui, label: &str, ys: &[f32], color: Color32) {
         if ys.is_empty() {
             return;
         }
         let last = *ys.last().unwrap_or(&0.0);
         ui.horizontal(|ui| {
-            ui.label(RichText::new(label).small());
+            ui.label(RichText::new(label).small().color(theme::MUTED));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(
                     RichText::new(fmt_compact(last as f64))
@@ -772,18 +932,14 @@ mod aether_dashboard_win {
                 );
             });
         });
-        let height = 52.0;
+        let height = 56.0;
         let (rect, _) = ui.allocate_exact_size(
             Vec2::new(ui.available_width().max(40.0), height),
             Sense::hover(),
         );
         let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, 3.0, Color32::from_rgb(20, 26, 32));
-        painter.rect_stroke(
-            rect,
-            3.0,
-            Stroke::new(1.0_f32, Color32::from_rgb(50, 60, 70)),
-        );
+        painter.rect_filled(rect, 3.0, theme::BG);
+        painter.rect_stroke(rect, 3.0, Stroke::new(1.0_f32, theme::STROKE));
 
         let min = ys.iter().copied().fold(f32::INFINITY, f32::min);
         let max = ys.iter().copied().fold(f32::NEG_INFINITY, f32::max);
@@ -803,108 +959,62 @@ mod aether_dashboard_win {
             points.push(egui::Pos2::new(x, py));
         }
         if points.len() >= 2 {
-            painter.add(egui::Shape::line(points, Stroke::new(1.6_f32, color)));
+            let mut fill = points.clone();
+            if let (Some(first), Some(last)) = (fill.first().copied(), fill.last().copied()) {
+                fill.push(egui::Pos2::new(last.x, rect.bottom() - pad));
+                fill.push(egui::Pos2::new(first.x, rect.bottom() - pad));
+                let mut fill_color = color;
+                fill_color = Color32::from_rgba_unmultiplied(
+                    fill_color.r(),
+                    fill_color.g(),
+                    fill_color.b(),
+                    40,
+                );
+                painter.add(egui::Shape::convex_polygon(fill, fill_color, Stroke::NONE));
+            }
+            painter.add(egui::Shape::line(points, Stroke::new(1.8_f32, color)));
         }
         ui.add_space(4.0);
     }
 
-    /// Formata com **4 dígitos** + sufixo `k`/`kk`/`kkk` (sem `eN`).
-    /// Exemplos: `1,586` · `15,86` · `158,6` · `87k` · `235kk` · `3,180kkk` · `0,003182`.
-    fn fmt_compact(n: f64) -> String {
-        if !n.is_finite() {
-            return "—".into();
-        }
-        let sign = if n.is_sign_negative() && n != 0.0 {
-            "-"
-        } else {
-            ""
-        };
-        let mut x = n.abs();
-        if x == 0.0 {
-            return format!("{sign}0");
-        }
-
-        // Escala milhar → mantissa em [1, 1000) + sufixo k/kk/kkk/kkkk.
-        const SUFFIXES: [&str; 5] = ["", "k", "kk", "kkk", "kkkk"];
-        let mut scale = 0usize;
-        while x >= 1000.0 && scale + 1 < SUFFIXES.len() {
-            x /= 1000.0;
-            scale += 1;
-        }
-        let suffix = SUFFIXES[scale];
-
-        if x < 1.0 {
-            // Frações: até 4 dígitos significativos (ex.: 0,003182).
-            return format!("{sign}{}", four_digits_lt1(x));
-        }
-
-        format!("{sign}{}{suffix}", four_digits_ge1(x))
-    }
-
-    /// Mantissa ∈ [1, 1000): sempre 4 dígitos, vírgula decimal, zeros finais removidos.
-    fn four_digits_ge1(x: f64) -> String {
-        let raw = if x < 10.0 {
-            format!("{x:.3}") // 1,586
-        } else if x < 100.0 {
-            format!("{x:.2}") // 15,86
-        } else {
-            format!("{x:.1}") // 158,6
-        };
-        trim_comma_zeros(&raw.replace('.', ","))
-    }
-
-    /// Mantissa ∈ (0, 1): 4 dígitos significativos com vírgula.
-    fn four_digits_lt1(x: f64) -> String {
-        // Casas = 3 + ordem (ex.: 0,003182 → 6 casas, 4 sig).
-        let exp = x.log10().floor() as i32; // -3 for 0.003…
-        let frac_digits = ((-exp) + 3).clamp(3, 9) as usize;
-        let raw = format!("{x:.frac_digits$}");
-        trim_comma_zeros(&raw.replace('.', ","))
-    }
-
-    fn trim_comma_zeros(s: &str) -> String {
-        if !s.contains(',') {
-            return s.to_string();
-        }
-        let t = s.trim_end_matches('0').trim_end_matches(',');
-        if t.is_empty() {
-            "0".into()
-        } else {
-            t.to_string()
-        }
-    }
-
     fn score_color(score: f64) -> Color32 {
         if score >= 99.0 {
-            Color32::from_rgb(35, 145, 100)
+            theme::OK
         } else if score >= 90.0 {
-            Color32::from_rgb(160, 140, 50)
+            theme::WARN
         } else {
-            Color32::from_rgb(180, 80, 60)
+            theme::BAD
         }
     }
 
-    /// Card de medidor; retorna `true` se o mouse está sobre ele.
+    /// Card de medidor; `true` se hovered.
     fn meter_card(ui: &mut egui::Ui, title: &str, value: String, accent: Color32) -> bool {
-        let size = Vec2::new(118.0, 72.0);
+        let size = Vec2::new(122.0, 74.0);
         let (rect, resp) = ui.allocate_exact_size(size, Sense::hover());
-        let fill = Color32::from_rgb(24, 30, 36);
+        let fill = if resp.hovered() {
+            theme::CARD_HOVER
+        } else {
+            theme::CARD
+        };
         ui.painter().rect_filled(rect, 4.0, fill);
         ui.painter()
-            .rect_stroke(rect, 4.0, Stroke::new(1.5_f32, accent));
+            .rect_stroke(rect, 4.0, Stroke::new(1.0_f32, theme::STROKE));
+        // Faixa de acento à esquerda.
+        let bar = egui::Rect::from_min_size(rect.min, Vec2::new(3.0, rect.height()));
+        ui.painter().rect_filled(bar, 0.0, accent);
         ui.painter().text(
-            rect.left_top() + Vec2::new(8.0, 8.0),
+            rect.left_top() + Vec2::new(10.0, 8.0),
             egui::Align2::LEFT_TOP,
             title,
-            egui::FontId::proportional(12.0),
-            Color32::from_rgb(160, 170, 175),
+            FontId::proportional(11.0),
+            theme::MUTED,
         );
         ui.painter().text(
-            rect.left_top() + Vec2::new(8.0, 30.0),
+            rect.left_top() + Vec2::new(10.0, 30.0),
             egui::Align2::LEFT_TOP,
             value,
-            egui::FontId::proportional(18.0),
-            Color32::from_rgb(230, 235, 238),
+            FontId::proportional(18.0),
+            theme::TEXT,
         );
         resp.hovered()
     }
@@ -916,33 +1026,53 @@ mod aether_dashboard_win {
         name: &str,
         body: &str,
         accent: Color32,
+        selected: bool,
+        score: f64,
     ) -> (bool, bool) {
-        let size = Vec2::new(200.0, 96.0);
+        let size = Vec2::new(204.0, 100.0);
         let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
-        ui.painter()
-            .rect_filled(rect, 4.0, Color32::from_rgb(22, 28, 34));
-        ui.painter()
-            .rect_stroke(rect, 4.0, Stroke::new(1.5_f32, accent));
+        let fill = if selected {
+            theme::CARD_SEL
+        } else if resp.hovered() {
+            theme::CARD_HOVER
+        } else {
+            theme::CARD
+        };
+        let stroke = if selected {
+            Stroke::new(2.0_f32, theme::BRAND)
+        } else {
+            Stroke::new(1.0_f32, theme::STROKE)
+        };
+        ui.painter().rect_filled(rect, 4.0, fill);
+        ui.painter().rect_stroke(rect, 4.0, stroke);
+        // Barra de score na base.
+        let frac = (score / 100.0).clamp(0.0, 1.0) as f32;
+        let score_bar = egui::Rect::from_min_max(
+            egui::Pos2::new(rect.left(), rect.bottom() - 3.0),
+            egui::Pos2::new(rect.left() + rect.width() * frac, rect.bottom()),
+        );
+        ui.painter().rect_filled(score_bar, 0.0, accent);
+
         ui.painter().text(
-            rect.left_top() + Vec2::new(8.0, 6.0),
+            rect.left_top() + Vec2::new(10.0, 8.0),
             egui::Align2::LEFT_TOP,
             id,
-            egui::FontId::proportional(14.0),
+            FontId::proportional(14.0),
             accent,
         );
         ui.painter().text(
-            rect.left_top() + Vec2::new(8.0, 26.0),
+            rect.left_top() + Vec2::new(10.0, 28.0),
             egui::Align2::LEFT_TOP,
             truncate(name, 28),
-            egui::FontId::proportional(11.0),
-            Color32::from_rgb(170, 180, 185),
+            FontId::proportional(11.0),
+            theme::MUTED,
         );
         ui.painter().text(
-            rect.left_top() + Vec2::new(8.0, 48.0),
+            rect.left_top() + Vec2::new(10.0, 50.0),
             egui::Align2::LEFT_TOP,
             body,
-            egui::FontId::proportional(12.0),
-            Color32::from_rgb(220, 225, 228),
+            FontId::proportional(12.0),
+            theme::TEXT,
         );
         (resp.hovered(), resp.clicked())
     }
@@ -991,13 +1121,17 @@ mod aether_dashboard_win {
             hover_scratch: None,
             confirm_daemon: false,
             last_job_done: true,
+            theme_ready: false,
         };
         app.reload();
+        app.try_load_host();
 
+        let title = format!("AETHER — Hub de métricas v{}", env!("CARGO_PKG_VERSION"));
         let native = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
-                .with_inner_size([1280.0, 820.0])
-                .with_title("AETHER — Hub de métricas"),
+                .with_inner_size([1320.0, 860.0])
+                .with_min_inner_size([960.0, 640.0])
+                .with_title(title),
             ..Default::default()
         };
         eframe::run_native(

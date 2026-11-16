@@ -306,7 +306,7 @@ fn jl_spearman(bits: &[u64], words: usize, emb: &[Vec<f32>]) -> (f64, usize) {
             for (a, b) in emb[i].iter().zip(&emb[j]) {
                 dot += a * b;
             }
-            cos.push(dot as f64);
+            cos.push(1.0 - dot as f64);
             ham.push(f64::from(hamming(
                 &bits[i * words..(i + 1) * words],
                 &bits[j * words..(j + 1) * words],
@@ -338,7 +338,7 @@ fn analogy_recall(
         }
         phases.push(p);
     }
-    let idx = |g: usize, s: usize, v: usize| (g * N_SLOTS + s) * VALUES_PER_SLOT + v;
+    let idx = |g: usize, s: usize, v: usize| (g * N_SLOTS + s) * 4 + v;
 
     let mut rec = vec![0.0f32; FHRR_DIM];
     let mut sims = vec![0.0f32; phases.len()];
@@ -454,25 +454,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         enc.encode_into(r, &mut p);
         relation_phase.push(p);
     }
-    let mut value_phase: Vec<Vec<f32>> = Vec::with_capacity(N_VAL);
-    for i in 0..N_VAL {
-        let mut p = vec![0.0f32; FHRR_DIM];
-        // valores: base aleatória determinística, independente das entidades
-        let mut rng = ChaCha8Rng::seed_from_u64(args.phase_seed ^ (0x1000 + i as u64));
-        let mut v = gauss_vec(&mut rng, D_IN, 1.0);
-        normalize_in_place(&mut v);
-        enc.encode_into(&v, &mut p);
+    let mut rng_noise = ChaCha8Rng::seed_from_u64(args.phase_seed ^ 0xBEEF);
+    // Átomo de valor **por fato** (como no E1b): dois fatos com o mesmo valor
+    // gerariam átomos idênticos, argmax ambíguo e margem degenerada.
+    let mut value_phase: Vec<Vec<f32>> = Vec::with_capacity(n);
+    for _ in 0..n {
+        let p: Vec<f32> = (0..FHRR_DIM)
+            .map(|_| rng_noise.gen::<f32>() * std::f32::consts::TAU)
+            .collect();
         value_phase.push(p);
     }
 
-    let mut mask = vec![true; FHRR_DIM];
-    // 25% da pista oculta (determinístico)
-    for (j, m) in mask.iter_mut().enumerate() {
-        if j % 4 == 0 {
-            *m = false;
-        }
-    }
-    let mut rng_noise = ChaCha8Rng::seed_from_u64(args.phase_seed ^ 0xBEEF);
+    // Pista completa: a consulta é (entidade, relação); a capacidade de 48
+    // fatos já é o regime medido no E1b.
+    let mask = vec![true; FHRR_DIM];
 
     let mut shards = 0usize;
     let mut max_shard = 0usize;

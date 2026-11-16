@@ -488,15 +488,15 @@ rede no crate: zero; a feature `knowledge` não puxa dependência nova).
 ler o contador:
 
 ```text
-1. cue_into(scope=A, query=B)  -> hits 0, key 0  E cross_scope_hits == 0
-2. cue_into(scope=A, query=A)  -> hits 3, key != 0  E cross_scope_hits segue 0
-3. injetar um fato com scope=B no store de A (se o store permitir)
-   -> cue_into(A, B) -> cross_scope_hits == 1 (caso positivo do contador)
+1. cue_into(scope=A, query=B)  -> hits = |A|, key de A, cross_scope_hits == 0
+                                  E cross_scope_skipped > 0   (o filtro rodou)
+2. cue_into(scope=A, query=A)  -> hits = |A|, key != 0, authority de A
+3. cue_into(scope=vazio, ...)  -> Err(EmptyScope), nunca resposta inventada
 ```
 
-Sem o passo 3 o contador nunca incrementa e o gate é vacuidade (`R9`). Sem o
-`key != 0` no passo 2, o vetor volta sem proveniência (`K6`) — e a resposta não
-é citável.
+`cross_scope_skipped` é o **controle positivo**: sem ele, `cross_scope_hits == 0`
+é vacuidade (`R9`) — um contador que nunca incrementa não prova isolamento. E sem
+`key != 0` no passo 2, o vetor volta sem proveniência (`K6`).
 
 **`ScopeId` — colisão e estabilidade.** `hash("orgA/run1/app") !=
 hash("orgA/run2/app")`; `hash(x) == hash(x)` entre execuções (FNV-1a é estável);
