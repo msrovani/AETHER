@@ -309,6 +309,27 @@ fn persistencia_sob_concorrencia_nao_perde_linha() {
 }
 
 #[test]
+fn solve_acima_do_cap_do_roof_avisa() {
+    let addr = start();
+    // n = 70 > ROOF_MAX_N (64): o solver resolve, mas o roof dual NÃO roda.
+    // A resposta tem de dizer isso, em vez de reportar "0 fixas".
+    let n = 70usize;
+    let j = format!("[{}]", vec!["0"; n * n].join(","));
+    let h = format!("[{}]", vec!["0"; n].join(","));
+    let body = format!(r#"{{"n":{n},"j":{j},"h":{h},"steps":20,"restarts":1}}"#);
+    let (st, resp) = request(addr, "POST", "/v1/aether/solve", &body);
+    assert_eq!(st, 200, "{resp}");
+    assert!(resp.contains("\"applicable\":false"), "{resp}");
+    assert!(resp.contains("\"cap\":64"), "{resp}");
+
+    // Dentro do cap: aplicável.
+    let body = r#"{"n":2,"j":[[0,1],[1,0]],"h":[0,0]}"#;
+    let (st, resp) = request(addr, "POST", "/v1/aether/solve", body);
+    assert_eq!(st, 200, "{resp}");
+    assert!(resp.contains("\"applicable\":true"), "{resp}");
+}
+
+#[test]
 fn concorrencia_mista_sem_erro() {
     let addr = start();
     let mut handles = Vec::new();

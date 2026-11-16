@@ -218,7 +218,7 @@ impl Reservoir {
             self.scratch[i] = acc;
         }
         for i in 0..n {
-            self.x[i] = (1.0 - leak) * self.x[i] + leak * self.scratch[i].tanh();
+            self.x[i] = (1.0 - leak) * self.x[i] + leak * fast_tanh(self.scratch[i]);
         }
         &self.x
     }
@@ -227,6 +227,19 @@ impl Reservoir {
     pub fn state(&self) -> &[f32] {
         &self.x
     }
+}
+
+/// Aproximação racional de `tanh` (Padé), erro `< 1e-4` em `[-5,5]`.
+///
+/// O `tanh` da libm é uma das operações mais caras do passo; a aproximação
+/// remove a chamada transcendental sem mudar a dinâmica no regime saturado.
+#[inline]
+fn fast_tanh(x: f32) -> f32 {
+    let x = x.clamp(-5.5, 5.5);
+    let x2 = x * x;
+    let num = x * (135_135.0 + x2 * (17_325.0 + x2 * (378.0 + x2)));
+    let den = 135_135.0 + x2 * (62_370.0 + x2 * (3_150.0 + x2 * 28.0));
+    (num / den).clamp(-1.0, 1.0)
 }
 
 /// LCG mínimo (determinístico, sem dependência de `rand` no caminho quente).

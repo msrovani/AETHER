@@ -3,6 +3,24 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.116] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 10 arquivo(s) (.:1, data:3, docs:1, src:2, tests:2, tools:1).
+- Gate: ok (3s).
+
+- `Cargo.lock`
+- `data/emb/bank.f32`
+- `data/hv/bank.bin`
+- `data/manifest.json`
+- `docs/AUDIT_CLAIMS_VOL3.md`
+- `src/api/mod.rs`
+- `src/core/reservoir.rs`
+- `tests/api_integrity.rs`
+- `tests/e8_reservoir_gate.rs`
+- `tools/harvest_transplant.py`
+
 ## [0.0.115] - 2026-11-16
 
 ### Changed

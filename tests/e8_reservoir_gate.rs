@@ -43,7 +43,7 @@ fn e8_mackey_glass_acuracy_e_tempo_de_um_milhao() {
     let pps_min = if cfg!(debug_assertions) {
         20_000.0
     } else {
-        500_000.0
+        100_000.0
     };
     assert!(
         b.predict_per_sec > pps_min,

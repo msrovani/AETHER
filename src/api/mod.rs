@@ -42,7 +42,7 @@ use crate::core::certificate::{self, Decision, Provenance};
 use crate::core::knowledge_bridge_f1::{
     BridgeError, Certificate as BridgeCertificate, DraftRecord, Layer, ScopeId, ScopeLedger,
 };
-use crate::core::presolve::roof_dual_qumo;
+use crate::core::presolve::{roof_dual_qumo, ROOF_MAX_N};
 use crate::core::thermodynamic_solver::{IsingLandscape, ThermodynamicIsingSolver};
 use crate::error::AetherError;
 
@@ -756,6 +756,11 @@ fn solve(body: &[u8]) -> Reply {
             (
                 "persistency",
                 Json::obj([
+                    // O roof dual tem buffers fixos (ROOF_MAX_N): acima disso ele
+                    // NÃO roda, e `fixed` reflete só a dominância. Sem este campo
+                    // o cliente leria "0 fixas" como informação, quando é ausência.
+                    ("applicable", Json::Bool(n <= ROOF_MAX_N)),
+                    ("cap", Json::num(ROOF_MAX_N as f64)),
                     ("fixed", Json::num(pre.fixed_count() as f64)),
                     ("residual", Json::num(pre.residual.len() as f64)),
                     ("rounds", Json::num(pre.rounds as f64)),

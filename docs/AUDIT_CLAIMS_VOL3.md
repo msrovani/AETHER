@@ -381,3 +381,37 @@ continua **0 extra** em 600 instâncias.
 **Limite:** o pior caso é exponencial; `n=64` exige o bound (E2c-3C) para podar
 por energia. O que está fechado é o Q4 **como medido**: em `n=14–20`, o roof
 dual deixa de ser um redutor e passa a ser um propagador exato.
+
+### 8.6 Fronteira de escala (2026-11-16)
+
+Busca exata, plant 45%, 10 instâncias por `n`, orçamento 500k nós:
+
+| n | 20 | 24 | 28 | 32 | 40 | 48 | 64 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| fechou | 10/10 | 10/10 | 10/10 | 10/10 | 10/10 | 10/10 | **0/10** |
+| nós (média) | 77 | 183 | 624 | 3.122 | 25.833 | 222.270 | >5M |
+| ms/inst | 0,3 | 0,6 | 2,3 | 12,3 | 117,8 | 1.159 | ~50.000 |
+
+n=64 com 5M nós **não fecha** (três instâncias, ~50 s cada). O penhasco está
+entre 48 e 64: sem bound, a busca é exata mas explode. Duas conclusões:
+
+1. **Até n=48, o E2c-3A basta** (segundos por instância).
+2. **n=64 exige o E2c-3C** (B&B com bound `C+ν`).
+
+Teste da hipótese “dá para montar o bound só com a API pública”: **não**.
+`pass_into` devolve o fluxo, mas `c0 + flow` varia de +110 a +353 contra ótimos
+de ≈ −100 — falta a constante do posiforme. O bound precisa ser exposto pelo
+dono do `presolve.rs`:
+
+```rust
+pub fn bound_into(&mut self, n, j, h, fixed: &mut [Option<i8>]) -> f64
+// retorna C+ν (bound), preenche fixed; solve_into inalterado
+```
+
+Gate proposto: `bound ≤ ótimo` em 600 instâncias (força bruta n=14) + relatório
+de gap. Com isso, `ExactSearch` ganha um modo B&B (podar quando
+`const_fixo + bound_resíduo ≥ incumbente`).
+
+**E2c-3B** (certificado 2-SAT): precisa do **posiforme residual** (termos
+lineares/quadráticos após o flow), hoje não exposto. Para n=14, `k=7` → 128
+roof duals por instância; o gate é a taxa de certificação global.
