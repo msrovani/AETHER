@@ -148,6 +148,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut pre_min = Vec::with_capacity(args.instances);
     let mut pers_min = Vec::with_capacity(args.instances);
     let mut dec_min = Vec::with_capacity(args.instances);
+    let mut solve_min = Vec::with_capacity(args.instances);
+    let mut bsb_min = Vec::with_capacity(args.instances);
+    let mut rep_min = Vec::with_capacity(args.instances);
     let mut fixed_sum = 0.0f64;
 
     for inst in 0..args.instances {
@@ -159,6 +162,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut pre = Vec::with_capacity(args.reps);
         let mut pers = Vec::with_capacity(args.reps);
         let mut dec = Vec::with_capacity(args.reps);
+        let mut solve = Vec::with_capacity(args.reps);
+        let mut bsb = Vec::with_capacity(args.reps);
+        let mut rep = Vec::with_capacity(args.reps);
         for r in 0..args.reps {
             pipeline.resolve_into(n, &clauses, (inst * 1000 + r) as u64, &mut out, &mut cert)?;
             let st = pipeline.last;
@@ -166,23 +172,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             pre.push(st.presolve_us);
             pers.push(st.persistency_us);
             dec.push(st.decompose_us);
+            solve.push(st.solve_us);
+            bsb.push(st.bsb_us);
+            rep.push(st.repair_us);
         }
         fixed_sum += pipeline.last.fixed_symbolic as f64;
-        sym.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        pre.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        pers.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        dec.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        for v in [&mut sym, &mut pre, &mut pers, &mut dec, &mut solve, &mut bsb, &mut rep] {
+            v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        }
         sym_min.push(sym[0]);
         sym_med.push(sym[sym.len() / 2]);
         pre_min.push(pre[0]);
         pers_min.push(pers[0]);
         dec_min.push(dec[0]);
+        solve_min.push(solve[0]);
+        bsb_min.push(bsb[0]);
+        rep_min.push(rep[0]);
     }
 
     let sym_min_v = sym_min.iter().copied().fold(f64::INFINITY, f64::min);
     let pre_min_v = pre_min.iter().copied().fold(f64::INFINITY, f64::min);
     let pers_min_v = pers_min.iter().copied().fold(f64::INFINITY, f64::min);
     let dec_min_v = dec_min.iter().copied().fold(f64::INFINITY, f64::min);
+    let solve_min_v = solve_min.iter().copied().fold(f64::INFINITY, f64::min);
+    let bsb_min_v = bsb_min.iter().copied().fold(f64::INFINITY, f64::min);
+    let rep_min_v = rep_min.iter().copied().fold(f64::INFINITY, f64::min);
     let sym_med_v = median(&mut sym_med);
 
     let budget = 0.05 * 81.3; // 5% do ciclo de 81,3 µs
@@ -198,6 +212,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{:>28} {:>10.3} {:>10}", "  presolve", pre_min_v, "—");
     println!("{:>28} {:>10.3} {:>10}", "  persistência", pers_min_v, "—");
     println!("{:>28} {:>10.3} {:>10}", "  decomposição", dec_min_v, "—");
+    println!("{:>28} {:>10.3} {:>10}", "solver (4)", solve_min_v, "—");
+    println!("{:>28} {:>10.3} {:>10}", "  BSB", bsb_min_v, "—");
+    println!("{:>28} {:>10.3} {:>10}", "  reparo", rep_min_v, "—");
     println!();
     println!(
         "orçamento G3b (5% de 81,3 µs) : {budget:.2} µs  ->  {} (min {:.2} × teto)",

@@ -3,6 +3,23 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.137] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 9 arquivo(s) (.:3, docs:1, examples:1, src:3, tests:1).
+- Gate: ok (7s).
+
+- `Cargo.lock`
+- `README.md`
+- `docs/SGDB_INTEGRATION.md`
+- `examples/e2_symbolic_bench.rs`
+- `src/api/mod.rs`
+- `src/core/logic_pipeline.rs`
+- `src/knowledge/sgdb/cli.rs`
+- `AGENTS.md`
+- `tests/api_sgdb.rs`
+
 ## [0.0.136] - 2026-11-16
 
 ### Changed

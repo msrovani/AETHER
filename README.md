@@ -12,6 +12,7 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 * **docs/USER_DELIVERY_PLAN.md** — mapa do entregável ao usuário + plano de ondas (demo → Produto C → A/B).
 * **docs/O_PROBLEMA_DOS_3_CORPOS_NAO.md** (+ `_VOL2`, `_VOL3`) — dossiê dos três "NÃO" (linguagem, lógica, self): tese, preço em hardware e gestão do conhecimento. Registro mestre no Vol. III §11.
 * **docs/SGDB_INTEGRATION.md** — encaixe operacional do `neural-sgdb` (`T2`): MCP, outbox, leitura de fase e gates F4.
+* **AGENTS.md** — ritual para agentes de IA usarem a memória (`context` antes, `put` depois) sem tratar memória como instrução.
 
 ## Pilares
 

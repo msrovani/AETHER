@@ -324,9 +324,11 @@ impl ApiState {
 
     /// Estado do SGDB para `/health` (`off`/`on`/`error`).
     pub fn sgdb_status(&self) -> &'static str {
+        if self.sgdb_error.is_some() {
+            return "error";
+        }
         match &self.sgdb {
             Some(_) => "on",
-            None if self.sgdb_error.is_some() => "error",
             None => "off",
         }
     }
@@ -758,14 +760,25 @@ fn remember(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
             }
         }
     }
-    let result = state
-        .sgdb
-        .as_mut()
-        .map(|client| client.remember_records(std::slice::from_ref(&record)));
+    let result = state.sgdb.as_mut().map(|client| {
+        // O contrato do SGDB é fase complexa (`re, im`); a borda HTTP fala
+        // fases puras. Converte na fronteira para um único formato durável.
+        let durable = DraftRecord {
+            payload: phases_to_complex(&record.payload),
+            ..record.clone()
+        };
+        client.remember_records(std::slice::from_ref(&durable))
+    });
     let mut sgdb_state = "off";
     match result {
-        Some(Ok(1)) => sgdb_state = "stored",
-        Some(Ok(_)) => sgdb_state = "empty",
+        Some(Ok(1)) => {
+            sgdb_state = "stored";
+            state.sgdb_error = None;
+        }
+        Some(Ok(_)) => {
+            sgdb_state = "empty";
+            state.sgdb_error = None;
+        }
         Some(Err(e)) => {
             sgdb_state = "offline";
             state.sgdb_error = Some(e.to_string());
@@ -943,7 +956,7 @@ fn hydrate_from_sgdb(state: &mut ApiState, scope: ScopeId) -> usize {
                     scope: hit.doc.scope,
                     tick: hit.doc.tick,
                     wall_ms: hit.doc.wall_ms,
-                    payload: hit.doc.payload,
+                    payload: complex_to_phases(&hit.doc.payload),
                 });
             }
             count
@@ -1301,6 +1314,28 @@ fn phases_to_payload(phases: &[f32]) -> Vec<u8> {
     let mut out = Vec::with_capacity(phases.len() * 4);
     for p in phases {
         out.extend_from_slice(&p.to_le_bytes());
+    }
+    out
+}
+
+/// Fases puras (`f32`) → fase complexa (`re, im`) para o SGDB.
+fn phases_to_complex(payload: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(payload.len() * 2);
+    for chunk in payload.chunks_exact(4) {
+        let phase = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        out.extend_from_slice(&phase.cos().to_le_bytes());
+        out.extend_from_slice(&phase.sin().to_le_bytes());
+    }
+    out
+}
+
+/// Fase complexa (`re, im`) → fases puras (`atan2`), inverso do anterior.
+fn complex_to_phases(payload: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(payload.len() / 2);
+    for chunk in payload.chunks_exact(8) {
+        let re = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        let im = f32::from_le_bytes([chunk[4], chunk[5], chunk[6], chunk[7]]);
+        out.extend_from_slice(&im.atan2(re).to_le_bytes());
     }
     out
 }
