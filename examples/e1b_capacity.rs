@@ -20,7 +20,7 @@ use rand_chacha::ChaCha8Rng;
 use std::f32::consts::TAU;
 
 use aether_engine::core::fhrr::FhrrStore;
-use aether_engine::phase_memory::ComplexPhaseMemory;
+use aether_engine::phase_memory::{ComplexPhaseMemory, PhaseMemoryConfig};
 
 const DIMS: [usize; 4] = [64, 160, 320, 640];
 const TRACES: [usize; 2] = [1, 6];
@@ -31,6 +31,7 @@ struct Args {
     quick: bool,
     dim: usize,
     seed: u64,
+    hidden: f64,
 }
 
 fn parse_args() -> Args {
@@ -38,6 +39,7 @@ fn parse_args() -> Args {
         quick: false,
         dim: 160,
         seed: 0xE1B_0001,
+        hidden: 0.2,
     };
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
@@ -53,6 +55,12 @@ fn parse_args() -> Args {
             "--seed" => {
                 if let Some(v) = argv.get(i + 1).and_then(|v| v.parse().ok()) {
                     a.seed = v;
+                    i += 1;
+                }
+            }
+            "--hidden" => {
+                if let Some(v) = argv.get(i + 1).and_then(|v| v.parse().ok()) {
+                    a.hidden = v;
                     i += 1;
                 }
             }
@@ -126,21 +134,80 @@ fn wrapped_abs(a: f32, b: f32) -> f32 {
 }
 
 /// Arm B: erro angular de recall com 40% da pista oculta.
-fn phase_memory_error(n: usize, patterns: usize, seed: u64) -> f32 {
-    let mut rng = ChaCha8Rng::seed_from_u64(seed);
-    let mut mem = ComplexPhaseMemory::new(n);
-    let mask: Vec<bool> = (0..n).map(|i| i % 5 != 0).collect(); // 20% oculto
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PatternClass {
+    Random,
+    Harmonic,
+}
 
-    let mut stored: Vec<Vec<f32>> = Vec::with_capacity(patterns);
-    for _ in 0..patterns {
-        let p: Vec<f32> = (0..n).map(|_| rng.gen::<f32>() * TAU).collect();
-        mem.imprint(&p, 40);
-        stored.push(p);
+/// Padrão harmônico (mesma classe usada na auditoria cognitiva).
+fn harmonic_pattern(n: usize, order: usize) -> Vec<f32> {
+    (0..n)
+        .map(|i| {
+            let x = i as f32 / n as f32;
+            let base = (TAU * (order as f32 + 1.0) * x).sin() * 2.0;
+            (base + 0.4 * (order as f32 + 1.0)).rem_euclid(TAU)
+        })
+        .collect()
+}
+
+fn make_patterns(n: usize, k: usize, seed: u64, class: PatternClass) -> Vec<Vec<f32>> {
+    let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    (0..k)
+        .map(|order| match class {
+            PatternClass::Random => (0..n).map(|_| rng.gen::<f32>() * TAU).collect(),
+            PatternClass::Harmonic => harmonic_pattern(n, order),
+        })
+        .collect()
+}
+
+/// Máscara com exatamente `hidden` posições ocultas (sem reposição).
+fn mask_exact(seed: u64, n: usize, hidden: usize) -> Vec<bool> {
+    let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    let mut idx: Vec<usize> = (0..n).collect();
+    for i in (1..n).rev() {
+        let j = rng.gen_range(0..=i);
+        idx.swap(i, j);
+    }
+    let mut mask = vec![true; n];
+    for &h in idx.iter().take(hidden.min(n)) {
+        mask[h] = false;
+    }
+    mask
+}
+
+fn audit_config() -> PhaseMemoryConfig {
+    PhaseMemoryConfig {
+        omega0: 0.0,
+        clamp_strength: 8.0,
+        eta_w: 0.12,
+        eta_delta: 0.08,
+        gamma_w: 0.002,
+    }
+}
+
+/// Erro angular médio nas posições ocultas.
+fn phase_memory_error(
+    n: usize,
+    patterns: usize,
+    seed: u64,
+    class: PatternClass,
+    hidden: usize,
+) -> f32 {
+    let mut mem = ComplexPhaseMemory::with_config(n, audit_config());
+    let mask = mask_exact(seed ^ 0x9E37, n, hidden);
+    let stored = make_patterns(n, patterns, seed, class);
+
+    for p in &stored {
+        mem.imprint(p, 40);
     }
 
     let mut err_sum = 0.0f32;
     let mut count = 0usize;
     for p in &stored {
+        // estado neutro antes de cada recall (senão a memória carrega o
+        // atrator anterior e a medida deixa de ser por padrão)
+        mem.reset_phases(0.0);
         let (out, _) = mem.recall(p, &mask, 200, 0.05);
         for i in 0..n {
             if !mask[i] {
@@ -229,28 +296,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // ---------------- Arm B ----------------
-    println!("Arm B — memória de fase (M5): erro angular com 20% oculto");
+    println!("Arm B — memória de fase (M5): erro angular, 40% da pista oculto");
     let n = args.dim;
-    let mut mem_ref = ComplexPhaseMemory::new(n);
-    let _ = &mut mem_ref;
+    let mem_ref = ComplexPhaseMemory::new(n);
+    let hidden = ((n as f64) * args.hidden).round() as usize;
     println!(
-        "{:>5} {:>10} {:>12} {:>12}",
-        "n", "padrões", "capacidade*", "erro rad"
+        "{:>5} {:>9} {:>12} {:>12}",
+        "n", "padrões", "aleatório", "harmônico"
     );
-    println!("{}", "-".repeat(44));
+    println!("{}", "-".repeat(42));
     let pattern_counts: &[usize] = if args.quick {
         &[4, 8, 16]
     } else {
         &[4, 8, 16, 32, 64]
     };
-    let mut phase_errs: Vec<(usize, f32)> = Vec::new();
+    let mut phase_errs: Vec<(usize, f32, f32)> = Vec::new();
     for &k in pattern_counts {
-        let err = phase_memory_error(n, k, args.seed);
-        phase_errs.push((k, err));
-        println!("{:>5} {:>10} {:>12} {:>12.3}", n, k, "—", err);
+        let er = phase_memory_error(n, k, args.seed, PatternClass::Random, hidden);
+        let eh = phase_memory_error(n, k, args.seed, PatternClass::Harmonic, hidden);
+        phase_errs.push((k, er, eh));
+        println!("{:>5} {:>9} {:>12.3} {:>12.3}", n, k, er, eh);
     }
+    let cap_of = |random: bool| -> usize {
+        phase_errs
+            .iter()
+            .filter(|(_, er, eh)| {
+                let e = if random { *er } else { *eh };
+                e < 0.15
+            })
+            .map(|(k, _, _)| *k)
+            .max()
+            .unwrap_or(0)
+    };
     println!(
-        "  (*) `ComplexPhaseMemory::pattern_capacity()` = {}",
+        "  capacidade a erro < 0,15 rad: aleatório ~{} · harmônico ~{}",
+        cap_of(true),
+        cap_of(false)
+    );
+    println!(
+        "  (*) `pattern_capacity()` declarado = {}",
         mem_ref.pattern_capacity()
     );
     println!();
@@ -263,9 +347,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => println!("  D=160 não medido neste modo"),
     }
     println!("  lei de escala (K=6)             : D^{slope:.2}");
-    let err64 = phase_errs.last().map(|x| x.1);
-    if let Some(e) = err64 {
-        println!("  memória de fase (último M)      : erro {e:.3} rad");
+    if let Some((k, er, eh)) = phase_errs.last() {
+        println!(
+            "  memória de fase (M={k})          : aleatório {er:.3} · harmônico {eh:.3} rad"
+        );
     }
     println!();
 
@@ -282,10 +367,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     json.push_str("  ],\n");
     json.push_str(&format!("  \"slope_loglog\": {slope:.4},\n"));
     json.push_str("  \"phase_memory\": [\n");
-    for (i, (k, e)) in phase_errs.iter().enumerate() {
+    for (i, (k, er, eh)) in phase_errs.iter().enumerate() {
         let comma = if i + 1 == phase_errs.len() { "" } else { "," };
         json.push_str(&format!(
-            "    {{\"n\": {n}, \"patterns\": {k}, \"angular_error\": {e:.5}}}{comma}\n"
+            "    {{\"n\": {n}, \"patterns\": {k}, \"error_random\": {er:.5}, \"error_harmonic\": {eh:.5}}}{comma}\n"
         ));
     }
     json.push_str("  ]\n}\n");
