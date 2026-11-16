@@ -8,6 +8,7 @@
 
 mod catalog;
 mod demo_trace;
+mod fmt;
 mod gaps;
 mod host_probe;
 mod jobs;
@@ -18,7 +19,8 @@ pub use catalog::{
     DimFicha,
 };
 pub use demo_trace::{DemoSample, DemoTrace};
+pub use fmt::fmt_compact;
 pub use gaps::{Gap, GapSeverity};
-pub use host_probe::{probe_and_save, HostReport};
+pub use host_probe::{host_report_path, load_host_report, probe_and_save, HostReport};
 pub use jobs::{JobKind, JobPhase, JobRunner, JobSnapshot};
 pub use model::{load_scorecard, DimCard, ScorecardView, ThroughputRegime, ThroughputView};

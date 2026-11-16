@@ -180,8 +180,8 @@ fn g1_g2_pipeline_iguala_forca_bruta_e_certificado_nunca_mente() {
     let instances = 64usize;
     let half = instances / 2;
 
-    let mut pipe = LogicPipeline::new(n, m + 4, 12, 3, 5, 0.5);
-    let mut arm1 = BsbCore::new(n, 12, 0.05);
+    let mut pipe = LogicPipeline::new(n, m + 4, 48, 4, 5, 0.5);
+    let mut arm1 = BsbCore::new(n, 48, 0.05);
 
     let mut states = vec![0i8; n];
     let mut best1 = vec![0i8; n];
@@ -308,7 +308,7 @@ fn g3_zero_alocacao_durante_a_resolucao() {
     let n = 16usize;
     let m = (4.3 * n as f64).round() as usize;
     let clauses = random_3sat(n, m, 0xE2_777);
-    let mut pipe = LogicPipeline::new(n, m + 4, 12, 3, 5, 0.5);
+    let mut pipe = LogicPipeline::new(n, m + 4, 48, 4, 5, 0.5);
     let mut out = vec![0i8; n];
     let mut cert = Certificate::new(0.0, 0.0, 0, 0.0, Provenance::Inferred);
 

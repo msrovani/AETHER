@@ -385,14 +385,14 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | **E2** | I | lógica como Ising + certificado | 3-SAT n≤20 = força bruta | R1 |
 | **E2b** ✅ | II | presolve simbólico antes do BSB — **executado** | **0 insound** · **64,8% redução** (+39,8 pp de cascata) · **200/200** resolvidas vs 183/200 | R1, R3 |
 | **E2c** ✅ | II | persistência de 1ª ordem (dominância) — **executado** | **0/600 ótimos alterados** · 0% sem viés (controle) · 42,9% com viés 45% | R1, R3 |
-| **E2c-2** | II | roof dual completo (max-flow) | alcance além da dominância; mesmo gate de soundness | R1 |
+| **E2c-2** ✅ | II | roof dual completo (max-flow) — **executado** | **0/600 ótimos alterados** · **52,0%** em 45% (vs 42,9%) · 28,9% em 25% · **0% no controle = teto ℤ₂** · 199/200 | R1 |
 | **E3** | I | transplantação de embeddings | analogia medida, sem alvo de marketing | R3 |
 | **E3b** ✅ | II/III | verificador de coerência + proveniência | **spins: nulo (AUC 0,46–0,55)** · **2-SAT: precisão 100%** | R3, R10 |
 | **E4** | I | self-field + ablação | ECE melhora; T01 não regride | K5 |
 | **E5** | I | currículo por progresso | readaptação < 150 ciclos (T03) | R5 |
 | **E7** | II | laço S0 com 4 atuadores | H3: entropia cai ≥30% sem atuador | R4 |
 | **E8** | II | readout congelado vs treinado | <5% regressão; <60 s treino | R5 |
-| **F1** | III | `KnowledgeSink` read-only | 0 no hot path; `alloc_invariants` verde | R7, K6 |
+| **F1** ✅ | III | `KnowledgeSink` read-only — **executado** | **0 alocações** no `T0` (10k ciclos) · **`t0_ledger_calls = 0`** · `T1` 100% íntegro · **0 hits cruzados** de escopo | R7, K6 |
 | **F2** | III | consolidação T1 + `commit_run` | 0 eventos perdidos; ciclo inalterado | R9 |
 | **F3** | III | fusão 2D + `cue_into` | quadrante "plausível sem fonte" ≥90% | R3, R8 |
 
@@ -411,15 +411,15 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | `PREPRINT_RISK` | I/II | info | protocolo §7 Vol. II |
 | `NO_PROFILE_BREAKDOWN` | II | ✅ **resolvido (E6)** | medido 2026-11-15: solver 84,4% | — |
 | `SOLVER_KERNEL_SCALAR` | II | ✅ **resolvido (E6b)** | 16 acumuladores safe: 7,44 → 17,10 GFLOP/s | — |
-| `NO_ROOF_DUAL` | II | alto | E2b |
+| `NO_ROOF_DUAL` | II | ✅ **resolvido (E2c-2)** | max-flow Dinic + SCC: 42,9% → **52,0%** em 45%, 0/600 insound | — |
 | `NO_LIMIT_CYCLE_GUARD` | II | alto | E1b |
-| `NO_PROVENANCE` | II | alto | F1 → E3b |
+| `NO_PROVENANCE` | II | ✅ **resolvido (F1)** | `KnowledgeEvent` carrega `Certificate` + `authority` + `ScopeId` | — |
 | `D_CAPACITY_UNMEASURED` | II | ✅ **resolvido (E1b → E1)** | lei linear **0,4·D** medida; 1.000 fatos via 24 shards | — |
 | `NO_ACTUATOR_LOOP` | II | alto | E7 |
 | `CERT_SEMANTICS` | II | médio | §6 (vocabulário) |
 | `KB_TAXONOMY_UNDOC` | III | alto | este volume |
-| `NO_LEDGER_BRIDGE` | III | alto | F1 |
-| `TIMEBASE_MIX` | III | alto | §2.1 |
+| `NO_LEDGER_BRIDGE` | III | ✅ **resolvido (F1)** | `knowledge_bridge_f1.rs`: `record` 0 alloc, `drain_batch` T1, telemetria | — |
+| `TIMEBASE_MIX` | III | ✅ **resolvido (F1)** | `tick` e `wall_ms` viajam separados; `created_tick = wall_ms` | — |
 | `NO_REVISION_PATH` | III | alto | F2 (supersede) |
 | `NO_DEGRADATION_LADDER` | III | médio | §2.2 (gist no L4) |
 | `SCOPE_UNDEFINED` | III | alto | F3 |
@@ -434,8 +434,8 @@ R7 é o mais provável de todos. Merece um invariante de teste, não um aviso em
 | R4 | Open-endedness sem corpo | médio | P2 |
 | R5 | Custo de treino | baixo | P3 |
 | R6 | Preprints | baixo | P3 |
-| R7 | Drift para RAG | **alto** | P1 |
-| R8 | Vazamento de escopo | médio | P2 |
+| R7 | Drift para RAG | médio | P1 |
+| R8 | Vazamento de escopo | baixo | P2 |
 | R9 | Proveniência-teatro | alto | P1 |
 | R10 | Certificado sem dentes | alto | P1 |
 
@@ -542,9 +542,9 @@ alocação, sem violar a lei do E1b em nenhum acumulador.
 6º ✅ E1b  capacidade em D=160          ← FEITO: 64 fatos · lei linear ~0,4·D
 7º ✅ E1   PLH sharded                   ← FEITO: 1.000 fatos recall 1,000 · p50 5,80 µs · 0 alloc
 8º ✅ E1-2 fasor pré-computado + ressonador ← FEITO: latência fechada (E1)
-9º  E2c-2 roof dual (max-flow)         ← alcance além da dominância
-10º E1b-2 memória de fase estruturada  ← separar padrão aleatório de harmônico
-11º F1   ponte read-only               ← fecha K6 sem risco de drift
+9º  ✅ E2c-2 roof dual (max-flow)         ← FEITO: 52,0% em 45% · 0/600 insound · teto 0% no controle
+10º ✅ E1b-2 memória de fase estruturada  ← FEITO: harmônico 8 vs aleatório 4 (erro < 0,15 rad)
+11º ✅ F1   ponte read-only               ← FEITO: 0 alloc no T0 · 0 chamadas ao ledger · R8 = 0
 12º E2/E3 os outros dois "NÃO"         ← o programa científico
 13º E4/E5/E7/E8  self, currículo, corpo, treino
 14º F2/F3  consolidação e fusão 2D
@@ -557,7 +557,7 @@ alocação, sem violar a lei do E1b em nenhum acumulador.
 | 1 | **Onde vão os 146 µs?** | ✅ **respondida** (E6) | **84,4% no solver** (133,1 de 157,7 µs). readout 7,0% · entropy 3,0% · wave 2,5% · actuator 1,7% · ring_copy 1,1%. Cobertura 99,98%. |
 | 2 | **ΔE prevê acerto?** | ✅ **respondida** (E3b) | **Não em otimização livre** (AUC 0,46–0,55; bound 0,058 anti-preditivo). **Sim com restrições exatas**: 383 decisivas, precisão 100%. |
 | 3 | **Quantos padrões cabem em D=160?** | ✅ **respondida** (E1b/E1) | **64 fatos** por acumulador (`FhrrStore`, K=6, recall@1 ≥ 99%); 128 já cai para 89%. Lei **linear ~0,4·D** — **não** D². **E1:** com 24 shards de ≤ 48 fatos, **1.000 fatos** com recall@1 **1,0000** (superposição plana: 0,0725). Memória de fase (M5): ~**4** padrões aleatórios a erro < 0,15 rad (declarado 40). |
-| 4 | **Roof dual reduz o suficiente em CNF de circuito?** | ⏳ **parcial** (E2b/E2c) | **CNF:** presolve por unidades+implicação dá **64,8%** (cascata +39,8 pp), 0 insound, 200/200. **QUBO:** dominância é sound (**0/600 ótimos alterados**) mas míope — **0% sem viés**, 42,9% com viés 45%. Falta o **roof dual completo (max-flow)**. |
+| 4 | **Roof dual reduz o suficiente em CNF de circuito?** | ✅ **respondida** (E2b/E2c/E2c-2) | **CNF:** presolve por unidades+implicação dá **64,8%** (cascata +39,8 pp), 0 insound, 200/200. **QUBO:** dominância é sound (**0/600**) mas míope; o **roof dual (max-flow)** é igualmente sound (**0/600**) e leva **42,9% → 52,0%** em viés 45%, **28,9%** em 25% e **0% no controle — que é o teto ℤ₂** (com `h = 0` nenhum spin é persistente). Fecha com **probing condicionado**, não com mais fluxo. |
 | 5 | **O self-field melhora calibração ou só replica a surpresa?** | ⏳ **aberta** (E4) | Falsificável: melhora ECE de abstenção **sem** melhorar T01. Se T01 também melhorar, a hipótese "metacognição é separada" cai. |
 | 6 | **Um atrator pode virar "gist" sem perder a habilidade?** | ⏳ **aberta** (F2) | Hoje o atrator é binário: está ou não está. Fecha consolidando no L4 (texto/energia) e medindo retenção após N consolidações. |
 | 7 | **A ponte de fase preserva o suficiente?** | ⏳ **aberta** (F3) | Fecha com `cue_into` (ledger → vetor → semente de atrator) e medindo recall@1 no round-trip **vs** recall direto; gate: perda < 5%. |
@@ -575,7 +575,7 @@ em `target/`.
 
 | Fase | Entrega | Gate |
 |---|---|---|
-| **F1** (1 sem) | `KnowledgeSink` read-only: todo evento com `Certificate` vira linha no SGDB; nada volta | 0 chamadas no T0; `alloc_invariants` verde; R7 medido em 0 |
+| **F1** ✅ (feito) | `KnowledgeSink` read-only: todo evento com `Certificate` vira linha no SGDB; nada volta | **0 alloc no T0** ✔ · `alloc_invariants` verde ✔ · **R7 = 0** ✔ |
 | **F2** (2–3 sem) | consolidação T1: ring buffer + drain; `commit_run` ao fim de cada ciclo; `supersede` em divergência | 0 eventos perdidos; latência do ciclo inalterada; R9 > 0 |
 | **F3** (pesquisa) | fusão 2D (`authority × gap`) + `cue_into` | quadrante "plausível sem fonte" detectado ≥ 90%; R8 = 0 |
 

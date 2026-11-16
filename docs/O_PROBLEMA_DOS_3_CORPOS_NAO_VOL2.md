@@ -343,6 +343,71 @@ implicação — **rigorosa e barata, mas limitada ao que já está explícito**
 alcançar variáveis que não são dominadas por `h` mas são constantes em algum
 ótimo, é preciso o **roof dual completo (max-flow)** — o E2c-2.
 
+### 2.8 E2c-2 — roof dual completo (max-flow): o alcance depende do viés
+
+**Executado em 2026-11-15.** `roof_dual_qumo` + `RoofDualWorkspace` em
+`src/core/presolve.rs`, `examples/e2c_persistency.rs`,
+`tests/e2c2_roof_dual_gate.rs`. **Exatamente as mesmas 600 instâncias do E2c v1**
+(`n = 14`, `J` ±1 simétrica, `plant ∈ {0%, 25%, 45%}`, 200/regime, mesmas seeds).
+
+**O que é.** O Hamiltoniano vai para a posiform quadrática
+(`H = c₀ + Σ l_i x_i + Σ Q_ij x_i x_j`, com todo coeficiente negativo reescrito
+em literais até sobrar coeficiente ≥ 0), cada termo positivo vira aresta de
+implicação com capacidade (`β·u·v ⇒ arcs u→v̄, v→ū`), e o **fluxo máximo**
+(Dinic determinístico, rede de `2n+2` nós) dá o roof dual. As persistências saem
+da **alcançabilidade residual a partir de `S`**: `x_i` alcançável e `x̄_i` não
+⇒ `x_i = 1` em algum ótimo (e o simétrico ⇒ `x_i = 0`); ambos no mesmo lado ⇒
+variável não rotulada. O refinamento por SCC (`ComputeWeakPersistencies`) decide
+o que a segmentação deixou ambíguo. Tudo em buffers fixos (`MAX_N = 64`):
+**0 alocações** durante a resolução.
+
+| `plant` | dominância (E2c v1) | roof dual | roof dual + ℤ₂ | roof+BSB | BSB puro |
+|---:|---:|---:|---:|---:|---:|
+| **0%** (controle) | 0,0% | **0,0%** | 7,1% | 185/200 | **185/200** |
+| 25% | 28,6% | **28,9%** | 28,9% | 190/200 | 188/200 |
+| 45% | 42,9% | **52,0%** | 52,0% | **199/200** | 193/200 |
+
+| Soundness (600 instâncias) | **0 ótimos alterados** |
+|---|---|
+| Variáveis fixadas em 45% (média) | 6,00 → **7,28** (+21%) |
+| Gate `presolve+BSB ≥ 199/200` em 45% | **199/200** ✅ |
+| Alocação no hot path | **0** |
+| `presolve+BSB` no controle vs BSB puro | 185 = 185 (empate) ❌ |
+
+**Três achados:**
+
+1. **Soundness perfeita e alcance maior — mas só onde há viés.** Em 600
+   instâncias o roof dual não alterou **nenhum** ótimo, e em `plant = 45%` ele
+   fixa **7,28** variáveis contra **6,00** da dominância (+9,1 pp de redução).
+   Em 25% o ganho é marginal (+0,3 pp); no controle, **nulo**.
+2. **O teto do controle é 0% — por simetria, não por miopia.** Com `h = 0` a
+   energia é invariante por `s → −s`: se `s*` é ótimo, `−s*` também é, logo
+   **todo** spin aparece com os dois sinais entre os dois ótimos espelhados e
+   *nenhuma* variável é persistente. Medido por força bruta: o número de
+   variáveis com valor único entre os ótimos é **0,0%** no controle. Ou seja, o
+   `0,0%` do E2c v1 **não era miopia** — era o limite teórico. A única redução
+   sound é quebrar a simetria (`fixar 1 variável`, coluna ℤ₂): 7,1%, que é o
+   máximo que se pode escrever sem perder o ótimo.
+3. **A completude não paga o preço no controle.** Fixar 1 variável por ℤ₂
+   reduz o resíduo para 13 variáveis com campo injetado, e o BSB **piora**
+   (171/200 vs 185/200). Por isso a quebra de simetria fica **desligada por
+   padrão** (`enable_z2_symmetry_break`): um presolve que degrada o solver
+   a jusante é um presolve ruim. Nos regimes com viés o roof dual não regride
+   (190/190 em 25%, 199/199 em 45%).
+
+**Limite honesto:** o roof dual sobre a posiform canônica **não** é a resposta
+para "quantas variáveis são fixáveis em um vidro sem viés" — nesse regime a
+resposta é *zero* e é uma propriedade da instância. O que ele entrega é o
+**dobro de alcance onde o viés já organiza a paisagem** (45%). Fechar o gap
+entre 52% e o teto de 93,6% (medido por força bruta em 25%) exige **probing
+com bound condicionado** (Boros–Hammer–Tavares), não um max-flow maior na mesma
+posiform — fica registrado como próximo passo, não como resultado.
+
+**Gates:** G1 soundness ✅ · G2 alcance ✅ (≥ dominância; estrito em 25%/45%;
+estrito no controle só com ℤ₂) · G3 completude em 45% ✅ (199/200) ·
+G4 "melhora o BSB puro no controle" ❌ (empate em 185 e −7,6 pp com ℤ₂).
+Artefatos: `target/aether_e2c2.json`, fórum **MSG 0140**.
+
 ---
 
 ## 3. Risco 2 — Interferência em VSA

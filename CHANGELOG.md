@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.99] - 2026-11-16
+
+### Changed
+
+- Ciclo automatico: 13 arquivo(s) (docs:2, examples:4, src:5, tests:2).
+- Gate: ok (10s).
+
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL2.md`
+- `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md`
+- `examples/e1b_capacity.rs`
+- `examples/ising_logic_probe.rs`
+- `examples/plh_bench.rs`
+- `examples/plh_debug.rs`
+- `src/core/knowledge_bridge_f1.rs`
+- `src/core/presolve.rs`
+- `src/dashboard/host_probe.rs`
+- `src/dashboard/mod.rs`
+- `tests/e2_logic_gate.rs`
+- `tests/f1_knowledge_bridge_gate.rs`
+
 ## [0.0.98] - 2026-11-16
 
 ### Changed

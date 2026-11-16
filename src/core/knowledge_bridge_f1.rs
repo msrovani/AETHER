@@ -651,17 +651,28 @@ impl KnowledgeSource for ScopeLedger {
     ///
     /// `query` e o payload gravado são vetores de fase complexos intercalados
     /// (`re, im`) de mesmo comprimento. O melhor casamento é copiado para
-    /// `out` (semente de atrator) e o retorno é o número de candidatos
-    /// consultados. Nunca mistura organismos: o filtro é `scope.organism_id`
-    /// **e** `scope == self.scope_filter` quando definido.
-    fn cue_into(&mut self, query: &[f32], out: &mut [f32]) -> Result<usize, BridgeError> {
+    /// `out` (semente de atrator) e o retorno carrega a proveniência do fato
+    /// que casou (`key`, `scope`, `authority`). O filtro é **exato** por
+    /// `ScopeId`: `run_id` de organismos diferentes pode coincidir, então
+    /// comparar só `run_id` não isola nada.
+    fn cue_into(
+        &mut self,
+        scope: ScopeId,
+        query: &[f32],
+        out: &mut [f32],
+    ) -> Result<CueHit, BridgeError> {
         self.queries += 1;
         if self.entries.is_empty() {
             return Err(BridgeError::EmptyScope);
         }
-        let mut best: Option<(f32, usize, Vec<f32>)> = None;
+        let mut best: Option<(f32, usize)> = None;
         let mut consulted = 0usize;
-        for record in self.entries.iter() {
+        let mut skipped = 0u64;
+        for (idx, record) in self.entries.iter().enumerate() {
+            if record.scope != scope {
+                skipped += 1;
+                continue;
+            }
             let phases = Self::payload_phases(record);
             if phases.is_empty() || phases.len() != query.len() {
                 continue;
@@ -680,22 +691,31 @@ impl KnowledgeSource for ScopeLedger {
             }
             let den = (na.sqrt() * nb.sqrt()).max(1e-12);
             let score = (re / den) as f32;
-            let better = match &best {
+            let better = match best {
                 None => true,
-                Some((s, _, _)) => score > *s,
+                Some((s, _)) => score > s,
             };
             if better {
-                best = Some((score, consulted, phases));
+                best = Some((score, idx));
             }
         }
-        let Some((_, hits, phases)) = best else {
+        // O filtro rodou: registros de fora do escopo foram descartados.
+        self.cross_scope_skipped += skipped;
+        let Some((_, idx)) = best else {
             return Err(BridgeError::EmptyScope);
         };
+        let record = &self.entries[idx];
+        let phases = Self::payload_phases(record);
         if out.len() < phases.len() {
             return Err(BridgeError::BufTooSmall);
         }
         out[..phases.len()].copy_from_slice(&phases);
-        Ok(hits)
+        Ok(CueHit {
+            key: record.key,
+            scope: record.scope,
+            authority: record.authority,
+            hits: consulted,
+        })
     }
 }
 

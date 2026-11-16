@@ -975,8 +975,7 @@ impl RoofDualWorkspace {
                 }
             }
 
-            let flow = self.pass_into(m, &red_j[..m * m], &red_h[..m], &mut tmp[..m]);
-            let _ = flow;
+            let _flow = self.pass_into(m, &red_j[..m * m], &red_h[..m], &mut tmp[..m]);
 
             let mut changed = 0usize;
             for a in 0..m {

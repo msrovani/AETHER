@@ -32,6 +32,8 @@ struct Args {
     dim: usize,
     seed: u64,
     hidden: f64,
+    /// Pula o braço A (FHRR) — útil para medir só a memória de fase.
+    phase_only: bool,
 }
 
 fn parse_args() -> Args {
@@ -40,12 +42,14 @@ fn parse_args() -> Args {
         dim: 160,
         seed: 0xE1B_0001,
         hidden: 0.2,
+        phase_only: false,
     };
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
     while i < argv.len() {
         match argv[i].as_str() {
             "--quick" => a.quick = true,
+            "--phase-only" => a.phase_only = true,
             "--dim" => {
                 if let Some(v) = argv.get(i + 1).and_then(|v| v.parse().ok()) {
                     a.dim = v;
@@ -228,7 +232,13 @@ fn phase_memory_error(
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = parse_args();
-    let dims: &[usize] = if args.quick { &[64, 160] } else { &DIMS };
+    let dims: &[usize] = if args.phase_only {
+        &[]
+    } else if args.quick {
+        &[64, 160]
+    } else {
+        &DIMS
+    };
     let traces_list: &[usize] = if args.quick { &[6] } else { &TRACES };
     let cap = if args.quick { 512 } else { 2048 };
 

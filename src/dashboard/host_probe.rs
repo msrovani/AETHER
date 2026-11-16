@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::core::affinity::L1D_BYTES;
 use crate::core::core_topology::CorePlan;
@@ -12,7 +12,7 @@ use crate::dashboard::model::ScorecardView;
 use crate::error::{AetherError, Result};
 
 /// Relatório de hardware / ambiente.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HostReport {
     pub logical_cpus: usize,
     pub physical_cpus: usize,
@@ -32,7 +32,7 @@ pub struct HostReport {
 }
 
 /// Gap serializável.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GapDto {
     pub code: String,
     pub severity: String,
@@ -192,6 +192,15 @@ pub fn host_report_path() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("target"));
     target.join("aether_host_report.json")
+}
+
+/// Lê `target/aether_host_report.json` se existir (sem re-sondar).
+pub fn load_host_report() -> Result<HostReport> {
+    let path = host_report_path();
+    let raw = fs::read_to_string(&path)
+        .map_err(|e| AetherError::Config(format!("host_report read {}: {e}", path.display())))?;
+    serde_json::from_str(&raw)
+        .map_err(|e| AetherError::Config(format!("host_report parse: {e}")))
 }
 
 /// Executa a sonda e grava `target/aether_host_report.json`.

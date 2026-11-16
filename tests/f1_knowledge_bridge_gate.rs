@@ -291,31 +291,35 @@ fn gate4_isolamento_de_escopo_entre_organismos() {
     assert_eq!(ledger.hits_for_scope(a), 4);
     assert_eq!(ledger.hits_for_scope(b), 4);
 
-    // Toda resposta de `cue_into` no escopo de A só pode conter registros de A.
+    // Consulta no escopo A: devolve só A, com proveniência.
     let mut query = vec![0.0f32; 32];
     query[0] = 1.0;
     query[1] = 0.0;
     let mut out = vec![0.0f32; query.len()];
-    let mut cross = 0u64;
-    for rec in ledger.scoped(a) {
-        // o "recall" de A é comparado contra o próprio escopo de A
-        assert_eq!(rec.scope.organism_id, 1);
-        if rec.scope.organism_id != a.organism_id {
-            cross += 1;
-        }
-    }
-    assert_eq!(cross, 0, "R8 violado: escopo cruzado em consulta filtrada");
 
-    // `cue_into` no ledger completo devolve um candidato — mas o filtro por
-    // escopo é o que impede a contaminação (o ledger completo é o T2 bruto).
-    let hits = ledger.cue_into(&query, &mut out).expect("cue");
-    assert!(hits > 0);
-    assert_eq!(ledger.cross_scope_hits(), 0);
+    let hit_a = ledger.cue_into(a, &query, &mut out).expect("cue A");
+    assert_eq!(hit_a.hits, 4, "A tem 4 registros consultáveis");
+    assert_eq!(hit_a.scope, a, "proveniência: escopo do fato que casou");
+    assert_eq!(hit_a.authority, 128);
+    assert!(hit_a.key < 4, "key tem de vir de um registro de A");
+
+    // Mesmo vetor, escopo B: nunca devolve A.
+    let hit_b = ledger.cue_into(b, &query, &mut out).expect("cue B");
+    assert_eq!(hit_b.hits, 4);
+    assert_eq!(hit_b.scope, b);
+    assert!((4..8).contains(&hit_b.key), "key tem de vir de B");
+
+    // Controle positivo do filtro: 8 registros de fora foram descartados.
+    assert!(
+        ledger.cross_scope_skipped() >= 8,
+        "o filtro de escopo não foi exercitado (R9: gate vazio)"
+    );
+    assert_eq!(ledger.cross_scope_hits(), 0, "R8 violado");
 
     // Escopo vazio não inventa resposta.
-    let mut ledger_vazio = ScopeLedger::new();
+    let vazio = ScopeId::new(9, 9, 9);
     assert_eq!(
-        ledger_vazio.cue_into(&query, &mut out),
+        ledger.cue_into(vazio, &query, &mut out),
         Err(BridgeError::EmptyScope)
     );
 }

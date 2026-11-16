@@ -372,6 +372,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut n_free_sum = 0usize;
     let mut comp_sum = 0usize;
     let mut runs_sum = 0usize;
+    let mut repair_sum = 0usize;
     let mut allocs_max = 0usize;
 
     // warmup (estatísticas lazy do alocador/ndarray)
@@ -454,6 +455,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         n_free_sum += st.n_free;
         comp_sum += st.components;
         runs_sum += st.bsb_runs;
+        repair_sum += st.repair_moves;
 
         let v2 = violations_3(&clauses, &best2);
         debug_assert_eq!(v2, st.violations);
@@ -514,10 +516,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         fixed_pers as f64 / inst
     );
     println!(
-        "resíduo (spins livres, média)      : {:.1}  ·  componentes {:.1}  ·  BSB runs {:.1}",
+        "resíduo (spins livres, média)      : {:.1}  ·  componentes {:.1}  ·  BSB runs {:.1}  ·  reparo {:.1} mov.",
         n_free_sum as f64 / inst,
         comp_sum as f64 / inst,
-        runs_sum as f64 / inst
+        runs_sum as f64 / inst,
+        repair_sum as f64 / inst
     );
     println!();
     println!("custo (release, por instância)");
@@ -579,12 +582,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ---------- amostra de certificado ----------
     println!("certificado (amostra do último)");
     println!(
-        "  E={:.3} ΔE={:.3} violações={} prov={} coerente={}",
+        "  E={:.3} ΔE(QUBO)={:.3} violações(exato)={} prov={} decisão={}",
         cert.energy,
         cert.gap,
         cert.violations,
         cert.provenance.label(),
-        cert.is_coherent()
+        if pipe.last.decisive {
+            "TESTEMUNHA_VALIDA"
+        } else {
+            "ABSTEM"
+        }
+    );
+    println!(
+        "  (ΔE descreve o mínimo local do QUBO antes do reparo; a decisão é a contagem exata)"
     );
     println!();
 
