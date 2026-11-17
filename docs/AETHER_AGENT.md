@@ -136,8 +136,12 @@ aether-agent ask --subject Atlântida --relation capital --json   # abstém (exi
 
 # registry + autoescolha de ferramenta (P1)
 aether-agent tools
+aether-agent plan --facts data/agent_facts.jsonl --subject AETHER --relation proibe
 aether-agent goal --facts data/agent_facts.jsonl \
   --subject AETHER --relation proibe --json
+
+# workflow multi-passo (P2)
+aether-agent pipeline target/workflow.json --facts data/agent_facts.jsonl --json
 
 # lógica / otimização
 aether-agent sat target/instancia.dimacs
@@ -183,6 +187,18 @@ let outcome = agent.solve(&workflow);
 ```
 
 Gates: `tests/agent_plan_gate.rs` (encadeia/verifica, falha desfaz, OOD abstém).
+
+Exemplo de `target/workflow.json`:
+
+```json
+{"steps":[
+  {"kind":"fact","subject":"AETHER","relation":"proibe"},
+  {"kind":"sat","n":3,"clauses":[[1,2,0],[-1,3,0]]}
+]}
+```
+
+`aether-agent plan` mostra o ranking de tools **sem executar** (score, custo,
+risco, motivo), para auditar a autoescolha.
 
 Resposta: `action`, `answer`, `support`, `consensus`, `authority`,
 `contradictions`, `steps`, `experts`, `rationale`, `certificate`.

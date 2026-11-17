@@ -41,7 +41,9 @@ COMANDOS
   solve <arquivo.json>    resolve QUBO {n, j, h}
   memory <consulta>       consulta a memória durável (SGDB)
   tools                   lista as ferramentas e custo/risco
+  plan                    mostra o ranking de tools sem executar
   goal                    executa um Goal com planner/verificador
+  pipeline <arquivo.json> executa workflow de subgoals (P2)
   teach                   ensina um fato novo com feedback verificado
   demo                    roda o conjunto de demonstração/gates
   stats                   mostra pesos do MoE e métricas
@@ -67,7 +69,9 @@ EXEMPLOS
   aether-agent ask --subject Brasil --relation capital
   aether-agent ask --subject Lua --relation orbita --json
   aether-agent tools
+  aether-agent plan --facts data/agent_facts.jsonl --subject AETHER --relation proibe
   aether-agent goal --facts data/agent_facts.jsonl --subject AETHER --relation proibe
+  aether-agent pipeline target/workflow.json
   aether-agent teach --subject Itália --relation capital --value Roma
   aether-agent sat target/sat.dimacs
   aether-agent demo --json
@@ -216,7 +220,9 @@ pub fn run(argv: &[String], out: &mut dyn Write) -> i32 {
         "solve" | "qubo" => solve(&args, out),
         "memory" | "recall" => memory(&args, out),
         "tools" => tools(&args, out),
+        "plan" => plan(&args, out),
         "goal" => goal(&args, out),
+        "pipeline" => pipeline(&args, out),
         "teach" | "learn" => teach(&args, out),
         "stats" => stats(&args, out),
         "demo" => demo(&args, out),
@@ -388,74 +394,282 @@ fn goal(args: &Args, out: &mut dyn Write) -> i32 {
     if let Some(path) = &args.policy {
         cfg.tool_policy_path = Some(path.clone());
     }
-    let goal = if let (Some(subject), Some(relation)) = (&args.subject, &args.relation) {
-        Goal::fact(subject.clone(), relation.clone())
-    } else if let Some(first) = args.positional.first() {
-        if first.ends_with(".dimacs") {
-            match std::fs::read_to_string(first) {
-                Ok(text) => match parse_dimacs(&text) {
-                    Ok((n, clauses)) => Goal::satisfy(n, clauses),
-                    Err(e) => {
-                        let _ = writeln!(out, "erro: {e}");
-                        return EXIT_FAIL;
-                    }
-                },
-                Err(e) => {
-                    let _ = writeln!(out, "erro: não li {first}: {e}");
-                    return EXIT_FAIL;
-                }
-            }
-        } else if let Some((subject, relation)) = first.split_once('|') {
-            Goal::fact(subject.to_string(), relation.to_string())
-        } else {
-            let _ = writeln!(
-                out,
-                "erro de uso: goal exige --subject/--relation ou \"sujeito|relação\""
-            );
-            return EXIT_USAGE;
+    let goal = match build_goal(args) {
+        Ok(goal) => goal,
+        Err(e) => {
+            let _ = writeln!(out, "erro: {e}");
+            return EXIT_FAIL;
         }
-    } else {
-        let _ = writeln!(out, "erro de uso: goal exige --subject e --relation");
-        return EXIT_USAGE;
     };
     let mut agent = ToolAgent::new(&cfg);
     let outcome = agent.solve(&goal);
-    if args.json {
-        let _ = writeln!(out, "{}", outcome.trace.to_json());
-    } else {
-        let _ = writeln!(
-            out,
-            "sucesso={} ação={} | {}",
-            outcome.success,
-            outcome.action.label(),
-            outcome.rationale
-        );
-        for (i, step) in outcome.steps.iter().enumerate() {
-            let _ = writeln!(
-                out,
-                "  {}. {:<10} score={:.3} met={} {}us — {}",
-                i + 1,
-                step.tool,
-                step.score,
-                step.met,
-                step.elapsed_us,
-                step.detail
-            );
-        }
-        if let Some(claim) = outcome.outcome.as_ref().and_then(|o| o.first_claim()) {
-            let _ = writeln!(
-                out,
-                "resposta: {} (fonte {})",
-                claim.value,
-                claim.source.label()
-            );
-        }
-    }
+    print_goal_outcome(out, &outcome, args.json);
     if outcome.success {
         EXIT_OK
     } else {
         EXIT_FAIL
     }
+}
+
+fn plan(args: &Args, out: &mut dyn Write) -> i32 {
+    let mut cfg = args.config();
+    if let Some(path) = &args.policy {
+        cfg.tool_policy_path = Some(path.clone());
+    }
+    let goal = match build_goal(args) {
+        Ok(goal) => goal,
+        Err(e) => {
+            let _ = writeln!(out, "erro: {e}");
+            return EXIT_FAIL;
+        }
+    };
+    let agent = ToolAgent::new(&cfg);
+    let ranked = agent.plan(&goal);
+    if args.json {
+        let list: Vec<Json> = ranked
+            .iter()
+            .map(|step| {
+                Json::obj([
+                    ("tool", Json::str(step.tool)),
+                    ("score", Json::num(step.score)),
+                    ("cost_ms", Json::num(f64::from(step.cost.ms))),
+                    ("tokens", Json::num(f64::from(step.cost.tokens))),
+                    ("risk", Json::str(step.risk.label())),
+                    ("reason", Json::str(step.reason.clone())),
+                ])
+            })
+            .collect();
+        let _ = writeln!(out, "{}", Json::Arr(list));
+    } else if ranked.is_empty() {
+        let _ = writeln!(out, "nenhuma tool candidata (abstenção)");
+    } else {
+        for (i, step) in ranked.iter().enumerate() {
+            let _ = writeln!(
+                out,
+                "{:>2}. {:<10} score={:.3} custo={:.1}ms risco={} — {}",
+                i + 1,
+                step.tool,
+                step.score,
+                step.cost.ms,
+                step.risk.label(),
+                step.reason
+            );
+        }
+    }
+    EXIT_OK
+}
+
+fn pipeline(args: &Args, out: &mut dyn Write) -> i32 {
+    let Some(path) = args.positional.first() else {
+        let _ = writeln!(out, "erro de uso: pipeline <arquivo.json>");
+        return EXIT_USAGE;
+    };
+    let workflow = match parse_pipeline_file(path) {
+        Ok(workflow) => workflow,
+        Err(e) => {
+            let _ = writeln!(out, "erro: {e}");
+            return EXIT_FAIL;
+        }
+    };
+    let mut cfg = args.config();
+    if let Some(policy) = &args.policy {
+        cfg.tool_policy_path = Some(policy.clone());
+    }
+    let mut agent = ToolAgent::new(&cfg);
+    let outcome = agent.solve(&workflow);
+    print_goal_outcome(out, &outcome, args.json);
+    if outcome.success {
+        EXIT_OK
+    } else {
+        EXIT_FAIL
+    }
+}
+
+fn build_goal(args: &Args) -> Result<Goal, String> {
+    if let (Some(subject), Some(relation)) = (&args.subject, &args.relation) {
+        return Ok(Goal::fact(subject.clone(), relation.clone()));
+    }
+    let Some(first) = args.positional.first() else {
+        return Err("goal exige --subject e --relation".into());
+    };
+    if first.ends_with(".dimacs") {
+        let text = std::fs::read_to_string(first).map_err(|e| format!("não li {first}: {e}"))?;
+        let (n, clauses) = parse_dimacs(&text)?;
+        return Ok(Goal::satisfy(n, clauses));
+    }
+    if let Some((subject, relation)) = first.split_once('|') {
+        return Ok(Goal::fact(subject.to_string(), relation.to_string()));
+    }
+    Err("goal exige --subject/--relation ou \"sujeito|relação\"".into())
+}
+
+fn print_goal_outcome(out: &mut dyn Write, outcome: &super::GoalOutcome, json: bool) {
+    if json {
+        let _ = writeln!(out, "{}", outcome.trace.to_json());
+        return;
+    }
+    let _ = writeln!(
+        out,
+        "sucesso={} ação={} | {}",
+        outcome.success,
+        outcome.action.label(),
+        outcome.rationale
+    );
+    for (i, step) in outcome.steps.iter().enumerate() {
+        let _ = writeln!(
+            out,
+            "  {}. {:<10} score={:.3} met={} {}us — {}",
+            i + 1,
+            step.tool,
+            step.score,
+            step.met,
+            step.elapsed_us,
+            step.detail
+        );
+    }
+    if let Some(claim) = outcome.outcome.as_ref().and_then(|o| o.first_claim()) {
+        let _ = writeln!(
+            out,
+            "resposta: {} (fonte {})",
+            claim.value,
+            claim.source.label()
+        );
+    }
+}
+
+fn parse_pipeline_file(path: &str) -> Result<Goal, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("não li {path}: {e}"))?;
+    let text = text.trim_start_matches('\u{feff}');
+    let json = Json::parse(text).map_err(|e| format!("JSON inválido: {e}"))?;
+    let steps = json
+        .get("steps")
+        .and_then(|v| v.as_arr())
+        .ok_or("pipeline exige `steps` array")?;
+    let mut goals = Vec::new();
+    for step in steps {
+        goals.push(goal_from_json(step)?);
+    }
+    if goals.is_empty() {
+        return Err("pipeline sem steps".into());
+    }
+    let mut workflow = Goal::pipeline(goals);
+    if let Some(budget) = json.get("budget") {
+        workflow.budget = parse_budget(budget)?;
+    }
+    if let Some(risk) = json.get("risk_ceiling").and_then(|v| v.as_str()) {
+        workflow.risk_ceiling = parse_risk(risk)?;
+    }
+    Ok(workflow)
+}
+
+fn goal_from_json(json: &Json) -> Result<Goal, String> {
+    let kind = json
+        .get("kind")
+        .and_then(|v| v.as_str())
+        .ok_or("step sem kind")?;
+    let mut goal = match kind {
+        "fact" | "answer" => {
+            let subject = json
+                .get("subject")
+                .and_then(|v| v.as_str())
+                .ok_or("fact sem subject")?;
+            let relation = json
+                .get("relation")
+                .and_then(|v| v.as_str())
+                .ok_or("fact sem relation")?;
+            let mut goal = Goal::fact(subject, relation);
+            if let Some(value) = json.get("value").and_then(|v| v.as_str()) {
+                goal.success = super::SuccessCriteria::Claim {
+                    subject: subject.to_string(),
+                    relation: relation.to_string(),
+                    value: Some(value.to_string()),
+                };
+            }
+            goal
+        }
+        "sat" => {
+            let n = json.get("n").and_then(|v| v.as_u64()).ok_or("sat sem n")? as usize;
+            let clauses = json
+                .get("clauses")
+                .and_then(clauses_from_json)
+                .ok_or("sat sem clauses válidas")?;
+            Goal::satisfy(n, clauses)
+        }
+        "qubo" | "optimize" => {
+            let n = json.get("n").and_then(|v| v.as_u64()).ok_or("qubo sem n")? as usize;
+            let j = json
+                .get("j")
+                .and_then(|v| v.as_arr())
+                .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect::<Vec<_>>())
+                .ok_or("qubo sem j")?;
+            let h = json
+                .get("h")
+                .and_then(|v| v.as_arr())
+                .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect::<Vec<_>>())
+                .unwrap_or_else(|| vec![0.0; n]);
+            Goal::optimize(n, j, h)
+        }
+        "memory" | "retrieve" => {
+            let query = json
+                .get("query")
+                .and_then(|v| v.as_str())
+                .ok_or("memory sem query")?;
+            Goal::memory(query)
+        }
+        other => return Err(format!("kind desconhecido: {other}")),
+    };
+    if let Some(budget) = json.get("budget") {
+        goal.budget = parse_budget(budget)?;
+    }
+    if let Some(risk) = json.get("risk_ceiling").and_then(|v| v.as_str()) {
+        goal.risk_ceiling = parse_risk(risk)?;
+    }
+    Ok(goal)
+}
+
+fn parse_budget(json: &Json) -> Result<super::Budget, String> {
+    Ok(super::Budget {
+        max_steps: json.get("max_steps").and_then(|v| v.as_u64()).unwrap_or(4) as usize,
+        max_ms: json.get("max_ms").and_then(|v| v.as_u64()).unwrap_or(2_000),
+        max_tokens: json.get("max_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+    })
+}
+
+fn parse_risk(raw: &str) -> Result<super::Risk, String> {
+    match raw {
+        "low" => Ok(super::Risk::Low),
+        "medium" => Ok(super::Risk::Medium),
+        "high" => Ok(super::Risk::High),
+        other => Err(format!("risco inválido: {other}")),
+    }
+}
+
+fn clauses_from_json(value: &Json) -> Option<Vec<Clause3>> {
+    let arr = value.as_arr()?;
+    let mut out = Vec::with_capacity(arr.len());
+    for clause in arr {
+        let ints: Vec<i64> = clause
+            .as_arr()?
+            .iter()
+            .filter_map(|v| v.as_i64())
+            .filter(|v| *v != 0)
+            .collect();
+        if ints.is_empty() || ints.len() > 3 {
+            return None;
+        }
+        let mut lits: Vec<(usize, i8)> = ints
+            .iter()
+            .map(|v| ((v.unsigned_abs() as usize) - 1, if *v > 0 { 1 } else { -1 }))
+            .collect();
+        let pad = *lits.last()?;
+        while lits.len() < 3 {
+            lits.push(pad);
+        }
+        out.push(Clause3::new3(
+            lits[0].0, lits[0].1, lits[1].0, lits[1].1, lits[2].0, lits[2].1,
+        ));
+    }
+    Some(out)
 }
 
 fn teach(args: &Args, out: &mut dyn Write) -> i32 {
@@ -891,6 +1105,49 @@ mod tests {
         assert!(text.contains("\"success\":true"), "{text}");
         assert!(text.contains("\"tool\":\"fact\""), "{text}");
         assert!(text.contains("backpropagation"), "{text}");
+    }
+
+    #[test]
+    fn plan_e_pipeline_mostram_autoescolha() {
+        let (code, text) = run_capture(&[
+            "plan",
+            "--facts",
+            "data/agent_facts.jsonl",
+            "--subject",
+            "AETHER",
+            "--relation",
+            "proibe",
+            "--json",
+        ]);
+        assert_eq!(code, EXIT_OK, "{text}");
+        assert!(text.contains("\"tool\":\"fact\""), "{text}");
+        assert!(text.contains("\"score\""), "{text}");
+
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let path = std::env::temp_dir().join(format!(
+            "aether_agent_pipeline_{}_{unique}.json",
+            std::process::id()
+        ));
+        std::fs::write(
+            &path,
+            r#"{"steps":[{"kind":"fact","subject":"AETHER","relation":"proibe"},{"kind":"sat","n":3,"clauses":[[1,2,0],[-1,3,0]]}]}"#,
+        )
+        .unwrap();
+        let (code, text) = run_capture(&[
+            "pipeline",
+            path.to_str().unwrap(),
+            "--facts",
+            "data/agent_facts.jsonl",
+            "--json",
+        ]);
+        assert_eq!(code, EXIT_OK, "{text}");
+        assert!(text.contains("\"success\":true"), "{text}");
+        assert!(text.contains("\"tool\":\"fact\""), "{text}");
+        assert!(text.contains("\"tool\":\"sat\""), "{text}");
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

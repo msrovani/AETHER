@@ -88,7 +88,9 @@ aether-agent sat target/instancia.dimacs --json
 aether-agent solve target/qubo.json --json
 aether-agent demo --json          # inferência + SAT + QUBO + aprendizado
 aether-agent tools                # registry de tools (custo/risco)
+aether-agent plan --facts data/agent_facts.jsonl --subject AETHER --relation proibe
 aether-agent goal --facts data/agent_facts.jsonl --subject AETHER --relation proibe --json
+aether-agent pipeline target/workflow.json --facts data/agent_facts.jsonl --json
 aether-agent ask --facts data/agent_facts.jsonl --subject AETHER --relation proibe --json
 ```
 

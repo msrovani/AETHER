@@ -115,6 +115,17 @@ impl ToolAgent {
         self.registry.stats(name)
     }
 
+    /// Ranking de tools para um goal, sem executar (diagnóstico de autoescolha).
+    pub fn plan(&self, goal: &Goal) -> Vec<PlanStep> {
+        let state = WorldState {
+            scope: self.scope,
+            facts_loaded: 0,
+            memory_hits: 0,
+        };
+        self.planner
+            .rank(goal, &state, &self.registry, &self.self_model, &[])
+    }
+
     /// Executa o goal com orçamento, risco e verificação.
     ///
     /// Se `goal.pipeline` não estiver vazio, executa os subgoals em sequência,
