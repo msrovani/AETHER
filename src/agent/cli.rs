@@ -44,6 +44,7 @@ COMANDOS
   plan                    mostra o ranking de tools sem executar
   goal                    executa um Goal com planner/verificador
   pipeline <arquivo.json> executa workflow de subgoals (P2)
+  eval                    D0: tiers T0–T3 + artefato JSON (ADR-011)
   teach                   ensina um fato novo com feedback verificado
   demo                    roda o conjunto de demonstração/gates
   stats                   mostra pesos do MoE e métricas
@@ -72,6 +73,7 @@ EXEMPLOS
   aether-agent plan --facts data/agent_facts.jsonl --subject AETHER --relation proibe
   aether-agent goal --facts data/agent_facts.jsonl --subject AETHER --relation proibe
   aether-agent pipeline target/workflow.json
+  aether-agent eval --seed 1 --json
   aether-agent teach --subject Itália --relation capital --value Roma
   aether-agent sat target/sat.dimacs
   aether-agent demo --json
@@ -223,6 +225,7 @@ pub fn run(argv: &[String], out: &mut dyn Write) -> i32 {
         "plan" => plan(&args, out),
         "goal" => goal(&args, out),
         "pipeline" => pipeline(&args, out),
+        "eval" => eval_cmd(&args, out),
         "teach" | "learn" => teach(&args, out),
         "stats" => stats(&args, out),
         "demo" => demo(&args, out),
@@ -741,6 +744,46 @@ fn teach(args: &Args, out: &mut dyn Write) -> i32 {
                 .map(|c| c.value.as_str())
                 .unwrap_or("-")
         );
+    }
+    EXIT_OK
+}
+
+fn eval_cmd(args: &Args, out: &mut dyn Write) -> i32 {
+    use super::eval::{default_eval_path, EvalReport};
+
+    let seed = args.seed.unwrap_or(0);
+    let path = args
+        .positional
+        .first()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_eval_path);
+    let report = EvalReport::collect(seed);
+    if let Err(err) = report.write_to(&path) {
+        let _ = writeln!(out, "erro: nao gravou {}: {err}", path.display());
+        return EXIT_FAIL;
+    }
+    if args.json {
+        let _ = writeln!(out, "{}", report.to_json());
+    } else {
+        let _ = writeln!(
+            out,
+            "D-G0 artefato={} host={} seed={} version={} profile={}",
+            path.display(),
+            report.host,
+            report.seed,
+            report.version,
+            report.profile
+        );
+        for tier in &report.tiers {
+            let _ = writeln!(
+                out,
+                "  {} ready={} — {}",
+                tier.tier.label(),
+                tier.ready,
+                tier.note
+            );
+        }
+        let _ = writeln!(out, "regra: self-suite (T0) != benchmark externo (T3)");
     }
     EXIT_OK
 }

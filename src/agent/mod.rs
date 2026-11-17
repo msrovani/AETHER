@@ -36,6 +36,7 @@
 
 pub mod cli;
 pub mod coherence;
+pub mod eval;
 pub mod executor;
 pub mod experts;
 pub mod planner;
@@ -57,6 +58,7 @@ use self::coherence::{CoherenceEngine, CoherenceResult};
 use self::experts::{default_experts, Expert};
 use self::router::MoERouter;
 
+pub use eval::{default_eval_path, EvalReport, EvalTier};
 pub use executor::ToolExecutor;
 pub use planner::{PlanStep, Planner};
 pub use registry::ToolRegistry;
