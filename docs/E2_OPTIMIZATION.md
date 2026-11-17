@@ -86,6 +86,44 @@ atuam; o resto já está abaixo de 1 µs.
 
 ---
 
+## Lote B — executado (2026-11-17)
+
+| # | Item | Status | Medido |
+|---:|---|---|---|
+| B5 | expansão especializada no teste de dominância | ✅ | **persistência 3,7 → 1,4 µs** (bit-idêntico) |
+| B1 | orçamento de sondagem ∝ `m` | ❌ **sem ganho** | `n=32`: 1,4/1,5 µs e 0 fixadas nos dois braços (instâncias aleatórias não têm candidatas) — revertido |
+| B3 | reinício que fecha factibilidade encerra a rodada | ✅ | **solver 234 → 135 µs · BSB 216 → 117 µs** (1,7–1,9×) · G1/G2 preservados (100%) |
+| B2 | coleta incremental de candidatas | ⏭️ **não feito** | alvo é 1 passada de `m` (≈0,2 µs) de um presolve de 1 µs = **0,05% do total**; não paga o risco |
+| B4 | emit condicional por `λ` | ⏭️ **impossível** | `λ` muda sempre que `viol > 0`; quando não muda, `viol == 0` e o laço já saiu |
+
+Digest re-baselinado de forma deliberada: `0xa3f3babd84c2c30f` →
+**`0x6a49e419d006125d`** (B3 muda a trajetória; G1/G2 re-validados em 60
+instâncias: 100% dos SAT, precisão 100%, 0 decisivas falsas).
+
+Estado atual (min, `n=20`, 100 reps × 5 instâncias):
+
+| estágio | antes do lote B | agora |
+|---|---:|---:|
+| simbólico (1)–(3) | 8,6 µs | **7,9 µs** |
+| · persistência | 3,6 | **1,4** |
+| BSB | 216 | **117** |
+| reparo | 0,7 | 1,0 |
+| **solver (4)** | **234** | **135** |
+| **total** | ~243 | **~143 µs** |
+
+`p50` (60 instâncias, carga real): total **1 349 µs → 223 µs** (6,0×);
+simbólico `p50` **20,1 → 16,4 µs**.
+
+## Lote C — decisão por perfil
+
+| # | Item | Decisão | Razão medida |
+|---:|---|---|---|
+| C1 | matvec `f32`/SIMD | ⏸️ adiado | exige feature + gate estatístico novo; ganho estimado 1,3× (o `val` continua `f64`, então só a largura aritmética muda) sobre 52% do tempo ⇒ ~12% no total. Não paga o custo de abandonar o bit-a-bit agora |
+| C2 | bitset de literais no presolve | ❌ não fazer | presolve = **1,0 µs de 143 µs** (0,7%); o critério do plano (≥10% do estágio) não é atendido |
+| C3 | cache-blocking/PMU no CSR | ❌ não fazer | BSB é 117 µs com `nnz ≈ 774` e `n ≈ 104` — cabe em L2; não há sinal de *stall* de memória para justificar |
+
+---
+
 ## O que sobrou (ranqueado por ganho estimado)
 
 | # | Otimização | Onde | Ganho estimado | Risco |

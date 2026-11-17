@@ -3,6 +3,17 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.140] - 2026-11-17
+
+### Changed
+
+- Ciclo automatico: 3 arquivo(s) (.:1, docs:1, src:1).
+- Gate: ok (6s).
+
+- `Cargo.lock`
+- `docs/E2_OPTIMIZATION.md`
+- `src/core/logic_pipeline.rs`
+
 ## [0.0.139] - 2026-11-17
 
 ### Changed

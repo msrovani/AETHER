@@ -2036,8 +2036,7 @@ impl LogicPipeline {
                 );
                 continue;
             }
-            let quad = |x: usize, y: usize, cc: f64,
-                            qsum: &mut [f64], jabs: &mut [f64]| {
+            let quad = |x: usize, y: usize, cc: f64, qsum: &mut [f64], jabs: &mut [f64]| {
                 qsum[x] += cc;
                 qsum[y] += cc;
                 jabs[x] += cc.abs() * 0.25;
