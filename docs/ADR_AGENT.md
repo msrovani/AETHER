@@ -296,4 +296,38 @@ arXiv:2609.15397, arXiv:2609.35366, arXiv:2602.14849.
 **Alternativas.** Log depois do efeito (descartado: perde before-image);
 compensação cega por chave (descartado: apaga valor de terceiro).
 
+## ADR-015 — Autoridade é derivada de evidência, nunca do pedido
+
+**Contexto.** A auditoria de 2026-11-17 encontrou vazamentos da escada de
+autoridade: `memory.write` promovia fato em quarentena para 128 ao reescrever;
+o expert de transplante carimbava 200 (`verified`) em fato apenas transplantado;
+`remember`/`forget` da API aceitavam `authority` do corpo da requisição; e o
+planner podia escolher `ask.human` (custo zero) no lugar de uma tool executável.
+
+**Decisão.**
+
+1. A escada é `AUTHORITY_QUARANTINE=96` (inferido), `AUTHORITY_CORROBORATED=128`
+   (2+ fontes), `AUTHORITY_VERIFIED=200` (evidência física/certificado) e
+   `AUTHORITY_HITL=255` (humano explícito). Constantes em `src/agent/tool.rs`.
+2. Tool nunca promove autoridade sozinha: escrita nova entra em 96; escrita
+   sobre existente mantém a autoridade e incrementa `reinforced`.
+3. `authority >= 200` só é sobrescrita/apagada com credencial HITL de servidor;
+   corpo de requisição nunca concede autoridade.
+4. Proveniência casa com o carimbo: `Transplanted` ⇒ 128; resultado de
+   solver/verificação com certificado ⇒ 200 + `Observed`.
+5. `ask.human` é tool de **escalação** (`Tool::escalation`): score fora do EFE,
+   só aparece quando nenhuma tool executável paga o piso.
+
+**Status.** Implementado (`d3daf36`, `975ff0d`), com a parte de API em andamento.
+
+**Consequências.**
+- Um fato inferido não "vira verdade" por reescrita; promoção exige
+  corroboração (2 fontes) ou HITL.
+- Clientes sem credencial HITL não escrevem/apagam 200/255.
+- `ask.human` deixa de ser um atalho barato que vence tool real.
+
+**Alternativas.** Confiar no `authority` do corpo (descartado: escalada
+trivial); promover por contagem de reescritas (descartado: não é evidência
+independente).
+
 
