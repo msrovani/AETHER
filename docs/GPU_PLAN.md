@@ -199,6 +199,33 @@ passo `d`) e há 2×10⁷ `atomicOr`. O próximo passo medido é o kernel por pa
 (32 acumuladores por thread, matriz transposta `d × bits`, sem átomos), que é o
 que a projeção assume.
 
+### Segunda rodada (kernel coalescido, v2) — medições finais
+
+Kernel v2: 1 thread por `(palavra de 32 bits, linha)`, **32 acumuladores
+escalares**, matriz **transposta** (`d × bits`) e **sem átomos**.
+
+| métrica | v1 (átomos, row-major) | **v2 (coalescido)** |
+|---|---:|---:|
+| divergências GPU↔CPU | 0 / 32.000 | **0 / 32.000** |
+| razão (n=2000) | 3× | **5–6×** (1,6× sob carga alta) |
+| fill (matriz+transposta, 1×/sessão) | 52 ms | 84 ms |
+
+**Diagnóstico do teto:** 2000 linhas × 15,7 MB = **31 GB** de leitura da matriz
+(cada linha relê a matriz inteira). A ~60–190 GB/s efetivos isso dá os ~600 ms
+observados, não os 9,9 ms da projeção (que assume reúso por bloco).
+
+**Terceira rodada (v3, tiling 8 bits × 4 linhas)** — tentada e **descartada**:
+reduz o tráfego 4× na teoria, mas a validação acusou **95% de divergência** e
+tempo pior; o empacotamento por `atomicOr` com deslocamento ficou errado. Um
+kernel tiled correto exige *shared memory* (bloco 32 bits × 64 `j`) — é trabalho
+de uma sessão dedicada, com o mesmo gate de 0 divergências.
+
+**Veredito de admissão:** o JL fica **`propose`, não `act`**. A barra do plano é
+2× *medido e robusto*; o kernel entrega 5–6× em máquina ociosa e 1,6× sob carga
+— não é margem para mudar o default. O código fica atrás de `--features gpu`
+(opt-in, default intocado) e o gate de regressão exige ≥1,5×.
+
+
 ### G2 / G3 — não implementados (por decisão, com número)
 
 * **G2 (FFT)**: kernel WGSL de FFT não implementado. O que ficou pronto é o

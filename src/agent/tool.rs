@@ -6,6 +6,7 @@
 //! tool não entra no [`crate::agent::registry::ToolRegistry`].
 
 use std::fmt;
+use std::sync::Arc;
 
 use crate::core::certificate::Certificate as EngineCertificate;
 use crate::core::knowledge_bridge_f1::ScopeId;
@@ -338,16 +339,79 @@ pub struct WorldState {
     pub memory_hits: usize,
 }
 
+/// Snapshot de uma memória antes de uma escrita (para undo).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Snapshot {
+    /// Texto anterior.
+    pub text: String,
+    /// Objeto/valor anterior.
+    pub object: String,
+    /// Autoridade anterior.
+    pub authority: u8,
+    /// Contador de reforço.
+    pub reinforced: u64,
+    /// Escopo textual.
+    pub scope: String,
+    /// Proveniência textual.
+    pub provenance: String,
+}
+
 /// Efeito colateral de uma tool (para rollback).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Effect {
-    /// Escrita de memória (chave a remover no rollback).
+    /// Escrita de memória; `prev` é o snapshot pré-write (None = inserção).
     MemoryWrite {
         /// Chave de armazenamento.
         key: String,
+        /// Snapshot anterior (None = não existia).
+        prev: Option<Snapshot>,
+    },
+    /// Efeito sem compensação automática (exige HITL).
+    Irreversible {
+        /// Tipo do efeito.
+        kind: &'static str,
     },
     /// Nenhum efeito.
     None,
+}
+
+/// Operação de undo (LIFO).
+#[derive(Clone, Debug, PartialEq)]
+pub enum UndoOp {
+    /// Remove a chave inserida pelo passo.
+    Insert {
+        /// Chave.
+        key: String,
+    },
+    /// Restaura o snapshot anterior.
+    Restore {
+        /// Chave.
+        key: String,
+        /// Snapshot.
+        prev: Snapshot,
+    },
+    /// Descarta o outbox até a marca da transação.
+    Stage {
+        /// Transação.
+        txn: u64,
+        /// Chaves staged.
+        keys: Vec<String>,
+    },
+    /// Efeito sem compensação.
+    Irreversible {
+        /// Tipo.
+        kind: &'static str,
+    },
+}
+
+/// Backend de undo (memória real ou mock).
+pub trait UndoBackend: Send + Sync {
+    /// Remove a chave inserida (undo de Insert).
+    fn insert_undo(&self, key: &str) -> Result<(), String>;
+    /// Restaura snapshot (undo de Restore).
+    fn restore(&self, key: &str, prev: &Snapshot) -> Result<(), String>;
+    /// Descarta outbox até a marca (undo de Stage).
+    fn stage_rewind(&self, txn: u64, keys: &[String]) -> Result<(), String>;
 }
 
 /// Resultado de uma tool.
@@ -425,8 +489,8 @@ pub struct ToolSchema {
     pub kinds: &'static [GoalKind],
 }
 
-/// Contexto de execução (orçamento/efeitos).
-#[derive(Clone, Debug)]
+/// Contexto de execução (orçamento/efeitos/undo).
+#[derive(Clone)]
 pub struct ToolContext {
     /// Escopo.
     pub scope: ScopeId,
@@ -444,6 +508,33 @@ pub struct ToolContext {
     pub claims: Vec<Claim>,
     /// Certificados dos passos anteriores (verificação).
     pub certificates: Vec<EngineCertificate>,
+    /// Backend de undo (memória real ou mock).
+    pub undo_backend: Option<Arc<dyn UndoBackend>>,
+    /// Log LIFO de undo.
+    undo_log: Vec<UndoOp>,
+    /// Transação corrente.
+    txn: u64,
+}
+
+impl ToolContext {
+    /// Identificador da transação.
+    pub fn txn(&self) -> u64 {
+        self.txn
+    }
+}
+
+impl fmt::Debug for ToolContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ToolContext")
+            .field("scope", &self.scope)
+            .field("spent_ms", &self.spent_ms)
+            .field("effects", &self.effects.len())
+            .field("claims", &self.claims.len())
+            .field("certificates", &self.certificates.len())
+            .field("undo", &self.undo_log.len())
+            .field("has_backend", &self.undo_backend.is_some())
+            .finish()
+    }
 }
 
 impl ToolContext {
@@ -458,7 +549,16 @@ impl ToolContext {
             effects: Vec::new(),
             claims: Vec::new(),
             certificates: Vec::new(),
+            undo_backend: None,
+            undo_log: Vec::new(),
+            txn: trace_id,
         }
+    }
+
+    /// Define o backend de undo (memória/mock).
+    pub fn with_undo_backend(mut self, backend: Arc<dyn UndoBackend>) -> Self {
+        self.undo_backend = Some(backend);
+        self
     }
 
     /// Há orçamento para `cost`?
@@ -475,21 +575,67 @@ impl ToolContext {
         self.spent_tokens = self.spent_tokens.saturating_add(cost.tokens);
     }
 
-    /// Registra um efeito.
+    /// Registra um efeito e a operação de undo correspondente.
     pub fn push_effect(&mut self, effect: Effect) {
-        if effect != Effect::None {
-            self.effects.push(effect);
+        match &effect {
+            Effect::MemoryWrite {
+                key,
+                prev: Some(prev),
+            } => {
+                self.undo_log.push(UndoOp::Restore {
+                    key: key.clone(),
+                    prev: prev.clone(),
+                });
+            }
+            Effect::MemoryWrite { key, prev: None } => {
+                self.undo_log.push(UndoOp::Insert { key: key.clone() });
+            }
+            Effect::Irreversible { kind } => {
+                self.undo_log.push(UndoOp::Irreversible { kind });
+            }
+            Effect::None => return,
         }
+        self.effects.push(effect);
     }
 
-    /// Rollback lógico (limpa efeitos/claims; integração real vem na P2/P3).
+    /// Rewind LIFO até a marca `watermark` (inclusive efeitos posteriores).
+    pub fn rewind(&mut self, watermark: usize) -> Result<(), ToolError> {
+        if self.undo_log.len() <= watermark {
+            return Ok(());
+        }
+        if let Some(backend) = &self.undo_backend {
+            for op in self.undo_log[watermark..].iter().rev() {
+                match op {
+                    UndoOp::Insert { key } => backend
+                        .insert_undo(key)
+                        .map_err(|e| ToolError::Failed(format!("undo insert: {e}")))?,
+                    UndoOp::Restore { key, prev } => backend
+                        .restore(key, prev)
+                        .map_err(|e| ToolError::Failed(format!("undo restore: {e}")))?,
+                    UndoOp::Stage { txn, keys } => backend
+                        .stage_rewind(*txn, keys)
+                        .map_err(|e| ToolError::Failed(format!("undo stage: {e}")))?,
+                    UndoOp::Irreversible { kind } => {
+                        return Err(ToolError::Failed(format!(
+                            "efeito irreversível `{kind}`: exige HITL"
+                        )));
+                    }
+                }
+            }
+        }
+        self.undo_log.truncate(watermark);
+        Ok(())
+    }
+
+    /// Rollback lógico completo (rewind + limpa blackboard).
     pub fn rollback(&mut self) {
+        let _ = self.rewind(0);
         self.effects.clear();
         self.claims.clear();
         self.certificates.clear();
     }
 
-    /// Rollback até um ponto anterior (transação por passo).
+    /// Trunca estruturas após um rewind já aplicado.
     pub fn rollback_to(&mut self, effects: usize, claims: usize, certificates: usize) {
         self.effects.truncate(effects);
         self.claims.truncate(claims);

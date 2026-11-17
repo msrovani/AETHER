@@ -69,8 +69,8 @@ pub use planner::{PlanStep, Planner};
 pub use registry::ToolRegistry;
 pub use self_model::SelfModel;
 pub use tool::{
-    Budget, Cost, Effect, Goal, GoalKind, Risk, SuccessCriteria, Tool, ToolContext, ToolError,
-    ToolOutcome, ToolSchema, WorldState,
+    Budget, Cost, Effect, Goal, GoalKind, Risk, Snapshot, SuccessCriteria, Tool, ToolContext,
+    ToolError, ToolOutcome, ToolSchema, UndoBackend, UndoOp, WorldState,
 };
 pub use tool_agent::{GoalOutcome, ToolAgent};
 

@@ -6,9 +6,13 @@
 
 #![cfg(feature = "agent")]
 
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
 use aether_engine::agent::{
-    AgentConfig, Budget, Claim, Cost, Goal, GoalKind, Risk, SelfModel, SuccessCriteria, Tool,
-    ToolAgent, ToolContext, ToolError, ToolOutcome, ToolRegistry, ToolSchema, WorldState,
+    AgentConfig, Budget, Claim, Cost, Effect, Goal, GoalKind, Risk, SelfModel, Snapshot,
+    SuccessCriteria, Tool, ToolAgent, ToolContext, ToolError, ToolOutcome, ToolRegistry,
+    ToolSchema, UndoBackend, WorldState,
 };
 use aether_engine::core::certificate::Provenance;
 use aether_engine::core::logic_pipeline::Clause3;
@@ -277,6 +281,231 @@ fn gate_a2_real_recall_sat_verify() {
         .collect();
     assert_eq!(tools, ["fact", "sat", "verify"]);
     assert_eq!(outcome.trace.answer.as_deref(), Some("ok"));
+}
+
+#[derive(Default)]
+struct MockStore {
+    data: HashMap<String, String>,
+    undo_calls: usize,
+}
+
+struct MockUndo {
+    store: Arc<Mutex<MockStore>>,
+}
+
+impl UndoBackend for MockUndo {
+    fn insert_undo(&self, key: &str) -> Result<(), String> {
+        let mut store = self.store.lock().map_err(|_| "store")?;
+        store.data.remove(key);
+        store.undo_calls += 1;
+        Ok(())
+    }
+
+    fn restore(&self, key: &str, prev: &Snapshot) -> Result<(), String> {
+        let mut store = self.store.lock().map_err(|_| "store")?;
+        store.data.insert(key.to_string(), prev.text.clone());
+        store.undo_calls += 1;
+        Ok(())
+    }
+
+    fn stage_rewind(&self, _txn: u64, _keys: &[String]) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+struct WriteTool {
+    store: Arc<Mutex<MockStore>>,
+    key: &'static str,
+    value: &'static str,
+    prev: Option<Snapshot>,
+}
+
+impl Tool for WriteTool {
+    fn name(&self) -> &'static str {
+        "write"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "write",
+            description: "write mock",
+            args: &["key"],
+            kinds: &[GoalKind::Answer],
+        }
+    }
+
+    fn cost(&self) -> Cost {
+        Cost::local(1.0)
+    }
+
+    fn risk(&self) -> Risk {
+        Risk::Low
+    }
+
+    fn affordance(&self, goal: &Goal, _state: &WorldState) -> f32 {
+        if goal.kind == GoalKind::Answer {
+            1.0
+        } else {
+            0.0
+        }
+    }
+
+    fn preconditions(&self, goal: &Goal, state: &WorldState) -> bool {
+        self.affordance(goal, state) > 0.0
+    }
+
+    fn call(&mut self, _goal: &Goal, _ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
+        self.store
+            .lock()
+            .map_err(|_| ToolError::Failed("store".into()))?
+            .data
+            .insert(self.key.to_string(), self.value.to_string());
+        Ok(ToolOutcome {
+            claims: vec![Claim::new(
+                "x",
+                "write",
+                self.value,
+                1.0,
+                200,
+                aether_engine::agent::ExpertId::Transplant,
+                Provenance::Transplanted,
+            )],
+            effects: vec![Effect::MemoryWrite {
+                key: self.key.to_string(),
+                prev: self.prev.clone(),
+            }],
+            ..ToolOutcome::default()
+        })
+    }
+}
+
+struct FailTool;
+
+impl Tool for FailTool {
+    fn name(&self) -> &'static str {
+        "fail"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "fail",
+            description: "fail mock",
+            args: &["subject"],
+            kinds: &[GoalKind::Answer],
+        }
+    }
+
+    fn cost(&self) -> Cost {
+        Cost::local(1.0)
+    }
+
+    fn risk(&self) -> Risk {
+        Risk::Low
+    }
+
+    fn affordance(&self, goal: &Goal, _state: &WorldState) -> f32 {
+        if goal.kind == GoalKind::Answer {
+            1.0
+        } else {
+            0.0
+        }
+    }
+
+    fn preconditions(&self, goal: &Goal, state: &WorldState) -> bool {
+        self.affordance(goal, state) > 0.0
+    }
+
+    fn call(&mut self, _goal: &Goal, _ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
+        Ok(ToolOutcome::empty("falha proposital"))
+    }
+}
+
+fn undo_workflow() -> Goal {
+    let write = Goal::fact("x", "write").with_budget(
+        Budget {
+            max_steps: 1,
+            max_ms: 1_000,
+            max_tokens: 0,
+        },
+        Risk::Low,
+    );
+    let mut fail = Goal::fact("x", "fail");
+    fail.success = SuccessCriteria::Claim {
+        subject: "x".into(),
+        relation: "fail".into(),
+        value: Some("nunca".into()),
+    };
+    let fail = fail.with_budget(
+        Budget {
+            max_steps: 1,
+            max_ms: 1_000,
+            max_tokens: 0,
+        },
+        Risk::Low,
+    );
+    Goal::pipeline(vec![write, fail]).with_budget(
+        Budget {
+            max_steps: 4,
+            max_ms: 3_000,
+            max_tokens: 0,
+        },
+        Risk::Low,
+    )
+}
+
+fn undo_agent(
+    store: Arc<Mutex<MockStore>>,
+    key: &'static str,
+    value: &'static str,
+    prev: Option<Snapshot>,
+) -> ToolAgent {
+    let mut registry = ToolRegistry::new(vec!["write", "fail"]);
+    registry
+        .register(Box::new(WriteTool {
+            store: Arc::clone(&store),
+            key,
+            value,
+            prev,
+        }))
+        .unwrap();
+    registry.register(Box::new(FailTool)).unwrap();
+    ToolAgent::with_registry(
+        registry,
+        SelfModel::new(None),
+        aether_engine::core::knowledge_bridge_f1::ScopeId::new(1, 0, 1),
+    )
+    .with_undo_backend(Arc::new(MockUndo { store }))
+}
+
+#[test]
+fn gate_undo_insert_restore_em_falha() {
+    // INSERT: passo 1 escreve chave nova; passo 2 falha; store volta vazio.
+    let store = Arc::new(Mutex::new(MockStore::default()));
+    let mut agent = undo_agent(Arc::clone(&store), "k", "v1", None);
+    let outcome = agent.solve(&undo_workflow());
+    assert!(!outcome.success);
+    assert!(store.lock().unwrap().data.is_empty());
+    assert_eq!(store.lock().unwrap().undo_calls, 1);
+
+    // RESTORE: passo 1 atualiza; passo 2 falha; store volta ao valor anterior.
+    let store = Arc::new(Mutex::new(MockStore::default()));
+    store.lock().unwrap().data.insert("k".into(), "old".into());
+    let prev = Snapshot {
+        text: "old".into(),
+        object: "old".into(),
+        authority: 200,
+        reinforced: 0,
+        scope: "org:1/run:0".into(),
+        provenance: "transplant".into(),
+    };
+    let mut agent = undo_agent(Arc::clone(&store), "k", "new", Some(prev));
+    let outcome = agent.solve(&undo_workflow());
+    assert!(!outcome.success);
+    assert_eq!(
+        store.lock().unwrap().data.get("k").map(String::as_str),
+        Some("old")
+    );
+    assert_eq!(store.lock().unwrap().undo_calls, 1);
 }
 
 #[test]

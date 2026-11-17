@@ -5,6 +5,7 @@
 //! *o que usar* para um `Goal`, com orçamento, risco e rollback.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::core::knowledge_bridge_f1::ScopeId;
 
@@ -15,7 +16,7 @@ use super::self_model::SelfModel;
 use super::telemetry::{goal_label, EpisodeTrace, StepTrace};
 use super::tool::{
     Budget, Cost, Goal, GoalKind, Risk, Tool, ToolContext, ToolError, ToolOutcome, ToolSchema,
-    WorldState,
+    UndoBackend, WorldState,
 };
 use super::tools::default_tools;
 use super::{Action, AgentConfig, Claim, ExpertId, Feedback};
@@ -50,6 +51,7 @@ pub struct ToolAgent {
     executor: ToolExecutor,
     scope: ScopeId,
     traces: Vec<EpisodeTrace>,
+    undo_backend: Option<Arc<dyn UndoBackend>>,
 }
 
 impl std::fmt::Debug for ToolAgent {
@@ -80,6 +82,7 @@ impl ToolAgent {
             executor: ToolExecutor,
             scope: cfg.scope,
             traces: Vec::new(),
+            undo_backend: None,
         }
     }
 
@@ -92,6 +95,22 @@ impl ToolAgent {
             executor: ToolExecutor,
             scope,
             traces: Vec::new(),
+            undo_backend: None,
+        }
+    }
+
+    /// Injeta o backend de undo (memória real ou mock) para o workflow.
+    pub fn with_undo_backend(mut self, backend: Arc<dyn UndoBackend>) -> Self {
+        self.undo_backend = Some(backend);
+        self
+    }
+
+    fn context(&self, budget: Budget, trace_id: u64) -> ToolContext {
+        let ctx = ToolContext::new(self.scope, budget, trace_id);
+        if let Some(backend) = &self.undo_backend {
+            ctx.with_undo_backend(Arc::clone(backend))
+        } else {
+            ctx
         }
     }
 
@@ -146,8 +165,7 @@ impl ToolAgent {
             facts_loaded: 0,
             memory_hits: 0,
         };
-        let mut ctx = ToolContext::new(
-            self.scope,
+        let mut ctx = self.context(
             Budget {
                 max_steps: goal.budget.max_steps.clamp(1, 16),
                 ..goal.budget
@@ -180,8 +198,7 @@ impl ToolAgent {
             .map(|goal| goal.budget.max_steps.max(1))
             .sum::<usize>()
             .clamp(1, 32);
-        let mut ctx = ToolContext::new(
-            self.scope,
+        let mut ctx = self.context(
             Budget {
                 max_steps: total_steps,
                 ..workflow.budget

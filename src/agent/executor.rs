@@ -47,7 +47,14 @@ impl ToolExecutor {
         let claims_before = ctx.claims.len();
         let certificates_before = ctx.certificates.len();
         let started = std::time::Instant::now();
-        let outcome = tool.call(goal, ctx)?;
+        let outcome = match tool.call(goal, ctx) {
+            Ok(outcome) => outcome,
+            Err(e) => {
+                // Efeitos já registrados antes do erro precisam ser desfeitos.
+                let _ = ctx.rewind(effects_before);
+                return Err(e);
+            }
+        };
         ctx.charge(cost);
         let elapsed_us = started.elapsed().as_micros() as u64;
         for effect in &outcome.effects {
@@ -61,7 +68,10 @@ impl ToolExecutor {
                 ctx.certificates.push(*cert);
             }
         } else {
-            // Efeitos de um passo que não passou no verificador são desfeitos.
+            // Rewind LIFO (memória) e truncamento do blackboard.
+            if let Err(e) = ctx.rewind(effects_before) {
+                return Err(e);
+            }
             ctx.rollback_to(effects_before, claims_before, certificates_before);
         }
         Ok(Execution {
