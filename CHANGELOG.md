@@ -3,6 +3,20 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.160] - 2026-11-17
+
+### Changed
+
+- Ciclo automatico: 6 arquivo(s) (.:1, docs:1, src:2, tests:2).
+- Gate: ok (17s).
+
+- `Cargo.lock`
+- `docs/LANGUAGE_PORT.md`
+- `src/agent/undo_sgdb.rs`
+- `src/api/mod.rs`
+- `tests/api_agent.rs`
+- `tests/language_port_gate.rs`
+
 ## [0.0.159] - 2026-11-17
 
 ### Changed

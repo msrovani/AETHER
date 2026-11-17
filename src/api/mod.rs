@@ -42,6 +42,7 @@ use ndarray::{Array2, Array3};
 
 use crate::agent::{
     AetherAgent, AgentConfig, Budget, Goal, GoalKind, Risk, SuccessCriteria, Task, ToolAgent,
+    AUTHORITY_QUARANTINE,
 };
 use crate::core::certificate::{self, Decision, Provenance};
 use crate::core::knowledge_bridge_f1::{
@@ -110,6 +111,12 @@ pub struct ApiConfig {
     pub sgdb_outbox: Option<PathBuf>,
     /// Token `Bearer` do SGDB (ou `AETHER_SGDB_TOKEN`).
     pub sgdb_token: Option<String>,
+    /// Segredo **servidor-side** que autoriza escrita/purga de fatos em
+    /// autoridade `>= 200` (HITL). Populado de `AETHER_HITL_TOKEN`.
+    ///
+    /// O corpo da requisição nunca concede esse poder: sem este segredo, o
+    /// cliente não promove autoridade em `remember` nem apaga fato 200/255.
+    pub hitl_token: Option<String>,
 }
 
 impl Default for ApiConfig {
@@ -124,6 +131,9 @@ impl Default for ApiConfig {
             sgdb: None,
             sgdb_outbox: None,
             sgdb_token: None,
+            hitl_token: std::env::var("AETHER_HITL_TOKEN")
+                .ok()
+                .filter(|token| !token.trim().is_empty()),
         }
     }
 }
@@ -280,6 +290,8 @@ pub struct ApiState {
     ledger: ScopeLedger,
     store: Option<LedgerStore>,
     auth: Option<AuthPolicy>,
+    /// Segredo servidor-side para escrever/purgar em autoridade `>= 200`.
+    hitl: Option<String>,
     sgdb: Option<SgdbClient<Box<dyn Transport>>>,
     sgdb_error: Option<String>,
     agent: Option<AetherAgent>,
@@ -313,6 +325,10 @@ impl ApiState {
             token,
             organism: cfg.organism,
         });
+        state.hitl = cfg
+            .hitl_token
+            .clone()
+            .filter(|token| !token.trim().is_empty());
         if let Some(spec) = &cfg.sgdb {
             let mut sgdb_cfg = SgdbConfig::from_env();
             if let Some(path) = &cfg.sgdb_outbox {
@@ -461,6 +477,8 @@ struct Request {
     path: String,
     body: Vec<u8>,
     token: Option<String>,
+    /// Cabeçalho `x-aether-hitl` (segredo HITL; nunca vem do corpo).
+    hitl: Option<String>,
     too_large: bool,
 }
 
@@ -483,6 +501,7 @@ fn read_request(stream: &mut TcpStream) -> std::io::Result<Option<Request>> {
 
     let mut content_length = 0usize;
     let mut token: Option<String> = None;
+    let mut hitl: Option<String> = None;
     loop {
         line.clear();
         if reader.read_line(&mut line)? == 0 {
@@ -504,6 +523,8 @@ fn read_request(stream: &mut TcpStream) -> std::io::Result<Option<Request>> {
                 });
             } else if k.eq_ignore_ascii_case("x-aether-token") {
                 token = Some(v.to_string());
+            } else if k.eq_ignore_ascii_case("x-aether-hitl") {
+                hitl = Some(v.to_string());
             }
         }
     }
@@ -531,6 +552,7 @@ fn read_request(stream: &mut TcpStream) -> std::io::Result<Option<Request>> {
         path,
         body,
         token,
+        hitl,
         too_large,
     }))
 }
@@ -624,11 +646,11 @@ fn route(state: &mut ApiState, req: &Request) -> Reply {
         ("GET", "/health") => Reply::Json(200, health(state)),
         ("GET", "/props") => Reply::Json(200, props(state)),
         ("GET", "/v1/models") => Reply::Json(200, models()),
-        ("POST", "/v1/aether/remember") => remember(state, &req.body, bound),
+        ("POST", "/v1/aether/remember") => remember(state, req, bound),
         ("POST", "/v1/aether/cue") => cue(state, &req.body, bound),
         ("POST", "/v1/aether/solve") => solve(&req.body),
         ("POST", "/v1/aether/agent") => agent_route(state, &req.body, bound),
-        ("POST", "/v1/aether/forget") => forget(state, &req.body, bound),
+        ("POST", "/v1/aether/forget") => forget(state, req, bound),
         ("POST", "/v1/chat/completions") => chat(state, &req.body, bound),
         ("POST", "/completion") => completion(state, &req.body, bound),
         ("OPTIONS", _) => Reply::Json(204, Json::Null),
@@ -661,6 +683,25 @@ fn token_eq(a: &str, b: &str) -> bool {
         diff |= x ^ y;
     }
     diff == 0
+}
+
+/// Autoriza operação em autoridade `>= 200` (HITL).
+///
+/// O segredo é **do servidor** (`ApiConfig.hitl_token` / `AETHER_HITL_TOKEN`) e
+/// chega em `x-aether-hitl` (ou em `Authorization`/`X-Aether-Token`, quando é o
+/// mesmo segredo). O corpo (`authority`, `confirm`) nunca conta. Sem segredo
+/// configurado não existe canal humano: 200/255 ficam indisponíveis.
+fn hitl_authorized(state: &ApiState, req: &Request) -> bool {
+    let Some(expected) = state.hitl.as_deref() else {
+        return false;
+    };
+    if expected.trim().is_empty() {
+        return false;
+    }
+    [req.hitl.as_deref(), req.token.as_deref()]
+        .into_iter()
+        .flatten()
+        .any(|presented| token_eq(presented.trim(), expected))
 }
 
 fn scope_or_bound(value: Option<&Json>, bound: Option<u64>) -> Option<ScopeId> {
@@ -742,8 +783,8 @@ fn models() -> Json {
     ])
 }
 
-fn remember(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
-    let doc = match parse_json(body) {
+fn remember(state: &mut ApiState, req: &Request, bound: Option<u64>) -> Reply {
+    let doc = match parse_json(&req.body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
     };
@@ -761,11 +802,19 @@ fn remember(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
         None => return bad("key ausente (número ou string decimal)"),
     };
     let certificate = cert_from(doc.get("certificate"));
-    let authority = doc
+    // Autoridade é do **servidor**, não do corpo. Fato novo entra em
+    // quarentena (96); 200/255 só com o segredo HITL apresentado no cabeçalho.
+    let requested = doc
         .get("authority")
         .and_then(Json::as_u64)
         .unwrap_or(0)
         .min(255) as u8;
+    let authority = if requested >= AUTHORITY_HITL && hitl_authorized(state, req) {
+        requested
+    } else {
+        AUTHORITY_QUARANTINE
+    };
+    let demoted = requested > authority;
     let layer = match doc.get("layer").and_then(Json::as_u64).unwrap_or(4) {
         2 => Layer::L2Episodic,
         6 => Layer::L6Graph,
@@ -844,11 +893,19 @@ fn remember(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
         ("stored".into(), Json::Bool(true)),
         ("persisted".into(), Json::Bool(persisted)),
         ("compacted".into(), Json::Bool(compacted)),
+        // Autoridade **efetiva** (servidor): o corpo não promove.
+        ("authority".into(), Json::num(f64::from(authority))),
         ("scope".into(), scope_json(scope)),
         ("scope_key".into(), Json::str(scope_key)),
         ("total".into(), Json::num(state.ledger.len() as f64)),
         ("sgdb".into(), Json::str(sgdb_state)),
     ];
+    if demoted {
+        fields.push((
+            "authority_requested".into(),
+            Json::num(f64::from(requested)),
+        ));
+    }
     if let Some(e) = compact_error {
         fields.push(("compact_error".into(), Json::str(e)));
     }
@@ -857,19 +914,20 @@ fn remember(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
 
 /// Remove um fato do escopo e grava o túmulo (para não ressuscitar no boot).
 ///
-/// Exige `authority >= 200` (HITL, ADR-014/MSG 0306): apagar memória é ato com
-/// mandato, não efeito colateral de uma requisição qualquer.
-///
+/// * `< 200` — comportamento antigo: `403 authority_required`.
 /// * `200..=254` — grava o **túmulo** e mantém o registro no ledger: o purge
 ///   fica pendente de decisão humana (`forgot:false`, `tombstoned:true`).
-/// * `255` — purge de fato aprovado por humano; exige confirmação **explícita**
-///   (`"confirm":true` no corpo), senão a rota responde `409` e nada é tocado.
-/// * `< 200` — comportamento antigo: `403 authority_required`.
+/// * `255` — purga de fato aprovado por humano (`forgot:true`).
+///
+/// `200/255` só valem com o **segredo HITL do servidor** apresentado no
+/// cabeçalho `x-aether-hitl` (ou em `Authorization`/`X-Aether-Token`, quando for
+/// o mesmo segredo); sem ele a rota responde `403 hitl_required`. Corpo
+/// (`authority`/`confirm`) não concede poder: é dado do cliente, não mandato.
 ///
 /// O túmulo é gravado **antes** da remoção: se o disco falhar, o fato continua
 /// citável e o cliente vê `500`, em vez de perder o registro sem rastro.
-fn forget(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
-    let doc = match parse_json(body) {
+fn forget(state: &mut ApiState, req: &Request, bound: Option<u64>) -> Reply {
+    let doc = match parse_json(&req.body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
     };
@@ -892,17 +950,18 @@ fn forget(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
             403,
             error_json(
                 "authority_required",
-                "forget exige authority >= 200 (túmulo + HITL; 255 exige confirmação)",
+                "forget exige authority >= 200 (túmulo + HITL)",
             ),
         );
     }
-    // 255 apaga um fato aprovado por humano: o mandato precisa ser explícito.
-    if authority == AUTHORITY_HUMAN && doc.get("confirm").and_then(Json::as_bool) != Some(true) {
+    // 200/255 só com o segredo do servidor: `{"authority":255,"confirm":true}`
+    // não vale como mandato humano.
+    if !hitl_authorized(state, req) {
         return Reply::Json(
-            409,
+            403,
             error_json(
-                "hitl_confirmation_required",
-                "authority 255 exige confirmação explícita (`confirm: true`) — HITL",
+                "hitl_required",
+                "forget 200/255 exige o segredo HITL do servidor (x-aether-hitl)",
             ),
         );
     }
@@ -922,9 +981,19 @@ fn forget(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
                 );
             }
             tombstoned = true;
+        } else if authority == AUTHORITY_HUMAN {
+            // Sem store não há onde gravar o túmulo. Purgar aqui apagaria o
+            // fato da memória e ele ressuscitaria no próximo boot.
+            return Reply::Json(
+                500,
+                error_json(
+                    "ledger_io",
+                    "sem store para gravar o túmulo antes do purge",
+                ),
+            );
         }
     }
-    // 200..=254 é HITL: marca, mas não purga (o purge é o 255 confirmado).
+    // 200..=254 é HITL: marca, mas não purga (o purge é o 255 autorizado).
     let hitl = authority < AUTHORITY_HUMAN;
     let removed = if hitl {
         false
@@ -938,7 +1007,7 @@ fn forget(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
         ("scope".into(), scope_json(scope)),
         ("remaining".into(), Json::num(state.ledger.len() as f64)),
     ];
-    // Campo só no ramo novo: a resposta do purge 255 confirmado mantém o shape
+    // Campo só no ramo novo: a resposta do purge 255 autorizado mantém o shape
     // antigo (`forgot`/`tombstoned`/`key`/`scope`/`remaining`).
     if hitl {
         fields.insert(2, ("hitl".into(), Json::Bool(true)));
@@ -1185,12 +1254,23 @@ fn agent_route(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
 /// `SgdbUndoBackend::new` nunca panica em erro de I/O, então a rota não tem
 /// caminho de falha por causa do arquivo.
 fn agent_pipeline_route(doc: &Json, bound: Option<u64>) -> Reply {
+    let scope = if doc.get("scope").is_some() {
+        let Some(scope) = scope_or_bound(doc.get("scope"), bound) else {
+            return bad("scope ausente: use {organism,run,app}");
+        };
+        if !scope_allowed(scope, bound) {
+            return forbidden(scope, bound);
+        }
+        Some(scope)
+    } else {
+        None
+    };
     let workflow = match pipeline_goal_from_json(doc) {
         Ok(goal) => goal,
         Err(e) => return bad(&e),
     };
     let mut agent =
-        ToolAgent::new(&agent_pipeline_config(bound)).with_undo_journal(undo_journal_path());
+        ToolAgent::new(&agent_pipeline_config(bound, scope)).with_undo_journal(undo_journal_path());
     let outcome = agent.solve(&workflow);
     let answer = outcome
         .outcome
@@ -1217,12 +1297,14 @@ const PIPELINE_MAX_STEPS: usize = 8;
 
 /// Config do `ToolAgent` usado pela borda.
 ///
-/// Quando o token está ligado a um organismo, o pipeline roda no escopo
-/// `(organism, 0, 0)` — o mesmo mapeamento de `remember`/`cue` (`scope_or_bound`)
-/// em vez de ignorar o `bound` e usar o escopo default da biblioteca.
-fn agent_pipeline_config(bound: Option<u64>) -> AgentConfig {
+/// Sem `scope` no corpo, o token liga o pipeline a `(organism, 0, 0)`, o mesmo
+/// mapeamento de `remember`/`cue`. Com `scope` explícito, `run` e `app` entram
+/// — desde que o organismo seja o do token.
+fn agent_pipeline_config(bound: Option<u64>, scope: Option<ScopeId>) -> AgentConfig {
     let mut cfg = AgentConfig::default();
-    if let Some(organism) = bound {
+    if let Some(scope) = scope {
+        cfg.scope = scope;
+    } else if let Some(organism) = bound {
         cfg.scope = ScopeId::new(organism, 0, 0);
     }
     cfg
@@ -2170,10 +2252,18 @@ mod tests {
     fn config_do_pipeline_usa_o_organismo_do_token() {
         // O `bound` vem do token: o pipeline tem de rodar no organismo dele,
         // como `remember`/`cue` já fazem via `scope_or_bound`.
-        assert_eq!(agent_pipeline_config(Some(7)).scope, ScopeId::new(7, 0, 0));
+        assert_eq!(
+            agent_pipeline_config(Some(7), None).scope,
+            ScopeId::new(7, 0, 0)
+        );
+        let explicit = ScopeId::new(7, 2, 3);
+        assert_eq!(
+            agent_pipeline_config(Some(7), Some(explicit)).scope,
+            explicit
+        );
         // Sem auth (`bound = None`) o escopo default da config é preservado.
         assert_eq!(
-            agent_pipeline_config(None).scope,
+            agent_pipeline_config(None, None).scope,
             AgentConfig::default().scope
         );
     }

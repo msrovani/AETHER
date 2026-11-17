@@ -65,13 +65,27 @@ impl Drop for EnvGuard {
 }
 
 fn request(addr: SocketAddr, method: &str, path: &str, body: &str) -> (u16, String) {
+    request_with_hitl(addr, method, path, body, None)
+}
+
+/// Igual a [`request`], com o segredo HITL no cabeçalho `x-aether-hitl`.
+fn request_with_hitl(
+    addr: SocketAddr,
+    method: &str,
+    path: &str,
+    body: &str,
+    hitl: Option<&str>,
+) -> (u16, String) {
     let mut stream = TcpStream::connect(addr).expect("connect");
     stream
         .set_read_timeout(Some(Duration::from_secs(10)))
         .unwrap();
+    let hitl = hitl
+        .map(|token| format!("x-aether-hitl: {token}\r\n"))
+        .unwrap_or_default();
     let request = format!(
         "{method} {path} HTTP/1.1\r\nhost: localhost\r\ncontent-type: application/json\r\n\
-         content-length: {}\r\nconnection: close\r\n\r\n{}",
+         {hitl}content-length: {}\r\nconnection: close\r\n\r\n{}",
         body.len(),
         body
     );
@@ -134,9 +148,13 @@ fn error_kind(doc: &Json) -> String {
 const PHASES: &str = "[0.1,0.2,0.3,0.4]";
 
 fn remember_body(key: u64, organism: u64) -> String {
+    remember_body_with_authority(key, organism, 128)
+}
+
+fn remember_body_with_authority(key: u64, organism: u64, authority: u64) -> String {
     format!(
         r#"{{"key":"{key}","phases":{PHASES},
-            "scope":{{"organism":{organism},"run":1,"app":1}},"authority":128}}"#
+            "scope":{{"organism":{organism},"run":1,"app":1}},"authority":{authority}}}"#
     )
 }
 
@@ -144,11 +162,10 @@ fn cue_body(organism: u64) -> String {
     format!(r#"{{"scope":{{"organism":{organism},"run":1,"app":1}},"query":{PHASES}}}"#)
 }
 
-fn forget_body(key: u64, organism: u64, authority: u64, confirm: bool) -> String {
-    let confirm = if confirm { ",\"confirm\":true" } else { "" };
+fn forget_body(key: u64, organism: u64, authority: u64) -> String {
     format!(
         r#"{{"key":"{key}","scope":{{"organism":{organism},"run":1,"app":1}},
-            "authority":{authority},"reason":"teste"{confirm}}}"#
+            "authority":{authority},"reason":"teste"}}"#
     )
 }
 
@@ -432,14 +449,19 @@ fn api_agent_pipeline_desfaz_escrita_no_rollback() {
     let _ = std::fs::remove_file(&journal);
 }
 
-/// Authority 200 = túmulo + HITL: o túmulo vai para o disco **antes** de
-/// qualquer remoção, e o registro não é purgado no mesmo passo.
+/// Segredo HITL **do servidor** usado nos testes de autoridade.
+const HITL_TOKEN: &str = "hitl-secret";
+
+/// Authority 200 = túmulo + HITL: sem o segredo do servidor a rota recusa; com
+/// ele, o túmulo vai para o disco **antes** de qualquer remoção e o registro
+/// não é purgado no mesmo passo.
 #[test]
 fn api_agent_forget_200_tombstone_sem_purge() {
     let file = temp_file("forget200");
     let _ = std::fs::remove_file(&file);
     let addr = start_cfg(ApiConfig {
         ledger_path: Some(file.clone()),
+        hitl_token: Some(HITL_TOKEN.to_string()),
         threads: 1,
         ..ApiConfig::default()
     });
@@ -447,11 +469,17 @@ fn api_agent_forget_200_tombstone_sem_purge() {
     let (status, resp) = request(addr, "POST", "/v1/aether/remember", &remember_body(1, 1));
     assert_eq!(status, 200, "{resp}");
 
-    let (status, resp) = request(
+    // Sem o segredo HITL, 200 não deleta (o corpo não autoriza nada).
+    let (status, resp) = request(addr, "POST", "/v1/aether/forget", &forget_body(1, 1, 200));
+    assert_eq!(status, 403, "{resp}");
+    assert_eq!(error_kind(&json_of(&resp)), "hitl_required", "{resp}");
+
+    let (status, resp) = request_with_hitl(
         addr,
         "POST",
         "/v1/aether/forget",
-        &forget_body(1, 1, 200, false),
+        &forget_body(1, 1, 200),
+        Some(HITL_TOKEN),
     );
     assert_eq!(status, 200, "{resp}");
     let doc = json_of(&resp);
@@ -468,12 +496,13 @@ fn api_agent_forget_200_tombstone_sem_purge() {
     let (_, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(1));
     assert!(resp.contains("\"key\":\"1\""), "fato sumiu no 200: {resp}");
 
-    // Só 255 + confirmação explícita purga (túmulo já está no disco).
-    let (status, resp) = request(
+    // Só 255 com o segredo HITL purga (túmulo já está no disco).
+    let (status, resp) = request_with_hitl(
         addr,
         "POST",
         "/v1/aether/forget",
-        &forget_body(1, 1, 255, true),
+        &forget_body(1, 1, 255),
+        Some(HITL_TOKEN),
     );
     assert_eq!(status, 200, "{resp}");
     assert!(resp.contains("\"forgot\":true"), "{resp}");
@@ -483,32 +512,111 @@ fn api_agent_forget_200_tombstone_sem_purge() {
     let _ = std::fs::remove_file(&file);
 }
 
-/// 255 purga um fato aprovado por humano: sem confirmação explícita, `409` e
-/// nada é tocado.
+/// `remember` ignora a autoridade do corpo: fato novo entra em quarentena (96).
 #[test]
-fn api_agent_forget_255_sem_confirmacao_e_recusado() {
-    let addr = start();
-    let (status, resp) = request(addr, "POST", "/v1/aether/remember", &remember_body(9, 1));
-    assert_eq!(status, 200, "{resp}");
+fn api_agent_remember_ignora_authority_do_cliente() {
+    let addr = start_cfg(ApiConfig {
+        hitl_token: None,
+        threads: 1,
+        ..ApiConfig::default()
+    });
 
+    // 255 no corpo não vira 255 no ledger: é 96, e a resposta sinaliza.
     let (status, resp) = request(
         addr,
         "POST",
-        "/v1/aether/forget",
-        &forget_body(9, 1, 255, false),
+        "/v1/aether/remember",
+        &remember_body_with_authority(1, 1, 255),
     );
-    assert_eq!(status, 409, "{resp}");
+    assert_eq!(status, 200, "{resp}");
     let doc = json_of(&resp);
-    assert_eq!(error_kind(&doc), "hitl_confirmation_required", "{resp}");
-    assert!(
-        error_message(&doc).contains("confirm"),
-        "mensagem não explica o flag: {resp}"
+    let authority = doc.get("authority").and_then(Json::as_u64);
+    assert_eq!(authority, Some(96), "autoridade efetiva errada: {resp}");
+    let requested = doc.get("authority_requested").and_then(Json::as_u64);
+    assert_eq!(requested, Some(255), "pedido não foi registrado: {resp}");
+
+    // A leitura (`cue`) confirma o que foi gravado.
+    let (status, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(1));
+    assert_eq!(status, 200, "{resp}");
+    assert!(resp.contains("\"key\":\"1\""), "{resp}");
+    assert!(resp.contains("\"authority\":96"), "{resp}");
+
+    // Mesmo um pedido intermediário (128) não escapa da quarentena.
+    let (_, resp) = request(
+        addr,
+        "POST",
+        "/v1/aether/remember",
+        &remember_body_with_authority(2, 2, 128),
     );
+    assert!(resp.contains("\"authority\":96"), "{resp}");
+
+    // E `forget` < 200 continua recusado como antes.
+    let (status, resp) = request(addr, "POST", "/v1/aether/forget", &forget_body(1, 1, 128));
+    assert_eq!(status, 403, "{resp}");
+    assert_eq!(error_kind(&json_of(&resp)), "authority_required", "{resp}");
+
+    // A recusa não apagou o fato.
+    let (_, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(1));
+    assert!(resp.contains("\"key\":\"1\""), "{resp}");
+}
+
+/// 255 purga um fato aprovado por humano, mas **só** com o segredo HITL do
+/// servidor: `authority`/`confirm` no corpo não concedem poder.
+#[test]
+fn api_agent_forget_255_exige_segredo_hitl() {
+    let addr = start_cfg(ApiConfig {
+        hitl_token: Some(HITL_TOKEN.to_string()),
+        threads: 1,
+        ..ApiConfig::default()
+    });
+
+    // O único caminho para um fato 255 é o HITL do servidor.
+    let (status, resp) = request_with_hitl(
+        addr,
+        "POST",
+        "/v1/aether/remember",
+        &remember_body_with_authority(9, 1, 255),
+        Some(HITL_TOKEN),
+    );
+    assert_eq!(status, 200, "{resp}");
+    assert!(resp.contains("\"authority\":255"), "{resp}");
+
+    // Sem segredo (mesmo pedindo `confirm:true`) a rota recusa.
+    let body = format!(
+        r#"{{"key":"9","scope":{{"organism":1,"run":1,"app":1}},
+            "authority":255,"confirm":true,"reason":"teste"}}"#
+    );
+    let (status, resp) = request(addr, "POST", "/v1/aether/forget", &body);
+    assert_eq!(status, 403, "{resp}");
+    assert_eq!(error_kind(&json_of(&resp)), "hitl_required", "{resp}");
+
+    // Segredo errado também não passa.
+    let (status, resp) =
+        request_with_hitl(addr, "POST", "/v1/aether/forget", &body, Some("errado"));
+    assert_eq!(status, 403, "{resp}");
+    assert_eq!(error_kind(&json_of(&resp)), "hitl_required", "{resp}");
 
     // Recusa não é purga: o fato continua citável.
     let (_, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(1));
     assert!(
         resp.contains("\"key\":\"9\""),
         "recusa apagou o fato: {resp}"
+    );
+
+    // Segredo certo, mas sem store: não há onde gravar o túmulo, então o
+    // fato permanece citável (500, não purge silencioso).
+    let (status, resp) = request_with_hitl(
+        addr,
+        "POST",
+        "/v1/aether/forget",
+        &forget_body(9, 1, 255),
+        Some(HITL_TOKEN),
+    );
+    assert_eq!(status, 500, "{resp}");
+    assert_eq!(error_kind(&json_of(&resp)), "ledger_io", "{resp}");
+    let (_, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(1));
+    assert!(
+        resp.contains("\"key\":\"9\""),
+        "purge sem túmulo: {resp}"
     );
 }

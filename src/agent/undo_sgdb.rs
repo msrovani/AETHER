@@ -8,8 +8,8 @@
 //! # Contrato
 //!
 //! * [`UndoBackend::write`] devolve o *before-image* e registra a intenção no
-//!   diário **antes** de mutar o mapa (intenção crash-safe: sem `fsync`, mas
-//!   com `flush`).
+//!   diário **antes** de mutar o mapa. O append faz `flush` + `sync_all` sob
+//!   um lock de arquivo (create-new), para dois processos não intercalarem a linha.
 //! * [`UndoBackend::insert_undo`] faz **compare-and-delete**: só apaga se o
 //!   valor corrente ainda é o que o `write` emparelhado inseriu. Escritor
 //!   concorrente ⇒ `Err("stale: ...")` e nada é tocado.
@@ -393,8 +393,9 @@ impl SgdbUndoBackend {
         Ok(())
     }
 
-    /// Anexa uma linha ao diário (append + `flush`, sem `fsync`).
+    /// Anexa uma linha ao diário (`flush` + `sync_all`, lock exclusivo).
     fn append_line(&self, line: &Json) -> Result<(), String> {
+        let _lock = JournalLock::acquire(&self.path)?;
         let mut text = line.to_text();
         text.push('\n');
         let mut file = std::fs::OpenOptions::new()
@@ -404,8 +405,69 @@ impl SgdbUndoBackend {
             .map_err(|e| format!("io: abrir diário {}: {e}", self.path.display()))?;
         file.write_all(text.as_bytes())
             .and_then(|()| file.flush())
+            .and_then(|()| file.sync_all())
             .map_err(|e| format!("io: gravar diário {}: {e}", self.path.display()))
     }
+}
+
+/// Lock exclusivo do diário: arquivo irmão `*.jsonl.lock` via `create_new`.
+struct JournalLock {
+    path: PathBuf,
+}
+
+impl JournalLock {
+    fn acquire(journal: &Path) -> Result<Self, String> {
+        let path = lock_path(journal);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        loop {
+            match std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+            {
+                Ok(file) => {
+                    drop(file);
+                    return Ok(Self { path });
+                }
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                    if std::time::Instant::now() >= deadline {
+                        let stale = std::fs::metadata(&path)
+                            .and_then(|meta| meta.modified())
+                            .ok()
+                            .and_then(|modified| modified.elapsed().ok())
+                            .is_some_and(|age| age >= std::time::Duration::from_secs(5));
+                        if stale {
+                            let _ = std::fs::remove_file(&path);
+                            continue;
+                        }
+                        return Err(format!("io: diário {} ocupado", journal.display()));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                Err(error) => {
+                    return Err(format!(
+                        "io: lock do diário {}: {error}",
+                        journal.display()
+                    ));
+                }
+            }
+        }
+    }
+}
+
+impl Drop for JournalLock {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+fn lock_path(journal: &Path) -> PathBuf {
+    let mut name = journal
+        .file_name()
+        .map(|name| name.to_os_string())
+        .unwrap_or_default();
+    name.push(".lock");
+    journal.with_file_name(name)
 }
 
 impl UndoBackend for SgdbUndoBackend {
@@ -973,5 +1035,48 @@ mod tests {
         let error = b.insert_undo("k").expect_err("stale: valor mudou");
         assert!(error.starts_with("stale"), "{error}");
         assert_eq!(a.get("k").map(|s| s.text), Some("A2".to_string()));
+    }
+
+    #[test]
+    fn append_nao_deixa_lock_orfao() {
+        let journal = TempJournal::new("fsync");
+        let backend = journal.backend();
+        backend.write("k", "A", AUTHORITY_QUARANTINE).unwrap();
+        let lock = lock_path(journal.path());
+        assert!(
+            !lock.exists(),
+            "lock órfão depois do append: {}",
+            lock.display()
+        );
+        drop(backend);
+        assert_eq!(SgdbUndoBackend::replay(journal.path()).unwrap(), 1);
+    }
+
+    #[test]
+    fn dois_escritores_nao_intercalam_linhas() {
+        let journal = TempJournal::new("interleave");
+        let path = journal.path().to_path_buf();
+        let a = journal.backend();
+        let b = SgdbUndoBackend::new(&path);
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                for i in 0..20 {
+                    a.write(&format!("a{i}"), "A", AUTHORITY_QUARANTINE)
+                        .unwrap();
+                }
+            });
+            scope.spawn(|| {
+                for i in 0..20 {
+                    b.write(&format!("b{i}"), "B", AUTHORITY_QUARANTINE)
+                        .unwrap();
+                }
+            });
+        });
+        drop((a, b));
+        let text = std::fs::read_to_string(&path).unwrap();
+        for line in text.lines() {
+            assert!(Json::parse(line).is_ok(), "linha quebrada: {line}");
+        }
+        assert_eq!(SgdbUndoBackend::replay(&path).unwrap(), 40);
     }
 }
