@@ -3,6 +3,15 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.167] - 2026-11-17
+
+### Changed
+
+- Ciclo automatico: 1 arquivo(s) (tests:1).
+- Gate: ok (3s).
+
+- `tests/gpu_ising_sweep_gate.rs`
+
 ## [0.0.166] - 2026-11-17
 
 ### Added
