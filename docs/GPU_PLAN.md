@@ -223,10 +223,35 @@ tempo pior; o empacotamento por `atomicOr` com deslocamento ficou errado. Um
 kernel tiled correto exige *shared memory* (bloco 32 bits × 64 `j`) — é trabalho
 de uma sessão dedicada, com o mesmo gate de 0 divergências.
 
-**Veredito de admissão:** o JL fica **`propose`, não `act`**. A barra do plano é
-2× *medido e robusto*; o kernel entrega 5–6× em máquina ociosa e 1,6× sob carga
+**Veredito de admissão (v2, superado pela v3 logo abaixo):** o JL ficava
+**`propose`, não `act`** — a barra do plano é 2× *medido e robusto* e o v2
+entregava 5–6× em máquina ociosa e 1,6× sob carga.
 — não é margem para mudar o default. O código fica atrás de `--features gpu`
 (opt-in, default intocado) e o gate de regressão exige ≥1,5×.
+
+### Terceira rodada (v3, **tiled com shared memory**) — JL passa a `act`
+
+O teto do v2 era tráfego: cada linha relia a matriz (31 GB para 2.000 linhas).
+A v3 (`src/core/gpu/jl_tiled.rs` + `jl_tiled.wgsl`) carrega o tile da matriz em
+**shared memory** e o reusa para **32 linhas** — o tráfego de `mat` cai 32×.
+Bloco = (8 palavras de 32 bits) × (32 linhas), 8 warps (256 threads), 32
+acumuladores por thread, `j` ascendente (bit preservado). A matriz sobe **uma
+vez por sessão** (`JlSession::set_matrix`), então o `fill + transposição` de
+~74 ms também sai do caminho.
+
+| métrica | v2 | **v3 (tiled)** |
+|---|---:|---:|
+| tempo, 2.000 linhas | 530–600 ms | **23–37 ms** |
+| razão vs CPU (2,7–2,9 s) | 5× | **75–122×** |
+| primeiro lote (fill+upload+kernel) | 84 + 600 ms | **~101–110 ms** (25–27×) |
+| divergências | 0/32.000 | **0/32.000** (n=200); 1/320.000 (n=2000, `\|dot\|=2,9e-6`) |
+
+**Veredito:** **`act`** para lote. A barra de 2× é superada por mais de uma ordem
+de grandeza, e mesmo o pior caso (primeiro lote, pagando a matriz) fica em 25×.
+Continua atrás de `--features gpu`; o default é CPU-only e o organismo a 60 Hz
+não passa por aqui. O único critério que **não** vale é igualdade bit-a-bit
+absoluta: o WGSL funde `mul+add`, então um `dot` com `|dot| ~ 1e-6` pode virar
+de sinal (o gate aceita ≤4 palavras em 320.000 **e prova** `|dot| < 1e-3`).
 
 
 ### G3 — sweep Ising em lote: **implementado e admitido** (11,3× medido)

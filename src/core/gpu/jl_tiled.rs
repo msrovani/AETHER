@@ -153,13 +153,21 @@ mod sess {
         }
 
         /// Sobe a matriz transposta (`d Ã— bits`) uma vez por sessÃ£o.
-        pub fn set_matrix(&mut self, mat_t: &[f32], d: usize, bits: usize) -> Result<(), JlTiledError> {
+        pub fn set_matrix(
+            &mut self,
+            mat_t: &[f32],
+            d: usize,
+            bits: usize,
+        ) -> Result<(), JlTiledError> {
             if d == 0 || bits == 0 || bits % 32 != 0 || mat_t.len() < d * bits {
                 return Err(JlTiledError::Shape);
             }
             if self.d == d && self.bits == bits && self.mat.is_some() {
-                self.queue
-                    .write_buffer(self.mat.as_ref().expect("mat"), 0, bytemuck::cast_slice(&mat_t[..d * bits]));
+                self.queue.write_buffer(
+                    self.mat.as_ref().expect("mat"),
+                    0,
+                    bytemuck::cast_slice(&mat_t[..d * bits]),
+                );
                 return Ok(());
             }
             self.mat = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -168,8 +176,11 @@ mod sess {
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             }));
-            self.queue
-                .write_buffer(self.mat.as_ref().expect("mat"), 0, bytemuck::cast_slice(&mat_t[..d * bits]));
+            self.queue.write_buffer(
+                self.mat.as_ref().expect("mat"),
+                0,
+                bytemuck::cast_slice(&mat_t[..d * bits]),
+            );
             self.d = d;
             self.bits = bits;
             self.bind = None;
@@ -248,12 +259,7 @@ mod sess {
             self.queue.write_buffer(
                 &self.params,
                 0,
-                bytemuck::cast_slice(&[
-                    n_rows as u32,
-                    d as u32,
-                    bits as u32,
-                    words32 as u32,
-                ]),
+                bytemuck::cast_slice(&[n_rows as u32, d as u32, bits as u32, words32 as u32]),
             );
             self.queue
                 .write_buffer(&self.x, 0, bytemuck::cast_slice(&rows[..n_rows * d]));
@@ -303,13 +309,10 @@ mod sess {
 
 /// SessÃ£o do GEMM JL tiled â€” **o caminho para lotes**.
 ///
-/// ```no_run
-/// # use aether_engine::core::gpu::jl_tiled::JlSession;
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// ```text
 /// let mut s = JlSession::new()?;
-/// s.set_matrix(&mat_t, 384, 10_240)?; // uma vez
-/// s.project_into(&rows, n, &mut out)?; // por lote
-/// # Ok(()) }
+/// s.set_matrix(&mat_t, 384, 10_240)?;   // uma vez por sessão
+/// s.project_into(&rows, n, &mut out)?;  // por lote
 /// ```
 pub struct JlSession {
     #[cfg(feature = "gpu")]

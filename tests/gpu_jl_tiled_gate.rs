@@ -210,10 +210,7 @@ fn tiled_razao_minima_10x() {
 #[test]
 fn tiled_fallback_e_shape_nao_panicam() {
     let err = JlSession::with_force_off(true);
-    assert!(matches!(
-        err,
-        Err(JlTiledError::Off(gpu::GpuOff::Disabled))
-    ));
+    assert!(matches!(err, Err(JlTiledError::Off(gpu::GpuOff::Disabled))));
 
     let st = gpu::status();
     if !st.available {

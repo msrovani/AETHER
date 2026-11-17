@@ -58,6 +58,16 @@ Princípios:
    Boltzmann do `ThermodynamicDreamer` (milhares de caminhos em paralelo),
    backtest de morfogênese. **A rota de 60 Hz do organismo permanece em CPU**
    até a GPU provar determinismo aceitável (ver §4).
+
+   * **Admitido por medição (2026-11-17, RTX 3050):** o GEMM do transplante
+     (JL, `d=384 → 10.240 bits`) em lote — **75–122×** contra a CPU em 2.000
+     linhas (23–37 ms vs 2,7 s), 25× já contando `fill+upload` do primeiro
+     lote, com o bit idêntico ao caminho CPU (`0/32.000` em n=200; no lote de
+     2.000, 1/320.000 com `|dot| = 2,9e-6`, FMA — não índice). Entra por
+     `--features gpu` + [`JlSession`]; o default segue CPU-only.
+   * **Admitido por medição:** sweep de instâncias Ising em lote — **11,3×**
+     (10⁴ instâncias, n=20, 48 passos: 11 ms vs 124 ms), só para lote
+     (≥ ~10³); o pipeline por instância não passa por lá.
 4. **Fallback obrigatório:** ausência de GPU (ou driver ausente) degrada para
    a rota CPU com um aviso — **nunca** um `panic`. O motor não sabe o que está
    plugado, na GPU como no transdutor.
