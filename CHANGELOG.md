@@ -3,6 +3,23 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [Unreleased]
+
+### Added
+
+- `examples/fft_gpu_probe.rs`: probe de crossover CPU×GPU do FFT em lote
+  (L=8192, B=64..2048, mesmo processo, 5 reps min/p50). Resultado medido na
+  RTX 3050: **sem crossover** — razão 0,18–0,22× (o GPU perde e2e em qualquer
+  lote), custo fixo **11,4 ms/chamada** p50, 1ª chamada 712 ms. Artefato
+  `target/fft_gpu_probe.json`; veredicto em `docs/GPU_PLAN.md` §G2 e
+  `docs/HW_TARGET.md` §3 (fórum MSG 0438).
+
+### Fixed
+
+- `src/core/gpu/jl_tiled.rs`: `clippy::unnecessary_unwrap` (linha 167) —
+  `clippy -D warnings` verde novamente; gate `gpu_jl_tiled_gate` 3/3
+  (serializado: em threads paralelas os testes disputam o device).
+
 ## [0.0.168] - 2026-11-17
 
 ### Added

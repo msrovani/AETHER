@@ -327,11 +327,21 @@ critério é a média exata. O gate codifica isso: `|Δmédia| ≤ 0,2%`.
 **o `digest` do E2 e o `bsb_compacto_igual_ao_solver_auditado` não valem neste
 caminho** (documentado no topo de `ising.rs`).
 
-### G2 — não implementado (por decisão, com número)
+### G2 — kernel implementado, **rejeitado por medição** (2026-11-17)
 
-* **G2 (FFT)**: kernel WGSL de FFT não implementado. O que ficou pronto é o
-  **invariante estrutural** (organismo/hot path sem dependência gráfica) e a
-  projeção de **7,4×** para L=8192 em lote.
+* **G2 (FFT)**: kernel WGSL implementado (dono do FFT, gate `gpu_fft_gate`
+  verde: erro rel. 4,2e-7 vs `rustfft`, repro same-lote, `force_off` sem
+  `panic`, invariante estrutural). O **probe de crossover**
+  (`examples/fft_gpu_probe.rs`) mediu a razão CPU/GPU ponta-a-ponta em
+  L=8192: **0,18× (B=64), 0,21× (256), 0,22× (1.024), 0,17× (2.048)** —
+  **não existe crossover**: o GPU perde em qualquer lote e perde pior quanto
+  maior o lote. Custo fixo por chamada **11,4 ms p50** (13 uniforms + 13
+  passes + readback síncrono; a 1ª chamada paga 712 ms de device+shader,
+  1× por processo). O gargalo é o trabalho do *host* dentro da chamada
+  (bit-reversal cache-hostil, pack/unpack, cópias, PCIe síncrono) — a
+  computação GPU é trivial. **`rustfft` CPU é a rota do FFT**; reabrir G1/G2
+  exige sessão com buffers residentes + bit-reversal no shader + readback
+  async (estilo `JlSession`).
 
 ---
 
@@ -341,7 +351,7 @@ caminho** (documentado no topo de `ising.rs`).
 |---|---|---|
 | **G0** censo | ✅ | JL 13,4 s (2,9 GFLOP/s), FFT 7,4× projetado, Ising 929× projetado |
 | **G1** JL do transplante | ✅ **`act`** | **75–122×** (tiled, 2.000 linhas); 25× no 1º lote pagando a matriz |
-| **G2** FFT em lote | ⏸ `abstain` | sem consumidor de lote; 7,4× segue **projetado** |
+| **G2** FFT em lote | ❌ `abstain` com número | 7,4× era **projeção**; medido **0,18–0,22× (perde)**, custo fixo 11,4 ms/chamada, sem crossover até B=2.048 (`examples/fft_gpu_probe.rs`, MSG 0438) |
 | **G3** sweep Ising | ✅ admitido **só em lote** | **11,3×** em 10⁴ (sintético) e **11,9×** na família E2c-2 (`h ≠ 0`), KS 0,014 vs piso 0,024; média 0,089% pior |
 
 Nenhum kernel novo entra no `default`: tudo atrás de `--features gpu`, e o laço
@@ -353,10 +363,12 @@ de 60 Hz, o `record` do F1 e o solver do E2 continuam em CPU.
    (`gpu_jl_gate`, `gpu_jl_tiled_gate`, `gpu_ising_sweep_gate`) e o
    `gpu_boundary_gate` rodam **à mão**. Sem um job opt-in, uma regressão de
    kernel não é pega por `cargo test` (sem a feature os testes compilam fora).
-2. **G2 (FFT) — gates para quem construir:** (a) erro relativo ≤ 1e-4 contra
-   `rustfft` em `L=8192, B=64`; (b) razão ≥ 2× medida; (c) `force_off` sem
-   `panic`; (d) invariante estrutural — o organismo a 60 Hz **não** referencia
-   `core::gpu`; (e) mesma saída para o mesmo lote (reprodutibilidade).
+2. **G2 (FFT) — fechado por medição (2026-11-17).** Gates (a) erro ≤ 1e-4,
+   (c) `force_off` sem `panic`, (d) invariante estrutural e (e) reprodutibilidade
+   **verdes** no `gpu_fft_gate`; o gate (b) razão ≥ 2× **falhou honestamente em
+   todos os lotes** (probe: 0,18–0,22×). Dívida restante só se alguém reescrever
+   o caminho: sessão com buffers residentes, bit-reversal no shader (ou saída em
+   ordem natural) e readback async — sem isso, FFT fica em CPU.
 3. **JL não tem bit-exatidão absoluta** (o WGSL funde `mul+add`): o gate é
    `≤4 palavras em 320.000` **e** `|dot| < 1e-3` provado no teste. Se o JL
    entrar num caminho bit-exato, é esse contrato que precisa mudar.

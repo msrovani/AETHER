@@ -68,6 +68,15 @@ Princípios:
    * **Admitido por medição:** sweep de instâncias Ising em lote — **11,3×**
      (10⁴ instâncias, n=20, 48 passos: 11 ms vs 124 ms), só para lote
      (≥ ~10³); o pipeline por instância não passa por lá.
+   * **Rejeitado por medição (2026-11-17, probe `examples/fft_gpu_probe.rs`):**
+     FFT em lote GPU perde ponta-a-ponta **em qualquer lote** em L=8192:
+     razão CPU/GPU **0,18× (B=64), 0,21× (256), 0,22× (1.024), 0,17× (2.048)**
+     — sem crossover. Custo fixo **11,4 ms/chamada** p50 (13 uniforms + 13
+     passes + readback síncrono; 1ª chamada 712 ms, 1× por processo). O
+     gargalo é o trabalho do host dentro da chamada (bit-reversal,
+     pack/unpack, cópias, PCIe síncrono). **Rota do FFT continua `rustfft`
+     CPU**; para reabrir: sessão com buffers residentes + bit-reversal no
+     shader + readback async.
 4. **Fallback obrigatório:** ausência de GPU (ou driver ausente) degrada para
    a rota CPU com um aviso — **nunca** um `panic`. O motor não sabe o que está
    plugado, na GPU como no transdutor.

@@ -162,13 +162,12 @@ mod sess {
             if d == 0 || bits == 0 || bits % 32 != 0 || mat_t.len() < d * bits {
                 return Err(JlTiledError::Shape);
             }
-            if self.d == d && self.bits == bits && self.mat.is_some() {
-                self.queue.write_buffer(
-                    self.mat.as_ref().expect("mat"),
-                    0,
-                    bytemuck::cast_slice(&mat_t[..d * bits]),
-                );
-                return Ok(());
+            if self.d == d && self.bits == bits {
+                if let Some(mat) = self.mat.as_ref() {
+                    self.queue
+                        .write_buffer(mat, 0, bytemuck::cast_slice(&mat_t[..d * bits]));
+                    return Ok(());
+                }
             }
             self.mat = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("jl-tiled-mat"),
