@@ -145,6 +145,19 @@ impl ToolAgent {
                 break;
             };
             used.push(step.tool);
+            if !ctx.can_spend(step.cost) {
+                steps.push(StepTrace {
+                    tool: step.tool.to_string(),
+                    score: step.score,
+                    reason: step.reason.clone(),
+                    executed: false,
+                    met: false,
+                    elapsed_us: 0,
+                    detail: "custo > orçamento: hold".to_string(),
+                });
+                rationale = "orçamento insuficiente: hold".to_string();
+                continue;
+            }
             let execution = self
                 .executor
                 .execute(&mut self.registry, &step, goal, &mut ctx);

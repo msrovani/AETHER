@@ -508,6 +508,13 @@ pub trait Tool: Send {
 
     /// Executa.
     fn call(&mut self, goal: &Goal, ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError>;
+
+    /// Simulação obrigatória antes de efeito (P1: read-only; P2: efeitos).
+    ///
+    /// Default: no-op. Tools com efeito devem validar argumentos/sandbox aqui.
+    fn dry_run(&self, _goal: &Goal, _ctx: &ToolContext) -> Result<(), ToolError> {
+        Ok(())
+    }
 }
 
 /// Converte um `ExpertOutput` em `ToolOutcome` (atalho para as tools reais).

@@ -258,7 +258,7 @@ custo, risco e validação — exatamente o que o plano híbrido já diz.
 
 | ID | Experimento | Métrica | Decisão |
 |---|---|---|---|
-| **L1** | Grammar Pruning/parser em 100 comandos do agente | exact match/slot F1, p99 | default se ≥95% e <10 ms |
+| **L1** | Grammar Pruning/parser em 100 comandos do agente | exact match/slot F1, p99, **OOV fora do schema** | default se ≥95%, <10 ms e OOV ≤5%; se OOV >5%, abstenção/ask (não LLM) |
 | **L2** | xLSTM/RWKV/Mamba/BLT 1–3B em 50 prompts | qualidade, RAM, tok/s | small_lm se couber no budget |
 | **L3** | LCM/Mimir-like com SONAR em sumarização/comandos | similaridade semântica, decoder latency | concept se ≥0,9 e <50 ms |
 | **L4** | ESN/LAERC em corpus de domínio | perplexity/BLiMP, p99 | edge se ≥ baseline local |

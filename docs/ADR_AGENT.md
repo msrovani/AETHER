@@ -118,6 +118,9 @@ HITL; `shell` é desligado por default.
 - O planner penaliza caro/arriscado e evita tool inválida.
 - O usuário vê por que uma tool foi escolhida.
 - Tool nova precisa de teste de schema e de segurança.
+- `dry_run` é obrigatório antes de qualquer efeito; o executor chama antes de
+  `call`.
+- Custo > orçamento ⇒ `hold` (não executa) — ideia do CURSOR (MSG 0263).
 
 **Alternativas.** Registry aberto (inseguro); tool como string mágica
 (impossível validar).
@@ -187,7 +190,9 @@ verdadeiro. Promover saída de LLM a 255 cria sistema confiantemente errado.
 **Decisão.** Faixas: 0–59 descarte; 60–120 quarentena (LLM/transplante não
 corroborado, só `cite`/`propose`); 128–199 corroboração mínima; 200–254
 verificação; 255 HITL. Conflito vira `contradicts`, nunca overwrite. TTL para
-extração de LLM até corroboração.
+extração de LLM até corroboração. **Tag `source=llm|transplant`** obrigatória;
+**autoridade efetiva = min(faixa, corroboracão)**; 128+ exige **2 fontes
+independentes**; LLM nunca se promove.
 
 **Status.** Aceito; implementação na Trilha B/C.
 
@@ -214,6 +219,9 @@ Latência só release, com host/seed/versão no artefato.
 - ACQ 100 não é comparável a MMLU.
 - 100k exige shard/LSH; 1M exige SGDB como fonte.
 - Regressão > 10% bloqueia.
+- G-A1 exige **n ≥ 200** por seed (ou IC95 inferior ≥ 85% com n=50), piso por
+  seed ≥ 90%, matriz de confusão (certa/errada/abstenção); abstenção correta
+  não conta como acerto.
 
 **Alternativas.** Benchmark único (engana); “funciona na minha máquina”
 (descartado).

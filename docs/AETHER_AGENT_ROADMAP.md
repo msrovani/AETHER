@@ -1,9 +1,10 @@
 # AETHER Agent — plano de implementação (v0.1 → v1.0)
 
-> **Versão do plano:** 2.1 — 2026-11-17
+> **Versão do plano:** 2.2 — 2026-11-17
 > Mudanças: análise cruzada; quatro trilhas (A/B/C/D); `LanguagePort` e
 > alternativas à LLM de borda; autoridade em escada; tiers de avaliação;
-> ADR-013. Registro no fórum: MSG 0253–0259.
+> ADR-013; P0/P1 implementados; addenda do fórum (MSG 0263/0267): OOV, IC95,
+> proveniência, dry-run, hold por orçamento, telemetria.
 >
 > O que falta para o agente **escolher sozinho o que usar**, planejar em vários
 > passos, operar ferramentas com segurança e aprender sem se enganar.
@@ -263,13 +264,17 @@ independente e reversível.
 - `src/agent/cli.rs` — `aether-agent tools`, `aether-agent goal "<json>"`.
 - `tests/agent_tools_gate.rs` — G-A1.
 
-**Gate G-A1 (escolha certa)**
+**Gate G-A1 (escolha certa)** — *implementado em `tests/agent_tools_gate.rs`*
 - 10 goals sintéticos, 4 ferramentas, recompensa verificada;
-- após 50 episódios: acerto da ferramenta escolhida **≥ 90%** (baseline
-  aleatório 25%); custo médio ≤ 1,5× do ótimo; 0 chamadas fora de allowlist.
+- **n ≥ 200** por seed (ou IC95 inferior ≥ 85% com n=50), **piso por seed**
+  ≥ 90% — não média entre seeds (BUFFY, MSG 0267);
+- matriz de confusão: tool certa / tool errada / abstenção; **abstenção correta
+  não é acerto nem erro**;
+- custo médio ≤ 1,5× do ótimo; 0 chamadas fora de allowlist; telemetria por
+  tool obrigatória para o UCB (CURSOR/BUFFY).
 
 **Saída:** a IA escolhe *o que usar* para um passo, com justificativa e
-telemetria.
+telemetria. **Status:** P0/P1 verdes; promover a P2 só com IC/10 seeds.
 
 ### P2 — Planejamento multi-passo e parada (7–10 dias)
 
@@ -352,8 +357,8 @@ borda por hash.
 | Fase | Entrega | Esforço | Gate |
 |---|---|---|---|
 | **B0** | transdutor real: embedding do doador (Qwen3-Embedding-0.6B, Apache-2.0) → JL/sign → HV; labels reais; `symbol_phases` deixa de ser hash | 5–7 d | **B-G0**: “gato/gata”, paráfrase e 1 caractere deixam de dar 60/60 abstenções; recall@10 ≥ 0,95 |
-| **B1** | escala 1k–10k: shards, `HvBank::top_k_into`, crosstalk, p99, RAM; decidir D/LSH | 5–7 d | **B-G1**: recall@10 ≥ 0,95 em 10k; p99 ≤ 5 ms; RSS ≤ 256 MB |
-| **B2** | 100k + fallback SGDB; autoridade e conflito (`contradicts`, nunca overwrite) | 5–7 d | **B-G2**: recall@10 ≥ 0,90 em 100k; 0 overwrite; 0 vazamento de escopo |
+| **B1** | escala 1k–10k: shards, `HvBank::top_k_into`, crosstalk, p99, RAM; decidir D/LSH | 5–7 d | **B-G1**: recall@10 ≥ 0,95 em 10k; p99 ≤ 5 ms; RSS ≤ 256 MB; **E3/JL mantidos** (senão 10k não vale) |
+| **B2** | 100k + fallback SGDB; autoridade e conflito (`contradicts`, nunca overwrite) | 5–7 d | **B-G2**: recall@10 ≥ 0,90 em 100k; **shard antes de medir**; 0 overwrite; 0 vazamento de escopo |
 | **B4** | rodada de produção do transplante: corpus real, manifest, licença, auditoria, 8 gates | 3–5 d | **B-G3**: `transplant_hv_gate` + `e3_transplant_gate` verdes com números no artefato |
 | **B3** | E3 como tool: `transduce.text` (borda) + `semantic.match` | 5–7 d | **B-G4**: generalização semântica medida; abstenção calibrada |
 
@@ -365,7 +370,7 @@ Detalhe das alternativas, papers e experimentos: **`docs/LANGUAGE_PORT.md`**.
 
 | Fase | Entrega | Esforço | Gate |
 |---|---|---|---|
-| **C0** | `LanguagePort` + backend `parser` (gramática/schema) + `template` (retrieval extrativo) | 4–6 d | **C-G0**: 100 comandos do agente com exact/slot ≥ 95% e p99 < 10 ms; sem LLM |
+| **C0** | `LanguagePort` + backend `parser` (gramática/schema) + `template` (retrieval extrativo) | 4–6 d | **C-G0**: 100 comandos com exact/slot ≥ 95% e p99 < 10 ms; **OOV fora do schema ≤ 5%**; acima disso → abstenção/`ask`, nunca LLM automático |
 | **C1** | backend `small_lm` (xLSTM/RWKV/Mamba/BLT 0.5–3B) com budget de tokens/CPU | 5–7 d | **C-G1**: qualidade ≥ baseline parser em open-domain, RAM ≤ budget, tok/s ≥ alvo |
 | **C2** | backend `concept` (SONAR/LCM-like: conceito→embedding→decoder) | 7–10 d | **C-G2**: similaridade semântica ≥ 0,9 e decoder < 50 ms em domínio |
 | **C3** | backend `remote_llm` + `diffusion` constrained para JSON/planejamento | 5–7 d | **C-G3**: JSON válido ≥ 95%; custo/latência dentro do orçamento |
@@ -472,13 +477,15 @@ entra em ranking.
 
 Regras:
 - fato de LLM entra **sempre** em 60–120, com `citation`, modelo/versão, timestamp,
-  escopo e hash do texto;
+  escopo e hash do texto; **tag `source=llm|transplant`** no metadado (CURSOR);
+- **autoridade efetiva = min(faixa da fonte, corroboracão)**; 128+ exige **2
+  fontes independentes**; LLM **nunca** promove a si mesmo (BUFFY);
 - conflito não sobrescreve: vira `contradicts`; o antigo mantém autoridade até
   decisão;
 - `forget` exige motivo e autoridade ≥ 128;
 - TTL obrigatório para extração de LLM (ex.: 30–90 dias) até corroboração;
-- **gate:** nenhuma claim com autoridade < 128 produz `act`; nenhuma promoção a
-  255 sem HITL.
+- **gate:** nenhuma claim com autoridade efetiva < 128 produz `act`; nenhuma
+  promoção a 255 sem HITL.
 
 ## 7.2 Escala de memória (o gargalo real)
 
@@ -607,10 +614,29 @@ compartilhados: mudanças por PR pequeno e rebase.
 
 Cada commit passa `cargo test --lib agent::` e `cargo test --test agent_tools_gate`.
 
-## 14. Versões do plano
+## 15. Contribuições do fórum (MSG 0263/0267) e disposição
+
+| Ideia | Origem | Disposição |
+|---|---|---|
+| Parser L1 primeiro; OOV fora do schema ≤ 5%, senão abstenção (não LLM) | CURSOR/BUFFY | C-G0 atualizado |
+| Concept/L3 em paralelo só como medição (não bloqueia P0) | CURSOR | Trilha B/C |
+| Alvo 10k; 100k só depois de shard; 1k é smoke | BUFFY | B-G1/B-G2 atualizados |
+| Quarentena com tag `llm` vs `transplant`; autoridade efetiva = min(faixa, corroboração); 2 fontes; LLM não se promove | BUFFY | §7.1 + ADR-010 |
+| Ordem: memory/verify/sat/qubo; fs read-only; http GET allowlist; MCP com schema; shell nunca sem sandbox | BUFFY | Trilha C/P3 |
+| G-A1: n ≥ 200 ou IC95 inferior ≥ 85%; piso por seed; matriz de confusão; abstenção separada | BUFFY | §4/G-A1 + ADR-011 |
+| Dry-run obrigatório antes de efeito | CURSOR | `Tool::dry_run` no executor (P1) |
+| Self-model hold quando custo > orçamento | CURSOR | `ToolAgent` marca `hold` antes de executar |
+| Telemetria por tool para UCB | CURSOR/BUFFY | `EpisodeTrace` + `StepTrace` |
+
+**Status P0/P1:** implementado (`src/agent/tool.rs`, `registry.rs`, `executor.rs`,
+`self_model.rs`, `planner.rs`, `telemetry.rs`, `tools.rs`, `tool_agent.rs`);
+`aether-agent tools/goal`; G-A1 com 200 episódios/seed e IC95.
+
+## 16. Versões do plano
 
 | Versão | Data | Mudança |
 |---|---|---|
+| **2.2** | 2026-11-17 | incorpora MSG 0263/0267: OOV, IC95/piso por seed, tag de proveniência/2 fontes, dry-run, hold por orçamento, telemetria; P0/P1 implementados |
 | **2.1** | 2026-11-17 | análise cruzada com sessão paralela; 4 trilhas (A/B/C/D); `LanguagePort` + alternativas; autoridade em escada; tiers T0–T3; ADR-009…013; fórum MSG 0253–0259 |
 | 2.0 | 2026-11-17 | autoescolha EFE+UCB; tools/planner/self-model; trilhas B/C/D; gates G-A/B/C/D |
 | 1.0 | 2026-11-17 | plano inicial P0–P5 (autonomia), avaliação e riscos |

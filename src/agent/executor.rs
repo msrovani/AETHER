@@ -41,6 +41,8 @@ impl ToolExecutor {
         let tool = registry
             .get_mut(step.tool)
             .ok_or_else(|| ToolError::InvalidArgs(format!("tool `{}` sumiu", step.tool)))?;
+        // Dry-run obrigatório antes de qualquer efeito (P2 reusa isto).
+        tool.dry_run(goal, ctx)?;
         let started = std::time::Instant::now();
         let outcome = tool.call(goal, ctx)?;
         ctx.charge(cost);

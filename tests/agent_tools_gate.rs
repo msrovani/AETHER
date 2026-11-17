@@ -87,8 +87,9 @@ fn gate_a1_planner_aprende_ferramenta_certa() {
     let goal = Goal::fact("Brasil", "capital");
     let state = WorldState::default();
     let planner = aether_engine::agent::Planner::default();
+    // BUFFY (MSG 0267): n >= 200 e limite inferior do IC95 >= 85%, por seed.
+    let n = 200usize;
     for seed in 0..5u64 {
-        // Alterna a ordem para não vencer por acaso do registry.
         let registry = if seed % 2 == 0 {
             mock_registry([("good", true), ("bad", false)])
         } else {
@@ -96,19 +97,35 @@ fn gate_a1_planner_aprende_ferramenta_certa() {
         };
         let mut model = SelfModel::new(None);
         let mut correct = 0usize;
-        for _ in 0..50 {
+        let mut wrong = 0usize;
+        for _ in 0..n {
             let step = planner
                 .select(&goal, &state, &registry, &model, &[])
                 .expect("candidato");
             let ok = step.tool == "good";
             if ok {
                 correct += 1;
+            } else {
+                wrong += 1;
             }
             model.update(step.tool, &goal, ok);
         }
+        assert_eq!(correct + wrong, n, "matriz de confusão incompleta");
+        let p = correct as f64 / n as f64;
+        let z = 1.96f64;
+        let denom = 1.0 + z * z / n as f64;
+        let center = (p + z * z / (2.0 * n as f64)) / denom;
+        let margin = z
+            * ((p * (1.0 - p) / n as f64) + (z * z / (4.0 * (n as f64) * (n as f64)))).sqrt()
+            / denom;
+        let lower = center - margin;
         assert!(
-            correct >= 45,
-            "seed {seed}: {correct}/50 escolhas certas (<90%)"
+            lower >= 0.85,
+            "seed {seed}: {correct}/{n} (p={p:.3}, IC95 inferior={lower:.3} < 0.85)"
+        );
+        assert!(
+            correct * 10 >= n * 9,
+            "seed {seed}: piso por seed < 90% ({correct}/{n})"
         );
         assert!(model.success("good", &goal) > model.success("bad", &goal));
     }

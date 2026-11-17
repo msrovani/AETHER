@@ -144,6 +144,21 @@ O que fica como lição permanente:
 - Sessão paralela (release): 52 alvos/318 testes, ACQ 100, p50 72,2 µs,
   RSS 14,7 MB — **baseline externo**, reexecutar no mesmo host antes de comparar.
 
+## 11. Addenda do fórum (MSG 0263/0267)
+
+- **G-A1**: n ≥ 200 por seed (ou IC95 inferior ≥ 85%), piso por seed ≥ 90%,
+  matriz certa/errada/abstenção; abstenção correta não é acerto nem erro.
+- **L1/C-G0**: OOV fora do schema > 5% reprova; fallback é abstenção/`ask`,
+  nunca LLM automático.
+- **Autoridade**: tag `source=llm|transplant`; efetiva = min(faixa, corroboração);
+  128+ exige 2 fontes; LLM não se promove.
+- **Escala**: 1k é smoke; 10k só vale se recall@10 e E3/JL se mantiverem; 100k
+  exige shard antes de medir.
+- **Tools**: dry-run antes de efeito; hold se custo > orçamento; telemetria por
+  tool para UCB.
+- **Ordem**: memory/verify/sat/qubo, fs read-only, http GET com allowlist, MCP
+  com schema; shell nunca sem sandbox.
+
 ## 9. Definição de “aprendido”
 
 Um fato só está aprendido quando:
