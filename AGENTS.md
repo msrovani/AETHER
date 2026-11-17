@@ -109,7 +109,8 @@ tokeniza.
 
 - `docs/AETHER_AGENT.md` — agente: especialistas, MoE/EXP3, coerência, limites.
 - `docs/AETHER_AGENT_ROADMAP.md` — plano v0.1→v1.0: autonomia (autoescolha EFE/UCB), trilhas de transplante em escala e híbrido LLM; tiers de avaliação e gates.
-- `docs/ADR_AGENT.md` — decisões de arquitetura do agente (ADR-001…012).
+- `docs/ADR_AGENT.md` — decisões de arquitetura do agente (ADR-001…013).
+- `docs/LANGUAGE_PORT.md` — alternativas à LLM de borda (parser/gramática, LCM/conceito, ESN/reservoir, xLSTM/RWKV/Mamba/BLT, difusão, spiking, VSA/JEPA) com papers e gates.
 - `docs/LESSONS_AETHER_AGENT.md` — lições, invariantes e receitas de extensão.
 - `docs/SGDB_INTEGRATION.md` — arquitetura, CLI completa, env, troubleshooting.
 - `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md` §3–§8 — doutrina do encaixe.

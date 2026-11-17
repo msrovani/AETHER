@@ -7,8 +7,9 @@
 **Posicionamento:** isto **não** é um chatbot nem um concorrente de LLM. É um
 **coprocessador cognitivo**: memória auditável, solver com certificado e
 abstenção calibrada. A suíte própria (ACQ 100) mede metas internas, não
-inteligência geral. O produto é híbrido — LLM na borda para linguagem/extração,
-AETHER no meio para memória/verificação/decisão. Ver
+inteligência geral. O produto é híbrido — `LanguagePort` (parser/template por
+default; small LM/concept/remote LLM opcionais) na borda, AETHER no meio para
+memória/verificação/decisão. Ver `docs/LANGUAGE_PORT.md` e
 `docs/AETHER_AGENT_ROADMAP.md` (Tiers T0–T3, Trilha C).
 
 ## Premissas → implementação

@@ -24,7 +24,12 @@ O veredito está correto e precisa entrar no plano:
 
 **Decisão de escopo:** o v1.0 do agente é um **coprocessador com mandato**, não
 um chatbot. A “autoescolha” inclui escolher entre **ferramenta local
-certificada**, **memória** e **LLM externo** — e saber quando não usar nenhum.
+certificada**, **memória** e **`LanguagePort`** — e saber quando não usar
+nenhum.
+
+> Alternativas à “LLM de borda” (parser/gramática, LCM/conceito, reservoir/ESN,
+> xLSTM/RWKV/Mamba/BLT, difusão, spiking, VSA/JEPA) com papers, matriz de
+> decisão e gates: **`docs/LANGUAGE_PORT.md`**.
 
 ## 0. Onde estamos (v0.1)
 

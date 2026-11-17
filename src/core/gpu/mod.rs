@@ -127,7 +127,14 @@ mod backend {
         }
         // `wgpu::Instance` + adapter são baratos; o device é criado aqui.
         let instance = wgpu::Instance::default();
-        let adapters = instance.enumerate_adapters(wgpu::Backends::all());
+        let mut adapters = instance.enumerate_adapters(wgpu::Backends::all());
+        // Prefere GPU discreta; depois integrada; nunca software (WARP/llvmpipe).
+        adapters.retain(|a| a.get_info().device_type != wgpu::DeviceType::Cpu);
+        adapters.sort_by_key(|a| match a.get_info().device_type {
+            wgpu::DeviceType::DiscreteGpu => 0,
+            wgpu::DeviceType::IntegratedGpu => 1,
+            _ => 2,
+        });
         let Some(adapter) = adapters.into_iter().next() else {
             *slot = Some(Err(GpuOff::NoAdapter));
             return Err(GpuOff::NoAdapter);
