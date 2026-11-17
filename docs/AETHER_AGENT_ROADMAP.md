@@ -342,13 +342,15 @@ pedidos em linguagem via adaptador validado.
 | Irreversível pré-call | **verde**: `Tool::planned_effects` barra antes da `call`; `gate_irreversivel_declarado_nao_executa_pre_call` (contador = 0) |
 | Undo não engolido | **verde**: `UndoReport{applied,stale,failed}`, log preservado em falha (`gate_undo_falha_nao_e_engolida`, `gate_undo_sem_backend_nao_descarta_em_silencio`) |
 | HITL não preempta tool segura | **verde**: `Planner::select` prefere candidato legal que paga o piso (`gate_hitl_nao_preempta_tool_segura`) |
-| `memory.write` | **real**: `SgdbUndoBackend` (journal JSONL, before-image, CAS, tombstone 200/255) + `ToolAgent::with_undo_journal`; gates `agent_undo_sgdb_gate` 2/2 e 8 unit tests |
+| `memory.write` | **real + T9**: `SgdbUndoBackend` (journal JSONL, before-image, CAS, tombstone 200/255) + `ToolAgent::with_undo_journal`; `peek` antes da escrita, autoridade ≥200 exige HITL, reforço conta em `reinforced` sem promover autoridade; gates `agent_undo_sgdb_gate` 4/4 e 8 unit tests |
 | HTTP pipeline | **verde + hardening P0**: caps 8 steps / n≤64, validação de literais (`< n`), `j` n×n, `pipeline:null` não desvia, catch de panic com recuperação de mutex envenenado; `api_agent` 10/10 |
 | Pipeline abortado por HITL | **verde**: `ctx.rollback()` no `break`, e `Cite` é checado antes de `!ok` |
 
-Pendências abertas: T4 tombstone (autoridade ≥200 / token 255), T6 crash entre
-write e log (journal durável), T8 CAS/replay concorrente, T9 reinforce com
-autoridade; backend `UndoBackend` de produção.
+Pendências abertas: T4 tombstone (autoridade ≥200 / token 255) — coberto no
+backend; T6 crash entre write e log — journal antes da mutação + **sync
+incremental entre processos** (`lock_synced` reaplica a cauda do diário), restando
+`fsync` e lock de arquivo; T8 CAS/replay concorrente — CAS no backend; T9
+reinforce — autoridade não sobe sozinha, `reinforced` conta.
 
 #### Auditoria de undo/compensação (memo, 2026-11-17)
 
