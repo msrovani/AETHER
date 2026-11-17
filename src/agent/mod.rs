@@ -48,6 +48,7 @@ pub mod telemetry;
 pub mod tool;
 pub mod tool_agent;
 pub mod tools;
+pub mod undo_sgdb;
 
 use std::path::PathBuf;
 
@@ -74,6 +75,7 @@ pub use tool::{
 };
 pub use tool_agent::{GoalOutcome, ToolAgent};
 pub use tools::MemoryWriteTool;
+pub use undo_sgdb::SgdbUndoBackend;
 
 /// Identidade estável de um especialista (1 byte para logs).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

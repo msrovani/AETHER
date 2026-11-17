@@ -105,6 +105,15 @@ impl ToolAgent {
         self
     }
 
+    /// Anexa o backend de undo durável (journal JSONL) usado por `memory.write`.
+    ///
+    /// O journal é reaplicado no `new`, então um crash entre a escrita e o
+    /// registro do efeito ainda pode ser compensado no próximo run.
+    pub fn with_undo_journal(mut self, path: impl Into<PathBuf>) -> Self {
+        self.undo_backend = Some(Arc::new(super::undo_sgdb::SgdbUndoBackend::new(path)));
+        self
+    }
+
     fn context(&self, budget: Budget, trace_id: u64) -> ToolContext {
         let ctx = ToolContext::new(self.scope, budget, trace_id);
         if let Some(backend) = &self.undo_backend {
