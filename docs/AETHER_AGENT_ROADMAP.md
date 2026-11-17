@@ -1,5 +1,10 @@
 # AETHER Agent — plano de implementação (v0.1 → v1.0)
 
+> **Versão do plano:** 2.1 — 2026-11-17
+> Mudanças: análise cruzada; quatro trilhas (A/B/C/D); `LanguagePort` e
+> alternativas à LLM de borda; autoridade em escada; tiers de avaliação;
+> ADR-013. Registro no fórum: MSG 0253–0259.
+>
 > O que falta para o agente **escolher sozinho o que usar**, planejar em vários
 > passos, operar ferramentas com segurança e aprender sem se enganar.
 >
@@ -592,4 +597,13 @@ compartilhados: mudanças por PR pequeno e rebase.
 8. `docs: ADR-001…006 + roadmap atualizado`.
 
 Cada commit passa `cargo test --lib agent::` e `cargo test --test agent_tools_gate`.
+
+## 14. Versões do plano
+
+| Versão | Data | Mudança |
+|---|---|---|
+| **2.1** | 2026-11-17 | análise cruzada com sessão paralela; 4 trilhas (A/B/C/D); `LanguagePort` + alternativas; autoridade em escada; tiers T0–T3; ADR-009…013; fórum MSG 0253–0259 |
+| 2.0 | 2026-11-17 | autoescolha EFE+UCB; tools/planner/self-model; trilhas B/C/D; gates G-A/B/C/D |
+| 1.0 | 2026-11-17 | plano inicial P0–P5 (autonomia), avaliação e riscos |
+
 
