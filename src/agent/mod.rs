@@ -39,6 +39,7 @@ pub mod coherence;
 pub mod eval;
 pub mod executor;
 pub mod experts;
+pub mod language;
 pub mod planner;
 pub mod registry;
 pub mod router;
@@ -60,6 +61,10 @@ use self::router::MoERouter;
 
 pub use eval::{default_eval_path, EvalReport, EvalTier};
 pub use executor::ToolExecutor;
+pub use language::{
+    adapt_text, GoalSchema, LanguageCaps, LanguageError, LanguageParseTool, LanguagePort,
+    ParserPort, Style as LanguageStyle,
+};
 pub use planner::{PlanStep, Planner};
 pub use registry::ToolRegistry;
 pub use self_model::SelfModel;

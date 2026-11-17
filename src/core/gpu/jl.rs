@@ -212,13 +212,19 @@ mod imp {
             mapped_at_creation: false,
         });
         // v1 usa palavras de 64 bits; v2 usa palavras de 32 bits (2× words)
-        let w32 = match kernel {
-            JlKernel::V1 => words,
-            JlKernel::V2 => words * 2,
+        let (w32, rows) = match kernel {
+            JlKernel::V1 => (words, n_rows),
+            JlKernel::V2 => (words * 2, n_rows),
         };
         let params = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("jl-params"),
-            contents: bytemuck::cast_slice(&[n_rows as u32, d as u32, bits as u32, w32 as u32]),
+            contents: bytemuck::cast_slice(&[
+                n_rows as u32,
+                d as u32,
+                bits as u32,
+                w32 as u32,
+                rows as u32,
+            ]),
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
@@ -325,8 +331,11 @@ mod imp {
             });
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind, &[]);
-            let gx = (w32 as u32).div_ceil(WG);
-            pass.dispatch_workgroups(gx, n_rows as u32, 1);
+            let (gx, gy) = match kernel {
+                JlKernel::V1 => ((bits as u32).div_ceil(WG), n_rows as u32),
+                JlKernel::V2 => ((w32 as u32).div_ceil(WG), rows as u32),
+            };
+            pass.dispatch_workgroups(gx, gy, 1);
         }
         encoder.copy_buffer_to_buffer(&out_buf, 0, &staging, 0, (n_rows * words * 8) as u64);
         queue.submit(Some(encoder.finish()));

@@ -3,6 +3,21 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.152] - 2026-11-17
+
+### Changed
+
+- Ciclo automatico: 7 arquivo(s) (src:5, tests:2).
+- Gate: ok (24s).
+
+- `src/agent/mod.rs`
+- `src/agent/tool_agent.rs`
+- `src/agent/tools.rs`
+- `src/core/gpu/jl.rs`
+- `tests/gpu_jl_gate.rs`
+- `src/agent/language.rs`
+- `tests/language_port_gate.rs`
+
 ## [0.0.151] - 2026-11-17
 
 ### Changed
