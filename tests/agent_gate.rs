@@ -12,9 +12,7 @@
 
 use std::path::PathBuf;
 
-use aether_engine::agent::{
-    Action, AetherAgent, AgentConfig, Claim, ExpertId, Feedback,
-};
+use aether_engine::agent::{Action, AetherAgent, AgentConfig, Claim, ExpertId, Feedback};
 use aether_engine::core::certificate::Provenance;
 use aether_engine::core::logic_pipeline::Clause3;
 
@@ -179,10 +177,13 @@ fn gate_orcamento_e_politica_persistente() {
 
     let outcome = agent.ask_fact("Brasil", "capital");
     assert!(outcome.steps <= 1, "orçamento estourado: {}", outcome.steps);
-    agent.learn(&outcome, &Feedback {
-        correct: Some(true),
-        expected: None,
-    });
+    agent.learn(
+        &outcome,
+        &Feedback {
+            correct: Some(true),
+            expected: None,
+        },
+    );
     assert!(policy.exists(), "política não persistiu");
     let weights = agent.router_weights();
     assert_eq!(weights.len(), 5);

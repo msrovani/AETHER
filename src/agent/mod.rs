@@ -34,6 +34,7 @@
 //!                         └─ política persiste (JSON)
 //! ```
 
+pub mod cli;
 pub mod coherence;
 pub mod experts;
 pub mod router;
@@ -575,7 +576,10 @@ impl AetherAgent {
                         .map(|e| {
                             Json::obj([
                                 ("expert", Json::str(e.id().label())),
-                                ("weight", Json::num(f64::from(self.router.weight_of(e.id())))),
+                                (
+                                    "weight",
+                                    Json::num(f64::from(self.router.weight_of(e.id()))),
+                                ),
                             ])
                         })
                         .collect(),

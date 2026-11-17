@@ -80,6 +80,7 @@ export AETHER_SGDB_OUTBOX=target/aether_sgdb.jsonl
 
 ## Onde ler mais
 
+- `docs/AETHER_AGENT.md` — agente: especialistas, MoE/EXP3, coerência, limites.
 - `docs/SGDB_INTEGRATION.md` — arquitetura, CLI completa, env, troubleshooting.
 - `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md` §3–§8 — doutrina do encaixe.
 - `src/knowledge/sgdb/` — implementação (`wire`, `transport`, `client`,

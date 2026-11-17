@@ -216,14 +216,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // T0 puro: 8 repetições por padrão (o anel de 64 não satura)
     for (k, body) in payloads.iter().enumerate() {
-        let ev = KnowledgeEvent::new(u128::from(k as u64), Layer::L2Episodic, scope_a, 0, 1_000 + k as u64)
-            .with_certificate(Certificate {
-                energy: -(k as f32),
-                gap: 0.1,
-                violations: 0,
-            })
-            .with_authority(255)
-            .with_payload(body);
+        let ev = KnowledgeEvent::new(
+            u128::from(k as u64),
+            Layer::L2Episodic,
+            scope_a,
+            0,
+            1_000 + k as u64,
+        )
+        .with_certificate(Certificate {
+            energy: -(k as f32),
+            gap: 0.1,
+            violations: 0,
+        })
+        .with_authority(255)
+        .with_payload(body);
         for _ in 0..8 {
             let t = Instant::now();
             let _ = tx.record(&ev);
@@ -354,14 +360,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("fidelidade do round-trip (M5 real, D={D}, {hidden} ocultos)");
     println!("  erro direto (média)           : {e_direct:.4} rad");
     println!("  erro round-trip (média)       : {e_rt:.4} rad");
-    println!("  loss                          : {:.1}% (pior padrão {:.1}%)", 100.0 * loss, 100.0 * worst);
+    println!(
+        "  loss                          : {:.1}% (pior padrão {:.1}%)",
+        100.0 * loss,
+        100.0 * worst
+    );
     println!();
     println!("integridade e escopo");
     println!(
         "  eventos drenados / consolidados: {n} / {committed} (anel cheio? {})",
         tx.metrics().dropped()
     );
-    println!("  chamadas ao ledger no T0      : {}", tx.metrics().t0_ledger_calls());
+    println!(
+        "  chamadas ao ledger no T0      : {}",
+        tx.metrics().t0_ledger_calls()
+    );
     println!(
         "  escopo B: drenados={nb} consolidados={committed_b} hit.scope==b: {} · cross_scope_hits={}",
         hit_b.scope == scope_b,
@@ -375,11 +388,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let gate_r8 = ledger.cross_scope_hits() == 0 && hit_b.scope == scope_b;
     let gate_t0 = t0_p95 < FRAME_BUDGET_US * 0.05;
     println!("gates");
-    println!("  Q7 loss < 5%                  : {}", if gate_loss { "PASS" } else { "FAIL" });
-    println!("  T0 zero alocação              : {}", if gate_alloc { "PASS" } else { "FAIL" });
-    println!("  R7 (0 chamadas no T0)         : {}", if gate_r7 { "PASS" } else { "FAIL" });
-    println!("  R8 (isolamento de escopo)     : {}", if gate_r8 { "PASS" } else { "FAIL" });
-    println!("  T0 ≤ 5% do quadro (4,07 µs)   : {}", if gate_t0 { "PASS" } else { "FAIL" });
+    println!(
+        "  Q7 loss < 5%                  : {}",
+        if gate_loss { "PASS" } else { "FAIL" }
+    );
+    println!(
+        "  T0 zero alocação              : {}",
+        if gate_alloc { "PASS" } else { "FAIL" }
+    );
+    println!(
+        "  R7 (0 chamadas no T0)         : {}",
+        if gate_r7 { "PASS" } else { "FAIL" }
+    );
+    println!(
+        "  R8 (isolamento de escopo)     : {}",
+        if gate_r8 { "PASS" } else { "FAIL" }
+    );
+    println!(
+        "  T0 ≤ 5% do quadro (4,07 µs)   : {}",
+        if gate_t0 { "PASS" } else { "FAIL" }
+    );
     println!();
 
     std::fs::create_dir_all("target").ok();

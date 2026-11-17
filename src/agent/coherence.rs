@@ -174,10 +174,7 @@ impl CoherenceEngine {
         }
 
         if winners.is_empty() {
-            let support = outputs
-                .iter()
-                .map(|o| o.confidence)
-                .fold(0.0f32, f32::max);
+            let support = outputs.iter().map(|o| o.confidence).fold(0.0f32, f32::max);
             return CoherenceResult {
                 contradictions: details.len(),
                 contradiction_details: details,

@@ -40,6 +40,7 @@ use std::time::Duration;
 
 use ndarray::{Array2, Array3};
 
+use crate::agent::{AetherAgent, AgentConfig, Task};
 use crate::core::certificate::{self, Decision, Provenance};
 use crate::core::knowledge_bridge_f1::{
     BridgeError, Certificate as BridgeCertificate, DraftRecord, Layer, ScopeId, ScopeLedger,
@@ -270,6 +271,7 @@ pub struct ApiState {
     auth: Option<AuthPolicy>,
     sgdb: Option<SgdbClient<Box<dyn Transport>>>,
     sgdb_error: Option<String>,
+    agent: Option<AetherAgent>,
     requests: u64,
     bad_lines: usize,
 }
@@ -319,6 +321,10 @@ impl ApiState {
                 }
             }
         }
+        // Agente: especialistas locais (transplante/SAT/QUBO). Não usa o SGDB
+        // diretamente para não abrir um segundo cliente; a rota `agent` é
+        // inferência + coerência, e a memória durável tem rota própria.
+        state.agent = Some(AetherAgent::new(AgentConfig::default()));
         Ok(state)
     }
 
@@ -589,6 +595,7 @@ fn route(state: &mut ApiState, req: &Request) -> Reply {
         ("POST", "/v1/aether/remember") => remember(state, &req.body, bound),
         ("POST", "/v1/aether/cue") => cue(state, &req.body, bound),
         ("POST", "/v1/aether/solve") => solve(&req.body),
+        ("POST", "/v1/aether/agent") => agent_route(state, &req.body),
         ("POST", "/v1/aether/forget") => forget(state, &req.body, bound),
         ("POST", "/v1/chat/completions") => chat(state, &req.body, bound),
         ("POST", "/completion") => completion(state, &req.body, bound),
@@ -665,6 +672,7 @@ fn health(state: &ApiState) -> Json {
         ("auth", Json::Bool(state.auth.is_some())),
         ("bad_lines", Json::num(state.bad_lines as f64)),
         ("sgdb", Json::str(state.sgdb_status())),
+        ("agent", Json::Bool(state.agent.is_some())),
     ])
 }
 
@@ -966,6 +974,146 @@ fn hydrate_from_sgdb(state: &mut ApiState, scope: ScopeId) -> usize {
             0
         }
     }
+}
+
+/// Rota do agente: fato, SAT, QUBO ou memória — com certificado e abstenção.
+fn agent_route(state: &mut ApiState, body: &[u8]) -> Reply {
+    let doc = match parse_json(body) {
+        Ok(v) => v,
+        Err(e) => return Reply::Json(e.0, e.1),
+    };
+    let task = if let (Some(subject), Some(relation)) = (
+        doc.get("subject").and_then(|v| v.as_str()),
+        doc.get("relation").and_then(|v| v.as_str()),
+    ) {
+        Task::Fact {
+            subject: subject.to_string(),
+            relation: relation.to_string(),
+        }
+    } else if let Some(clauses) = clauses_from_json(doc.get("clauses")) {
+        let n = doc
+            .get("n")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or_else(|| {
+                clauses
+                    .iter()
+                    .flat_map(|c| [c.lit(0).0, c.lit(1).0, c.lit(2).0])
+                    .max()
+                    .unwrap_or(0)
+                    + 1
+            });
+        Task::Satisfy { n, clauses }
+    } else if let Some(n) = doc.get("n").and_then(|v| v.as_u64()).map(|v| v as usize) {
+        let Some(j) = flat_matrix(doc.get("j"), n, n) else {
+            return bad("j deve ser n×n");
+        };
+        let h = flat_matrix(doc.get("h"), n, 1).unwrap_or_else(|| vec![0.0; n]);
+        Task::Optimize { n, j, h }
+    } else if let Some(query) = doc.get("query").and_then(|v| v.as_str()) {
+        Task::Memory {
+            query: query.to_string(),
+        }
+    } else {
+        return bad("use {subject,relation}, {clauses,n}, {n,j,h} ou {query}");
+    };
+    let Some(agent) = state.agent.as_mut() else {
+        return Reply::Json(503, error_json("agent_off", "agente indisponível"));
+    };
+    let outcome = agent.run(&task);
+    let certificate = outcome
+        .outputs
+        .iter()
+        .find_map(|o| o.certificate.as_ref())
+        .map(|cert| {
+            Json::obj([
+                ("energy", Json::num(cert.energy)),
+                ("gap", Json::num(cert.gap)),
+                ("violations", Json::num(f64::from(cert.violations))),
+                ("consensus", Json::num(cert.consensus)),
+            ])
+        });
+    let mut fields: Vec<(String, Json)> = vec![
+        ("action".into(), Json::str(outcome.action.label())),
+        (
+            "answer".into(),
+            outcome
+                .answer
+                .as_ref()
+                .map(|claim| Json::str(claim.value.clone()))
+                .unwrap_or(Json::Null),
+        ),
+        (
+            "confidence".into(),
+            Json::num(f64::from(
+                outcome.answer.as_ref().map_or(0.0, |c| c.confidence),
+            )),
+        ),
+        (
+            "support".into(),
+            Json::num(f64::from(outcome.coherence.support)),
+        ),
+        (
+            "consensus".into(),
+            Json::num(f64::from(outcome.coherence.consensus)),
+        ),
+        (
+            "authority".into(),
+            Json::num(f64::from(outcome.coherence.authority)),
+        ),
+        (
+            "contradictions".into(),
+            Json::num(outcome.coherence.contradictions as f64),
+        ),
+        ("steps".into(), Json::num(outcome.steps as f64)),
+        (
+            "experts".into(),
+            Json::Arr(
+                outcome
+                    .experts_used
+                    .iter()
+                    .map(|e| Json::str(e.label()))
+                    .collect(),
+            ),
+        ),
+        (
+            "rationale".into(),
+            Json::str(outcome.coherence.rationale.clone()),
+        ),
+    ];
+    if let Some(cert) = certificate {
+        fields.push(("certificate".into(), cert));
+    }
+    Reply::Json(200, Json::Obj(fields))
+}
+
+fn clauses_from_json(value: Option<&Json>) -> Option<Vec<crate::core::logic_pipeline::Clause3>> {
+    use crate::core::logic_pipeline::Clause3;
+    let arr = value?.as_arr()?;
+    let mut out = Vec::with_capacity(arr.len());
+    for clause in arr {
+        let ints: Vec<i64> = clause
+            .as_arr()?
+            .iter()
+            .filter_map(|v| v.as_i64())
+            .filter(|v| *v != 0)
+            .collect();
+        if ints.is_empty() || ints.len() > 3 {
+            return None;
+        }
+        let mut lits: Vec<(usize, i8)> = ints
+            .iter()
+            .map(|v| ((v.unsigned_abs() as usize) - 1, if *v > 0 { 1 } else { -1 }))
+            .collect();
+        let pad = *lits.last()?;
+        while lits.len() < 3 {
+            lits.push(pad);
+        }
+        out.push(Clause3::new3(
+            lits[0].0, lits[0].1, lits[1].0, lits[1].1, lits[2].0, lits[2].1,
+        ));
+    }
+    Some(out)
 }
 
 fn solve(body: &[u8]) -> Reply {

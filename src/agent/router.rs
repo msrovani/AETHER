@@ -99,12 +99,7 @@ impl MoERouter {
         let mut pool: Vec<(usize, f64)> = probes
             .iter()
             .enumerate()
-            .filter(|(i, p)| {
-                **p > 0.01
-                    && !used
-                        .iter()
-                        .any(|id| id.code() as usize == *i)
-            })
+            .filter(|(i, p)| **p > 0.01 && !used.iter().any(|id| id.code() as usize == *i))
             .map(|(i, probe)| {
                 let w = self.weights[i];
                 (i, w * (f64::from(*probe) + 0.05))

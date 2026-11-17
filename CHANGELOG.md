@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.144] - 2026-11-17
+
+### Changed
+
+- Ciclo automatico: 16 arquivo(s) (.:4, docs:1, examples:1, src:7, tests:3).
+- Gate: ok (10s).
+
+- `AGENTS.md`
+- `Cargo.lock`
+- `Cargo.toml`
+- `README.md`
+- `examples/f2_f3_live.rs`
+- `src/agent/coherence.rs`
+- `src/agent/experts.rs`
+- `src/agent/mod.rs`
+- `src/agent/router.rs`
+- `src/api/mod.rs`
+- `tests/agent_gate.rs`
+- `docs/AETHER_AGENT.md`
+
 ## [0.0.143] - 2026-11-17
 
 ### Changed

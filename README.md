@@ -12,6 +12,7 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 * **docs/USER_DELIVERY_PLAN.md** — mapa do entregável ao usuário + plano de ondas (demo → Produto C → A/B).
 * **docs/O_PROBLEMA_DOS_3_CORPOS_NAO.md** (+ `_VOL2`, `_VOL3`) — dossiê dos três "NÃO" (linguagem, lógica, self): tese, preço em hardware e gestão do conhecimento. Registro mestre no Vol. III §11.
 * **docs/SGDB_INTEGRATION.md** — encaixe operacional do `neural-sgdb` (`T2`): MCP, outbox, leitura de fase e gates F4.
+* **docs/AETHER_AGENT.md** — organismo agêntico: inferência, MoE, coerência e autoaprendizado (`aether-agent`).
 * **AGENTS.md** — ritual para agentes de IA usarem a memória (`context` antes, `put` depois) sem tratar memória como instrução.
 
 ## Pilares
@@ -28,6 +29,7 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 | 8 | `m8` | `src/bin/aether_daemon.rs` | Transdutor físico real + enxame UDP multicast `239.255.42.99:7777` |
 | — | `sgdb` | `src/knowledge/sgdb/` | `T2` do `neural-sgdb`: MCP (mock/HTTP/stdio), outbox, recall→fase |
 | — | `sgdb` | `src/bin/aether_sgdb.rs` | CLI `aether-sgdb`: doctor, put, recall, sync, export/import |
+| — | `agent` | `src/agent/` | organismo agêntico: FHRR/SAT/QUBO/fase/SGDB + MoE + coerência + EXP3 |
 
 ## Build
 
@@ -47,6 +49,19 @@ No Windows com a toolchain `x86_64-pc-windows-gnu`, use o wrapper
 `.\scripts\cargo.ps1` (ajusta o PATH para os binutils do MinGW) ou coloque
 `C:\Users\msrov\Tools\mingw64\mingw64\bin` no PATH (necessário porque os crates
 `windows-sys ≥ 0.52` usam *raw-dylib*, que exige `dlltool` + `as`).
+
+## Agente (`aether-agent`)
+
+Costura os especialistas do motor em um ciclo agêntico com MoE, coerência e
+autoaprendizado (feature `agent`; sem LLM e sem backpropagation):
+
+```bash
+cargo run --release --bin aether-agent -- ask --subject Brasil --relation capital
+cargo run --release --bin aether-agent -- demo
+cargo run --release --bin aether-agent -- sat target/instancia.dimacs
+```
+
+Detalhes, gates e limites: `docs/AETHER_AGENT.md`.
 
 ## Enxame multi-máquina
 

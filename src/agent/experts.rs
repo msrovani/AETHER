@@ -20,23 +20,17 @@ use ndarray::{Array2, Array3};
 
 use crate::core::certificate::{self, Certificate as EngineCertificate, Provenance};
 use crate::core::fhrr::FhrrStore;
-use crate::core::logic_pipeline::{violations_3, LogicPipeline};
-use crate::core::thermodynamic_solver::{
-    IsingLandscape, RelaxOutcome, ThermodynamicIsingSolver,
-};
-use crate::json::Json;
-use crate::knowledge::sgdb::{
-    open, SgdbClient, SgdbConfig, Transport,
-};
-use crate::phase_memory::ComplexPhaseMemory;
 use crate::core::knowledge_bridge_f1::ScopeId;
+use crate::core::logic_pipeline::{violations_3, LogicPipeline};
+use crate::core::thermodynamic_solver::{IsingLandscape, RelaxOutcome, ThermodynamicIsingSolver};
+use crate::json::Json;
+use crate::knowledge::sgdb::{open, SgdbClient, SgdbConfig, Transport};
+use crate::phase_memory::ComplexPhaseMemory;
 
-use super::{
-    AgentConfig, Claim, ExpertId, ExpertOutput, Feedback, Task, TaskFeatures,
-};
+use super::{AgentConfig, Claim, ExpertId, ExpertOutput, Feedback, Task, TaskFeatures};
 
 /// Contrato de um especialista.
-pub trait Expert {
+pub trait Expert: Send {
     /// Identidade.
     fn id(&self) -> ExpertId;
 
@@ -210,11 +204,7 @@ impl TransplantExpert {
     }
 }
 
-fn symbol<'a>(
-    cache: &'a mut HashMap<String, Vec<f32>>,
-    label: &str,
-    dim: usize,
-) -> Vec<f32> {
+fn symbol<'a>(cache: &'a mut HashMap<String, Vec<f32>>, label: &str, dim: usize) -> Vec<f32> {
     cache
         .entry(label.to_string())
         .or_insert_with(|| symbol_phases(label, dim))
@@ -725,14 +715,8 @@ mod tests {
     fn logic_resolve_sat_simples() {
         let mut expert = LogicExpert::new(16, 64);
         // (x1 ∨ x2) ∧ (¬x1 ∨ x3)
-        let clauses = vec![
-            Clause3::new2(0, 1, 1, 1),
-            Clause3::new2(0, -1, 2, 1),
-        ];
-        let task = Task::Satisfy {
-            n: 3,
-            clauses,
-        };
+        let clauses = vec![Clause3::new2(0, 1, 1, 1), Clause3::new2(0, -1, 2, 1)];
+        let task = Task::Satisfy { n: 3, clauses };
         let out = expert.infer(&task);
         assert_eq!(out.claims.len(), 1);
         assert!(out.confidence > 0.5);
