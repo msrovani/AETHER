@@ -28,6 +28,16 @@ pub const EXIT_FAIL: i32 = 1;
 /// Uso incorreto.
 pub const EXIT_USAGE: i32 = 2;
 
+/// Constrói o agente e anexa o journal de undo quando `AETHER_UNDO_JOURNAL`
+/// está definido (habilita `memory.write` com before-image durável).
+fn build_agent(cfg: &AgentConfig) -> ToolAgent {
+    let agent = ToolAgent::new(cfg);
+    match std::env::var("AETHER_UNDO_JOURNAL") {
+        Ok(path) if !path.trim().is_empty() => agent.with_undo_journal(path),
+        _ => agent,
+    }
+}
+
 /// Ajuda.
 pub const HELP: &str = "\
 aether-agent — organismo agêntico do AETHER (inferência, MoE, coerência, aprendizado)
@@ -349,7 +359,7 @@ fn tools(args: &Args, out: &mut dyn Write) -> i32 {
     if let Some(path) = &args.policy {
         cfg.tool_policy_path = Some(path.clone());
     }
-    let agent = ToolAgent::new(&cfg);
+    let agent = build_agent(&cfg);
     if args.json {
         let list: Vec<Json> = agent
             .tools()
@@ -404,7 +414,7 @@ fn goal(args: &Args, out: &mut dyn Write) -> i32 {
             return EXIT_FAIL;
         }
     };
-    let mut agent = ToolAgent::new(&cfg);
+    let mut agent = build_agent(&cfg);
     let outcome = agent.solve(&goal);
     print_goal_outcome(out, &outcome, args.json);
     if outcome.success {
@@ -426,7 +436,7 @@ fn plan(args: &Args, out: &mut dyn Write) -> i32 {
             return EXIT_FAIL;
         }
     };
-    let agent = ToolAgent::new(&cfg);
+    let agent = build_agent(&cfg);
     let ranked = agent.plan(&goal);
     if args.json {
         let list: Vec<Json> = ranked
@@ -478,7 +488,7 @@ fn pipeline(args: &Args, out: &mut dyn Write) -> i32 {
     if let Some(policy) = &args.policy {
         cfg.tool_policy_path = Some(policy.clone());
     }
-    let mut agent = ToolAgent::new(&cfg);
+    let mut agent = build_agent(&cfg);
     let outcome = agent.solve(&workflow);
     print_goal_outcome(out, &outcome, args.json);
     if outcome.success {
