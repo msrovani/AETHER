@@ -215,11 +215,17 @@ Resposta: `action`, `answer`, `support`, `consensus`, `authority`,
 | pesos MoE após feedback | transplant sobe acima dos demais |
 | CLI em processo real | `tests/agent_cli.rs` |
 | biblioteca | `tests/agent_gate.rs` (6 gates) |
-| workflow P2 | `tests/agent_plan_gate.rs` (5 gates) |
+| workflow P2/P3 | `tests/agent_plan_gate.rs` (15 gates: pipeline, undo LIFO, stage, HITL, irreversível pré-call) |
+| undo durável | `tests/agent_undo_sgdb_gate.rs` (4) + 11 unit tests em `src/agent/undo_sgdb.rs` |
+| calibração P4 | `tests/agent_self_model_gate.rs` (4: ECE, Brier, temperatura, persistência) |
+| HTTP | `tests/api_agent.rs` (14: pipeline, caps, HITL, undo) |
 
 ```bash
 cargo test --lib agent::
 cargo test --test agent_gate
+cargo test --test agent_plan_gate
+cargo test --test agent_undo_sgdb_gate
+cargo test --test agent_self_model_gate
 cargo test --test agent_cli
 cargo test --features api --test api_agent
 ```
