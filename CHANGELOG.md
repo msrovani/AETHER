@@ -3,6 +3,24 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.157] - 2026-11-17
+
+### Changed
+
+- Ciclo automatico: 10 arquivo(s) (.:1, docs:4, src:3, tests:1, tools:1).
+- Gate: ok (13s).
+
+- `Cargo.lock`
+- `docs/ADR_AGENT.md`
+- `docs/AETHER_AGENT_ROADMAP.md`
+- `docs/DOACAO_PLAYBOOK.md`
+- `docs/USER_DELIVERY_PLAN.md`
+- `src/api/mod.rs`
+- `src/core/gpu/ising.rs`
+- `src/dashboard/jobs.rs`
+- `tests/gpu_ising_sweep_gate.rs`
+- `tools/transplant_uso.py`
+
 ## [0.0.156] - 2026-11-17
 
 ### Changed

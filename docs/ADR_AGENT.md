@@ -266,4 +266,31 @@ na Trilha C.
 **Alternativas.** LLM único (refém); parser só (sem open-domain); nuvem só
 (privacidade/latência).
 
+## ADR-014 — Undo registra a intenção antes do efeito
+
+**Contexto.** Antes-image + LIFO é padrão (Sagas, ARIES). A implementação AETHER
+ainda registra o `Effect` **depois** da escrita e checa irreversível **depois**
+da call; um crash entre os dois perde o undo, e um efeito irreversível pode
+acontecer antes do HITL.
+
+**Decisão.** O executor deve: (1) `dry_run` declarar efeitos; (2) rejeitar
+`Irreversible` quando `risk_ceiling < High` **antes** de `call`; (3) registrar
+a intenção `(txn, seq, key, before-image)` antes da mutação, com a escrita e o
+log atômicos no backend; (4) `rewind` devolver `UndoReport { stale, failed }`,
+nunca engolir erro; (5) `Stage` carregar `seq` + `outbox_len`; (6) replay stale
+não apaga valor de writer concorrente (CAS/token); (7) autoridade ≥200 vira
+tombstone + HITL, 255 só com token humano.
+
+**Status.** Propósito aceito; implementação em mediação (MSG 0306/0333).
+Referências: Sagas (SIGMOD 1987), ARIES (VLDB 1992), arXiv:2609.15397,
+arXiv:2609.35366, arXiv:2602.14849.
+
+**Consequências.**
+- Crash-safe só com journal durável `(txn, seq)`; o `Vec` atual é protótipo.
+- Undo falho bloqueia o workflow e escala para HITL, não “passa”.
+- Testes T1–T9 do roadmap passam a ser obrigatórios.
+
+**Alternativas.** Log depois do efeito (descartado: perde before-image);
+compensação cega por chave (descartado: apaga valor de terceiro).
+
 

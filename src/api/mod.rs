@@ -570,6 +570,8 @@ fn route(state: &mut ApiState, req: &Request) -> Reply {
     }
 
     // Saúde e catálogo são públicos (probe); o resto exige token quando há auth.
+    // Com `memory.write` no ToolAgent, o pipeline HTTP também exige token
+    // quando a borda está configurada com auth (sem token, check_auth libera).
     let needs_auth = matches!(
         (req.method.as_str(), req.path.as_str()),
         (
@@ -577,6 +579,7 @@ fn route(state: &mut ApiState, req: &Request) -> Reply {
             "/v1/aether/remember"
                 | "/v1/aether/cue"
                 | "/v1/aether/solve"
+                | "/v1/aether/agent"
                 | "/v1/aether/forget"
                 | "/v1/chat/completions"
                 | "/completion"

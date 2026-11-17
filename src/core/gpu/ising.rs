@@ -20,6 +20,13 @@
 //! fuga:    se E(polido) ≥ E(s_0), testa flip único em cada i e fica com o melhor
 //! ```
 //!
+//! # Sessão, não chamada avulsa
+//!
+//! Compilar o shader custa **250–550 ms** (medido): uma chamada avulsa gasta
+//! mais nisso do que no lote inteiro. Por isso o caminho de produção é
+//! [`IsingSweep`], que guarda device, pipeline e buffers entre lotes — o custo
+//! por lote passa a ser cópia + dispatch + leitura.
+//!
 //! # Gate (`tests/gpu_ising_sweep_gate.rs`)
 //!
 //! `f32` no GPU e `f64` na CPU ⇒ a trajetória **não** é bit-idêntica. O gate é
@@ -40,7 +47,7 @@ pub const MAX_N: usize = 32;
 pub enum IsingGpuError {
     /// Backend indisponível.
     Off(GpuOff),
-    /// `n > MAX_N`, `k == 0` ou buffers curtos.
+    /// `n > MAX_N`, `k == 0`, `steps == 0` ou buffers curtos.
     InvalidShape,
 }
 
@@ -94,7 +101,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         best[i] = s[i];
     }
 
-    // E(s_0) — a referência da fuga determinística.
+    // E(s_0) - referencia da fuga deterministica.
     var e0: f32 = 0.0;
     for (var i: u32 = 0u; i < n; i = i + 1u) {
         var acc: f32 = 0.0;
@@ -201,7 +208,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         e_work = e_work - hm[hbase + i] * f32(work[i]);
     }
 
-    // ---------- fuga determinística (só se o polimento não bateu E(s_0)) ----------
+    // ---------- fuga deterministica (so se o polimento nao bateu E(s_0)) ----------
     if (e_work >= e0) {
         for (var i: u32 = 0u; i < n; i = i + 1u) {
             best[i] = work[i];
@@ -212,7 +219,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 s[j] = best[j];
             }
             s[i] = -s[i];
-            // descend(s) a partir do flip
             for (var j: u32 = 0u; j < n; j = j + 1u) {
                 var acc: f32 = 0.0;
                 for (var k: u32 = 0u; k < n; k = k + 1u) {
@@ -260,7 +266,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
-    // ---------- saída ----------
+    // ---------- saida ----------
     var e_out: f32 = 0.0;
     for (var i: u32 = 0u; i < n; i = i + 1u) {
         var acc: f32 = 0.0;
@@ -280,9 +286,319 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 "#;
 
 #[cfg(feature = "gpu")]
-mod imp {
+mod sess {
     use super::{IsingGpuError, MAX_N, SHADER};
     use crate::core::gpu;
+
+    const STORAGE_IN: wgpu::BufferUsages = wgpu::BufferUsages::STORAGE;
+    const STORAGE_RW: wgpu::BufferUsages =
+        wgpu::BufferUsages::STORAGE.union(wgpu::BufferUsages::COPY_SRC);
+    const STAGING: wgpu::BufferUsages =
+        wgpu::BufferUsages::MAP_READ.union(wgpu::BufferUsages::COPY_DST);
+
+    fn storage(device: &wgpu::Device, label: &str, bytes: u64, rw: bool) -> wgpu::Buffer {
+        device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(label),
+            size: bytes,
+            usage: if rw { STORAGE_RW } else { STORAGE_IN },
+            mapped_at_creation: false,
+        })
+    }
+
+    /// Estado persistente do sweep (device, pipeline e buffers por capacidade).
+    ///
+    /// Criar o pipeline custa **250–550 ms**; reusar esta sessão entre lotes é a
+    /// diferença entre "0,2×" e o ganho real medido.
+    pub struct Session {
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        adapter: String,
+        pipeline: wgpu::ComputePipeline,
+        layout: wgpu::BindGroupLayout,
+        params: wgpu::Buffer,
+        j: wgpu::Buffer,
+        h: wgpu::Buffer,
+        init: wgpu::Buffer,
+        c0: wgpu::Buffer,
+        e: wgpu::Buffer,
+        s: wgpu::Buffer,
+        e_stage: wgpu::Buffer,
+        s_stage: wgpu::Buffer,
+        bind: Option<wgpu::BindGroup>,
+        cap_k: usize,
+        cap_n: usize,
+    }
+
+    impl Session {
+        /// Abre a sessão (paga a compilação do shader uma vez).
+        pub fn new(force_off: bool) -> Result<Self, IsingGpuError> {
+            let (device, queue, adapter) = gpu::device_with(force_off)?;
+            let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("ising-shader"),
+                source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+            });
+            let entries: Vec<wgpu::BindGroupLayoutEntry> = (0..7u32)
+                .map(|b| wgpu::BindGroupLayoutEntry {
+                    binding: b,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: if b == 0 {
+                            wgpu::BufferBindingType::Uniform
+                        } else {
+                            wgpu::BufferBindingType::Storage { read_only: b < 5 }
+                        },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                })
+                .collect();
+            let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("ising-layout"),
+                entries: &entries,
+            });
+            let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("ising-pl"),
+                bind_group_layouts: &[&layout],
+                push_constant_ranges: &[],
+            });
+            let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("ising-pipe"),
+                layout: Some(&pl),
+                module: &module,
+                entry_point: "main",
+                compilation_options: Default::default(),
+                cache: None,
+            });
+            let params = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("ising-params"),
+                size: 16,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let j0 = storage(&device, "ising-j", 16, false);
+            let h0 = storage(&device, "ising-h", 16, false);
+            let i0 = storage(&device, "ising-init", 16, false);
+            let c0b = storage(&device, "ising-c0", 16, false);
+            let e0 = storage(&device, "ising-e", 4, true);
+            let s0 = storage(&device, "ising-s", 16, true);
+            let es = storage(&device, "ising-e-stage", 4, false);
+            let ss = storage(&device, "ising-s-stage", 16, false);
+            let mut s = Self {
+                device,
+                queue,
+                adapter,
+                pipeline,
+                layout,
+                params,
+                j: j0,
+                h: h0,
+                init: i0,
+                c0: c0b,
+                e: e0,
+                s: s0,
+                e_stage: es,
+                s_stage: ss,
+                bind: None,
+                cap_k: 0,
+                cap_n: 0,
+            };
+            s.allocate(1, 1)?;
+            Ok(s)
+        }
+
+        /// Nome do adapter em uso (telemetria).
+        pub fn adapter(&self) -> &str {
+            &self.adapter
+        }
+
+        /// (Re)dimensiona os buffers para `k` instâncias de `n` sítios.
+        fn allocate(&mut self, k: usize, n: usize) -> Result<(), IsingGpuError> {
+            let cap_k = k.next_power_of_two().max(64);
+            if self.cap_k >= k && self.cap_n == n {
+                return Ok(());
+            }
+            let dev = &self.device;
+            let kn = (cap_k * n) as u64;
+            let knn = (cap_k * n * n) as u64;
+            self.j = storage(dev, "ising-j", knn * 4, false);
+            self.h = storage(dev, "ising-h", kn * 4, false);
+            self.init = storage(dev, "ising-init", kn * 8, false);
+            self.c0 = storage(dev, "ising-c0", cap_k as u64 * 4, false);
+            self.e = storage(dev, "ising-e", cap_k as u64 * 4, true);
+            self.s = storage(dev, "ising-s", kn * 4, true);
+            self.e_stage = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("ising-e-stage"),
+                size: cap_k as u64 * 4,
+                usage: STAGING,
+                mapped_at_creation: false,
+            });
+            self.s_stage = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("ising-s-stage"),
+                size: kn * 4,
+                usage: STAGING,
+                mapped_at_creation: false,
+            });
+            self.bind = Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("ising-bind"),
+                layout: &self.layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.params.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: self.j.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: self.h.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: self.init.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: self.c0.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: self.e.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 6,
+                        resource: self.s.as_entire_binding(),
+                    },
+                ],
+            }));
+            self.cap_k = cap_k;
+            self.cap_n = n;
+            Ok(())
+        }
+
+        /// Roda `k` instâncias (`n ≤ MAX_N`) e devolve `(energias, estados)`.
+        #[allow(clippy::too_many_arguments)]
+        pub fn sweep(
+            &mut self,
+            kmat: &[f32],
+            hmat: &[f32],
+            init: &[f32],
+            c0: &[f32],
+            n: usize,
+            k: usize,
+            steps: usize,
+            out_energy: &mut [f32],
+            out_states: &mut [i32],
+        ) -> Result<(), IsingGpuError> {
+            if n == 0 || n > MAX_N || k == 0 || steps == 0 {
+                return Err(IsingGpuError::InvalidShape);
+            }
+            if kmat.len() < k * n * n
+                || hmat.len() < k * n
+                || init.len() < k * n * 2
+                || c0.len() < k
+                || out_energy.len() < k
+                || out_states.len() < k * n
+            {
+                return Err(IsingGpuError::InvalidShape);
+            }
+            self.allocate(k, n)?;
+            let q = &self.queue;
+            q.write_buffer(
+                &self.params,
+                0,
+                bytemuck::cast_slice(&[n as u32, steps as u32, k as u32, 0u32]),
+            );
+            q.write_buffer(&self.j, 0, bytemuck::cast_slice(&kmat[..k * n * n]));
+            q.write_buffer(&self.h, 0, bytemuck::cast_slice(&hmat[..k * n]));
+            q.write_buffer(&self.init, 0, bytemuck::cast_slice(&init[..k * n * 2]));
+            q.write_buffer(&self.c0, 0, bytemuck::cast_slice(&c0[..k]));
+
+            let mut enc = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("ising-enc"),
+                });
+            {
+                let mut pass = enc.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("ising-pass"),
+                    timestamp_writes: None,
+                });
+                pass.set_pipeline(&self.pipeline);
+                pass.set_bind_group(0, self.bind.as_ref().ok_or(IsingGpuError::InvalidShape)?, &[]);
+                pass.dispatch_workgroups((k as u32).div_ceil(64), 1, 1);
+            }
+            enc.copy_buffer_to_buffer(&self.e, 0, &self.e_stage, 0, (k * 4) as u64);
+            enc.copy_buffer_to_buffer(&self.s, 0, &self.s_stage, 0, (k * n * 4) as u64);
+            self.queue.submit(Some(enc.finish()));
+
+            let device = &self.device;
+            let read = |buf: &wgpu::Buffer| -> Option<Vec<u8>> {
+                let slice = buf.slice(..);
+                let (tx, rx) = std::sync::mpsc::channel();
+                slice.map_async(wgpu::MapMode::Read, move |r| {
+                    let _ = tx.send(r);
+                });
+                device.poll(wgpu::Maintain::Wait);
+                rx.recv().ok()?.ok()?;
+                let v = slice.get_mapped_range().to_vec();
+                buf.unmap();
+                Some(v)
+            };
+            let ebytes = read(&self.e_stage).ok_or(IsingGpuError::Off(gpu::GpuOff::NoDevice))?;
+            let sbytes = read(&self.s_stage).ok_or(IsingGpuError::Off(gpu::GpuOff::NoDevice))?;
+            let ev: &[f32] = bytemuck::cast_slice(&ebytes);
+            let sv: &[i32] = bytemuck::cast_slice(&sbytes);
+            out_energy[..k].copy_from_slice(&ev[..k]);
+            out_states[..k * n].copy_from_slice(&sv[..k * n]);
+            Ok(())
+        }
+    }
+}
+
+/// Sessão de sweep Ising na GPU — **o caminho recomendado para lotes**.
+///
+/// Compila o kernel uma vez e reusa buffers; cada [`IsingSweep::sweep_into`]
+/// paga só cópia + dispatch + leitura.
+pub struct IsingSweep {
+    #[cfg(feature = "gpu")]
+    inner: sess::Session,
+}
+
+impl IsingSweep {
+    /// Abre a sessão (paga a compilação do shader uma vez).
+    pub fn new() -> Result<Self, IsingGpuError> {
+        Self::with_force_off(false)
+    }
+
+    /// Igual a [IsingSweep::new], com `force_off` (teste do fallback).
+    pub fn with_force_off(force_off: bool) -> Result<Self, IsingGpuError> {
+        #[cfg(feature = "gpu")]
+        {
+            Ok(Self {
+                inner: sess::Session::new(force_off)?,
+            })
+        }
+        #[cfg(not(feature = "gpu"))]
+        {
+            let _ = force_off;
+            Err(IsingGpuError::Off(GpuOff::NoFeature))
+        }
+    }
+
+    /// Nome do adapter em uso (vazio sem a feature).
+    pub fn adapter(&self) -> &str {
+        #[cfg(feature = "gpu")]
+        {
+            self.inner.adapter()
+        }
+        #[cfg(not(feature = "gpu"))]
+        {
+            ""
+        }
+    }
 
     /// Roda `k` instâncias (`n ≤ MAX_N`) e devolve `(energias, estados)`.
     ///
@@ -291,207 +607,11 @@ mod imp {
     /// * `init` — `[k, n, 2]` pares `(x_0, y_0)` por sítio.
     /// * `c0` — `[k]` ganho `0.5 / (√n · std(J))` (o mesmo do solver).
     ///
-    /// Devolve a energia `H(s)` do estado emergente (pós-polimento e fuga), com a
-    /// mesma fórmula do caminho auditado.
-    #[allow(clippy::too_many_arguments)]
-    pub fn sweep_into_with(
-        force_off: bool,
-        kmat: &[f32],
-        hmat: &[f32],
-        init: &[f32],
-        c0: &[f32],
-        n: usize,
-        k: usize,
-        steps: usize,
-        out_energy: &mut [f32],
-        out_states: &mut [i32],
-    ) -> Result<(), IsingGpuError> {
-        if n == 0 || n > MAX_N || k == 0 || steps == 0 {
-            return Err(IsingGpuError::InvalidShape);
-        }
-        if kmat.len() < k * n * n
-            || hmat.len() < k * n
-            || init.len() < k * n * 2
-            || c0.len() < k
-            || out_energy.len() < k
-            || out_states.len() < k * n
-        {
-            return Err(IsingGpuError::InvalidShape);
-        }
-        let (device, queue, _name) = gpu::device_with(force_off)?;
-        use wgpu::util::DeviceExt;
-
-        let mk = |label: &str, data: &[u8], usage: wgpu::BufferUsages| {
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(label),
-                contents: data,
-                usage,
-            })
-        };
-        let j_buf = mk(
-            "ising-j",
-            bytemuck::cast_slice(&kmat[..k * n * n]),
-            wgpu::BufferUsages::STORAGE,
-        );
-        let h_buf = mk(
-            "ising-h",
-            bytemuck::cast_slice(&hmat[..k * n]),
-            wgpu::BufferUsages::STORAGE,
-        );
-        let i_buf = mk(
-            "ising-init",
-            bytemuck::cast_slice(&init[..k * n * 2]),
-            wgpu::BufferUsages::STORAGE,
-        );
-        let c_buf = mk(
-            "ising-c0",
-            bytemuck::cast_slice(&c0[..k]),
-            wgpu::BufferUsages::STORAGE,
-        );
-        let e_size = (k * 4) as u64;
-        let s_size = (k * n * 4) as u64;
-        let e_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("ising-e"),
-            size: e_size,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-        let s_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("ising-s"),
-            size: s_size,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-        let e_stage = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("ising-e-stage"),
-            size: e_size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let s_stage = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("ising-s-stage"),
-            size: s_size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let params = mk(
-            "ising-params",
-            bytemuck::cast_slice(&[n as u32, steps as u32, k as u32, 0u32]),
-            wgpu::BufferUsages::UNIFORM,
-        );
-
-        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("ising-shader"),
-            source: wgpu::ShaderSource::Wgsl(SHADER.into()),
-        });
-        let entries: Vec<wgpu::BindGroupLayoutEntry> = (0..7u32)
-            .map(|b| wgpu::BindGroupLayoutEntry {
-                binding: b,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: if b == 0 {
-                        wgpu::BufferBindingType::Uniform
-                    } else {
-                        wgpu::BufferBindingType::Storage { read_only: b < 5 }
-                    },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            })
-            .collect();
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("ising-layout"),
-            entries: &entries,
-        });
-        let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("ising-pl"),
-            bind_group_layouts: &[&layout],
-            push_constant_ranges: &[],
-        });
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("ising-pipe"),
-            layout: Some(&pl),
-            module: &module,
-            entry_point: "main",
-            compilation_options: Default::default(),
-            cache: None,
-        });
-        let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("ising-bind"),
-            layout: &layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: params.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: j_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: h_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: i_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: c_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: e_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 6,
-                    resource: s_buf.as_entire_binding(),
-                },
-            ],
-        });
-
-        let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("ising-enc"),
-        });
-        {
-            let mut pass = enc.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("ising-pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&pipeline);
-            pass.set_bind_group(0, &bind, &[]);
-            pass.dispatch_workgroups((k as u32).div_ceil(64), 1, 1);
-        }
-        enc.copy_buffer_to_buffer(&e_buf, 0, &e_stage, 0, e_size);
-        enc.copy_buffer_to_buffer(&s_buf, 0, &s_stage, 0, s_size);
-        queue.submit(Some(enc.finish()));
-
-        let read = |buf: &wgpu::Buffer| -> Option<Vec<u8>> {
-            let slice = buf.slice(..);
-            let (tx, rx) = std::sync::mpsc::channel();
-            slice.map_async(wgpu::MapMode::Read, move |r| {
-                let _ = tx.send(r);
-            });
-            device.poll(wgpu::Maintain::Wait);
-            rx.recv().ok()?.ok()?;
-            let v = slice.get_mapped_range().to_vec();
-            buf.unmap();
-            Some(v)
-        };
-        let ebytes = read(&e_stage).ok_or(IsingGpuError::Off(gpu::GpuOff::NoDevice))?;
-        let sbytes = read(&s_stage).ok_or(IsingGpuError::Off(gpu::GpuOff::NoDevice))?;
-        let ev: &[f32] = bytemuck::cast_slice(&ebytes);
-        let sv: &[i32] = bytemuck::cast_slice(&sbytes);
-        out_energy[..k].copy_from_slice(&ev[..k]);
-        out_states[..k * n].copy_from_slice(&sv[..k * n]);
-        Ok(())
-    }
-
-    /// Sweep com o backend padrão.
+    /// Devolve a energia `H(s)` do estado emergente (pós-polimento e fuga), com
+    /// a mesma fórmula do caminho auditado.
     #[allow(clippy::too_many_arguments)]
     pub fn sweep_into(
+        &mut self,
         kmat: &[f32],
         hmat: &[f32],
         init: &[f32],
@@ -502,14 +622,73 @@ mod imp {
         out_energy: &mut [f32],
         out_states: &mut [i32],
     ) -> Result<(), IsingGpuError> {
-        sweep_into_with(
-            false, kmat, hmat, init, c0, n, k, steps, out_energy, out_states,
-        )
+        #[cfg(feature = "gpu")]
+        {
+            self.inner
+                .sweep(kmat, hmat, init, c0, n, k, steps, out_energy, out_states)
+        }
+        #[cfg(not(feature = "gpu"))]
+        {
+            let _ = (kmat, hmat, init, c0, n, k, steps, out_energy, out_states);
+            Err(IsingGpuError::Off(GpuOff::NoFeature))
+        }
     }
 }
 
+impl std::fmt::Debug for IsingSweep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IsingSweep")
+            .field("adapter", &self.adapter())
+            .finish()
+    }
+}
+
+/// Sweep avulso (cria a sessão a cada chamada: paga a compilação do shader).
+///
+/// Para lotes repetidos use [`IsingSweep`].
 #[cfg(feature = "gpu")]
-pub use imp::{sweep_into, sweep_into_with};
+#[allow(clippy::too_many_arguments)]
+pub fn sweep_into(
+    kmat: &[f32],
+    hmat: &[f32],
+    init: &[f32],
+    c0: &[f32],
+    n: usize,
+    k: usize,
+    steps: usize,
+    out_energy: &mut [f32],
+    out_states: &mut [i32],
+) -> Result<(), IsingGpuError> {
+    IsingSweep::new()?.sweep_into(kmat, hmat, init, c0, n, k, steps, out_energy, out_states)
+}
+
+/// Sweep avulso com `force_off` (teste determinístico do fallback).
+#[cfg(feature = "gpu")]
+#[allow(clippy::too_many_arguments)]
+pub fn sweep_into_with(
+    force_off: bool,
+    kmat: &[f32],
+    hmat: &[f32],
+    init: &[f32],
+    c0: &[f32],
+    n: usize,
+    k: usize,
+    steps: usize,
+    out_energy: &mut [f32],
+    out_states: &mut [i32],
+) -> Result<(), IsingGpuError> {
+    IsingSweep::with_force_off(force_off)?.sweep_into(
+        kmat,
+        hmat,
+        init,
+        c0,
+        n,
+        k,
+        steps,
+        out_energy,
+        out_states,
+    )
+}
 
 /// Sem a feature: recusa explícita (o chamador fica na CPU).
 #[cfg(not(feature = "gpu"))]

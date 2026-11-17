@@ -54,7 +54,9 @@ corpus ──► ETL (offline) ──► data/ (HV + manifest + facts)
 | Escriba barato | `mohar07/qwen3-0.6b-kg-triplets` | MIT | Opcional |
 | — | `victorlxh/ICKG-v3.2` | non-commercial | **Proibido** |
 
-- Dimensão operacional do mapa: **`dim_in = 768`** (MRL truncate se o modelo for 1024).
+- Dimensão operacional do mapa: **`dim_in = 768`**.
+  Qwen3-Embedding-0.6B é **nativo 1024** com MRL (32…1024); em produção pedir
+  `dimensions=768` / `truncate_dim=768` (ou truncar primeiros 768 + L2). Apache-2.0.
 - HV: **`dim_hv = 10240`** → **160 × u64** = **1,28 KB/átomo**.
 - Authority: transplantado **≤ 240**; **255 = HITL exclusivo**.
 
@@ -260,15 +262,19 @@ integrado ao loop; senão, só tools/API de lab.
 
 ```text
 tools/harvest_transplant.py          # ETL
+tools/transplant_uso.py              # U1–U6 → target/aether_transplant_uso.json
 examples/transplant_hv_probe.rs      # medição + JSON
 tests/transplant_hv_gate.rs          # CI
 src/core/hv.rs                       # HvBank + LSH (>10k)
 src/core/certificate.rs              # Evidence (append)
 src/knowledge/sgdb_bridge.rs         # mock + loader
+src/dashboard/transplant_view.rs     # hub: origem/destino/gates/uso
 data/manifest.json                   # assinatura da rodada ativa
 data/hv/bank.bin | bank.idx
 data/emb/bank.f32 | whitening.bin
 data/facts.jsonl
+target/aether_transplant_hv.json     # gates probe
+target/aether_transplant_uso.json    # usabilidade
 docs/DOACAO_PLAYBOOK.md              # este arquivo
 docs/INTAKE_PLAN.md                  # schema binário
 docs/TRANSPLANT_HV.md                # números da 1ª rodada
@@ -327,3 +333,90 @@ python tools/harvest_transplant.py --limit 200 --dry-run --out data/rounds/NOVA 
 ```
 
 Isso é tudo que um agente novo precisa para **clonar o aprendizado** sem tocar no organismo.
+
+---
+
+## 12. Origem (doação) — o que entra
+
+| Campo | 1ª rodada lab (2026-11-16) | Notas |
+|-------|----------------------------|-------|
+| Doador (mapa) | `Qwen/Qwen3-Embedding-0.6B#dry-run-synthetic` | Produção: revision HF real |
+| Escriba | sintético PT-BR (dry-run) | Prod: Qwen2.5-7B Instruct |
+| Licença mapa | Apache-2.0 | Obrigatório em produto |
+| `dim_in` | 768 | MRL truncate se 1024 |
+| `dim_hv` / words | 10240 / 160 | 1,28 KB/átomo |
+| `seed` | `0xDEADBEEF` (3735928559) | Novo a cada rodada |
+| `count` / `facts` | 205 / 205 | `--limit 200` + conflitos |
+| Whitening | **off** (`--no-whiten`) | Ablação recomendada |
+| `sha256_bank` | `9b8bfadd…c06f8f` | Assinatura da rodada |
+| `sha256_embeds` | `815e2fa5…2ffa1d` | Cache regenerável |
+| Conflitos | 5 plantados / 5 detectados | Cartório `contradicts` |
+| Authority máx. | 240 | 255 = HITL |
+| CLAIM | MSG 0229 / 0244 / 0245 | Tópico `INTAKE_TRANSPLANT` |
+| ETL | `tools/harvest_transplant.py` · 6 estágios | Offline; nunca T0 |
+
+Shards FHRR (manifest): `capital`20 · `é_um`41 · `é`20 · `é_uma`48+14 · `orbita`21 · `usa`21 · `minimiza`20.
+
+---
+
+## 13. Destino (transplante) — o que o AETHER recebe
+
+| Peça | Path / API | Papel |
+|------|------------|-------|
+| `bank.bin` + `bank.idx` | `data/hv/` | Bits + keys u128 |
+| `HvBank` | `src/core/hv.rs` | `load` · `top_k_into` · LSH se >10k |
+| SGDB bridge | `src/knowledge/sgdb_bridge.rs` | mock ledger + `try_load_hv_bank` |
+| Evidence | `certificate.rs` | `EvidenceSource::Hypervector` · auth≤240 |
+| Decisão | `decide_with_evidence` | Act / Cite / Propose / Abstain |
+| Hub | painel **Doação · ETL · Transplante** | `transplant_view.rs` |
+| Job | **Probe doação HV** | harvest (se faltar) + probe + gate |
+
+**Invariantes de destino:** T0 / `step_into` intocados · zero `String` no sinal · HV só T1/T2.
+
+---
+
+## 14. Estatísticas e usabilidade (medidas reais)
+
+### 14.1 Gates INTAKE (`target/aether_transplant_hv.json`)
+
+| Métrica | Valor | Alvo | Status |
+|---------|------:|------|--------|
+| Spearman | 0,9539 | ≥ 0,95 | PASS |
+| Recall@10 | 1,0000 | ≥ 0,90 | PASS |
+| JL distorção | 0,0084 | ≤ 0,12 | PASS |
+| Latência top-k | 0,006 ms | ≤ 1,5 ms | PASS |
+| Allocs query | 0 | 0 | PASS |
+| Conflitos | 5/5 | ≥ 95% | PASS |
+| Determinismo / rebuild | true | idêntico | PASS |
+| **pass** | **true** | | |
+
+### 14.2 E3 geometria (`target/aether_e3.json`)
+
+| Métrica | Valor |
+|---------|------:|
+| Spearman | 0,9528 |
+| Relação R@1 | 0,9990 |
+| Analogia R@1 / R@5 | 0,9549 / 1,0000 |
+| Falsos confiáveis | 0,00% |
+| Verificador | 0,004 ms · 0 alloc |
+
+### 14.3 Usabilidade U1–U6 (`target/aether_transplant_uso.json`)
+
+| ID | Cenário | Resultado |
+|----|---------|-----------|
+| U1 | Auto-recuperação top-1 (5 queries) | **5/5** |
+| U2 | Resolve SGDB (fato+cite+auth≤240) | **9/9** |
+| U3 | Vizinhança por relação (Rust→Python) | **PASS** |
+| U4 | Conflitos → Abstain/Propose | **5/5** |
+| U5 | Evidence Hypervector Act | **5/5** |
+| U6 | Latência Rust HvBank | **0,006 ms** |
+| CI | `transplant_hv_gate` 5 · `e3` 6 · `e3b` 5 · `f1` 4 | **PASS** |
+
+### 14.4 Hub
+
+```powershell
+.\scripts\cargo.ps1 run --release --bin aether-dashboard --features dashboard
+```
+
+Painel central: origem · destino · gates · E3 · U1–U6. Hover → coluna **Detalhe**.
+Job **Probe doação HV** regenera gates; `Recarregar` relê JSONs.

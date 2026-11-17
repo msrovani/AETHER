@@ -116,7 +116,7 @@ Prioridade de entrega ao **usuário** (não ao agente):
 | 0.3 | Script `scripts/run-demo.ps1` | um comando: build release + organism 15 s + tip daemon |
 | 0.4 | Alinhar telemetria daemon com `--help` já existente | banner legível: o que é R, F, SONHANDO |
 | 0.5 | Congelar superfície: **não** expor BAM/JIT/governor no CLI | docs dizem “lab only” |
-| **0.6 / (5)** | **Hub Windows** (`aether-dashboard`) | ACQ + T01–T12 + vazão; hover/fichas; jobs Auditoria / Benchmark / HW / demos; gaps heurísticos |
+| **0.6 / (5)** | **Hub Windows** (`aether-dashboard`) | ACQ + T01–T12 + vazão; hover/fichas; jobs Auditoria / Benchmark / HW / demos / **Probe doação HV**; painel **Doação·ETL·Transplante** (origem/destino/gates/U1–U6); gaps heurísticos |
 
 **Resultado:** qualquer dev com Rust+MinGW roda a demo sem ler ARCHITECTURE;
 no Windows, o hub é a superfície única de métricas + testes práticos.
@@ -126,10 +126,10 @@ no Windows, o hub é a superfície única de métricas + testes práticos.
 | Item | Spec |
 |---|---|
 | Binário | `aether-dashboard` · feature `dashboard` · **somente Windows** (`cfg(windows)`) |
-| Fonte | `target/aether_scorecard.json` (+ throughput); `target/aether_host_report.json` |
-| Layout | barra de ações + ACQ/coverage/hot-path + grade T01–T12 + vazão + HW/gaps |
-| Hover / clique | tooltips pedagógicos; ficha demonstrativa T0x no click |
-| Jobs | single-flight: auditoria, bench vazão, sonda HW, demo organism/daemon |
+| Fonte | `target/aether_scorecard.json` (+ throughput); `target/aether_host_report.json`; doação: `data/manifest.json` + `target/aether_transplant_{hv,uso}.json` + `aether_e3.json` |
+| Layout | barra de ações + ACQ/coverage/hot-path + grade T01–T12 + vazão + **Doação·ETL·Transplante** + HW/gaps |
+| Hover / clique | tooltips pedagógicos; ficha demonstrativa T0x no click; hover doação → Detalhe |
+| Jobs | single-flight: auditoria, bench vazão, sonda HW, demo organism/daemon, **Probe doação HV** |
 | Gaps | `SCORECARD_MISSING`, `TAIL_LATENCY_HIGH`, `L1D_PRESSURE`, `AFFINITY_OFF`, `TOOLCHAIN_PATH`, … |
 | Docs | [USER_GUIDE.md](USER_GUIDE.md) · [DASHBOARD_METRICS.md](DASHBOARD_METRICS.md) · [HUB_DASHBOARD.md](HUB_DASHBOARD.md) |
 | Gráficos | coluna direita: telemetria ao vivo do demo organismo (in-process) e parse do daemon |

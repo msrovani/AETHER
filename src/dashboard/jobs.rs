@@ -460,7 +460,18 @@ fn run_transplant_probe(shared: &Shared) -> Result<String, String> {
         Duration::from_secs(600),
         shared,
     )?;
-    Ok(format!("doação OK · probe: {probe} · gate: {gate}"))
+    set_log(shared, "transplant_uso U1–U6…");
+    let uso_status = Command::new("python")
+        .args(["tools/transplant_uso.py", "--data", "data", "--out", "target/aether_transplant_uso.json"])
+        .current_dir(&root)
+        .status()
+        .map_err(|e| format!("python uso: {e}"))?;
+    if !uso_status.success() {
+        return Err(format!("transplant_uso exit {}", uso_status.code().unwrap_or(-1)));
+    }
+    Ok(format!(
+        "doação OK · probe: {probe} · gate: {gate} · uso: target/aether_transplant_uso.json"
+    ))
 }
 
 fn run_cargo(args: &[&str], timeout: Duration, shared: &Shared) -> Result<String, String> {

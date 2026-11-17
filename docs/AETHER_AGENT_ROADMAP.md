@@ -338,6 +338,29 @@ watermark, Irreversible/HITL e `memory.write` implementados** por CURSOR (MSG
 0333/0339); HTTP pipeline com caps em andamento (MSG 0344). HITL risco>teto:
 planner propõe e executor devolve `Cite` (MSG 0351 fechado).
 
+#### Auditoria de undo/compensação (memo, 2026-11-17)
+
+Pontos fortes: before-image + LIFO (padrão Sagas/ARIES), outbox com watermark,
+tombstone/HITL, idempotência de replay. Riscos a corrigir:
+
+1. **Intenção de undo antes do efeito**: hoje `write` ocorre e o `Effect` é
+   registrado depois; crash no meio perde o before-image.
+2. **Gate irreversível antes da call**: hoje o gate é pós-call; efeito pode já
+   ter ocorrido.
+3. **Undo não pode ser engolido**: `rewind` deve devolver `UndoReport` e
+   escalar falha para HITL, não truncar silenciosamente.
+4. **Watermark explícito**: `Stage` precisa de `seq` + `outbox_len` por passo;
+   `txn = trace_id` colide em dois stages do mesmo trace.
+5. **Idempotência/condição**: `Insert`-undo não pode apagar valor de writer
+   concorrente; `Restore` deve usar CAS/token; replay stale conta, não falha.
+6. **Tombstone**: `authority >= 200` vira tombstone + HITL; `255` só com token
+   humano explícito.
+
+Testes mínimos: T1 watermark (N→N, 0 forget), T2 stages aninhados, T3 stage
+idempotente, T4 tombstone 200/255, T5 irreversível pré-call (efeito=0), T6 crash
+entre write e log, T7 undo falha → erro, T8 replay concorrente, T9 reinforce
+(prev None→Insert; Some→Restore).
+
 ### P4 — Aprendizado em escala e memória como prior (7–10 dias)
 
 **Arquivos**

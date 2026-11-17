@@ -183,13 +183,13 @@ fn sweep_gpu_pareia_com_o_solver() {
         .expect("CPU relax");
     let cpu_e: Vec<f64> = out.best_energy.iter().copied().collect();
 
-    // --- GPU ---
+    // --- GPU (sessão: pipeline compilado uma vez) ---
+    let mut sweep = ising::IsingSweep::new().expect("sessão GPU");
     let mut gpu_e = vec![0.0f32; K];
     let mut gpu_s = vec![0i32; K * N];
-    ising::sweep_into(
-        &j32, &h32, &b.init, &b.c0, N, K, STEPS, &mut gpu_e, &mut gpu_s,
-    )
-    .expect("kernel GPU");
+    sweep
+        .sweep_into(&j32, &h32, &b.init, &b.c0, N, K, STEPS, &mut gpu_e, &mut gpu_s)
+        .expect("kernel GPU");
 
     // --- gate 1a: a energia reportada corresponde ao estado devolvido ---
     let mut worst_self = 0.0f64;
@@ -267,11 +267,9 @@ fn sweep_gpu_razao_minima_2x() {
     let mut gpu_e = vec![0.0f32; K];
     let mut gpu_s = vec![0i32; K * N];
 
-    // aquece o pipeline (compilação de shader na primeira chamada)
-    ising::sweep_into(
-        &j32, &h32, &b.init, &b.c0, N, K, STEPS, &mut gpu_e, &mut gpu_s,
-    )
-    .expect("kernel GPU");
+    // aquece a sessão (compilação de shader na abertura, não no lote)
+    let mut sweep = ising::IsingSweep::new().expect("sessão GPU");
+    let _ = sweep.sweep_into(&j32, &h32, &b.init, &b.c0, N, K, STEPS, &mut gpu_e, &mut gpu_s);
 
     let mut cpu_best = f64::INFINITY;
     let mut gpu_best = f64::INFINITY;
@@ -284,10 +282,9 @@ fn sweep_gpu_razao_minima_2x() {
         cpu_best = cpu_best.min(t.elapsed().as_secs_f64());
 
         let t = Instant::now();
-        ising::sweep_into(
-            &j32, &h32, &b.init, &b.c0, N, K, STEPS, &mut gpu_e, &mut gpu_s,
-        )
-        .expect("kernel GPU");
+        sweep
+            .sweep_into(&j32, &h32, &b.init, &b.c0, N, K, STEPS, &mut gpu_e, &mut gpu_s)
+            .expect("kernel GPU");
         gpu_best = gpu_best.min(t.elapsed().as_secs_f64());
     }
     let ratio = cpu_best / gpu_best;
@@ -348,6 +345,7 @@ fn bench_bruto() {
     if !st.available {
         return;
     }
+    let mut sweep = ising::IsingSweep::new().expect("sessão GPU");
     for k in [200usize, 2_000, 10_000] {
         let j64 = landscape(k, N, SEED);
         let b = bundles(&j64, k, N, SEED);
@@ -355,14 +353,31 @@ fn bench_bruto() {
         let h32: Vec<f32> = b.h64.iter().map(|v| *v as f32).collect();
         let mut e = vec![0.0f32; k];
         let mut s = vec![0i32; k * N];
-        let _ = ising::sweep_into(&j32, &h32, &b.init, &b.c0, N, k, STEPS, &mut e, &mut s);
+        let _ = sweep.sweep_into(&j32, &h32, &b.init, &b.c0, N, k, STEPS, &mut e, &mut s);
         let mut times = Vec::new();
         for _ in 0..5 {
             let t = Instant::now();
-            ising::sweep_into(&j32, &h32, &b.init, &b.c0, N, k, STEPS, &mut e, &mut s)
+            sweep
+                .sweep_into(&j32, &h32, &b.init, &b.c0, N, k, STEPS, &mut e, &mut s)
                 .expect("gpu");
             times.push(t.elapsed().as_secs_f64() * 1e3);
         }
-        println!("k={k}: {times:?} ms");
+        let j3 = Array3::from_shape_vec((k, N, N), b.j64.clone()).unwrap();
+        let h2 = Array2::from_shape_vec((k, N), b.h64.clone()).unwrap();
+        let mut solver = ThermodynamicIsingSolver::new(k, N, STEPS, DT);
+        let mut out = RelaxOutcome::with_capacity(k, N, STEPS);
+        let mut cpu = f64::INFINITY;
+        for _ in 0..3 {
+            let t = Instant::now();
+            solver.reset(SEED);
+            solver
+                .relax_into(IsingLandscape::new(j3.view(), h2.view()), &mut out)
+                .unwrap();
+            cpu = cpu.min(t.elapsed().as_secs_f64() * 1e3);
+        }
+        println!(
+            "k={k}: GPU {times:?} ms · CPU {cpu:.1} ms ⇒ {:.1}×",
+            cpu / times.iter().cloned().fold(f64::INFINITY, f64::min)
+        );
     }
 }
