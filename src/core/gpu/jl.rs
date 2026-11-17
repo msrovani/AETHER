@@ -211,20 +211,15 @@ mod imp {
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        // v1 usa palavras de 64 bits; v2 usa palavras de 32 bits (2× words)
-        let (w32, rows) = match kernel {
-            JlKernel::V1 => (words, n_rows),
-            JlKernel::V2 => (words * 2, n_rows),
+        // v1: words=u64/linha; v2: words=u32/linha (2×). Uniform = 4×u32
+        // (n_rows,d,bits,words) — alinhado ao struct Params dos shaders WGSL.
+        let w32 = match kernel {
+            JlKernel::V1 => words,
+            JlKernel::V2 => words * 2,
         };
         let params = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("jl-params"),
-            contents: bytemuck::cast_slice(&[
-                n_rows as u32,
-                d as u32,
-                bits as u32,
-                w32 as u32,
-                rows as u32,
-            ]),
+            contents: bytemuck::cast_slice(&[n_rows as u32, d as u32, bits as u32, w32 as u32]),
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
@@ -333,7 +328,7 @@ mod imp {
             pass.set_bind_group(0, &bind, &[]);
             let (gx, gy) = match kernel {
                 JlKernel::V1 => ((bits as u32).div_ceil(WG), n_rows as u32),
-                JlKernel::V2 => ((w32 as u32).div_ceil(WG), rows as u32),
+                JlKernel::V2 => ((w32 as u32).div_ceil(WG), n_rows as u32),
             };
             pass.dispatch_workgroups(gx, gy, 1);
         }

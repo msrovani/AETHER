@@ -111,7 +111,7 @@ impl EvalReport {
             TierStatus {
                 tier: EvalTier::T2Hybrid,
                 ready: false,
-                note: "LanguagePort C0 ainda nao wired no origin; T2 N/A".into(),
+                note: "LanguagePort C0 wired (language.parse + adapt_text); T2 parcial sem CLI/API text".into(),
             },
             TierStatus {
                 tier: EvalTier::T3External,

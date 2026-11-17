@@ -91,7 +91,7 @@ fn jl_gpu_igual_ao_cpu_bit_a_bit() {
 }
 
 #[test]
-fn gpu_razao_minima_2x() {
+fn gpu_razao_minima_1_5x() {
     let st = gpu::status();
     if !st.available {
         eprintln!("skip (sem GPU): {}", st.summary());
