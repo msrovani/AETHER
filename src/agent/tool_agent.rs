@@ -355,10 +355,15 @@ impl ToolAgent {
         started: std::time::Instant,
     ) -> GoalOutcome {
         let total_us = started.elapsed().as_micros() as u64;
-        let answer = last
-            .as_ref()
-            .and_then(|execution| execution.outcome.first_claim())
-            .map(|claim| claim.value.clone());
+        // Passo que falhou/pediu HITL não pode "vazar" resposta como se fosse
+        // sucesso: a evidência fica nos steps, não no answer.
+        let answer = if success {
+            last.as_ref()
+                .and_then(|execution| execution.outcome.first_claim())
+                .map(|claim| claim.value.clone())
+        } else {
+            None
+        };
         let trace = EpisodeTrace {
             goal: goal_label(goal),
             steps: steps.clone(),
@@ -374,7 +379,11 @@ impl ToolAgent {
             success,
             action,
             steps,
-            outcome: last.map(|execution| execution.outcome),
+            outcome: if success {
+                last.map(|execution| execution.outcome)
+            } else {
+                None
+            },
             claims,
             rationale,
             trace,

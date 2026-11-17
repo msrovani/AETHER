@@ -540,13 +540,15 @@ fn print_goal_outcome(out: &mut dyn Write, outcome: &super::GoalOutcome, json: b
             step.detail
         );
     }
-    if let Some(claim) = outcome.outcome.as_ref().and_then(|o| o.first_claim()) {
-        let _ = writeln!(
-            out,
-            "resposta: {} (fonte {})",
-            claim.value,
-            claim.source.label()
-        );
+    if outcome.success {
+        if let Some(claim) = outcome.outcome.as_ref().and_then(|o| o.first_claim()) {
+            let _ = writeln!(
+                out,
+                "resposta: {} (fonte {})",
+                claim.value,
+                claim.source.label()
+            );
+        }
     }
 }
 

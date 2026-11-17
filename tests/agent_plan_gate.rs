@@ -1057,6 +1057,16 @@ fn gate_pipeline_hitl_desfaz_passos_anteriores() {
 }
 
 #[test]
+fn gate_falha_nao_expoe_resposta_como_sucesso() {
+    let store = Arc::new(Mutex::new(MockStore::default()));
+    let mut agent = undo_agent(Arc::clone(&store), "k", "v1", None);
+    let outcome = agent.solve(&undo_workflow());
+    assert!(!outcome.success);
+    assert!(outcome.outcome.is_none(), "outcome de passo falho vazou");
+    assert!(outcome.trace.answer.is_none(), "answer de falha vazou");
+}
+
+#[test]
 fn gate_a3_ood_abstem_sem_candidato() {
     let registry = registry(vec![ChainTool {
         name: "fetch",
