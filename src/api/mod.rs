@@ -114,8 +114,11 @@ pub struct ApiConfig {
     /// Segredo **servidor-side** que autoriza escrita/purga de fatos em
     /// autoridade `>= 200` (HITL). Populado de `AETHER_HITL_TOKEN`.
     ///
-    /// O corpo da requisição nunca concede esse poder: sem este segredo, o
-    /// cliente não promove autoridade em `remember` nem apaga fato 200/255.
+    /// Vale para as rotas de memória expostas ao cliente
+    /// (`/v1/aether/memory/remember`, `/v1/aether/memory/forget`): nelas o
+    /// corpo nunca concede poder. Nas rotas de ledger local
+    /// (`/v1/aether/remember`, `/v1/aether/forget`) a `authority` do host é o
+    /// mandato e este segredo não é exigido.
     pub hitl_token: Option<String>,
 }
 

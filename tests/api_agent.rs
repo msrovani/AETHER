@@ -623,7 +623,7 @@ fn api_agent_forget_255_exige_segredo_hitl() {
         addr,
         "POST",
         "/v1/aether/memory/forget",
-        &body,
+        body,
         Some("errado"),
     );
     assert_eq!(status, 403, "{resp}");
