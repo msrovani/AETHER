@@ -49,15 +49,69 @@ fn f23_tabela_2d_e_fronteiras() {
     let mut ledger = FusionLedger::new(); // limiares: gap ≤ 0,25 · autoridade ≥ 128
     let cases = [
         // (authority, gap, violations, quadrant esperado, ação esperada)
-        (255, 0.00, 0, Quadrant::TrustedFeasible, FusionAction::ActAndCite),
-        (128, 0.25, 0, Quadrant::TrustedFeasible, FusionAction::ActAndCite),
-        (127, 0.00, 0, Quadrant::UnvettedFeasible, FusionAction::Propose),
-        (0, 0.10, 0, Quadrant::UnvettedFeasible, FusionAction::Propose),
-        (255, 0.26, 0, Quadrant::TrustedAmbiguous, FusionAction::CiteNoAct),
-        (200, 1.00, 0, Quadrant::TrustedAmbiguous, FusionAction::CiteNoAct),
-        (255, 0.00, 1, Quadrant::TrustedAmbiguous, FusionAction::CiteNoAct),
-        (0, 0.26, 0, Quadrant::UnvettedAmbiguous, FusionAction::Abstain),
-        (127, 0.00, 2, Quadrant::UnvettedAmbiguous, FusionAction::Abstain),
+        (
+            255,
+            0.00,
+            0,
+            Quadrant::TrustedFeasible,
+            FusionAction::ActAndCite,
+        ),
+        (
+            128,
+            0.25,
+            0,
+            Quadrant::TrustedFeasible,
+            FusionAction::ActAndCite,
+        ),
+        (
+            127,
+            0.00,
+            0,
+            Quadrant::UnvettedFeasible,
+            FusionAction::Propose,
+        ),
+        (
+            0,
+            0.10,
+            0,
+            Quadrant::UnvettedFeasible,
+            FusionAction::Propose,
+        ),
+        (
+            255,
+            0.26,
+            0,
+            Quadrant::TrustedAmbiguous,
+            FusionAction::CiteNoAct,
+        ),
+        (
+            200,
+            1.00,
+            0,
+            Quadrant::TrustedAmbiguous,
+            FusionAction::CiteNoAct,
+        ),
+        (
+            255,
+            0.00,
+            1,
+            Quadrant::TrustedAmbiguous,
+            FusionAction::CiteNoAct,
+        ),
+        (
+            0,
+            0.26,
+            0,
+            Quadrant::UnvettedAmbiguous,
+            FusionAction::Abstain,
+        ),
+        (
+            127,
+            0.00,
+            2,
+            Quadrant::UnvettedAmbiguous,
+            FusionAction::Abstain,
+        ),
     ];
     for (authority, gap, violations, want_q, want_a) in cases {
         let d = ledger.decide(authority, cert(gap, violations));
@@ -175,36 +229,42 @@ fn f23_poda_nao_vaza_escopo() {
     let mut ledger = FusionLedger::new();
 
     for scope in [a, b] {
-        ledger.stage(
-            aether_engine::core::knowledge_bridge_f1::DraftRecord {
-                key,
-                layer: Layer::L4Semantic,
-                certificate: cert(0.1, 0),
-                authority: 200,
-                scope,
-                tick: 0,
-                wall_ms: 1_000,
-                payload: payload(u64::from(scope.organism_id)),
-            },
-        );
+        ledger.stage(aether_engine::core::knowledge_bridge_f1::DraftRecord {
+            key,
+            layer: Layer::L4Semantic,
+            certificate: cert(0.1, 0),
+            authority: 200,
+            scope,
+            tick: 0,
+            wall_ms: 1_000,
+            payload: payload(scope.organism_id),
+        });
     }
     assert_eq!(ledger.commit_run(), 2, "chaves iguais em escopos distintos");
 
     let gist = ledger.prune_to_gist(a, key).expect("gist de A");
     assert_eq!(gist.scope, a, "gist precisa carregar o escopo de origem");
     assert!(!ledger.key_in_scope(a, key), "A deveria ter sido podado");
-    assert!(
-        ledger.key_in_scope(b, key),
-        "R8: podar A não pode apagar B"
-    );
+    assert!(ledger.key_in_scope(b, key), "R8: podar A não pode apagar B");
     assert_eq!(ledger.pruned(), 1);
     assert_eq!(ledger.gist_count(), 1);
 
-    // o gist de A serve A e **não** é anunciado para B
-    let sig = gist.signature;
-    assert_eq!(ledger.gist_cue(a, &sig, 0.5), Some(key));
+    // o gist de A serve A e **não** é anunciado para B.
+    // `gist_cue` recebe a consulta em fase complexa intercalada (`re, im`) —
+    // a mesma forma do payload — e não a assinatura já reduzida.
+    let body = payload(a.organism_id);
+    let mut query = Vec::with_capacity(body.len() / 4);
+    for c in body.chunks_exact(8) {
+        query.push(f32::from_le_bytes([c[0], c[1], c[2], c[3]]));
+        query.push(f32::from_le_bytes([c[4], c[5], c[6], c[7]]));
+    }
     assert_eq!(
-        ledger.gist_cue(b, &sig, 0.5),
+        ledger.gist_cue(a, &query, 0.5),
+        Some(key),
+        "o gist precisa reconhecer a própria origem (assinatura query-side)"
+    );
+    assert_eq!(
+        ledger.gist_cue(b, &query, 0.5),
         None,
         "R8: gist de A não pode ser recuperado por B"
     );
