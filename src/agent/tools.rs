@@ -353,5 +353,7 @@ pub fn default_tools(cfg: &AgentConfig) -> Vec<Box<dyn Tool>> {
         }
     }
     tools.push(Box::new(AskHumanTool));
+    // C0 LanguagePort (MSG 0292 ACK_Q1): tool em language.rs, registro aqui.
+    tools.push(Box::new(super::language::LanguageParseTool::new()));
     tools
 }

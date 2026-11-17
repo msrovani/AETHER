@@ -455,5 +455,13 @@ impl Tool for VerifyTool {
 }
 
 fn tools_allowlist() -> Vec<&'static str> {
-    vec!["fact", "sat", "qubo", "memory", "verify", "ask.human"]
+    vec![
+        "fact",
+        "sat",
+        "qubo",
+        "memory",
+        "verify",
+        "ask.human",
+        "language.parse",
+    ]
 }
