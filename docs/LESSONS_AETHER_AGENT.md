@@ -99,9 +99,10 @@ gravação via MCP direto precisa repetir o mesmo `scope_run`/entidade.
 
 ## 7. Testes e custo
 
-- `cargo test --lib agent::` — 14 testes; `tests/agent_gate.rs` — 6 gates;
-  `tests/agent_cli.rs` — 2; `tests/api_agent.rs` — 2.
-- `cargo test --lib` — 142 testes (após o agente).
+- `cargo test --lib agent::` — 18 testes; `tests/agent_gate.rs` — 6 gates;
+  `tests/agent_tools_gate.rs` — 4 (G-A1); `tests/agent_plan_gate.rs` — 3
+  (G-A2/G-A3); `tests/agent_cli.rs` — 2; `tests/api_agent.rs` — 2.
+- `cargo test --lib` — 143 testes (após o agente).
 - Gates de latência (`e1_language_gate::g5`, `phase5_hardware::t12_*`) exigem
   **release**; em debug eles medem o interpretador, não o motor.
 - O agente é `T2`: nada aqui deve ser importado pelo `T0`.

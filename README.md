@@ -63,6 +63,9 @@ autoaprendizado (feature `agent`; sem LLM e sem backpropagation):
 ```bash
 cargo run --release --bin aether-agent -- ask --subject Brasil --relation capital
 cargo run --release --bin aether-agent -- demo
+cargo run --release --bin aether-agent -- tools
+cargo run --release --bin aether-agent -- plan --subject AETHER --relation proibe
+cargo run --release --bin aether-agent -- pipeline target/workflow.json
 cargo run --release --bin aether-agent -- sat target/instancia.dimacs
 ```
 
