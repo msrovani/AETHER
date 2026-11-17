@@ -153,7 +153,7 @@ impl CoherenceEngine {
             // Conflito: a fonte com autoridade dominante vence, mas a ação
             // vira `Cite` (não se age com evidência contestada).
             contested = true;
-            values.sort_by(|a, b| b.authority.cmp(&a.authority));
+            values.sort_by_key(|claim| std::cmp::Reverse(claim.authority));
             let top = values[0].authority;
             let second = values.get(1).map_or(0, |c| c.authority);
             if top >= second.saturating_add(64) {

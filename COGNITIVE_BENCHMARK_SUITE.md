@@ -123,3 +123,10 @@ $$\text{eq-t/s} = \text{cycles/s} \times 128\text{ tokens equivalentes/ciclo}$$
 ### Como interpretar os resultados da auditoria no seu PC
 * **Alucinação & RAG Holográfico (`test_10` e `test_12`):** Diferente de um LLM que inventa texto plausível quando não sabe a resposta, o AETHER quantifica a própria ignorância fisicamente pela dispersão das trajetórias de Langevin ($\mathcal{U}$) e pela ortogonalidade dos fasores FHRR ($\text{sim} \approx 0$), bloqueando ações quando o sinal é ruído puro.
 * **Comparação de `eq-t/s` (`throughput_tps.rs`):** Em uma CPU x86/ARM moderna sem GPU, o ciclo completo em Rust *zero-allocation* roda na casa de dezenas a centenas de microssegundos, entregando uma vazão equivalente na ordem de **centenas de milhares a milhões de `eq-t/s`** com pegada de RAM inferior a 10 MB.
+
+---
+
+### Execuções registradas
+
+* [`docs/COGNITIVE_AUDIT_FINAL.md`](docs/COGNITIVE_AUDIT_FINAL.md) — fechamento do sprint (2026-11-15).
+* [`docs/COGNITIVE_AUDIT_RUN_2026-11-17.md`](docs/COGNITIVE_AUDIT_RUN_2026-11-17.md) — reexecução (2026-11-17): ACQ 100, 12/12 `MEASURED`, 52 alvos / 318 testes, strict 12/12.

@@ -204,7 +204,7 @@ impl TransplantExpert {
     }
 }
 
-fn symbol<'a>(cache: &'a mut HashMap<String, Vec<f32>>, label: &str, dim: usize) -> Vec<f32> {
+fn symbol(cache: &mut HashMap<String, Vec<f32>>, label: &str, dim: usize) -> Vec<f32> {
     cache
         .entry(label.to_string())
         .or_insert_with(|| symbol_phases(label, dim))

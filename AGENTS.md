@@ -67,6 +67,22 @@ export AETHER_SGDB_OUTBOX=target/aether_sgdb.jsonl
 | contrato legível por máquina | `aether-sgdb guide --json` |
 | demonstrar sem servidor | `aether-sgdb demo --json` |
 
+## Agente AETHER (inferência estruturada)
+
+Para perguntas **estruturadas** (não linguagem natural), use o organismo
+agêntico — ele devolve ação, certificado e abstenção:
+
+```bash
+aether-agent ask --subject Brasil --relation capital --json
+aether-agent sat target/instancia.dimacs --json
+aether-agent solve target/qubo.json --json
+aether-agent demo --json          # inferência + SAT + QUBO + aprendizado
+```
+
+Regras: se `action = abstain`, **não invente**; se `cite`, cite sem agir. O
+agente não é um chatbot: a borda não faz parsing de linguagem, e o núcleo não
+tokeniza.
+
 ## Regras de ouro
 
 - **O core não decide.** AETHER devolve fase/energia/evidência; o host decide o

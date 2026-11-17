@@ -4,6 +4,8 @@
 > Comando: `cargo test --release --test cognitive_audit -- --nocapture`.
 > Este arquivo é o fechamento do sprint; o relatório parcial do Bloco 1
 > (`docs/COGNITIVE_AUDIT_REPORT.md`, CURSOR/BUFFY) descreve um estado anterior.
+> Reexecução posterior: [`COGNITIVE_AUDIT_RUN_2026-11-17.md`](COGNITIVE_AUDIT_RUN_2026-11-17.md)
+> (2026-11-17, v0.0.143, ACQ 100, suíte completa com 318 testes).
 
 ## 1. Resultado global
 

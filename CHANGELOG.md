@@ -3,6 +3,22 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.145] - 2026-11-17
+
+### Changed
+
+- Ciclo automatico: 8 arquivo(s) (.:4, docs:2, src:2).
+- Gate: ok (10s).
+
+- `AGENTS.md`
+- `COGNITIVE_BENCHMARK_SUITE.md`
+- `Cargo.lock`
+- `README.md`
+- `docs/COGNITIVE_AUDIT_FINAL.md`
+- `src/agent/coherence.rs`
+- `src/agent/experts.rs`
+- `docs/COGNITIVE_AUDIT_RUN_2026-11-17.md`
+
 ## [0.0.144] - 2026-11-17
 
 ### Changed
