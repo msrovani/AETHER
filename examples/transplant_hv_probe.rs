@@ -188,7 +188,7 @@ fn sha256_simple(data: &[u8]) -> [u8; 32] {
     sha256(data)
 }
 
-fn sha256(mut msg: &[u8]) -> [u8; 32] {
+fn sha256(msg: &[u8]) -> [u8; 32] {
     // Compact SHA-256 (public domain style)
     let mut h: [u32; 8] = [
         0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
@@ -282,52 +282,6 @@ fn load_embeds(path: &Path) -> Result<(usize, usize, Vec<f32>), String> {
     Ok((n, d, v))
 }
 
-fn cosine(a: &[f32], b: &[f32]) -> f64 {
-    let mut dot = 0.0f64;
-    let mut na = 0.0f64;
-    let mut nb = 0.0f64;
-    for i in 0..a.len() {
-        let x = a[i] as f64;
-        let y = b[i] as f64;
-        dot += x * y;
-        na += x * x;
-        nb += y * y;
-    }
-    dot / (na.sqrt() * nb.sqrt() + 1e-12)
-}
-
-fn spearman(xs: &[f64], ys: &[f64]) -> f64 {
-    let n = xs.len();
-    if n < 2 {
-        return 0.0;
-    }
-    let mut ix: Vec<usize> = (0..n).collect();
-    let mut iy: Vec<usize> = (0..n).collect();
-    ix.sort_by(|&a, &b| xs[a].partial_cmp(&xs[b]).unwrap());
-    iy.sort_by(|&a, &b| ys[a].partial_cmp(&ys[b]).unwrap());
-    let mut rx = vec![0.0f64; n];
-    let mut ry = vec![0.0f64; n];
-    for (rank, &i) in ix.iter().enumerate() {
-        rx[i] = rank as f64;
-    }
-    for (rank, &i) in iy.iter().enumerate() {
-        ry[i] = rank as f64;
-    }
-    let mx = rx.iter().sum::<f64>() / n as f64;
-    let my = ry.iter().sum::<f64>() / n as f64;
-    let mut num = 0.0;
-    let mut dx = 0.0;
-    let mut dy = 0.0;
-    for i in 0..n {
-        let a = rx[i] - mx;
-        let b = ry[i] - my;
-        num += a * b;
-        dx += a * a;
-        dy += b * b;
-    }
-    num / (dx.sqrt() * dy.sqrt() + 1e-12)
-}
-
 fn main() {
     let bank_path = Path::new("data/hv/bank.bin");
     let idx_path = Path::new("data/hv/bank.idx");
@@ -415,7 +369,7 @@ fn main() {
     let recall10 = hits as f64 / recall_n.max(1) as f64;
 
     // Latency @ up to 10k (or bank size)
-    let mut q = bank.atom_words(0).to_vec();
+    let q = bank.atom_words(0).to_vec();
     let mut out = vec![(0u32, 0u128); 10];
     let t0 = Instant::now();
     let rounds = 20usize;

@@ -644,7 +644,7 @@ mod tests {
         first.stage(record(scope, 4));
         first.commit_run();
         let transport = first.client_mut().transport_mut();
-        let transport = std::mem::replace(transport, MockTransport::new());
+        let transport = std::mem::take(transport);
         let mut restarted = SgdbLedger::new(transport, SgdbConfig::default(), scope);
         assert_eq!(restarted.hydrate(scope, 16), 1);
         assert_eq!(restarted.local().len(), 1);

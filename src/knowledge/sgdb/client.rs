@@ -778,7 +778,10 @@ mod tests {
         let scope = ScopeId::new(1, 2, 3);
         let mut client = SgdbClient::new(MockTransport::new(), SgdbConfig::default());
         let rec = record(scope, 1, 200);
-        assert_eq!(client.remember_records(&[rec.clone()]).unwrap(), 1);
+        assert_eq!(
+            client.remember_records(std::slice::from_ref(&rec)).unwrap(),
+            1
+        );
         let hits = client.recall_scope(scope, 4).unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].doc.payload, rec.payload);
@@ -814,8 +817,10 @@ mod tests {
         let scope = ScopeId::new(7, 8, 9);
         let mut mock = MockTransport::new();
         mock.set_now(1_000);
-        let mut cfg = SgdbConfig::default();
-        cfg.ttl_ms = Some(100);
+        let cfg = SgdbConfig {
+            ttl_ms: Some(100),
+            ..Default::default()
+        };
         let mut client = SgdbClient::new(mock, cfg);
         client.remember_records(&[record(scope, 1, 100)]).unwrap();
         assert_eq!(client.recall_scope(scope, 4).unwrap().len(), 1);

@@ -599,6 +599,44 @@ impl StructuralVerifier {
     }
 }
 
+impl JlProjector {
+    /// Preenche a matriz JL completa (`bits x d`, row-major) com exatamente os
+    /// mesmos coeficientes que [`Self::project_into`] usa por bloco.
+    ///
+    /// Existe para o caminho GPU (`--features gpu`): a matriz sobe uma vez e o
+    /// kernel faz o GEMM. Como usa o mesmo RNG/gauss e a mesma ordem, o
+    /// resultado e' bit-a-bit identico ao caminho CPU.
+    pub fn fill_matrix(&mut self, out: &mut [f32]) {
+        assert!(out.len() >= self.bits * self.d, "JL: matriz curta");
+        let d = self.d;
+        let block = self.block;
+        let mut start = 0usize;
+        while start < self.bits {
+            let b = block.min(self.bits - start);
+            let mut rng = ChaCha8Rng::seed_from_u64(
+                self.seed ^ (start as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15),
+            );
+            for k in 0..b {
+                let row = &mut out[(start + k) * d..(start + k + 1) * d];
+                for v in row.iter_mut() {
+                    *v = gauss(&mut rng);
+                }
+            }
+            start += b;
+        }
+    }
+
+    /// Dimensao de entrada do projetor.
+    pub const fn input_dim(&self) -> usize {
+        self.d
+    }
+
+    /// Numero de bits de saida do projetor.
+    pub const fn bits_out(&self) -> usize {
+        self.bits
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -736,44 +774,5 @@ mod tests {
         let xs: Vec<f64> = (0..50).map(|i| i as f64).collect();
         let ys: Vec<f64> = (0..50).map(|i| -(i as f64)).collect();
         assert!((spearman(&xs, &ys) + 1.0).abs() < 1e-12);
-    }
-}
-
-
-impl JlProjector {
-    /// Preenche a matriz JL completa (`bits x d`, row-major) com exatamente os
-    /// mesmos coeficientes que [`Self::project_into`] usa por bloco.
-    ///
-    /// Existe para o caminho GPU (`--features gpu`): a matriz sobe uma vez e o
-    /// kernel faz o GEMM. Como usa o mesmo RNG/gauss e a mesma ordem, o
-    /// resultado e' bit-a-bit identico ao caminho CPU.
-    pub fn fill_matrix(&mut self, out: &mut [f32]) {
-        assert!(out.len() >= self.bits * self.d, "JL: matriz curta");
-        let d = self.d;
-        let block = self.block;
-        let mut start = 0usize;
-        while start < self.bits {
-            let b = block.min(self.bits - start);
-            let mut rng = ChaCha8Rng::seed_from_u64(
-                self.seed ^ (start as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15),
-            );
-            for k in 0..b {
-                let row = &mut out[(start + k) * d..(start + k + 1) * d];
-                for v in row.iter_mut() {
-                    *v = gauss(&mut rng);
-                }
-            }
-            start += b;
-        }
-    }
-
-    /// Dimensao de entrada do projetor.
-    pub const fn input_dim(&self) -> usize {
-        self.d
-    }
-
-    /// Numero de bits de saida do projetor.
-    pub const fn bits_out(&self) -> usize {
-        self.bits
     }
 }

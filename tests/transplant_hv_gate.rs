@@ -135,7 +135,7 @@ fn g4_rebuild_shards_byte_plan() {
     }
     let mut expected_shards = 0usize;
     for c in by_rel.values() {
-        expected_shards += (*c + 47) / 48;
+        expected_shards += (*c).div_ceil(48);
     }
     let listed = manifest.matches("\"relation\"").count();
     assert_eq!(listed, expected_shards, "rebuild shard count mismatch");
