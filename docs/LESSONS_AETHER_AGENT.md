@@ -39,6 +39,14 @@
 | Agir sempre que havia candidato | score não comparava com abstenção | `Planner::min_score` (EFE pragmática) | `planner.rs` |
 | Rollback de memória não desfazia escrita | `Effect::MemoryWrite` só tinha a chave | `UndoOp::{Insert,Restore}` + `UndoBackend` LIFO | `tool.rs`, `executor.rs` |
 | LanguagePort existia sem tool | faltava registro/allowlist | `language.parse` em `default_tools` + allowlist | `tools.rs`, `tool_agent.rs` |
+| Irreversível só era visto **depois** da call | gate pós-call em `outcome.effects` | `Tool::planned_effects` verificado antes da `call` | `tool.rs`, `executor.rs` |
+| Undo engolia falha | `let _ = rewind` e `Ok` sem backend | `UndoReport{applied,stale,failed}`; log preservado | `tool.rs`, `executor.rs` |
+| `Stage` era decorativo | nenhum backend materializava a marca | `stage_begin` devolve a marca; `stage_rewind_to` usa a do op | `tool.rs`, `undo_sgdb.rs` |
+| Fato inferido virava 128/200 por reescrita | `max(128)` e carimbo 200 no transplante | quarentena 96; mantém autoridade; promoção só com corroboração/HITL | `tools.rs`, `experts.rs` |
+| `ask.human` vencia tool real | affordance 0.5 + custo 0 no EFE | `Tool::escalation` fora do ranking | `planner.rs`, `registry.rs` |
+| Orçamento não contava tempo real nem passos | `charge(cost)` e `max_steps` sem uso | `charge(max(est,medido))` + `spent_steps` em `can_spend` | `executor.rs`, `tool.rs` |
+| HITL vazava sucesso | `needs_human` só trocava `action` | zera `success`, claims, `answer` e `outcome` | `tool_agent.rs` |
+| Journal perdia linha parcial de outro processo | contagem por linhas | sync por bytes até o último `\n` | `undo_sgdb.rs` |
 
 ## 3. Invariantes que não podem regredir
 
