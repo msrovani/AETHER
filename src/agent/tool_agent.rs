@@ -481,7 +481,7 @@ impl Tool for VerifyTool {
                     1.0,
                     200,
                     ExpertId::Logic,
-                    Provenance::Inferred,
+                    Provenance::Observed,
                 )],
                 confidence: 1.0,
                 detail: format!(

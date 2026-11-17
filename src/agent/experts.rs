@@ -235,7 +235,9 @@ impl Expert for TransplantExpert {
                     relation.clone(),
                     value,
                     confidence,
-                    200,
+                    // Transplantado = confiável (128), não "verificado" (200):
+                    // verificação exige evidência local/HITL.
+                    super::tool::AUTHORITY_CORROBORATED,
                     self.id(),
                     Provenance::Transplanted,
                 );
@@ -477,7 +479,7 @@ impl Expert for LogicExpert {
                 support,
                 200,
                 self.id(),
-                Provenance::Inferred,
+                Provenance::Observed,
             )],
             confidence: support,
             certificate: Some(EngineCertificate::new(
@@ -567,7 +569,7 @@ impl Expert for SolverExpert {
                 support,
                 200,
                 self.id(),
-                Provenance::Inferred,
+                Provenance::Observed,
             )],
             confidence: support,
             certificate: Some(EngineCertificate::new(
