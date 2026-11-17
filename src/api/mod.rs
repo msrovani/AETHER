@@ -43,11 +43,11 @@ use ndarray::{Array2, Array3};
 use crate::agent::{
     AetherAgent, AgentConfig, Budget, Goal, Risk, SuccessCriteria, Task, ToolAgent,
 };
-use crate::core::logic_pipeline::Clause3;
 use crate::core::certificate::{self, Decision, Provenance};
 use crate::core::knowledge_bridge_f1::{
     BridgeError, Certificate as BridgeCertificate, DraftRecord, Layer, ScopeId, ScopeLedger,
 };
+use crate::core::logic_pipeline::Clause3;
 use crate::core::presolve::{roof_dual_qumo, ROOF_MAX_N};
 use crate::core::thermodynamic_solver::{IsingLandscape, ThermodynamicIsingSolver};
 use crate::error::AetherError;
@@ -395,8 +395,25 @@ pub fn serve_listener(listener: TcpListener, cfg: ApiConfig) -> std::io::Result<
             };
             match next {
                 Ok(mut stream) => {
-                    if let Ok(mut st) = state.lock() {
-                        let _ = handle(&mut st, &mut stream);
+                    // Um panic dentro de `handle` (payload hostil que estoura
+                    // índice no núcleo) não pode derrubar o worker nem envenenar
+                    // o estado: o guard é recuperado com `into_inner` e a
+                    // conexão recebe 500 — a borda continua atendendo.
+                    let mut st = match state.lock() {
+                        Ok(guard) => guard,
+                        Err(poison) => poison.into_inner(),
+                    };
+                    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        handle(&mut st, &mut stream)
+                    }));
+                    if outcome.is_err() {
+                        // Best-effort: se o cabeçalho da resposta ainda não
+                        // saiu, o cliente lê um 500 em vez de reset.
+                        let _ = write_response(
+                            &mut stream,
+                            500,
+                            &error_json("internal", "panic ao atender a requisição"),
+                        );
                     }
                 }
                 Err(_) => break,
@@ -989,8 +1006,12 @@ fn agent_route(state: &mut ApiState, body: &[u8]) -> Reply {
         Err(e) => return Reply::Json(e.0, e.1),
     };
     // Workflow multi-passo (MSG 0287/0319): não toca `/v1/chat/completions`.
-    if doc.get("pipeline").is_some() || doc.get("steps").and_then(|v| v.as_arr()).is_some() {
-        return agent_pipeline_route(&doc);
+    // `pipeline`/`steps` só desviam a rota quando são **array** (`null` num
+    // corpo de tarefa única continua sendo tarefa única).
+    match pipeline_requested(&doc) {
+        Ok(true) => return agent_pipeline_route(&doc),
+        Ok(false) => {}
+        Err(e) => return bad(&e),
     }
     let task = if let (Some(subject), Some(relation)) = (
         doc.get("subject").and_then(|v| v.as_str()),
@@ -1000,34 +1021,51 @@ fn agent_route(state: &mut ApiState, body: &[u8]) -> Reply {
             subject: subject.to_string(),
             relation: relation.to_string(),
         }
-    } else if let Some(clauses) = clauses_from_json(doc.get("clauses")) {
-        let n = doc
-            .get("n")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
-            .unwrap_or_else(|| {
-                clauses
-                    .iter()
-                    .flat_map(|c| [c.lit(0).0, c.lit(1).0, c.lit(2).0])
-                    .max()
-                    .unwrap_or(0)
-                    + 1
-            });
+    } else if let Some(clauses_json) = doc.get("clauses").filter(|v| **v != Json::Null) {
+        let raw = match raw_clauses(Some(clauses_json)) {
+            Ok(v) => v,
+            Err(e) => return bad(&e),
+        };
+        let n = match doc.get("n").and_then(|v| v.as_u64()).map(|v| v as usize) {
+            Some(n) => n,
+            // Sem `n`: a maior variável citada manda (1-based).
+            None => raw
+                .iter()
+                .flatten()
+                .map(|v| v.unsigned_abs() as usize)
+                .max()
+                .unwrap_or(0),
+        };
+        if n == 0 || n > AGENT_MAX_N {
+            return bad(&format!("sat n fora de 1..={AGENT_MAX_N}"));
+        }
+        let clauses = match clauses_from_raw(&raw, n) {
+            Ok(v) => v,
+            Err(e) => return bad(&e),
+        };
         Task::Satisfy { n, clauses }
     } else if let Some(n) = doc.get("n").and_then(|v| v.as_u64()).map(|v| v as usize) {
+        // Teto **antes** de qualquer alocação: `flat_matrix` reserva n² floats.
+        if n == 0 || n > AGENT_MAX_N {
+            return bad(&format!("qubo n fora de 1..={AGENT_MAX_N}"));
+        }
         let Some(j) = flat_matrix(doc.get("j"), n, n) else {
-            return bad("j deve ser n×n");
+            return bad(&format!("j deve ter {} elementos (n×n)", n * n));
         };
-        let h = flat_matrix(doc.get("h"), n, 1).unwrap_or_else(|| vec![0.0; n]);
+        let h = match doc.get("h") {
+            None | Some(Json::Null) => vec![0.0; n],
+            Some(_) => match flat_matrix(doc.get("h"), n, 1) {
+                Some(v) => v,
+                None => return bad(&format!("h deve ter {n} elementos")),
+            },
+        };
         Task::Optimize { n, j, h }
     } else if let Some(query) = doc.get("query").and_then(|v| v.as_str()) {
         Task::Memory {
             query: query.to_string(),
         }
     } else {
-        return bad(
-            "use {subject,relation}, {clauses,n}, {n,j,h}, {query} ou {steps|pipeline}",
-        );
+        return bad("use {subject,relation}, {clauses,n}, {n,j,h}, {query} ou {steps|pipeline}");
     };
     let Some(agent) = state.agent.as_mut() else {
         return Reply::Json(503, error_json("agent_off", "agente indisponível"));
@@ -1129,8 +1167,30 @@ fn agent_pipeline_route(doc: &Json) -> Reply {
 
 /// Teto de passos no workflow HTTP (MSG 0340).
 const PIPELINE_MAX_STEPS: usize = 8;
-/// Teto de `n` em sat/qubo do pipeline HTTP (MSG 0340).
-const PIPELINE_MAX_N: usize = 64;
+/// Teto de `n` em sat/qubo na rota do agente — pipeline **e** tarefa única.
+///
+/// Herdado do `PIPELINE_MAX_N` (MSG 0340) e mantido em 64: o expert SAT de
+/// default aceita até 96, mas a borda HTTP resolve de forma **síncrona** com o
+/// mutex de estado na mão; 64 é o maior `n` cujo custo cabe no orçamento da
+/// rota e mantém `n×n` (QUBO) em 4096 floats — nada de alocação abusiva vinda
+/// de `{"n":1000000}`.
+const AGENT_MAX_N: usize = 64;
+
+/// `true` se o corpo pede workflow multi-passo.
+///
+/// `pipeline`/`steps` só contam quando são array: exigir o tipo aqui evita que
+/// `"pipeline": null` (ou lixo) num corpo de tarefa única caia na rota errada.
+fn pipeline_requested(doc: &Json) -> Result<bool, String> {
+    let mut found = false;
+    for key in ["pipeline", "steps"] {
+        match doc.get(key) {
+            None | Some(Json::Null) => {}
+            Some(v) if v.as_arr().is_some() => found = true,
+            Some(_) => return Err(format!("`{key}` deve ser array de steps")),
+        }
+    }
+    Ok(found)
+}
 
 fn pipeline_goal_from_json(doc: &Json) -> Result<Goal, String> {
     let steps = doc
@@ -1188,30 +1248,41 @@ fn pipeline_step_from_json(json: &Json) -> Result<Goal, String> {
         }
         "sat" => {
             let n = json.get("n").and_then(|v| v.as_u64()).ok_or("sat sem n")? as usize;
-            if n == 0 || n > PIPELINE_MAX_N {
-                return Err(format!("sat n fora de 1..={PIPELINE_MAX_N}"));
+            if n == 0 || n > AGENT_MAX_N {
+                return Err(format!("sat n fora de 1..={AGENT_MAX_N}"));
             }
-            let clauses = json
-                .get("clauses")
-                .and_then(pipeline_clauses)
-                .ok_or("sat sem clauses válidas")?;
+            let raw = raw_clauses(json.get("clauses"))?;
+            let clauses = clauses_from_raw(&raw, n)?;
             Goal::satisfy(n, clauses)
         }
         "qubo" | "optimize" => {
             let n = json.get("n").and_then(|v| v.as_u64()).ok_or("qubo sem n")? as usize;
-            if n == 0 || n > PIPELINE_MAX_N {
-                return Err(format!("qubo n fora de 1..={PIPELINE_MAX_N}"));
+            if n == 0 || n > AGENT_MAX_N {
+                return Err(format!("qubo n fora de 1..={AGENT_MAX_N}"));
             }
             let j = json
                 .get("j")
                 .and_then(|v| v.as_arr())
                 .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect::<Vec<_>>())
                 .ok_or("qubo sem j")?;
-            let h = json
-                .get("h")
-                .and_then(|v| v.as_arr())
-                .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect::<Vec<_>>())
-                .unwrap_or_else(|| vec![0.0; n]);
+            if j.len() != n * n {
+                return Err(format!(
+                    "qubo j deve ter {} elementos (n×n, recebeu {})",
+                    n * n,
+                    j.len()
+                ));
+            }
+            let h = match json.get("h") {
+                None | Some(Json::Null) => vec![0.0; n],
+                Some(v) => {
+                    let arr = v.as_arr().ok_or("qubo h deve ser array")?;
+                    let h: Vec<f64> = arr.iter().filter_map(|v| v.as_f64()).collect();
+                    if h.len() != n {
+                        return Err(format!("qubo h deve ter {n} elementos"));
+                    }
+                    h
+                }
+            };
             Goal::optimize(n, j, h)
         }
         "memory" | "retrieve" => {
@@ -1250,66 +1321,62 @@ fn pipeline_parse_risk(raw: &str) -> Result<Risk, String> {
     }
 }
 
-fn pipeline_clauses(value: &Json) -> Option<Vec<Clause3>> {
-    let arr = value.as_arr()?;
+/// Literais crus de `clauses` (`[[1,2],[-3]]`), ainda sem padding.
+///
+/// Valida o shape **antes** de qualquer alocação derivada de `n`: um corpo
+/// hostil não deve conseguir reservar memória só por declarar um `n`.
+fn raw_clauses(value: Option<&Json>) -> Result<Vec<Vec<i64>>, String> {
+    let arr = value
+        .and_then(|v| v.as_arr())
+        .ok_or("clauses deve ser array de arrays de literais")?;
+    if arr.is_empty() {
+        return Err("clauses vazio (nenhuma cláusula para resolver)".into());
+    }
     let mut out = Vec::with_capacity(arr.len());
     for clause in arr {
-        let ints: Vec<i64> = clause
-            .as_arr()?
+        let items = clause
+            .as_arr()
+            .ok_or("cada clause deve ser array de literais")?;
+        let ints: Vec<i64> = items
             .iter()
             .filter_map(|v| v.as_i64())
             .filter(|v| *v != 0)
             .collect();
         if ints.is_empty() || ints.len() > 3 {
-            return None;
+            return Err("cada clause deve ter 1..=3 literais não nulos".into());
         }
-        let mut lits: Vec<(usize, i8)> = ints
-            .iter()
-            .map(|v| {
-                (
-                    (v.unsigned_abs() as usize) - 1,
-                    if *v > 0 { 1 } else { -1 },
-                )
-            })
-            .collect();
-        let pad = *lits.last()?;
-        while lits.len() < 3 {
-            lits.push(pad);
-        }
-        out.push(Clause3::new3(
-            lits[0].0, lits[0].1, lits[1].0, lits[1].1, lits[2].0, lits[2].1,
-        ));
+        out.push(ints);
     }
-    Some(out)
+    Ok(out)
 }
 
-fn clauses_from_json(value: Option<&Json>) -> Option<Vec<crate::core::logic_pipeline::Clause3>> {
-    use crate::core::logic_pipeline::Clause3;
-    let arr = value?.as_arr()?;
-    let mut out = Vec::with_capacity(arr.len());
-    for clause in arr {
-        let ints: Vec<i64> = clause
-            .as_arr()?
-            .iter()
-            .filter_map(|v| v.as_i64())
-            .filter(|v| *v != 0)
-            .collect();
-        if ints.is_empty() || ints.len() > 3 {
-            return None;
+/// Converte literais 1-based em [`Clause3`] exigindo `1..=n`.
+///
+/// O núcleo indexa `s[lit - 1]` em `Clause3::satisfied`; literal fora do
+/// intervalo panicava (e envenenava o mutex do servidor), então a validação
+/// acontece aqui, na borda, e vira 400.
+fn clause_from_literals(ints: &[i64], n: usize) -> Result<Clause3, String> {
+    let mut lits: Vec<(usize, i8)> = Vec::with_capacity(3);
+    for v in ints {
+        let idx = v.unsigned_abs() as usize;
+        if idx == 0 || idx > n {
+            return Err(format!("literal {v} fora de 1..={n} (n={n})"));
         }
-        let mut lits: Vec<(usize, i8)> = ints
-            .iter()
-            .map(|v| ((v.unsigned_abs() as usize) - 1, if *v > 0 { 1 } else { -1 }))
-            .collect();
-        let pad = *lits.last()?;
-        while lits.len() < 3 {
-            lits.push(pad);
-        }
-        out.push(Clause3::new3(
-            lits[0].0, lits[0].1, lits[1].0, lits[1].1, lits[2].0, lits[2].1,
-        ));
+        lits.push((idx - 1, if *v > 0 { 1 } else { -1 }));
     }
-    Some(out)
+    let pad = *lits.last().ok_or("clause sem literais")?;
+    while lits.len() < 3 {
+        lits.push(pad);
+    }
+    Ok(Clause3::new3(
+        lits[0].0, lits[0].1, lits[1].0, lits[1].1, lits[2].0, lits[2].1,
+    ))
+}
+
+fn clauses_from_raw(raw: &[Vec<i64>], n: usize) -> Result<Vec<Clause3>, String> {
+    raw.iter()
+        .map(|ints| clause_from_literals(ints, n))
+        .collect()
 }
 
 fn solve(body: &[u8]) -> Reply {
@@ -1785,13 +1852,16 @@ fn flat_matrix(value: Option<&Json>, rows: usize, cols: usize) -> Option<Vec<f64
             }
             return Some(out);
         }
+        // Forma plana: conferir o tamanho **antes** de reservar `rows × cols`
+        // (um `n` enorme não deve virar alocação só porque o campo é array).
+        if outer.len() != rows * cols {
+            return None;
+        }
         let mut out = Vec::with_capacity(rows * cols);
         for x in outer {
             out.push(check(x.as_f64()?)?);
         }
-        if out.len() == rows * cols {
-            return Some(out);
-        }
+        return Some(out);
     }
     None
 }
