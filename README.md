@@ -16,7 +16,7 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 * **docs/AETHER_AGENT.md** — organismo agêntico: inferência, MoE, coerência e autoaprendizado (`aether-agent`).
 * **docs/AETHER_AGENT_ROADMAP.md** - plano v0.1→v1.0: autonomia (autoescolha EFE/UCB), transplante em escala e híbrido LLM; tiers e gates.
 * **docs/ADR_AGENT.md** — decisões (T2, sem gradiente, memória=prior, feedback verificado, linguagem na borda).
-* **docs/LESSONS_AETHER_AGENT.md** — lições do agente: o que quebrou, invariantes e receitas.
+* **docs/LANGUAGE_PORT.md** — por que “LLM de borda” e alternativas (parser/gramática, LCM/conceito, reservoir/ESN, xLSTM/RWKV/Mamba/BLT, difusão, spiking, VSA/JEPA) com papers e gates.
 * **AGENTS.md** — ritual para agentes de IA usarem a memória (`context` antes, `put` depois) sem tratar memória como instrução.
 
 ## Pilares

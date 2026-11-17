@@ -17,7 +17,7 @@ O veredito está correto e precisa entrar no plano:
 | **É um coprocessador cognitivo**: memória auditável, solver com certificado, abstenção calibrada | A métrica é factualidade/abstenção/latência/RAM, não “inteligência geral” |
 | **ACQ 100 é 100% da suíte própria** (12 dimensões, 50 fatos) | Não é comparável a benchmark externo; nunca apresentar como “empata com GPT” |
 | **Transplante compra conhecimento, similaridade e recall** | Não compra linguagem, raciocínio geral nem geração |
-| **Laço correto é híbrido** | `LLM (linguagem) → AETHER (memória/solver/abstenção) → act/cite/propose/abstain` |
+| **Laço correto é híbrido** | `LanguagePort` (parser/template/concept/small LM/remote LLM) → AETHER (memória/solver/abstenção) → act/cite/propose/abstain |
 | **Escala atual é de demonstração** (205 átomos, 43 KB de fatos) | O gargalo é memória + transdutor semântico, não “mais um prompt” |
 | **Borda atual é hash** (“gato”/“gata” sem relação; paráfrase→abstenção) | E3/transdutor real é pré-requisito de generalização semântica |
 | **Transplantado é evidência, não instrução** | Fato de LLM entra em quarentena (autoridade 60–120), nunca 255 |
@@ -186,7 +186,10 @@ risco, incluindo uma tool externa de linguagem:
 |---|---|---|---|
 | `infer.fact`, `solve.sat`, `solve.qubo`, `memory.search` | baixo | baixo | primeiro; resposta certificada/abstenção |
 | `verify.certificate` | baixo | baixo | sempre depois de efeito |
-| `llm.generate` / `llm.extract` | alto (tokens/ms) | médio (alucinação/ToS) | só quando o goal exige linguagem/geração ou o local abstém |
+| `language.parse` (parser/gramática) | baixo | baixo | comando/estrutura; **default** |
+| `language.template` (retrieval extrativo) | baixo | baixo | resposta factual/auditável |
+| `language.concept` / `small_lm` | médio | médio | linguagem local; validar |
+| `language.remote_llm` | alto (tokens/ms) | médio (alucinação/ToS) | open-domain/código; último recurso |
 | `fs.read/write`, `http.get` | médio | médio | sandbox/allowlist, com verificação |
 | `ask.human` | alto (humano) | baixo | risco acima do teto ou incerteza alta |
 
@@ -198,9 +201,10 @@ EFE(a) = −λi·IG + λc·custo_total + λr·risco − λv·valor
 score(a) = θ·features + EFE(a)
 ```
 
-**Política padrão:** local certificado > memória > LLM > humano, com inversão
-quando o goal é linguagem/geração ou quando o local abstém e o valor esperado
-do LLM supera custo/risco. O LLM **não** é default; é uma tool cara.
+**Política padrão:** local certificado > memória > parser/template > concept/
+small LM > LLM remoto > humano, com inversão quando o goal é linguagem/geração
+ou quando o local abstém e o valor esperado do backend de linguagem supera
+custo/risco. O LLM **não** é default; é um backend caro entre vários.
 
 **Regra de ouro:** saída de LLM é **dado não confiável**. O adaptador valida
 schema, extrai claims com citação, grava em quarentena (autoridade 60–120) e
@@ -339,18 +343,21 @@ borda por hash.
 
 **Não entra:** pesos/tokenizer do LLM no FHRR (anti-padrão do playbook).
 
-### Trilha C — Híbrido (LLM na borda)
+### Trilha C — Linguagem plugável (`LanguagePort`)
+
+Detalhe das alternativas, papers e experimentos: **`docs/LANGUAGE_PORT.md`**.
 
 | Fase | Entrega | Esforço | Gate |
 |---|---|---|---|
-| **C0** | tool `llm.generate`/`llm.extract` (OpenAI-compatible/llama.cpp), orçamento de tokens, timeout, allowlist | 3–5 d | **C-G0**: desligada por default; sem chave não quebra; custo registrado |
-| **C1** | pipeline LLM→claims→quarentena→SGDB; validação de schema/citação | 5–7 d | **C-G1**: fato extraído entra com autoridade 60–120; 0 promoção automática a 255 |
-| **C2** | adaptador `Goal` (texto→schema) + testes de injeção | 5–7 d | **C-G2**: injeção no texto não muda tool/action; OOD → `ask` |
-| **C3** | benchmark híbrido: LLM-only vs AETHER-only vs híbrido | 5–7 d | **C-G3**: híbrido melhora factualidade/abstenção com custo ≤ orçamento |
+| **C0** | `LanguagePort` + backend `parser` (gramática/schema) + `template` (retrieval extrativo) | 4–6 d | **C-G0**: 100 comandos do agente com exact/slot ≥ 95% e p99 < 10 ms; sem LLM |
+| **C1** | backend `small_lm` (xLSTM/RWKV/Mamba/BLT 0.5–3B) com budget de tokens/CPU | 5–7 d | **C-G1**: qualidade ≥ baseline parser em open-domain, RAM ≤ budget, tok/s ≥ alvo |
+| **C2** | backend `concept` (SONAR/LCM-like: conceito→embedding→decoder) | 7–10 d | **C-G2**: similaridade semântica ≥ 0,9 e decoder < 50 ms em domínio |
+| **C3** | backend `remote_llm` + `diffusion` constrained para JSON/planejamento | 5–7 d | **C-G3**: JSON válido ≥ 95%; custo/latência dentro do orçamento |
+| **C4** | benchmark híbrido: parser vs small LM vs concept vs remote | 5–7 d | **C-G4**: melhor combinação por tarefa, não um vencedor único |
 
-**Regra:** o LLM é uma tool **cara e não confiável**; o planner só a escolhe
+**Regra:** o LLM é um backend **caro e não confiável**; o planner só o escolhe
 quando o valor esperado supera custo/risco. Sem LLM, o agente continua
-funcionando (local + abstenção).
+funcionando com parser/template + abstenção.
 
 ### Trilha D — Avaliação e governança
 
@@ -490,12 +497,14 @@ fatos” é hipótese.
 - **ADR-011:** avaliação em tiers; ACQ 100 não é benchmark externo; latência
   debug não entra em ranking.
 - **ADR-012:** não destilar pesos/tokenizer do LLM; destilar fatos/mapas/labels.
+- **ADR-013:** linguagem é `LanguagePort` com backends plugáveis; LLM é um
+  backend caro, não a dependência única.
 
 ## 9. Definição de pronto (v1.0)
 
 - [ ] G-A1…G-A6 verdes, 5 seeds, artefato JSON.
 - [ ] B-G0…B-G4 verdes (transdutor real, 1k/10k/100k, autoridade).
-- [ ] C-G0…C-G3 verdes (LLM como tool cara, quarentena, injeção, híbrido).
+- [ ] C-G0…C-G4 verdes (LanguagePort: parser/template, small LM, concept, remote, híbrido).
 - [ ] D-G0…D-G3 verdes (tiers, regressão, red team).
 - [ ] 0 violações de segurança em `agent_safety_gate`.
 - [ ] `Task` antiga continua funcionando (compatibilidade).
@@ -534,6 +543,8 @@ externo antes de C2.
 | Comparar latência debug com release | mede o interpretador, não o motor |
 | “Milhões de fatos” sem gate de escala | 100k já exige shard/LSH; 1M exige SGDB |
 | Generalização semântica com hash | “gato”/“gata” continuam sem relação até B0 |
+| Tratar LLM como o único backend de linguagem | parser/template/ESN/concept podem cobrir comandos/domínio; LLM é caro e não confiável |
+| Escolher “edge LLM” sem benchmark | xLSTM/RWKV/Mamba/BLT/ESN/difusão/spiking têm custos e qualidades diferentes (`docs/LANGUAGE_PORT.md`) |
 
 
 ## 11. Orçamento de latência e recursos

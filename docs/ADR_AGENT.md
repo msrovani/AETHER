@@ -236,3 +236,26 @@ linguagem, o LLM fica na borda como tool.
 **Alternativas.** Embedding do modelo inteiro (não cabe); destilação de logits
 para o FHRR (não é o mecanismo).
 
+## ADR-013 — Linguagem é uma porta, não uma dependência
+
+**Contexto.** “LLM de borda” foi um atalho; há alternativas melhores para
+comandos (parser/gramática), para domínio/edge (reservoir/ESN) e para
+conceito/texto (LCM/NCM). Nenhuma iguala open-domain/geração hoje, mas o AETHER
+não deve ficar refém de um backend.
+
+**Decisão.** `LanguagePort` com backends plugáveis: `parser` e `template` como
+default; `concept`, `small_lm`, `remote_llm`, `spiking` opcionais. O planner
+escolhe por EFE + custo + risco + privacidade. Nenhum backend no `T0`.
+
+**Status.** Aceito; detalhes/papers em `docs/LANGUAGE_PORT.md`; implementação
+na Trilha C.
+
+**Consequências.**
+- O agente funciona sem LLM (parser/template + abstenção).
+- Open-domain/código continuam exigindo LLM (remoto ou pequeno).
+- Concept/ESN podem ser pesquisados sem bloquear o produto.
+
+**Alternativas.** LLM único (refém); parser só (sem open-domain); nuvem só
+(privacidade/latência).
+
+

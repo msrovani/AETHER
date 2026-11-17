@@ -41,36 +41,44 @@ struct Params {
     n_rows: u32,
     d: u32,
     bits: u32,
-    words: u32,
+    words: u32,   // palavras de 32 bits por linha (2 x u64 words)
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var<storage, read> mat: array<f32>;
 @group(0) @binding(2) var<storage, read> x: array<f32>;
-@group(0) @binding(3) var<storage, read_write> out: array<atomic<u32>>;
+@group(0) @binding(3) var<storage, read_write> out: array<u32>;
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    // eixo x = bit, eixo y = linha (bit-major: o workgroup compartilha o bit)
-    let bit = gid.x;
+    // eixo x = palavra de 32 bits, eixo y = linha (sem atomicos: 1 thread
+    // escreve a palavra inteira)
+    let word = gid.x;
     let row = gid.y;
-    if (bit >= p.bits || row >= p.n_rows) {
+    if (word >= p.words || row >= p.n_rows) {
         return;
     }
-    let mbase = bit * p.d;
+    var acc: array<f32, 32>;
+    for (var b: u32 = 0u; b < 32u; b = b + 1u) {
+        acc[b] = 0.0;
+    }
     let xbase = row * p.d;
-    var acc: f32 = 0.0;
+    let mbase = word * 32u * p.d;
     for (var j: u32 = 0u; j < p.d; j = j + 1u) {
-        acc = acc + mat[mbase + j] * x[xbase + j];
+        let xv = x[xbase + j];
+        for (var b: u32 = 0u; b < 32u; b = b + 1u) {
+            acc[b] = acc[b] + mat[mbase + b * p.d + j] * xv;
+        }
     }
-    if (acc >= 0.0) {
-        let word = bit >> 5u;
-        let shift = bit & 31u;
-        atomicOr(&out[(row * p.words) * 2u + word], 1u << shift);
+    var packed: u32 = 0u;
+    for (var b: u32 = 0u; b < 32u; b = b + 1u) {
+        if (acc[b] >= 0.0) {
+            packed = packed | (1u << b);
+        }
     }
+    out[row * p.words + word] = packed;
 }
 "#;
-
 #[cfg(feature = "gpu")]
 mod imp {
     use super::{JlGpuError, SHADER, WG};
@@ -137,7 +145,7 @@ mod imp {
                 n_rows as u32,
                 d as u32,
                 bits as u32,
-                words as u32,
+                (words * 2) as u32,
             ]),
             usage: wgpu::BufferUsages::UNIFORM,
         });
@@ -239,7 +247,7 @@ mod imp {
             });
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind, &[]);
-            let gx = (bits as u32).div_ceil(WG);
+            let gx = ((words * 2) as u32).div_ceil(WG);
             pass.dispatch_workgroups(gx, n_rows as u32, 1);
         }
         encoder.copy_buffer_to_buffer(&out_buf, 0, &staging, 0, (n_rows * words * 8) as u64);
