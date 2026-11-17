@@ -783,10 +783,7 @@ fn eval_cmd(args: &Args, out: &mut dyn Write) -> i32 {
                 tier.note
             );
         }
-        let _ = writeln!(
-            out,
-            "regra: self-suite (T0) != benchmark externo (T3)"
-        );
+        let _ = writeln!(out, "regra: self-suite (T0) != benchmark externo (T3)");
     }
     EXIT_OK
 }

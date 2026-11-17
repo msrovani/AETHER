@@ -27,7 +27,9 @@ fn d_g0_tiers_e_artefato_json() {
     let path = dir.join("aether_agent_eval.json");
     report.write_to(&path).expect("write");
     let raw = fs::read_to_string(&path).expect("read");
-    assert!(raw.contains("\"schema\":\"aether_agent_eval/d0\"") || raw.contains("aether_agent_eval/d0"));
+    assert!(
+        raw.contains("\"schema\":\"aether_agent_eval/d0\"") || raw.contains("aether_agent_eval/d0")
+    );
     assert!(raw.contains("self_suite_not_external_benchmark"));
     assert!(raw.contains("T0_self_suite"));
     assert!(raw.contains("T3_external"));

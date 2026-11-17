@@ -51,9 +51,7 @@ impl EvalTier {
                 "compara latencia/RAM/abstencao/recall com LLM; nao inteligencia geral"
             }
             Self::T2Hybrid => "exige LanguagePort; factualidade/custo vs LLM-only e AETHER-only",
-            Self::T3External => {
-                "so quando houver gerador/adaptador de linguagem; ate la = N/A"
-            }
+            Self::T3External => "so quando houver gerador/adaptador de linguagem; ate la = N/A",
         }
     }
 }
@@ -153,7 +151,10 @@ impl EvalReport {
             ("version", Json::str(self.version.clone())),
             ("host", Json::str(self.host.clone())),
             ("seed", Json::num(self.seed as f64)),
-            ("generated_at_unix", Json::num(self.generated_at_unix as f64)),
+            (
+                "generated_at_unix",
+                Json::num(self.generated_at_unix as f64),
+            ),
             ("profile", Json::str(self.profile.clone())),
             (
                 "self_suite_not_external_benchmark",
