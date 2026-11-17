@@ -40,7 +40,10 @@ use std::time::Duration;
 
 use ndarray::{Array2, Array3};
 
-use crate::agent::{AetherAgent, AgentConfig, Task};
+use crate::agent::{
+    AetherAgent, AgentConfig, Budget, Goal, Risk, SuccessCriteria, Task, ToolAgent,
+};
+use crate::core::logic_pipeline::Clause3;
 use crate::core::certificate::{self, Decision, Provenance};
 use crate::core::knowledge_bridge_f1::{
     BridgeError, Certificate as BridgeCertificate, DraftRecord, Layer, ScopeId, ScopeLedger,
@@ -976,12 +979,16 @@ fn hydrate_from_sgdb(state: &mut ApiState, scope: ScopeId) -> usize {
     }
 }
 
-/// Rota do agente: fato, SAT, QUBO ou memória — com certificado e abstenção.
+/// Rota do agente: fato, SAT, QUBO, memória **ou** pipeline `steps[]`.
 fn agent_route(state: &mut ApiState, body: &[u8]) -> Reply {
     let doc = match parse_json(body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
     };
+    // Workflow multi-passo (MSG 0287/0319): não toca `/v1/chat/completions`.
+    if doc.get("pipeline").is_some() || doc.get("steps").and_then(|v| v.as_arr()).is_some() {
+        return agent_pipeline_route(&doc);
+    }
     let task = if let (Some(subject), Some(relation)) = (
         doc.get("subject").and_then(|v| v.as_str()),
         doc.get("relation").and_then(|v| v.as_str()),
@@ -1015,7 +1022,9 @@ fn agent_route(state: &mut ApiState, body: &[u8]) -> Reply {
             query: query.to_string(),
         }
     } else {
-        return bad("use {subject,relation}, {clauses,n}, {n,j,h} ou {query}");
+        return bad(
+            "use {subject,relation}, {clauses,n}, {n,j,h}, {query} ou {steps|pipeline}",
+        );
     };
     let Some(agent) = state.agent.as_mut() else {
         return Reply::Json(503, error_json("agent_off", "agente indisponível"));
@@ -1085,6 +1094,172 @@ fn agent_route(state: &mut ApiState, body: &[u8]) -> Reply {
         fields.push(("certificate".into(), cert));
     }
     Reply::Json(200, Json::Obj(fields))
+}
+
+/// Pipeline HTTP: espelha o schema da CLI (`steps`/`pipeline` + budget/risk).
+fn agent_pipeline_route(doc: &Json) -> Reply {
+    let workflow = match pipeline_goal_from_json(doc) {
+        Ok(goal) => goal,
+        Err(e) => return bad(&e),
+    };
+    let mut agent = ToolAgent::new(&AgentConfig::default());
+    let outcome = agent.solve(&workflow);
+    let answer = outcome
+        .outcome
+        .as_ref()
+        .and_then(|o| o.first_claim())
+        .map(|c| Json::str(c.value.clone()))
+        .unwrap_or(Json::Null);
+    Reply::Json(
+        200,
+        Json::obj([
+            ("pipeline", Json::Bool(true)),
+            ("success", Json::Bool(outcome.success)),
+            ("action", Json::str(outcome.action.label())),
+            ("rationale", Json::str(outcome.rationale.clone())),
+            ("answer", answer),
+            ("step_count", Json::num(outcome.steps.len() as f64)),
+            ("trace", outcome.trace.to_json()),
+        ]),
+    )
+}
+
+fn pipeline_goal_from_json(doc: &Json) -> Result<Goal, String> {
+    let steps = doc
+        .get("pipeline")
+        .and_then(|v| v.as_arr())
+        .or_else(|| doc.get("steps").and_then(|v| v.as_arr()))
+        .ok_or_else(|| "pipeline exige `steps` ou `pipeline` array".to_string())?;
+    let mut goals = Vec::new();
+    for step in steps {
+        goals.push(pipeline_step_from_json(step)?);
+    }
+    if goals.is_empty() {
+        return Err("pipeline sem steps".into());
+    }
+    let mut workflow = Goal::pipeline(goals);
+    if let Some(budget) = doc.get("budget") {
+        workflow.budget = pipeline_parse_budget(budget)?;
+    }
+    if let Some(risk) = doc.get("risk_ceiling").and_then(|v| v.as_str()) {
+        workflow.risk_ceiling = pipeline_parse_risk(risk)?;
+    }
+    Ok(workflow)
+}
+
+fn pipeline_step_from_json(json: &Json) -> Result<Goal, String> {
+    let kind = json
+        .get("kind")
+        .and_then(|v| v.as_str())
+        .ok_or("step sem kind")?;
+    let mut goal = match kind {
+        "fact" | "answer" => {
+            let subject = json
+                .get("subject")
+                .and_then(|v| v.as_str())
+                .ok_or("fact sem subject")?;
+            let relation = json
+                .get("relation")
+                .and_then(|v| v.as_str())
+                .ok_or("fact sem relation")?;
+            let mut goal = Goal::fact(subject, relation);
+            if let Some(value) = json.get("value").and_then(|v| v.as_str()) {
+                goal.success = SuccessCriteria::Claim {
+                    subject: subject.to_string(),
+                    relation: relation.to_string(),
+                    value: Some(value.to_string()),
+                };
+            }
+            goal
+        }
+        "sat" => {
+            let n = json.get("n").and_then(|v| v.as_u64()).ok_or("sat sem n")? as usize;
+            let clauses = json
+                .get("clauses")
+                .and_then(pipeline_clauses)
+                .ok_or("sat sem clauses válidas")?;
+            Goal::satisfy(n, clauses)
+        }
+        "qubo" | "optimize" => {
+            let n = json.get("n").and_then(|v| v.as_u64()).ok_or("qubo sem n")? as usize;
+            let j = json
+                .get("j")
+                .and_then(|v| v.as_arr())
+                .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect::<Vec<_>>())
+                .ok_or("qubo sem j")?;
+            let h = json
+                .get("h")
+                .and_then(|v| v.as_arr())
+                .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect::<Vec<_>>())
+                .unwrap_or_else(|| vec![0.0; n]);
+            Goal::optimize(n, j, h)
+        }
+        "memory" | "retrieve" => {
+            let query = json
+                .get("query")
+                .and_then(|v| v.as_str())
+                .ok_or("memory sem query")?;
+            Goal::memory(query)
+        }
+        other => return Err(format!("kind desconhecido: {other}")),
+    };
+    if let Some(budget) = json.get("budget") {
+        goal.budget = pipeline_parse_budget(budget)?;
+    }
+    if let Some(risk) = json.get("risk_ceiling").and_then(|v| v.as_str()) {
+        goal.risk_ceiling = pipeline_parse_risk(risk)?;
+    }
+    Ok(goal)
+}
+
+fn pipeline_parse_budget(json: &Json) -> Result<Budget, String> {
+    Ok(Budget {
+        max_steps: json.get("max_steps").and_then(|v| v.as_u64()).unwrap_or(4) as usize,
+        max_ms: json.get("max_ms").and_then(|v| v.as_u64()).unwrap_or(2_000),
+        max_tokens: json.get("max_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+    })
+}
+
+fn pipeline_parse_risk(raw: &str) -> Result<Risk, String> {
+    match raw {
+        "low" => Ok(Risk::Low),
+        "medium" => Ok(Risk::Medium),
+        "high" => Ok(Risk::High),
+        other => Err(format!("risco inválido: {other}")),
+    }
+}
+
+fn pipeline_clauses(value: &Json) -> Option<Vec<Clause3>> {
+    let arr = value.as_arr()?;
+    let mut out = Vec::with_capacity(arr.len());
+    for clause in arr {
+        let ints: Vec<i64> = clause
+            .as_arr()?
+            .iter()
+            .filter_map(|v| v.as_i64())
+            .filter(|v| *v != 0)
+            .collect();
+        if ints.is_empty() || ints.len() > 3 {
+            return None;
+        }
+        let mut lits: Vec<(usize, i8)> = ints
+            .iter()
+            .map(|v| {
+                (
+                    (v.unsigned_abs() as usize) - 1,
+                    if *v > 0 { 1 } else { -1 },
+                )
+            })
+            .collect();
+        let pad = *lits.last()?;
+        while lits.len() < 3 {
+            lits.push(pad);
+        }
+        out.push(Clause3::new3(
+            lits[0].0, lits[0].1, lits[1].0, lits[1].1, lits[2].0, lits[2].1,
+        ));
+    }
+    Some(out)
 }
 
 fn clauses_from_json(value: Option<&Json>) -> Option<Vec<crate::core::logic_pipeline::Clause3>> {

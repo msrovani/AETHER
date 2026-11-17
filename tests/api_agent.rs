@@ -102,3 +102,23 @@ fn api_agent_resolve_sat_e_qubo_com_certificado() {
     assert!(body.contains("\"action\":\"act\""), "{body}");
     assert!(body.contains("\"answer\":\"++++\""), "{body}");
 }
+
+#[test]
+fn api_agent_aceita_pipeline_steps() {
+    let addr = start();
+    let body = r#"{
+      "steps":[
+        {"kind":"fact","subject":"Brasil","relation":"capital"},
+        {"kind":"sat","n":3,"clauses":[[1,2,0],[-1,3,0]]}
+      ],
+      "budget":{"max_steps":6,"max_ms":5000}
+    }"#;
+    let (status, resp) = request(addr, "POST", "/v1/aether/agent", body);
+    assert_eq!(status, 200, "{resp}");
+    assert!(resp.contains("\"pipeline\":true"), "{resp}");
+    assert!(resp.contains("\"trace\""), "{resp}");
+    assert!(
+        resp.contains("\"success\":true") || resp.contains("\"action\""),
+        "{resp}"
+    );
+}
