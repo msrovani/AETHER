@@ -405,6 +405,143 @@ fn fallback_e_shape_invalido_nao_panicam() {
     assert_eq!(err, Err(ising::IsingGpuError::InvalidShape));
 }
 
+/// Instância da família **E2c-2**: vidro de spin `±1` completo + viés forte em
+/// `k` sítios (o mesmo `random_glass` de `tests/e2c2_roof_dual_gate.rs`).
+fn e2c_glass(n: usize, k: usize, delta: f64, seed: u64) -> (Vec<f64>, Vec<f64>) {
+    let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    let mut j = vec![0.0f64; n * n];
+    for i in 0..n {
+        for m in (i + 1)..n {
+            let w = if rng.gen::<bool>() { 1.0 } else { -1.0 };
+            j[i * n + m] = w;
+            j[m * n + i] = w;
+        }
+    }
+    let mut h = vec![0.0f64; n];
+    let mut order: Vec<usize> = (0..n).collect();
+    for idx in (1..n).rev() {
+        let sw = rng.gen_range(0..=idx);
+        order.swap(idx, sw);
+    }
+    for &v in order.iter().take(k) {
+        let row_abs: f64 = j[v * n..(v + 1) * n]
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| *idx != v)
+            .map(|(_, x)| x.abs())
+            .sum();
+        let sign = if rng.gen::<bool>() { 1.0 } else { -1.0 };
+        h[v] = sign * (row_abs + delta);
+    }
+    (j, h)
+}
+
+/// JT3 (fechamento do ciclo): o sweep G3 na **família real do E2c-2** —
+/// vidro `±1` com viés forte (`h ≠ 0`), 1.000 instâncias.
+///
+/// É o teste que faltava: o gate principal usa `h = 0`; aqui o caminho do campo
+/// externo (que entra na energia, no `descend` e na fuga) é exercitado nas
+/// mesmas instâncias que o E2c-2 usa, e a razão é medida no lote.
+#[test]
+fn e2c_glass_com_vies_na_gpu() {
+    let st = gpu::status();
+    if !st.available {
+        eprintln!("skip (sem GPU): {}", st.summary());
+        return;
+    }
+    let _gpu = gpu_guard();
+
+    let k_inst = 1_000usize;
+    let (k_bias, delta) = (4usize, 0.5f64);
+    let mut j64 = vec![0.0f64; k_inst * N * N];
+    let mut h64 = vec![0.0f64; k_inst * N];
+    for b in 0..k_inst {
+        let (j, h) = e2c_glass(N, k_bias, delta, 0xE2C2_0000 + b as u64);
+        j64[b * N * N..(b + 1) * N * N].copy_from_slice(&j);
+        h64[b * N..(b + 1) * N].copy_from_slice(&h);
+    }
+    let init = bundles(&j64, k_inst, N, SEED).init;
+    let c0: Vec<f32> = (0..k_inst)
+        .map(|b| c0_of(&j64[b * N * N..(b + 1) * N * N], N) as f32)
+        .collect();
+    let j32: Vec<f32> = j64.iter().map(|v| *v as f32).collect();
+    let h32: Vec<f32> = h64.iter().map(|v| *v as f32).collect();
+
+    let j3 = Array3::from_shape_vec((k_inst, N, N), j64.clone()).unwrap();
+    let h2 = Array2::from_shape_vec((k_inst, N), h64.clone()).unwrap();
+    let mut solver = ThermodynamicIsingSolver::new(k_inst, N, STEPS, DT);
+    solver.reset(SEED);
+    let mut out = RelaxOutcome::with_capacity(k_inst, N, STEPS);
+    let cpu_t = Instant::now();
+    solver
+        .relax_into(IsingLandscape::new(j3.view(), h2.view()), &mut out)
+        .expect("CPU relax");
+    let cpu_ms = cpu_t.elapsed().as_secs_f64() * 1e3;
+    let cpu: Vec<f64> = out.best_energy.iter().copied().collect();
+
+    // piso de ruído do próprio solver (outra semente)
+    let mut solver2 = ThermodynamicIsingSolver::new(k_inst, N, STEPS, DT);
+    solver2.reset(SEED ^ 0x1234_5678);
+    let mut out2 = RelaxOutcome::with_capacity(k_inst, N, STEPS);
+    solver2
+        .relax_into(IsingLandscape::new(j3.view(), h2.view()), &mut out2)
+        .expect("CPU relax 2");
+    let cpu2: Vec<f64> = out2.best_energy.iter().copied().collect();
+
+    let mut sweep = ising::IsingSweep::new().expect("sessão GPU");
+    let mut gpu_e = vec![0.0f32; k_inst];
+    let mut gpu_s = vec![0i32; k_inst * N];
+    let _ = sweep.sweep_into(&j32, &h32, &init, &c0, N, k_inst, STEPS, &mut gpu_e, &mut gpu_s);
+    let mut gpu_ms = f64::INFINITY;
+    for _ in 0..3 {
+        let t = Instant::now();
+        sweep
+            .sweep_into(&j32, &h32, &init, &c0, N, k_inst, STEPS, &mut gpu_e, &mut gpu_s)
+            .expect("kernel GPU");
+        gpu_ms = gpu_ms.min(t.elapsed().as_secs_f64() * 1e3);
+    }
+
+    let gpu: Vec<f64> = gpu_e.iter().map(|v| f64::from(*v)).collect();
+    let igual = cpu.iter().zip(&gpu).filter(|(a, b)| (*a - *b).abs() <= 1e-3).count();
+    let melhor = cpu.iter().zip(&gpu).filter(|(a, b)| **b < **a - 1e-3).count();
+    let pior = igual.saturating_sub(melhor);
+    let dentro5 = cpu
+        .iter()
+        .zip(&gpu)
+        .filter(|(c, g)| **g <= **c + 1e-3 || (**g - **c) / c.abs().max(1e-9) <= 0.05)
+        .count();
+    let dentro5_2 = cpu
+        .iter()
+        .zip(&cpu2)
+        .filter(|(c, g)| **g <= **c + 1e-3 || (**g - **c) / c.abs().max(1e-9) <= 0.05)
+        .count();
+    let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
+    let ks = ks_statistic(&cpu, &gpu);
+    let ks2 = ks_statistic(&cpu, &cpu2);
+    println!(
+        "E2c-2 ({k_inst} instâncias, n={N}, k={k_bias}, delta={delta}, h≠0): \
+         {igual}/{k_inst} idênticas · {melhor} melhores · {pior} piores · KS {ks:.3} \
+         (piso {ks2:.3}) · ≤5% regret {dentro5}/{k_inst} (piso {dentro5_2})"
+    );
+    println!(
+        "  CPU {cpu_ms:.1} ms · GPU {gpu_ms:.2} ms ⇒ **{:.1}×** · média {:.3} (CPU {:.3})",
+        cpu_ms / gpu_ms,
+        mean(&gpu),
+        mean(&cpu)
+    );
+    assert!(ks <= ks2 + 0.05, "KS {ks:.3} > piso {ks2:.3} + 0,05");
+    assert!(
+        dentro5 + 10 >= dentro5_2,
+        "regret ≤5%: GPU {dentro5} < piso {dentro5_2} - 10"
+    );
+    assert!(mean(&gpu) <= mean(&cpu) + 1e-3, "GPU pior na média");
+    assert!(
+        cpu_ms / gpu_ms >= 2.0,
+        "razão {:.2}× < 2× no lote do E2c-2",
+        cpu_ms / gpu_ms
+    );
+}
+
 /// Diagnóstico do custo fixo por chamada (criação de pipeline + buffers).
 #[test]
 #[ignore = "diagnóstico: custo fixo por chamada vs kernel"]

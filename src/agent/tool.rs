@@ -351,6 +351,22 @@ pub const AUTHORITY_VERIFIED: u8 = 200;
 /// Aprovação humana explícita (HITL); só humano escreve/apaga.
 pub const AUTHORITY_HITL: u8 = 255;
 
+/// Fato com evidência física (certificado) dentro do workflow.
+///
+/// Só é produzido quando uma verificação válida (`violations=0`) confirma um
+/// claim de solver; é o que autoriza `memory.write` a gravar em 200.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VerifiedFact {
+    /// Sujeito.
+    pub subject: String,
+    /// Relação.
+    pub relation: String,
+    /// Valor verificado.
+    pub value: String,
+    /// Certificado que sustenta o fato.
+    pub certificate: EngineCertificate,
+}
+
 /// Snapshot de uma memória antes de uma escrita (para undo).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Snapshot {
@@ -604,6 +620,8 @@ pub struct ToolContext {
     pub claims: Vec<Claim>,
     /// Certificados dos passos anteriores (verificação).
     pub certificates: Vec<EngineCertificate>,
+    /// Fatos com certificado válido no workflow (evidência para 200).
+    pub verified: Vec<VerifiedFact>,
     /// Backend de undo (memória real ou mock).
     pub undo_backend: Option<Arc<dyn UndoBackend>>,
     /// Log LIFO de undo.
@@ -629,6 +647,7 @@ impl fmt::Debug for ToolContext {
             .field("effects", &self.effects.len())
             .field("claims", &self.claims.len())
             .field("certificates", &self.certificates.len())
+            .field("verified", &self.verified.len())
             .field("undo", &self.undo_log.len())
             .field("has_backend", &self.undo_backend.is_some())
             .finish()
@@ -648,6 +667,7 @@ impl ToolContext {
             effects: Vec::new(),
             claims: Vec::new(),
             certificates: Vec::new(),
+            verified: Vec::new(),
             undo_backend: None,
             undo_log: Vec::new(),
             txn: trace_id,
@@ -808,14 +828,22 @@ impl ToolContext {
         self.effects.clear();
         self.claims.clear();
         self.certificates.clear();
+        self.verified.clear();
         Ok(())
     }
 
     /// Trunca estruturas após um rewind já aplicado.
-    pub fn rollback_to(&mut self, effects: usize, claims: usize, certificates: usize) {
+    pub fn rollback_to(
+        &mut self,
+        effects: usize,
+        claims: usize,
+        certificates: usize,
+        verified: usize,
+    ) {
         self.effects.truncate(effects);
         self.claims.truncate(claims);
         self.certificates.truncate(certificates);
+        self.verified.truncate(verified);
     }
 }
 

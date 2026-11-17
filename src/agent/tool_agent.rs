@@ -268,6 +268,7 @@ impl ToolAgent {
         let budget = goal.budget.max_steps.clamp(1, 16);
         let claims_before = ctx.claims.len();
         let certificates_before = ctx.certificates.len();
+        let verified_before = ctx.verified.len();
         let mut used: Vec<&'static str> = Vec::new();
         let mut steps: Vec<StepTrace> = Vec::new();
         let mut last: Option<Execution> = None;
@@ -346,7 +347,7 @@ impl ToolAgent {
                 action = Action::Cite;
                 rationale = "tool pediu HITL".to_string();
                 let effects = ctx.effects.len();
-                ctx.rollback_to(effects, claims_before, certificates_before);
+                ctx.rollback_to(effects, claims_before, certificates_before, verified_before);
             }
         }
         (success, action, steps, last, rationale)
@@ -472,11 +473,42 @@ impl Tool for VerifyTool {
 
     fn call(&mut self, _goal: &Goal, ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
         let has_claim = !ctx.claims.is_empty();
-        let has_cert = ctx
+        let valid = ctx
             .certificates
             .iter()
-            .any(|cert| cert.violations == 0 && cert.energy.is_finite());
+            .find(|cert| cert.violations == 0 && cert.energy.is_finite())
+            .copied();
+        let has_cert = valid.is_some();
         if has_claim && has_cert {
+            // Evidência física: claims de solver cobertas por certificado viram
+            // fatos verificados (autorizam `memory.write` em 200).
+            if let Some(cert) = valid {
+                let facts: Vec<(String, String, String)> = ctx
+                    .claims
+                    .iter()
+                    .filter(|claim| matches!(claim.source, ExpertId::Logic | ExpertId::Solver))
+                    .map(|claim| {
+                        (
+                            claim.subject.clone(),
+                            claim.relation.clone(),
+                            claim.value.clone(),
+                        )
+                    })
+                    .collect();
+                for (subject, relation, value) in facts {
+                    let known = ctx.verified.iter().any(|fact| {
+                        fact.subject == subject && fact.relation == relation && fact.value == value
+                    });
+                    if !known {
+                        ctx.verified.push(super::tool::VerifiedFact {
+                            subject,
+                            relation,
+                            value,
+                            certificate: cert,
+                        });
+                    }
+                }
+            }
             Ok(ToolOutcome {
                 claims: vec![Claim::new(
                     "verify",

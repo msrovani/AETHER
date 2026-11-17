@@ -72,6 +72,7 @@ impl ToolExecutor {
         let effects_before = ctx.effects.len();
         let claims_before = ctx.claims.len();
         let certificates_before = ctx.certificates.len();
+        let verified_before = ctx.verified.len();
         let started = std::time::Instant::now();
         let outcome = match tool.call(goal, ctx) {
             Ok(outcome) => outcome,
@@ -106,7 +107,7 @@ impl ToolExecutor {
             {
                 let report = ctx.rewind_report(undo_before);
                 if report.is_ok() {
-                    ctx.rollback_to(effects_before, claims_before, certificates_before);
+                    ctx.rollback_to(effects_before, claims_before, certificates_before, verified_before);
                 }
                 return Err(match report.failed.first() {
                     Some(why) => ToolError::Failed(format!(
@@ -133,7 +134,7 @@ impl ToolExecutor {
             // só é seguro quando a compensação realmente aconteceu.
             let report = ctx.rewind_report(undo_before);
             if report.is_ok() {
-                ctx.rollback_to(effects_before, claims_before, certificates_before);
+                ctx.rollback_to(effects_before, claims_before, certificates_before, verified_before);
             }
             if !report.is_ok() {
                 return Err(ToolError::Failed(format!(

@@ -309,3 +309,36 @@ caminho** (documentado no topo de `ising.rs`).
   **invariante estrutural** (organismo/hot path sem dependência gráfica) e a
   projeção de **7,4×** para L=8192 em lote.
 
+---
+
+## Fechamento do ciclo (2026-11-17)
+
+| fase | estado | número medido |
+|---|---|---|
+| **G0** censo | ✅ | JL 13,4 s (2,9 GFLOP/s), FFT 7,4× projetado, Ising 929× projetado |
+| **G1** JL do transplante | ✅ **`act`** | **75–122×** (tiled, 2.000 linhas); 25× no 1º lote pagando a matriz |
+| **G2** FFT em lote | ⏸ `abstain` | sem consumidor de lote; 7,4× segue **projetado** |
+| **G3** sweep Ising | ✅ admitido **só em lote** | **11,3×** em 10⁴; família E2c-2 (`h ≠ 0`) validada |
+
+Nenhum kernel novo entra no `default`: tudo atrás de `--features gpu`, e o laço
+de 60 Hz, o `record` do F1 e o solver do E2 continuam em CPU.
+
+### Gates que continuam necessários (dívida declarada)
+
+1. **CI com `--features gpu` em máquina com adapter.** Hoje os três gates de GPU
+   (`gpu_jl_gate`, `gpu_jl_tiled_gate`, `gpu_ising_sweep_gate`) e o
+   `gpu_boundary_gate` rodam **à mão**. Sem um job opt-in, uma regressão de
+   kernel não é pega por `cargo test` (sem a feature os testes compilam fora).
+2. **G2 (FFT) — gates para quem construir:** (a) erro relativo ≤ 1e-4 contra
+   `rustfft` em `L=8192, B=64`; (b) razão ≥ 2× medida; (c) `force_off` sem
+   `panic`; (d) invariante estrutural — o organismo a 60 Hz **não** referencia
+   `core::gpu`; (e) mesma saída para o mesmo lote (reprodutibilidade).
+3. **JL não tem bit-exatidão absoluta** (o WGSL funde `mul+add`): o gate é
+   `≤4 palavras em 320.000` **e** `|dot| < 1e-3` provado no teste. Se o JL
+   entrar num caminho bit-exato, é esse contrato que precisa mudar.
+4. **Ising exige `J` simétrico** no caminho GPU (a leitura coalescida usa
+   `J[j][i] = J[i][j]`). Não há assert barato em shader; fica no doc e no gate.
+5. **`cargo fmt --all --check`** ainda falha em arquivos de outros agentes
+   (`src/bin/*`, `src/api/*`, `src/core/logic_pipeline.rs`): dívida alheia.
+
+

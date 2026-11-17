@@ -85,7 +85,7 @@ pub enum Decision {
 }
 
 /// Atestado que acompanha toda resposta do motor.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Certificate {
     /// `H(s*)` na convenção do solver (`-0.5 sᵀJs - hᵀs`).
     pub energy: f64,
@@ -187,7 +187,7 @@ pub enum EvidenceSource {
 }
 
 /// Evidência T1/T2 (HV / SGDB) acompanhando um [`Certificate`].
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Evidence {
     pub source: EvidenceSource,
     pub id: u64,

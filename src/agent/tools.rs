@@ -7,6 +7,7 @@ use super::experts::{make_logic, make_memory, make_solver, make_transplant, Expe
 use super::tool::{
     outcome_from_expert, Cost, Effect, Goal, GoalKind, Risk, Tool, ToolContext, ToolError,
     ToolOutcome, ToolSchema, WorldState, AUTHORITY_CORROBORATED, AUTHORITY_QUARANTINE,
+    AUTHORITY_VERIFIED,
 };
 use super::{Claim, ExpertId, Task};
 use crate::agent::AgentConfig;
@@ -354,13 +355,15 @@ impl Tool for MemoryWriteTool {
             .undo_backend
             .as_ref()
             .ok_or_else(|| ToolError::Failed("memory.write exige undo_backend".into()))?;
-        // Autoridade: não sobrescreve fato verificado/HITL sem humano, e não
-        // promove autoridade sozinho (reforço conta em `reinforced`).
+        // Autoridade: não sobrescreve fato verificado/HITL sem evidência nova.
+        let verified = ctx.verified.iter().any(|fact| {
+            fact.subject == subject && fact.relation == relation && fact.value == value
+        });
         let current = backend.peek(&key);
         if let Some(snapshot) = &current {
-            if snapshot.authority >= 200 {
+            if snapshot.authority >= 255 || (snapshot.authority >= 200 && !verified) {
                 return Err(ToolError::NeedsHuman(format!(
-                    "`{key}` tem autoridade {} (>=200): escrita exige HITL",
+                    "`{key}` tem autoridade {} (>=200): escrita exige HITL ou certificado",
                     snapshot.authority
                 )));
             }
@@ -375,7 +378,9 @@ impl Tool for MemoryWriteTool {
                 && snapshot.provenance != SOURCE
                 && snapshot.authority < AUTHORITY_CORROBORATED
         });
-        let authority = if corroborated {
+        let authority = if verified {
+            AUTHORITY_VERIFIED
+        } else if corroborated {
             AUTHORITY_CORROBORATED
         } else {
             current

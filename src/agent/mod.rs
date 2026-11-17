@@ -71,10 +71,10 @@ pub use registry::ToolRegistry;
 pub use self_model::SelfModel;
 pub use tool::{
     Budget, Cost, Effect, Goal, GoalKind, Risk, Snapshot, SuccessCriteria, Tool, ToolContext,
-    ToolError, ToolOutcome, ToolSchema, UndoBackend, UndoOp, WorldState, AUTHORITY_CORROBORATED,
-    AUTHORITY_HITL, AUTHORITY_QUARANTINE, AUTHORITY_VERIFIED,
+    ToolError, ToolOutcome, ToolSchema, UndoBackend, UndoOp, VerifiedFact, WorldState,
+    AUTHORITY_CORROBORATED, AUTHORITY_HITL, AUTHORITY_QUARANTINE, AUTHORITY_VERIFIED,
 };
-pub use tool_agent::{GoalOutcome, ToolAgent};
+pub use tool_agent::{GoalOutcome, ToolAgent, VerifyTool};
 pub use tools::MemoryWriteTool;
 pub use undo_sgdb::SgdbUndoBackend;
 

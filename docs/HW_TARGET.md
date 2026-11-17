@@ -76,8 +76,10 @@ Princípios:
 
 * **CPU é a referência bit-a-bit.** Todo resultado GPU é validado contra a
   saída CPU (tolerância de ponto flutuante explícita e declarada por op —
-  ex.: FFT `|Δ| ≤ 1e-5` relativo; integração bSB na GPU aceita reordenação
-  de empate **somente se** `H(s_final) < H(s_0)` continuar estrito).
+  ex.: FFT `|Δ| ≤ 1e-5` relativo; JL do transplante: **bit idêntico, exceto**
+  `dot` com `|dot| < 1e-3` — o WGSL funde `mul+add` e um quase-zero pode virar
+  de sinal, medido em 1 palavra de 320.000; integração bSB na GPU aceita
+  reordenação de empate **somente se** `H(s_final) < H(s_0)` continuar estrito).
 * Invariantes físicos (`tests/physical_invariants.rs`) rodam na rota CPU;
   uma suíte análoga `--features gpu` valida a rota GPU antes de qualquer
   aceleração entrar no hot path.
