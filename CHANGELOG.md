@@ -3,6 +3,25 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.165] - 2026-11-17
+
+### Changed
+
+- Fechamento de ciclo: Onda 0 / doação lab + residual agent/API.
+- `VerifiedFact` + rollback de `verified` no HITL (`memory.write` → 200).
+- Forget `authority=255` sem store → `500 ledger_io` (ledger e memory).
+- Docs: CYCLE_CLOSE doação, EXTERNAL_API, USER_DELIVERY 0.6, playbook §15.
+- Gates verdes: api_agent, api_lifecycle, agent_certificate_authority, undo/tools. JL tiled já está em `act` (o item JL-V4 do board 0414 está encerrado). Seguem abertos: FFT G2, MCTS, CI `--features gpu`, `cargo fmt --check`, B-G0/B1/B4.
+
+### Files
+
+- `Cargo.toml`, `CHANGELOG.md`, `docs/CYCLE_LOG.md`
+- `docs/CYCLE_CLOSE_2026-11-17_DOACAO_ONDA0.md`, `docs/DOACAO_PLAYBOOK.md`
+- `docs/USER_DELIVERY_PLAN.md`, `docs/EXTERNAL_API.md`
+- `src/api/mod.rs`, `src/agent/executor.rs`, `src/agent/tools.rs`
+- `docs/AETHER_AGENT_ROADMAP.md`
+- `tests/api_agent.rs`, `tests/api_lifecycle.rs`, `tests/agent_certificate_authority.rs`
+
 ## [0.0.164] - 2026-11-17
 
 ### Changed

@@ -427,3 +427,13 @@ Shards FHRR (manifest): `capital`20 · `é_um`41 · `é`20 · `é_uma`48+14 · `
 
 Painel central: origem · destino · gates · E3 · U1–U6. Hover → coluna **Detalhe**.
 Job **Probe doação HV** regenera gates; `Recarregar` relê JSONs.
+
+---
+
+## 15. Fechamento de ciclo lab (2026-11-17)
+
+Lab dry-run + hub + Onda 0 + B0 mínimo (`--jl-only` + sidecar) **fechados**.
+Documento canônico: [`CYCLE_CLOSE_2026-11-17_DOACAO_ONDA0.md`](CYCLE_CLOSE_2026-11-17_DOACAO_ONDA0.md).
+
+**Ainda aberto (não bloqueia aceite lab):** B-G0 · B1 (≥10k+LSH) · B4 produção ·
+SGDB-remember real · escriba 7B · FFT-G2 · JL-V4 · MCTS_gate (após B0).

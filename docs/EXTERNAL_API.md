@@ -215,6 +215,9 @@ curl -s -X POST http://127.0.0.1:8787/v1/aether/forget -d '{
 * Exige `authority ≥ 128`: apagar memória é ato com **mandato** (`403` sem ele).
 * O disco recebe uma **linha túmulo** (`op=forget`) além de remover da memória;
   no reinício os túmulos são reaplicados em ordem, então o fato **não volta**.
+* `authority = 255` **exige store** (`ledger_path`): sem disco para o túmulo a
+  API devolve `500 ledger_io` e **não** purga (ledger e memory — MSG 0413).
+* Rota `memory/forget` com 255 ainda exige o segredo HITL do servidor.
 * É **idempotente**: esquecer o que não existe devolve `forgot:false`, sem erro.
 * Escopo errado não alcança o fato de outro organismo (`forgot:false`).
 

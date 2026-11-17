@@ -102,17 +102,34 @@ fn forget_remove_torna_o_fato_nao_citavel() {
     assert_eq!(st, 403, "{resp}");
     assert!(resp.contains("authority_required"), "{resp}");
 
+    // 255 sem store não purga: não há túmulo durável (MSG 0413/0415).
+    let (st, resp) = request(addr, "POST", "/v1/aether/forget", &forget_body(1, 1, 255));
+    assert_eq!(st, 500, "{resp}");
+    assert!(resp.contains("ledger_io"), "{resp}");
+    let (_, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(1));
+    assert!(resp.contains("\"key\":\"1\""), "purge sem túmulo: {resp}");
+
+    // Com store o purge acontece, e o segundo forget é idempotente.
+    let file = temp_file("forget");
+    let _ = std::fs::remove_file(&file);
+    let addr = start_cfg(ApiConfig {
+        ledger_path: Some(file.clone()),
+        threads: 2,
+        ..ApiConfig::default()
+    });
+    assert_eq!(
+        request(addr, "POST", "/v1/aether/remember", &remember_body(1, 1)).0,
+        200
+    );
     let (st, resp) = request(addr, "POST", "/v1/aether/forget", &forget_body(1, 1, 255));
     assert_eq!(st, 200, "{resp}");
     assert!(resp.contains("\"forgot\":true"), "{resp}");
-
     let (_, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(1));
     assert!(resp.contains("\"abstain\":true"), "ainda cita: {resp}");
-
-    // Idempotente: o segundo forget não inventa sucesso.
     let (st, resp) = request(addr, "POST", "/v1/aether/forget", &forget_body(1, 1, 255));
     assert_eq!(st, 200, "{resp}");
     assert!(resp.contains("\"forgot\":false"), "{resp}");
+    let _ = std::fs::remove_file(&file);
 }
 
 #[test]

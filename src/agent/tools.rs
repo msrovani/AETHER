@@ -6,8 +6,8 @@
 use super::experts::{make_logic, make_memory, make_solver, make_transplant, Expert};
 use super::tool::{
     outcome_from_expert, Cost, Effect, Goal, GoalKind, Risk, Tool, ToolContext, ToolError,
-    ToolOutcome, ToolSchema, WorldState, AUTHORITY_CORROBORATED, AUTHORITY_QUARANTINE,
-    AUTHORITY_VERIFIED,
+    ToolOutcome, ToolSchema, WorldState, AUTHORITY_CORROBORATED, AUTHORITY_HITL,
+    AUTHORITY_QUARANTINE, AUTHORITY_VERIFIED,
 };
 use super::{Claim, ExpertId, Task};
 use crate::agent::AgentConfig;
@@ -361,7 +361,7 @@ impl Tool for MemoryWriteTool {
         });
         let current = backend.peek(&key);
         if let Some(snapshot) = &current {
-            if snapshot.authority >= 255 || (snapshot.authority >= 200 && !verified) {
+            if snapshot.authority == AUTHORITY_HITL || (snapshot.authority >= 200 && !verified) {
                 return Err(ToolError::NeedsHuman(format!(
                     "`{key}` tem autoridade {} (>=200): escrita exige HITL ou certificado",
                     snapshot.authority

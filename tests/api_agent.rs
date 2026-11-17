@@ -584,10 +584,37 @@ fn api_agent_remember_ignora_authority_do_cliente() {
     assert!(resp.contains("\"key\":\"3\""), "{resp}");
     assert!(resp.contains("\"authority\":255"), "{resp}");
 
-    // Na rota de ledger o corpo É o mandato: 255 purga sem header HITL.
+    // Ledger 255 sem store: mandato do corpo não basta — sem túmulo durável
+    // o purge seria silencioso (MSG 0413/0415). Fato permanece citável.
     let (status, resp) = request(addr, "POST", "/v1/aether/forget", &forget_body(3, 3, 255));
+    assert_eq!(status, 500, "{resp}");
+    assert_eq!(error_kind(&json_of(&resp)), "ledger_io", "{resp}");
+    let (_, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(3));
+    assert!(resp.contains("\"key\":\"3\""), "purge sem túmulo: {resp}");
+    assert!(resp.contains("\"authority\":255"), "{resp}");
+
+    // Com store: rota de ledger 255 purga (corpo = mandato; túmulo no disco).
+    let file = temp_file("forget_ledger255");
+    let _ = std::fs::remove_file(&file);
+    let addr = start_cfg(ApiConfig {
+        ledger_path: Some(file.clone()),
+        hitl_token: None,
+        threads: 1,
+        ..ApiConfig::default()
+    });
+    let (status, resp) = request(
+        addr,
+        "POST",
+        "/v1/aether/remember",
+        &remember_body_with_authority(4, 4, 255),
+    );
+    assert_eq!(status, 200, "{resp}");
+    let (status, resp) = request(addr, "POST", "/v1/aether/forget", &forget_body(4, 4, 255));
     assert_eq!(status, 200, "{resp}");
     assert!(resp.contains("\"forgot\":true"), "{resp}");
+    let text = std::fs::read_to_string(&file).expect("ledger");
+    assert!(text.contains("\"op\":\"forget\""), "sem túmulo: {text}");
+    let _ = std::fs::remove_file(&file);
 }
 
 /// 255 purga um fato aprovado por humano, mas **só** com o segredo HITL do

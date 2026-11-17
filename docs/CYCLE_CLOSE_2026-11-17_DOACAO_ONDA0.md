@@ -1,7 +1,7 @@
 # Fechamento de ciclo — Doação / Hub / Onda 0 / B0 mínimo
 
-Data: **2026-11-17** · Versão alvo pós-bump: ver `Cargo.toml`  
-CLAIM / tópico: `INTAKE_TRANSPLANT` · MSG 0229 / 0244 / 0245 (+ RELATORIO deste ciclo)
+Data: **2026-11-17** · Versão: **0.0.165**  
+CLAIM / tópico: `INTAKE_TRANSPLANT` · MSG 0229 / 0244 / 0245 · RELATORIO **MSG 0416** (`CICLO_DOACAO_ONDA0_CLOSE`)
 
 ## O que este ciclo fechou
 
@@ -14,6 +14,9 @@ CLAIM / tópico: `INTAKE_TRANSPLANT` · MSG 0229 / 0244 / 0245 (+ RELATORIO dest
 | Onda 0 | `--help`, `run-demo.ps1`, `--tui`→Ratatui (`features tui`), daemon R/F/SONHANDO | `organism.rs`, `scripts/run-demo.ps1`, `aether_daemon.rs` |
 | B0 mínimo | Sidecar HF fora do crate + `--jl-only` | `tools/donor_map_embed.py`, harvest `--jl-only` |
 | Docs usuário | USER_GUIDE §6, README 5 min, USER_DELIVERY 0.1–0.6 | docs + README |
+| Agent HITL | `VerifiedFact` + rollback de `verified` no HITL | `tool.rs` / `tool_agent.rs` |
+| API forget | HUMAN sem store → 500 `ledger_io` (ledger+memory) | `api/mod.rs` (MSG 0413 FIX_1) |
+| JL tiled | `act` em lote, 75–122× | o item JL-V4 do board 0414 está encerrado |
 
 ## Gates **verdes** neste ciclo (lab)
 
@@ -42,8 +45,10 @@ CLAIM / tópico: `INTAKE_TRANSPLANT` · MSG 0229 / 0244 / 0245 (+ RELATORIO dest
 | **B4** | Rodada produção completa (corpus+licença+8 gates em números oficiais) | Escriba 7B + remember SGDB real pendentes |
 | **SGDB-remember** | `remember` + `audit_checkpoint` + `contradicts` no neural-sgdb (não só mock) | Bridge popula `AtomRecord` do mock; sem URL/stdio estável neste ambiente |
 | **Escriba** | GLiNER/REBEL → Qwen2.5-7B → facts.jsonl | Fora do mínimo B0 |
-| **FFT-G2 / JL-V4** | Itens de board MSG 0414 (GPU/FFT) | Trilha ortogonal; não bloqueia doação lab |
-| **ledger forget 255** | Residual MSG 0413 | Agente/P3; não doação |
+| **FFT-G2** | Kernel WGSL FFT L=8192×B≥16; erro≤1e-4; razão≥2×; `force_off` sem panic; organismo sem `core::gpu` | `docs/GPU_PLAN.md` G2 — projeção 7,4×, sem consumidor de lote |
+| **MCTS_gate** | Planejador de horizonte | Fora do sprint; P2 entrega pipeline de um passo + rollback |
+| **CI gpu** | Job opt-in `--features gpu` com adapter | Gates JL/Ising rodam à mão |
+| **fmt** | `cargo fmt --all --check` | Dívida em arquivos de outros donos |
 | **Ratatui default** | `run-demo.ps1` ainda `--plain`; TUI exige `--features tui` | Aceite Onda 0.1 honesto |
 
 ## Aprendizados (memória de ciclo)
@@ -53,6 +58,8 @@ CLAIM / tópico: `INTAKE_TRANSPLANT` · MSG 0229 / 0244 / 0245 (+ RELATORIO dest
 3. **Hub é a superfície humana**: gates sem JSON no Detalhe não contam.
 4. **Arquivar rodadas** (`data/rounds/`) antes de sobrescrever `data/`.
 5. **Non-goals**: HV fora do T0; auth transplantado ≤240; sem BAM/JIT/governor no CLI de produto.
+6. **Forget 255 sem store = 500**: purgar sem túmulo ressuscita no boot; ledger e memory alinhados.
+7. **VerifiedFact**: certificado sem violação + claim Logic/Solver autoriza `memory.write` em 200; HITL 255 continua humano.
 
 ## Como clonar (receita mínima)
 

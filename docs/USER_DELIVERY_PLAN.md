@@ -116,10 +116,12 @@ Prioridade de entrega ao **usuário** (não ao agente):
 | 0.3 | Script `scripts/run-demo.ps1` | build release + organism 15 s + tip daemon/hub (**feito**) |
 | 0.4 | Alinhar telemetria daemon com `--help` já existente | R(LAN)/F/SONHANDO no help (**feito**) |
 | 0.5 | Congelar superfície: **não** expor BAM/JIT/governor no CLI | help organism/daemon dizem lab only (**feito**) |
-| **0.6 / (5)** | **Hub Windows** (`aether-dashboard`) | ACQ + T01–T12 + vazão; hover/fichas; jobs Auditoria / Benchmark / HW / demos / **Probe doação HV**; painel **Doação·ETL·Transplante** (origem/destino/gates/U1–U6); gaps heurísticos |
+| **0.6 / (5)** | **Hub Windows** (`aether-dashboard`) | ACQ + T01–T12 + vazão; hover/fichas; jobs Auditoria / Benchmark / HW / demos / **Probe doação HV**; painel **Doação·ETL·Transplante** (origem/destino/gates/U1–U6); gaps heurísticos (**feito** 2026-11-17) |
 
 **Resultado:** qualquer dev com Rust+MinGW roda a demo sem ler ARCHITECTURE;
 no Windows, o hub é a superfície única de métricas + testes práticos.
+
+**Status Onda 0 (2026-11-17):** fechada para aceite lab. Fechamento: [`CYCLE_CLOSE_2026-11-17_DOACAO_ONDA0.md`](CYCLE_CLOSE_2026-11-17_DOACAO_ONDA0.md). Gates ainda necessários (próximo ciclo): B-G0, B1 LSH≥10k, B4 produção, SGDB-remember real, escriba, FFT-G2/JL-V4.
 
 ### Entrega (5) — Hub Windows (detalhe)
 
@@ -221,5 +223,6 @@ Cada PR: claim no fórum, não tocar ownership BUFFY (`phase_memory`,
 
 ## 9. Próximo passo imediato
 
-Com aprovação: executar **Onda 0 / PR-U0+U1** (help, TUI, guia, script demo)
-sem alterar o núcleo cognitivo — só a borda de experiência.
+Onda 0 fechada. Próximo: **B-G0** (labels reais / paráfrase) + **SGDB-remember**
+real + rodada produção (B4) via sidecar `--jl-only`; Onda 1 só após demo
+operável sem reabrir T0.

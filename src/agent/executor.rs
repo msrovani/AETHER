@@ -107,7 +107,12 @@ impl ToolExecutor {
             {
                 let report = ctx.rewind_report(undo_before);
                 if report.is_ok() {
-                    ctx.rollback_to(effects_before, claims_before, certificates_before, verified_before);
+                    ctx.rollback_to(
+                        effects_before,
+                        claims_before,
+                        certificates_before,
+                        verified_before,
+                    );
                 }
                 return Err(match report.failed.first() {
                     Some(why) => ToolError::Failed(format!(
@@ -134,7 +139,12 @@ impl ToolExecutor {
             // só é seguro quando a compensação realmente aconteceu.
             let report = ctx.rewind_report(undo_before);
             if report.is_ok() {
-                ctx.rollback_to(effects_before, claims_before, certificates_before, verified_before);
+                ctx.rollback_to(
+                    effects_before,
+                    claims_before,
+                    certificates_before,
+                    verified_before,
+                );
             }
             if !report.is_ok() {
                 return Err(ToolError::Failed(format!(

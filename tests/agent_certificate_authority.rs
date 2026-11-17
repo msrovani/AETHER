@@ -8,11 +8,11 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use aether_engine::agent::{
-    Budget, Claim, Cost, Effect, ExpertId, Goal, GoalKind, MemoryWriteTool, Risk, Snapshot,
-    SuccessCriteria, Tool, ToolContext, ToolError, ToolOutcome, UndoBackend, VerifyTool,
-    AUTHORITY_QUARANTINE, AUTHORITY_VERIFIED,
+    Budget, Claim, Effect, ExpertId, Goal, GoalKind, MemoryWriteTool, Risk, Snapshot,
+    SuccessCriteria, Tool, ToolContext, UndoBackend, VerifyTool, AUTHORITY_QUARANTINE,
+    AUTHORITY_VERIFIED,
 };
-use aether_engine::core::certificate::{EngineCertificate, Provenance};
+use aether_engine::core::certificate::{Certificate as EngineCertificate, Provenance};
 use aether_engine::core::knowledge_bridge_f1::ScopeId;
 
 #[derive(Default)]
@@ -58,9 +58,15 @@ impl UndoBackend for Backend {
         self.store.lock().map(|s| s.outbox.len()).unwrap_or(0)
     }
 
-    fn stage_rewind_to(&self, _txn: u64, _keys: &[String], outbox_len: usize) -> Result<(), String> {
+    fn stage_rewind_to(
+        &self,
+        _txn: u64,
+        _keys: &[String],
+        outbox_len: usize,
+    ) -> Result<(), String> {
         let mut store = self.store.lock().map_err(|_| "store")?;
-        store.outbox.truncate(outbox_len.min(store.outbox.len()));
+        let len = store.outbox.len();
+        store.outbox.truncate(outbox_len.min(len));
         Ok(())
     }
 
@@ -210,7 +216,4 @@ fn gate_certificado_com_violacao_nao_promove() {
     let mut write = MemoryWriteTool;
     let outcome = write.call(&write_goal(), &mut ctx).expect("write");
     assert_eq!(outcome.claims[0].authority, AUTHORITY_QUARANTINE);
-    let _ = ToolError::Failed(String::new());
-    let _ = Cost::local(1.0);
-    let _ = ToolOutcome::empty("noop");
 }

@@ -346,11 +346,18 @@ pedidos em linguagem via adaptador validado.
 | HTTP pipeline | **verde + hardening P0**: caps 8 steps / n≤64, validação de literais (`< n`), `j` n×n, `pipeline:null` não desvia, catch de panic com recuperação de mutex envenenado; `api_agent` 10/10 |
 | Pipeline abortado por HITL | **verde**: `ctx.rollback()` no `break`, e `Cite` é checado antes de `!ok` |
 
-Pendências abertas: T4 tombstone (autoridade ≥200 / token 255) — coberto no
-backend; T6 crash entre write e log — journal antes da mutação + **sync
-incremental entre processos** (`lock_synced` reaplica a cauda do diário), restando
-`fsync` e lock de arquivo; T8 CAS/replay concorrente — CAS no backend; T9
-reinforce — autoridade não sobe sozinha, `reinforced` conta.
+Fechado neste ciclo: T4 túmulo (200 marca e não purga; 255 purga só com store —
+sem store as rotas ledger e memory devolvem `500 ledger_io` e o fato continua
+citável); T6 journal antes da mutação, `sync_all` e lock `create_new`; T8 CAS no
+backend; T9 reforço não promove (quarentena 96, duas fontes independentes sobem
+a 128, certificado de solver autoriza 200 via `VerifiedFact`).
+
+Gates que seguem necessários: **FFT G2** (kernel ausente; barra em
+`docs/GPU_PLAN.md`: erro relativo ≤ 1e-4, razão ≥ 2× em L=8192 B=64, `force_off`
+sem panic, organismo a 60 Hz sem `core::gpu`); **MCTS** (fora do sprint — o
+planner entrega um passo e o pipeline, não busca de horizonte); **CI com
+`--features gpu`** numa máquina com adapter; **`cargo fmt --check`** ainda
+falha em arquivos de outros donos.
 
 #### Auditoria de undo/compensação (memo, 2026-11-17)
 

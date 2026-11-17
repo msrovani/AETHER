@@ -938,16 +938,17 @@ fn remember(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: boo
 /// * `/v1/aether/forget` — **ledger local confiável**: a `authority` do corpo é
 ///   o mandato (como em `remember`). `< 200` → `403 authority_required`;
 ///   `200..=254` grava túmulo e **não** purga (`forgot:false`, HITL pendente);
-///   `255` purga.
+///   `255` purga **somente** com store (túmulo antes do purge); sem store →
+///   `500 ledger_io` (MSG 0413/0415 — sem purge silencioso).
 /// * `/v1/aether/memory/forget` — memória exposta ao cliente: o corpo não
 ///   concede poder. `200/255` exigem o **segredo HITL do servidor** no
 ///   cabeçalho `x-aether-hitl` (ou `Authorization`/`X-Aether-Token`, quando for
 ///   o mesmo segredo); sem ele, `403 hitl_required`. Para 255 exige ledger
 ///   persistente (túmulo durável antes do purge), senão `500 ledger_io`.
 ///
-/// Em ambas, o túmulo é gravado **antes** da remoção: se o disco falhar, o fato
-/// continua citável e o cliente vê `500`, em vez de perder o registro sem
-/// rastro.
+/// Em ambas, o túmulo é gravado **antes** da remoção: se o disco falhar (ou não
+/// houver store), o fato continua citável e o cliente vê `500`, em vez de
+/// perder o registro sem rastro.
 fn forget(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: bool) -> Reply {
     let doc = match parse_json(&req.body) {
         Ok(v) => v,
@@ -1003,10 +1004,9 @@ fn forget(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: bool)
                 );
             }
             tombstoned = true;
-        } else if memory && authority == AUTHORITY_HUMAN {
-            // Rota de memória: sem store não há onde gravar o túmulo. Purgar
-            // aqui apagaria o fato e ele ressuscitaria no próximo boot. (O
-            // ledger local pode ser efêmero por desenho — testes/embutido.)
+        } else if authority == AUTHORITY_HUMAN {
+            // Sem store não há túmulo durável: purgar apagaria o fato e ele
+            // ressuscitaria no próximo boot (MSG 0413/0415 — ledger e memory).
             return Reply::Json(
                 500,
                 error_json("ledger_io", "sem store para gravar o túmulo antes do purge"),
