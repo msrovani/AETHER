@@ -311,6 +311,9 @@ planner podia escolher `ask.human` (custo zero) no lugar de uma tool executável
    `AUTHORITY_HITL=255` (humano explícito). Constantes em `src/agent/tool.rs`.
 2. Tool nunca promove autoridade sozinha: escrita nova entra em 96; escrita
    sobre existente mantém a autoridade e incrementa `reinforced`.
+   **Exceção medida:** se outra fonte independente já registrou o *mesmo valor*
+   (`Snapshot.provenance` diferente de `inferred`), a inferência concordante
+   corrobora e sobe **96 → 128**; nunca 200.
 3. `authority >= 200` só é sobrescrita/apagada com credencial HITL de servidor;
    corpo de requisição nunca concede autoridade.
 4. Proveniência casa com o carimbo: `Transplanted` ⇒ 128; resultado de
@@ -318,7 +321,9 @@ planner podia escolher `ask.human` (custo zero) no lugar de uma tool executável
 5. `ask.human` é tool de **escalação** (`Tool::escalation`): score fora do EFE,
    só aparece quando nenhuma tool executável paga o piso.
 
-**Status.** Implementado (`d3daf36`, `975ff0d`), com a parte de API em andamento.
+**Status.** Implementado (`d3daf36`, `975ff0d`, `40af2e3`), incluindo a
+promoção por corroboração (`UndoBackend::write_sourced` + proveniência
+registrada); parte de API em `199ade4`.
 
 **Consequências.**
 - Um fato inferido não "vira verdade" por reescrita; promoção exige

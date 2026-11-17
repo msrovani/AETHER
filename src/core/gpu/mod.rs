@@ -20,6 +20,7 @@
 
 pub mod ising;
 pub mod jl;
+pub mod jl_tiled;
 
 #[cfg(feature = "gpu")]
 use std::future::Future;

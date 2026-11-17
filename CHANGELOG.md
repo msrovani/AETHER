@@ -3,6 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.162] - 2026-11-17
+
+### Changed
+
+- Ciclo automatico: 4 arquivo(s) (src:3, tests:1).
+- Gate: ok (6s).
+
+- `src/core/gpu/mod.rs`
+- `src/core/gpu/jl_tiled.rs`
+- `src/core/gpu/jl_tiled.wgsl`
+- `tests/gpu_jl_tiled_gate.rs`
+
 ## [0.0.161] - 2026-11-17
 
 ### Changed

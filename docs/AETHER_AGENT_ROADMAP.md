@@ -342,7 +342,7 @@ pedidos em linguagem via adaptador validado.
 | Irreversível pré-call | **verde**: `Tool::planned_effects` barra antes da `call`; `gate_irreversivel_declarado_nao_executa_pre_call` (contador = 0) |
 | Undo não engolido | **verde**: `UndoReport{applied,stale,failed}`, log preservado em falha (`gate_undo_falha_nao_e_engolida`, `gate_undo_sem_backend_nao_descarta_em_silencio`) |
 | HITL não preempta tool segura | **verde**: `Planner::select` prefere candidato legal que paga o piso (`gate_hitl_nao_preempta_tool_segura`) |
-| `memory.write` | **real + T9**: `SgdbUndoBackend` (journal JSONL, before-image, CAS, tombstone 200/255) + `ToolAgent::with_undo_journal`; `peek` antes da escrita, autoridade ≥200 exige HITL, reforço conta em `reinforced` sem promover autoridade; gates `agent_undo_sgdb_gate` 4/4 e 8 unit tests |
+| `memory.write` | **real + T9 + corroboração**: `SgdbUndoBackend` (journal JSONL, before-image, CAS, tombstone 200/255) + `ToolAgent::with_undo_journal`; `peek` antes da escrita, autoridade ≥200 exige HITL, reforço conta em `reinforced` sem promover; **2 fontes independentes com o mesmo valor** promovem 96→128 (`write_sourced`); gates `agent_undo_sgdb_gate` 6/6 e 11 unit tests |
 | HTTP pipeline | **verde + hardening P0**: caps 8 steps / n≤64, validação de literais (`< n`), `j` n×n, `pipeline:null` não desvia, catch de panic com recuperação de mutex envenenado; `api_agent` 10/10 |
 | Pipeline abortado por HITL | **verde**: `ctx.rollback()` no `break`, e `Cite` é checado antes de `!ok` |
 
