@@ -114,8 +114,11 @@ pipeline por instância.
 
 **Testado** (`tests/gpu_ising_sweep_gate.rs`) — **estatístico**:
 
-* mesma taxa G1/G2 (100% SAT, precisão 100%) em 200 instâncias;
-* `|ΔE| ≤ 1e‑3` e teste KS sobre a distribuição de ótimos vs CPU;
+* energia reportada == `H(estado devolvido)` (auto-consistência, `f64` no CPU);
+* teste KS, média e *regret* das distribuições de ótimos **contra o piso de
+  ruído do próprio solver** (CPU com outra semente), não contra paridade por
+  instância — o `f32` só acrescenta uma perturbação a um sistema caótico;
+* razão ≥ 2× no lote de 10⁴ instâncias (caso do E2c);
 * declarar no doc: **o `digest` do E2 e o `bsb_compacto_igual_ao_solver_auditado`
   não valem no caminho GPU** (bit-a-bit morre por construção).
 
@@ -226,12 +229,58 @@ de uma sessão dedicada, com o mesmo gate de 0 divergências.
 (opt-in, default intocado) e o gate de regressão exige ≥1,5×.
 
 
-### G2 / G3 — não implementados (por decisão, com número)
+### G3 — sweep Ising em lote: **implementado e admitido** (11,3× medido)
+
+Duas rodadas, com o mesmo gate (`tests/gpu_ising_sweep_gate.rs`, 3 gates):
+
+| | v1: 1 thread/instância | **v2: 1 warp/instância** |
+|---|---:|---:|
+| tempo, 10⁴ instâncias (n=20, 48 passos) | 44 ms | **11,0 ms** |
+| CPU auditado (mesmo lote) | 123 ms | 124 ms |
+| razão | 2,8× | **11,3×** |
+| ociosidade (k=200) | 0,4× | **9,0×** |
+| banda efetiva de `J` | 17 GB/s | **73–107 GB/s** |
+
+**Por que a v1 parou em 2,8×:** o custo escalava exatamente com `n²` (medido em
+n = 10, 20, 32), isto é, era **tráfego de `J`**: 48 passos × 16 MB = 768 MB, e
+cada thread lia a matriz com passo (não coalescida), a 17 GB/s.
+
+**O que a v2 mudou:** um **warp por instância** (lane = sítio, `n ≤ 32`), `x_i`,
+`y_i`, `s_i` e `g_i` em registradores, estado compartilhado (`x`, `s`, elite) em
+memória de *workgroup* com barreiras, e `J` lido **coalescido**: para `j` fixo as
+lanes leem `J[j][lane]`, que é `J[lane][j]` **por simetria**. Custo: o caminho
+GPU exige `J` **simétrico** (o contrato do solver já diz isso); com `J`
+assimétrico ele difere do CPU.
+
+**Qualidade (o ponto honesto):** `f32` vs `f64` não é bit-a-bit e a trajetória
+bSB é caótica. Medido no mesmo lote de 200 instâncias:
+
+| métrica | GPU vs CPU | **CPU(seed2) vs CPU(seed1)** |
+|---|---:|---:|
+| energias idênticas | 145/200 (72,5%) | **47/200 (23,5%)** |
+| melhores / piores | 30 / 25 | 24 / 129 |
+| KS das distribuições | 0,030 | **0,055** |
+| regret ≤ 5% | 182/200 | **146/200** |
+| média de energia | −53,71 (CPU −53,66) | −53,66 |
+
+Ou seja: **a GPU fica mais próxima do solver do que o próprio solver fica de si
+mesmo com outra semente**. O gate codifica isso (KS ≤ piso + 0,05, regret ≤ 5%
+em ≥ piso − 5 instâncias, média não pior), em vez de exigir paridade por
+instância — impossível num sistema caótico, e que a v1 passava por coincidência
+de ordem de soma, não por mérito.
+
+**Custo fixo:** compilar o shader custa **250–550 ms** por chamada. A avulsa
+`sweep_into` paga isso; o caminho de produção é `IsingSweep` (sessão que guarda
+device, pipeline e buffers) — sem ela a razão medida era **0,2×**.
+
+**Veredito:** admitido como caminho **de lote** (≥ ~10³ instâncias; abaixo de
+~500 a taxa de ocupação não paga). Continua fora do pipeline por instância, e
+**o `digest` do E2 e o `bsb_compacto_igual_ao_solver_auditado` não valem neste
+caminho** (documentado no topo de `ising.rs`).
+
+### G2 — não implementado (por decisão, com número)
 
 * **G2 (FFT)**: kernel WGSL de FFT não implementado. O que ficou pronto é o
   **invariante estrutural** (organismo/hot path sem dependência gráfica) e a
   projeção de **7,4×** para L=8192 em lote.
-* **G3 (sweep Ising)**: kernel batelado não implementado. Ficou o número
-  (**929×** de throughput) e a exigência de **gate estatístico** (o `digest` do
-  E2 e o teste denso↔esparso não valem no caminho GPU).
 

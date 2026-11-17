@@ -87,15 +87,26 @@ impl ToolExecutor {
                 return Err(e);
             }
         };
-        ctx.charge(cost);
         let elapsed_us = started.elapsed().as_micros() as u64;
+        // Cobra o maior entre estimativa e tempo medido: uma tool lenta não
+        // pode furar `max_ms` sem ser contabilizada.
+        let measured_ms = (elapsed_us as f32 / 1_000.0).max(outcome.cost_us as f32 / 1_000.0);
+        ctx.charge(cost);
+        if measured_ms > cost.ms {
+            ctx.charge(Cost {
+                ms: measured_ms - cost.ms,
+                tokens: 0,
+            });
+        }
         for effect in &outcome.effects {
             // Irreversível sem teto High: desfaz o que der e pede HITL.
             if matches!(effect, super::tool::Effect::Irreversible { .. })
                 && goal.risk_ceiling < super::tool::Risk::High
             {
                 let report = ctx.rewind_report(undo_before);
-                ctx.rollback_to(effects_before, claims_before, certificates_before);
+                if report.is_ok() {
+                    ctx.rollback_to(effects_before, claims_before, certificates_before);
+                }
                 return Err(match report.failed.first() {
                     Some(why) => ToolError::Failed(format!(
                         "{} — efeito irreversível já ocorreu ({why})",
@@ -117,10 +128,12 @@ impl ToolExecutor {
                 ctx.certificates.push(*cert);
             }
         } else {
-            // Rewind LIFO (memória) e truncamento do blackboard — sempre, mesmo
-            // quando a compensação falha (o erro é propagado depois).
+            // Rewind LIFO (memória) e truncamento do blackboard — o truncamento
+            // só é seguro quando a compensação realmente aconteceu.
             let report = ctx.rewind_report(undo_before);
-            ctx.rollback_to(effects_before, claims_before, certificates_before);
+            if report.is_ok() {
+                ctx.rollback_to(effects_before, claims_before, certificates_before);
+            }
             if !report.is_ok() {
                 return Err(ToolError::Failed(format!(
                     "{}: {}",

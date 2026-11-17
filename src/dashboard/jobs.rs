@@ -442,7 +442,7 @@ fn run_transplant_probe(shared: &Shared) -> Result<String, String> {
         }
     }
     set_log(shared, "transplant_hv_probe…");
-    let probe = run_cargo(
+    let _probe = run_cargo(
         &[
             "run",
             "--release",
@@ -455,23 +455,77 @@ fn run_transplant_probe(shared: &Shared) -> Result<String, String> {
         shared,
     )?;
     set_log(shared, "transplant_hv_gate…");
-    let gate = run_cargo(
+    let _gate = run_cargo(
         &["test", "--release", "--test", "transplant_hv_gate"],
         Duration::from_secs(600),
         shared,
     )?;
     set_log(shared, "transplant_uso U1–U6…");
     let uso_status = Command::new("python")
-        .args(["tools/transplant_uso.py", "--data", "data", "--out", "target/aether_transplant_uso.json"])
+        .args([
+            "tools/transplant_uso.py",
+            "--data",
+            "data",
+            "--out",
+            "target/aether_transplant_uso.json",
+        ])
         .current_dir(&root)
         .status()
         .map_err(|e| format!("python uso: {e}"))?;
     if !uso_status.success() {
-        return Err(format!("transplant_uso exit {}", uso_status.code().unwrap_or(-1)));
+        return Err(format!(
+            "transplant_uso exit {}",
+            uso_status.code().unwrap_or(-1)
+        ));
     }
+    let round = archive_transplant_round(&root)?;
     Ok(format!(
-        "doação OK · probe: {probe} · gate: {gate} · uso: target/aether_transplant_uso.json"
+        "doação OK · probe · gate · uso · round={round}"
     ))
+}
+
+/// Copia artefatos ativos para `data/rounds/YYYYMMDD_hhmmss_hub/` (anti-overwrite).
+fn archive_transplant_round(root: &PathBuf) -> Result<String, String> {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // Nome estável o suficiente p/ lab; evita colisão com archive manual.
+    let stamp = format!("{secs}");
+    let name = format!("hub_{stamp}");
+    let dest = root.join("data/rounds").join(&name);
+    fs::create_dir_all(dest.join("hv")).map_err(|e| e.to_string())?;
+    fs::create_dir_all(dest.join("emb")).map_err(|e| e.to_string())?;
+    let copies: &[(&str, &str)] = &[
+        ("data/manifest.json", "manifest.json"),
+        ("data/facts.jsonl", "facts.jsonl"),
+        ("data/sgdb_mock_ledger.json", "sgdb_mock_ledger.json"),
+        ("data/hv/bank.bin", "hv/bank.bin"),
+        ("data/hv/bank.idx", "hv/bank.idx"),
+        ("target/aether_transplant_hv.json", "aether_transplant_hv.json"),
+        ("target/aether_transplant_uso.json", "aether_transplant_uso.json"),
+        ("target/aether_e3.json", "aether_e3.json"),
+    ];
+    for (src, rel) in copies {
+        let from = root.join(src);
+        if from.exists() {
+            let to = dest.join(rel);
+            if let Some(parent) = to.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            fs::copy(&from, &to).map_err(|e| format!("copy {src}: {e}"))?;
+        }
+    }
+    // emb opcional (grande)
+    for name in ["bank.f32", "whitening.bin"] {
+        let from = root.join("data/emb").join(name);
+        if from.exists() {
+            let _ = fs::copy(&from, dest.join("emb").join(name));
+        }
+    }
+    Ok(format!("data/rounds/{name}"))
 }
 
 fn run_cargo(args: &[&str], timeout: Duration, shared: &Shared) -> Result<String, String> {

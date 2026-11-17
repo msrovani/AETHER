@@ -7,24 +7,61 @@
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
+use std::path::PathBuf;
 use std::time::Duration;
 
+use aether_engine::agent::SgdbUndoBackend;
 use aether_engine::api::json::Json;
 use aether_engine::api::{self, ApiConfig};
 
 fn start() -> SocketAddr {
+    start_cfg(ApiConfig {
+        threads: 1,
+        ..ApiConfig::default()
+    })
+}
+
+fn start_cfg(cfg: ApiConfig) -> SocketAddr {
     let listener = api::bind("127.0.0.1:0".parse().unwrap()).expect("bind");
     let addr = listener.local_addr().expect("addr");
     std::thread::spawn(move || {
-        let _ = api::serve_listener(
-            listener,
-            ApiConfig {
-                threads: 1,
-                ..ApiConfig::default()
-            },
-        );
+        let _ = api::serve_listener(listener, cfg);
     });
     addr
+}
+
+/// Arquivo temporário exclusivo do processo/teste.
+fn temp_file(tag: &str) -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "aether_api_agent_{tag}_{}_{}.jsonl",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ))
+}
+
+/// Define `AETHER_UNDO_JOURNAL` e restaura no `Drop` (o pipeline lê o env).
+struct EnvGuard {
+    previous: Option<String>,
+}
+
+impl EnvGuard {
+    fn set_journal(path: &std::path::Path) -> Self {
+        let previous = std::env::var("AETHER_UNDO_JOURNAL").ok();
+        std::env::set_var("AETHER_UNDO_JOURNAL", path);
+        Self { previous }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => std::env::set_var("AETHER_UNDO_JOURNAL", value),
+            None => std::env::remove_var("AETHER_UNDO_JOURNAL"),
+        }
+    }
 }
 
 fn request(addr: SocketAddr, method: &str, path: &str, body: &str) -> (u16, String) {
@@ -82,6 +119,39 @@ fn error_message(doc: &Json) -> String {
         .and_then(Json::as_str)
         .unwrap_or_else(|| panic!("resposta sem error.message: {}", doc.to_text()))
         .to_string()
+}
+
+/// Tipo estável do erro (`error.type`).
+fn error_kind(doc: &Json) -> String {
+    doc.get("error")
+        .and_then(|e| e.get("type"))
+        .and_then(Json::as_str)
+        .unwrap_or_else(|| panic!("resposta sem error.type: {}", doc.to_text()))
+        .to_string()
+}
+
+/// Fase sintética usada por `remember`/`cue` (par re/im, mínimo aceito).
+const PHASES: &str = "[0.1,0.2,0.3,0.4]";
+
+fn remember_body(key: u64, organism: u64) -> String {
+    format!(
+        r#"{{"key":"{key}","phases":{PHASES},
+            "scope":{{"organism":{organism},"run":1,"app":1}},"authority":128}}"#
+    )
+}
+
+fn cue_body(organism: u64) -> String {
+    format!(
+        r#"{{"scope":{{"organism":{organism},"run":1,"app":1}},"query":{PHASES}}}"#
+    )
+}
+
+fn forget_body(key: u64, organism: u64, authority: u64, confirm: bool) -> String {
+    let confirm = if confirm { ",\"confirm\":true" } else { "" };
+    format!(
+        r#"{{"key":"{key}","scope":{{"organism":{organism},"run":1,"app":1}},
+            "authority":{authority},"reason":"teste"{confirm}}}"#
+    )
 }
 
 #[test]
@@ -320,4 +390,118 @@ fn api_agent_continua_vivo_depois_de_corpo_hostil() {
     );
     assert_eq!(status, 200, "servidor morreu após payload hostil: {resp}");
     assert_eq!(str_field(&json_of(&resp), "action"), "act", "{resp}");
+}
+
+/// Passo `act` grava via `memory.write`; quando o passo seguinte abstém, o
+/// rollback do workflow desfaz a escrita de verdade (journal real, não mock).
+#[test]
+fn api_agent_pipeline_desfaz_escrita_no_rollback() {
+    let journal = temp_file("rollback");
+    let _ = std::fs::remove_file(&journal);
+    let _env = EnvGuard::set_journal(&journal);
+    let addr = start();
+
+    let body = r#"{"steps":[
+      {"kind":"act","subject":"k","relation":"rel","query":"v"},
+      {"kind":"fact","subject":"Atlântida","relation":"capital"}
+    ]}"#;
+    let (status, resp) = request(addr, "POST", "/v1/aether/agent", body);
+    assert_eq!(status, 200, "{resp}");
+    let doc = json_of(&resp);
+    assert!(!bool_field(&doc, "success"), "{resp}");
+    assert_eq!(str_field(&doc, "action"), "abstain", "{resp}");
+
+    // A escrita aconteceu (linha `write`) e foi compensada (linha `delete`).
+    let text = std::fs::read_to_string(&journal).unwrap_or_default();
+    assert!(text.contains("\"op\":\"write\""), "journal sem escrita: {text}");
+    assert!(text.contains("\"op\":\"delete\""), "journal sem undo: {text}");
+    assert!(text.contains("k|rel"), "journal não fala da chave: {text}");
+
+    // Reabrir o journal (replay) prova que o valor não sobreviveu ao rollback.
+    let backend = SgdbUndoBackend::new(&journal);
+    assert!(
+        backend.get("k|rel").is_none(),
+        "rollback deixou a escrita no journal"
+    );
+
+    drop(backend);
+    let _ = std::fs::remove_file(&journal);
+}
+
+/// Authority 200 = túmulo + HITL: o túmulo vai para o disco **antes** de
+/// qualquer remoção, e o registro não é purgado no mesmo passo.
+#[test]
+fn api_agent_forget_200_tombstone_sem_purge() {
+    let file = temp_file("forget200");
+    let _ = std::fs::remove_file(&file);
+    let addr = start_cfg(ApiConfig {
+        ledger_path: Some(file.clone()),
+        threads: 1,
+        ..ApiConfig::default()
+    });
+
+    let (status, resp) = request(addr, "POST", "/v1/aether/remember", &remember_body(1, 1));
+    assert_eq!(status, 200, "{resp}");
+
+    let (status, resp) = request(
+        addr,
+        "POST",
+        "/v1/aether/forget",
+        &forget_body(1, 1, 200, false),
+    );
+    assert_eq!(status, 200, "{resp}");
+    let doc = json_of(&resp);
+    assert!(!bool_field(&doc, "forgot"), "200 não purga: {resp}");
+    assert!(bool_field(&doc, "tombstoned"), "túmulo ausente: {resp}");
+    assert!(bool_field(&doc, "hitl"), "200 tem de escalar HITL: {resp}");
+
+    // Túmulo gravado no disco...
+    let text = std::fs::read_to_string(&file).expect("ledger");
+    assert!(text.contains("\"op\":\"forget\""), "sem túmulo: {text}");
+    // ...e o fato continua no ledger (não foi apagado neste passo).
+    let (_, health) = request(addr, "GET", "/health", "");
+    assert!(health.contains("\"ledger_entries\":1"), "{health}");
+    let (_, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(1));
+    assert!(resp.contains("\"key\":\"1\""), "fato sumiu no 200: {resp}");
+
+    // Só 255 + confirmação explícita purga (túmulo já está no disco).
+    let (status, resp) = request(
+        addr,
+        "POST",
+        "/v1/aether/forget",
+        &forget_body(1, 1, 255, true),
+    );
+    assert_eq!(status, 200, "{resp}");
+    assert!(resp.contains("\"forgot\":true"), "{resp}");
+    let (_, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(1));
+    assert!(resp.contains("\"abstain\":true"), "ainda cita: {resp}");
+
+    let _ = std::fs::remove_file(&file);
+}
+
+/// 255 purga um fato aprovado por humano: sem confirmação explícita, `409` e
+/// nada é tocado.
+#[test]
+fn api_agent_forget_255_sem_confirmacao_e_recusado() {
+    let addr = start();
+    let (status, resp) = request(addr, "POST", "/v1/aether/remember", &remember_body(9, 1));
+    assert_eq!(status, 200, "{resp}");
+
+    let (status, resp) = request(
+        addr,
+        "POST",
+        "/v1/aether/forget",
+        &forget_body(9, 1, 255, false),
+    );
+    assert_eq!(status, 409, "{resp}");
+    let doc = json_of(&resp);
+    assert_eq!(error_kind(&doc), "hitl_confirmation_required", "{resp}");
+    assert!(
+        error_message(&doc).contains("confirm"),
+        "mensagem não explica o flag: {resp}"
+    );
+
+    // Recusa não é purga: o fato continua citável.
+    let (_, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(1));
+    assert!(resp.contains("\"key\":\"9\""), "recusa apagou o fato: {resp}");
 }

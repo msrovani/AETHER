@@ -20,6 +20,8 @@ pub struct PlanStep {
     pub risk: Risk,
     /// Justificativa curta.
     pub reason: String,
+    /// Tool de escalação (não executa; só pede humano).
+    pub escalation: bool,
 }
 
 /// Planner.

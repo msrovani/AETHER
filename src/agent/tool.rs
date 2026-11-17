@@ -339,10 +339,21 @@ pub struct WorldState {
     pub memory_hits: usize,
 }
 
+/// Fato inferido (quarentena): entra sem confiança humana nem corroboração.
+pub const AUTHORITY_QUARANTINE: u8 = 96;
+
+/// Fato corroborado por duas ou mais fontes independentes.
+pub const AUTHORITY_CORROBORATED: u8 = 128;
+
+/// Fato verificado por evidência física/certificado.
+pub const AUTHORITY_VERIFIED: u8 = 200;
+
+/// Aprovação humana explícita (HITL); só humano escreve/apaga.
+pub const AUTHORITY_HITL: u8 = 255;
+
 /// Snapshot de uma memória antes de uma escrita (para undo).
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Snapshot {
-    /// Texto anterior.
+pub struct Snapshot {    /// Texto anterior.
     pub text: String,
     /// Objeto/valor anterior.
     pub object: String,
@@ -466,6 +477,14 @@ pub trait UndoBackend: Send + Sync {
     fn peek(&self, key: &str) -> Option<Snapshot> {
         let _ = key;
         None
+    }
+    /// Registra a marca de stage antes da escrita (watermark por transação).
+    ///
+    /// Default: no-op (backends sem outbox). Backends com outbox devem
+    /// persistir `keys` + `outbox_len` para que `stage_rewind` tenha alvo.
+    fn stage_begin(&self, txn: u64, keys: &[String], outbox_len: usize) -> Result<(), String> {
+        let _ = (txn, keys, outbox_len);
+        Ok(())
     }
     /// Escrita com before-image e autoridade explícita (para `memory.write`).
     fn write(&self, key: &str, text: &str, authority: u8) -> Result<Option<Snapshot>, String> {
@@ -669,6 +688,10 @@ impl ToolContext {
                 seq,
                 outbox_len,
             } => {
+                // Materializa a marca no backend (journal) antes do undo op.
+                if let Some(backend) = &self.undo_backend {
+                    let _ = backend.stage_begin(self.txn, keys, *outbox_len);
+                }
                 self.undo_log.push(UndoOp::Stage {
                     txn: self.txn,
                     seq: *seq,

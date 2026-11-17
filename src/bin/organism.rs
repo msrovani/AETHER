@@ -19,10 +19,39 @@
 use std::time::Duration;
 
 use aether_engine::simulation::closed_loop_organism::{ClosedLoopOrganism, OrganismConfig};
+use aether_engine::simulation::panel::PanelSink;
 
-fn parse_args() -> Result<(OrganismConfig, Duration), String> {
+fn print_help() {
+    println!(
+        "aether-organism — organismo pós-token AETHER v{}\n\
+         \n\
+         Uso:\n\
+           aether-organism [flags]\n\
+         \n\
+         Flags:\n\
+           --help | -h          esta mensagem (exit 0)\n\
+           --duration <s>       duração (padrão: 15s); aceita sufixo s\n\
+           --plain              painel ANSI (padrão)\n\
+           --tui                pede Ratatui (requer --features tui; senão cai em --plain)\n\
+           --seed <u64>         RNG\n\
+           --steps <n>          relaxamento/quadro (padrão: 200)\n\
+           --window <n>         buffer circular (padrão: 128)\n\
+           --perturb-at <s>     instante da perturbação (padrão: 3s)\n\
+           --hz <f>             taxa do loop (padrão: 60)\n\
+           --sensor-noise <f>   ruído sensor rad (padrão: 0.35)\n\
+           --no-perturb         desliga perturbação\n\
+         \n\
+         Demo rápida: .\\scripts\\run-demo.ps1\n\
+         Hub Windows: aether-dashboard --features dashboard\n\
+         Non-goal: não expõe BAM/JIT/governor neste CLI.",
+        env!("CARGO_PKG_VERSION")
+    );
+}
+
+fn parse_args() -> Result<(OrganismConfig, Duration, bool), String> {
     let mut cfg = OrganismConfig::default();
     let mut duration = Duration::from_secs(15);
+    let mut want_tui = false;
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
     while i < args.len() {
@@ -35,6 +64,10 @@ fn parse_args() -> Result<(OrganismConfig, Duration), String> {
                 .ok_or_else(|| format!("faltou valor para {flag}"))
         };
         match a.as_str() {
+            "--help" | "-h" => {
+                print_help();
+                std::process::exit(0);
+            }
             "--duration" => {
                 let raw = value(&mut i)?;
                 let v = raw
@@ -92,7 +125,10 @@ fn parse_args() -> Result<(OrganismConfig, Duration), String> {
             "--no-perturb" => {
                 cfg.perturb_after = Duration::from_secs(3600);
             }
-            "--plain" | "--tui" => {}
+            "--plain" => {}
+            "--tui" => {
+                want_tui = true;
+            }
             other => return Err(format!("flag desconhecida: {other}")),
         }
         i += 1;
@@ -100,28 +136,47 @@ fn parse_args() -> Result<(OrganismConfig, Duration), String> {
     cfg.perturb_after = cfg
         .perturb_after
         .max(Duration::from_secs_f64(cfg.window as f64 / cfg.hz + 0.5));
-    Ok((cfg, duration))
+    Ok((cfg, duration, want_tui))
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut cfg, duration) = match parse_args() {
+    let (mut cfg, duration, want_tui) = match parse_args() {
         Ok(v) => v,
         Err(e) => {
             eprintln!("erro de uso: {e}");
+            eprintln!("dica: aether-organism --help");
             std::process::exit(2);
         }
     };
     cfg.decision_dim = 64;
 
-    println!("AETHER — organismo pós-token");
+    println!("AETHER — organismo pós-token v{}", env!("CARGO_PKG_VERSION"));
     println!(
         "nós=3 canais={} janela={} passos={} hz={} ruído_sensor={} perturb_em={:?}",
         cfg.sensor_channels, cfg.window, cfg.steps, cfg.hz, cfg.sensor_noise, cfg.perturb_after
     );
 
     let mut organism = ClosedLoopOrganism::new(cfg)?;
+
+    #[cfg(feature = "tui")]
+    if want_tui {
+        let mut tui = aether_engine::simulation::panel::RatatuiPanel::new()?;
+        let run = organism.run(Some(duration), &mut tui);
+        let _ = tui.teardown();
+        run?;
+        println!("\nsimulação encerrada.");
+        return Ok(());
+    }
+
+    if want_tui {
+        eprintln!(
+            "aviso: --tui pediu Ratatui, mas o binário foi compilado sem --features tui; usando --plain.\n\
+             rebuild: cargo build --release --bin aether-organism --features tui"
+        );
+    }
     let mut plain = aether_engine::simulation::panel::PlainPanel::new();
     organism.run(Some(duration), &mut plain)?;
+    let _ = plain.teardown();
     println!("\nsimulação encerrada.");
     Ok(())
 }

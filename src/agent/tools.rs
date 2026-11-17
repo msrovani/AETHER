@@ -6,7 +6,7 @@
 use super::experts::{make_logic, make_memory, make_solver, make_transplant, Expert};
 use super::tool::{
     outcome_from_expert, Cost, Effect, Goal, GoalKind, Risk, Tool, ToolContext, ToolError,
-    ToolOutcome, ToolSchema, WorldState,
+    ToolOutcome, ToolSchema, WorldState, AUTHORITY_QUARANTINE,
 };
 use super::{Claim, ExpertId, Task};
 use crate::agent::AgentConfig;
@@ -365,10 +365,12 @@ impl Tool for MemoryWriteTool {
                 )));
             }
         }
+        // Autoridade: nunca promove sozinho. Fato novo entra em quarentena
+        // (proveniência `Inferred`); promoção exige corroboração/HITL fora daqui.
         let authority = current
             .as_ref()
-            .map(|snapshot| snapshot.authority.max(128))
-            .unwrap_or(128);
+            .map(|snapshot| snapshot.authority)
+            .unwrap_or(AUTHORITY_QUARANTINE);
         // Watermark ANTES da escrita: o rewind volta o outbox a este ponto.
         let outbox_len = backend.outbox_len();
         let prev = backend

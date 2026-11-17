@@ -15,6 +15,8 @@ pub struct Candidate {
     pub cost: Cost,
     /// Risco.
     pub risk: Risk,
+    /// Tool de escalação (`ask.human`): nunca compete com tools executáveis.
+    pub escalation: bool,
 }
 
 /// Registro de ferramentas.
@@ -110,6 +112,7 @@ impl ToolRegistry {
                     affordance,
                     cost: tool.cost(),
                     risk: tool.risk(),
+                    escalation: tool.escalation(),
                 })
             })
             .collect()

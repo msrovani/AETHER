@@ -58,7 +58,7 @@ use crate::json::Json;
 use super::tool::{Snapshot, UndoBackend};
 
 /// Autoridade de uma escrita vinda da borda (quarentena, sem HITL).
-pub const AUTHORITY_QUARANTINE: u8 = 128;
+pub const AUTHORITY_QUARANTINE: u8 = 96;
 
 /// A partir daqui o undo **não apaga**: grava tombstone e escala para HITL.
 pub const AUTHORITY_HITL: u8 = 200;
@@ -94,8 +94,8 @@ struct State {
     marks: BTreeMap<u64, usize>,
     /// Token que libera operações em autoridade `255`.
     token: Option<String>,
-    /// Linhas do diário já aplicadas (sync incremental entre processos).
-    applied_lines: usize,
+    /// Bytes do diário já aplicados (só até a última linha completa).
+    applied_bytes: usize,
 }
 
 /// Backend de undo durável local (JSONL append-only + `BTreeMap`).
@@ -283,15 +283,22 @@ impl SgdbUndoBackend {
     }
 
     /// Aplica incrementalmente o que outro processo anexou ao diário.
+    ///
+    /// Só considera **linhas completas** (até o último `\n`): uma linha que
+    /// outro processo ainda está escrevendo não é marcada como aplicada.
     fn sync(&self, state: &mut State) {
-        let Ok(text) = std::fs::read_to_string(&self.path) else {
+        let Ok(bytes) = std::fs::read(&self.path) else {
             return;
         };
-        let total = text.lines().count();
-        if total <= state.applied_lines {
+        let Some(last) = bytes.iter().rposition(|byte| *byte == b'\n') else {
+            return;
+        };
+        let complete = &bytes[..=last];
+        if complete.len() <= state.applied_bytes {
             return;
         }
-        for line in text.lines().skip(state.applied_lines) {
+        let tail = String::from_utf8_lossy(&complete[state.applied_bytes..]);
+        for line in tail.lines() {
             let line = line.trim();
             if line.is_empty() {
                 continue;
@@ -300,7 +307,7 @@ impl SgdbUndoBackend {
                 apply_line(&value, state);
             }
         }
-        state.applied_lines = total;
+        state.applied_bytes = complete.len();
     }
 
     /// Núcleo do `write`: decide o próximo snapshot sob o mesmo lock.
@@ -341,7 +348,6 @@ impl SgdbUndoBackend {
         ]);
         // Intenção antes da mutação: um crash aqui deixa o diário coerente.
         self.append_line(&line)?;
-        state.applied_lines += 1;
         state.records.insert(key.to_string(), next.clone());
         if prev.is_none() {
             state
@@ -382,7 +388,6 @@ impl SgdbUndoBackend {
             ("prev", record_to_json(&record)),
         ]);
         self.append_line(&line)?;
-        state.applied_lines += 1;
         state.records.insert(key.to_string(), record.clone());
         state.last_write.insert(key.to_string(), record.snapshot);
         Ok(())
@@ -422,7 +427,6 @@ impl UndoBackend for SgdbUndoBackend {
                     ),
                 ]);
                 self.append_line(&line)?;
-                state.applied_lines += 1;
                 if let Some(record) = state.records.get_mut(key) {
                     record.tombstone = true;
                 }
@@ -445,7 +449,6 @@ impl UndoBackend for SgdbUndoBackend {
             ("expected", record_to_json(&current)),
         ]);
         self.append_line(&line)?;
-        state.applied_lines += 1;
         state.records.remove(key);
         state.insert_marks.remove(key);
         state.last_write.remove(key);
@@ -456,8 +459,25 @@ impl UndoBackend for SgdbUndoBackend {
         self.restore_inner(key, prev, None)
     }
 
+    fn stage_begin(&self, txn: u64, keys: &[String], _outbox_len: usize) -> Result<(), String> {
+        // Backend por transação: a marca é o tamanho corrente de `staged[txn]`.
+        // Um `outbox` global (mock) usa o valor recebido; aqui ele é redundante.
+        let mut state = self.lock_synced();
+        let current = state.staged.get(&txn).map(Vec::len).unwrap_or(0);
+        state.marks.insert(txn, current);
+        state
+            .staged
+            .entry(txn)
+            .or_default()
+            .extend(keys.iter().cloned());
+        Ok(())
+    }
+
     fn stage_rewind(&self, txn: u64, keys: &[String]) -> Result<(), String> {
         let mut state = self.lock_synced();
+        if !state.staged.contains_key(&txn) {
+            return Err(format!("stage sem marca para txn `{txn}`"));
+        }
         let len = state.staged.get(&txn).map(Vec::len).unwrap_or(0);
         // Marca explícita (`stage_mark`) ou inferida pelo tamanho do lote.
         let mark = state
@@ -619,7 +639,13 @@ fn load_into(path: &Path, state: &mut State) -> io::Result<usize> {
             applied += 1;
         }
     }
-    state.applied_lines = text.lines().count();
+    let complete = text
+        .as_bytes()
+        .iter()
+        .rposition(|byte| *byte == b'\n')
+        .map(|last| last + 1)
+        .unwrap_or(0);
+    state.applied_bytes = complete;
     Ok(applied)
 }
 

@@ -1,7 +1,21 @@
 # AETHER — motor cognitivo pós-token em Rust
 
+Versão crate: **0.0.157** (ver `Cargo.toml`). Suite recente: ~318 testes na auditoria cognitiva (`docs/COGNITIVE_AUDIT_RUN_2026-11-17.md`); `cargo test --release` reporta dezenas de alvos.
+
 Protótipo experimental de computação baseada em física contínua: **zero tokens,
 zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
+
+## Primeiros 5 minutos (Windows)
+
+```powershell
+cd C:\Users\msrov\Documents\AETHER
+.\scripts\run-demo.ps1                  # organism ~15 s (ANSI)
+# opcional Ratatui:
+# .\scripts\cargo.ps1 run --release --bin aether-organism --features tui -- --duration 15s --tui
+.\scripts\cargo.ps1 run --release --bin aether-dashboard --features dashboard
+```
+
+Guia do hub: [docs/USER_GUIDE.md](docs/USER_GUIDE.md) · doação/ETL: [docs/DOACAO_PLAYBOOK.md](docs/DOACAO_PLAYBOOK.md).
 
 * **ARCHITECTURE.md** — Fase 1 (Módulos 1–4): organismo reflexivo.
 * **ARCHITECTURE_PHASE2.md** — Fase 2 (Módulos 5–8): memória, imaginação,

@@ -1,41 +1,41 @@
-//! G3 do `docs/GPU_PLAN.md` — **sweep de instâncias Ising em lote** na GPU.
+//! G3 do `docs/GPU_PLAN.md` â€” **sweep de instÃ¢ncias Ising em lote** na GPU.
 //!
-//! O censo (`examples/gpu_census.rs`) mediu **123 ms** para 10⁴ instâncias de
-//! `n=20` no solver auditado (0,38 GFLOP). Cada instância é independente, então
-//! o paralelismo natural é **uma thread por instância** — sem `atomic`, sem
-//! comunicação entre threads.
+//! O censo (`examples/gpu_census.rs`) mediu **123 ms** para 10â´ instÃ¢ncias de
+//! `n=20` no solver auditado (0,38 GFLOP). Cada instÃ¢ncia Ã© independente, entÃ£o
+//! o paralelismo natural Ã© **uma thread por instÃ¢ncia** â€” sem `atomic`, sem
+//! comunicaÃ§Ã£o entre threads.
 //!
 //! O kernel replica o contrato do `ThermodynamicIsingSolver` em `f32`:
-//! integração simplética (Euler), rampa linear `a(t)`, paredes inelásticas,
-//! elitismo sobre a trajetória, **polimento guloso** (`descend`) e **fuga
-//! determinística** com flip único — os mesmos passos do caminho auditado:
+//! integraÃ§Ã£o simplÃ©tica (Euler), rampa linear `a(t)`, paredes inelÃ¡sticas,
+//! elitismo sobre a trajetÃ³ria, **polimento guloso** (`descend`) e **fuga
+//! determinÃ­stica** com flip Ãºnico â€” os mesmos passos do caminho auditado:
 //!
 //! ```text
-//! hx_i   = Σ_j J_ij·x_j + h_i
-//! y_i   += dt·(−(a0−a)·x_i + c0·hx_i)
-//! x_i    = clamp(x_i + dt·a0·y_i, −1, 1)      (y_i = 0 na parede)
+//! hx_i   = Î£_j J_ijÂ·x_j + h_i
+//! y_i   += dtÂ·(âˆ’(a0âˆ’a)Â·x_i + c0Â·hx_i)
+//! x_i    = clamp(x_i + dtÂ·a0Â·y_i, âˆ’1, 1)      (y_i = 0 na parede)
 //! s_i    = sign(x_i)  (sign(0) = +1)
-//! E(s)   = −½·sᵀJs − hᵀs ; guarda o melhor
-//! descend: flip do menor ΔH_i = 2·s_i·(g_i + h_i), até não reduzir
-//! fuga:    se E(polido) ≥ E(s_0), testa flip único em cada i e fica com o melhor
+//! E(s)   = âˆ’Â½Â·sáµ€Js âˆ’ háµ€s ; guarda o melhor
+//! descend: flip do menor Î”H_i = 2Â·s_iÂ·(g_i + h_i), atÃ© nÃ£o reduzir
+//! fuga:    se E(polido) â‰¥ E(s_0), testa flip Ãºnico em cada i e fica com o melhor
 //! ```
 //!
-//! # Sessão, não chamada avulsa
+//! # SessÃ£o, nÃ£o chamada avulsa
 //!
-//! Compilar o shader custa **250–550 ms** (medido): uma chamada avulsa gasta
-//! mais nisso do que no lote inteiro. Por isso o caminho de produção é
-//! [`IsingSweep`], que guarda device, pipeline e buffers entre lotes — o custo
-//! por lote passa a ser cópia + dispatch + leitura.
+//! Compilar o shader custa **250â€“550 ms** (medido): uma chamada avulsa gasta
+//! mais nisso do que no lote inteiro. Por isso o caminho de produÃ§Ã£o Ã©
+//! [`IsingSweep`], que guarda device, pipeline e buffers entre lotes â€” o custo
+//! por lote passa a ser cÃ³pia + dispatch + leitura.
 //!
 //! # Gate (`tests/gpu_ising_sweep_gate.rs`)
 //!
-//! `f32` no GPU e `f64` na CPU ⇒ a trajetória **não** é bit-idêntica. O gate é
-//! **estatístico**, como o plano exige: com `J`/`h` inteiros (energias exatas
-//! em `f32`), `|ΔE| ≤ 1e-3` por instância em ≥95% dos casos, teste KS entre as
-//! distribuições de ótimos e razão ≥2× medida.
+//! `f32` no GPU e `f64` na CPU â‡’ a trajetÃ³ria **nÃ£o** Ã© bit-idÃªntica. O gate Ã©
+//! **estatÃ­stico**, como o plano exige: com `J`/`h` inteiros (energias exatas
+//! em `f32`), `|Î”E| â‰¤ 1e-3` por instÃ¢ncia em â‰¥95% dos casos, teste KS entre as
+//! distribuiÃ§Ãµes de Ã³timos e razÃ£o â‰¥2Ã— medida.
 //!
-//! **O `digest` do E2 e o `bsb_compacto_igual_ao_solver_auditado` não valem no
-//! caminho GPU** — bit-a-bit morre por construção (redução em `f32`).
+//! **O `digest` do E2 e o `bsb_compacto_igual_ao_solver_auditado` nÃ£o valem no
+//! caminho GPU** â€” bit-a-bit morre por construÃ§Ã£o (reduÃ§Ã£o em `f32`).
 
 use super::GpuOff;
 
@@ -45,7 +45,7 @@ pub const MAX_N: usize = 32;
 /// Erros do sweep (nunca fatais: o chamador roda em CPU).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IsingGpuError {
-    /// Backend indisponível.
+    /// Backend indisponÃ­vel.
     Off(GpuOff),
     /// `n > MAX_N`, `k == 0`, `steps == 0` ou buffers curtos.
     InvalidShape,
@@ -58,241 +58,18 @@ impl From<GpuOff> for IsingGpuError {
 }
 
 #[cfg(feature = "gpu")]
-const SHADER: &str = r#"
-struct P {
-    n: u32,
-    steps: u32,
-    k: u32,
-    pad: u32,
-};
-
-@group(0) @binding(0) var<uniform> p: P;
-@group(0) @binding(1) var<storage, read> jm: array<f32>;
-@group(0) @binding(2) var<storage, read> hm: array<f32>;
-@group(0) @binding(3) var<storage, read> init: array<f32>;
-@group(0) @binding(4) var<storage, read> c0m: array<f32>;
-@group(0) @binding(5) var<storage, read_write> oute: array<f32>;
-@group(0) @binding(6) var<storage, read_write> outs: array<i32>;
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    let inst = gid.x;
-    if (inst >= p.k) {
-        return;
-    }
-    let n = p.n;
-
-    var x: array<f32, 32>;
-    var y: array<f32, 32>;
-    var hx: array<f32, 32>;
-    var g: array<f32, 32>;
-    var s: array<i32, 32>;
-    var best: array<i32, 32>;
-    var work: array<i32, 32>;
-
-    let jbase = inst * n * n;
-    let hbase = inst * n;
-    let ibase = inst * n * 2u;
-
-    for (var i: u32 = 0u; i < n; i = i + 1u) {
-        x[i] = init[ibase + 2u * i];
-        y[i] = init[ibase + 2u * i + 1u];
-        s[i] = select(-1, 1, x[i] >= 0.0);
-        best[i] = s[i];
-    }
-
-    // E(s_0) - referencia da fuga deterministica.
-    var e0: f32 = 0.0;
-    for (var i: u32 = 0u; i < n; i = i + 1u) {
-        var acc: f32 = 0.0;
-        for (var j: u32 = 0u; j < n; j = j + 1u) {
-            acc = acc + jm[jbase + i * n + j] * f32(s[j]);
-        }
-        e0 = e0 - 0.5 * f32(s[i]) * acc;
-    }
-    for (var i: u32 = 0u; i < n; i = i + 1u) {
-        e0 = e0 - hm[hbase + i] * f32(s[i]);
-    }
-    var e_best: f32 = e0;
-
-    let a0: f32 = 1.0;
-    let dt: f32 = 0.05;
-    let c0 = c0m[inst];
-    let steps_f = f32(p.steps);
-
-    for (var k: u32 = 0u; k < p.steps; k = k + 1u) {
-        let a = a0 * f32(k + 1u) / steps_f;
-        let drift = a0 - a;
-        for (var i: u32 = 0u; i < n; i = i + 1u) {
-            var acc: f32 = 0.0;
-            for (var j: u32 = 0u; j < n; j = j + 1u) {
-                acc = acc + jm[jbase + i * n + j] * x[j];
-            }
-            hx[i] = acc + hm[hbase + i];
-        }
-        for (var i: u32 = 0u; i < n; i = i + 1u) {
-            y[i] = y[i] + dt * (-drift * x[i] + c0 * hx[i]);
-            let xn = x[i] + dt * a0 * y[i];
-            if (xn > 1.0) {
-                x[i] = 1.0;
-                y[i] = 0.0;
-            } else if (xn < -1.0) {
-                x[i] = -1.0;
-                y[i] = 0.0;
-            } else {
-                x[i] = xn;
-            }
-        }
-        for (var i: u32 = 0u; i < n; i = i + 1u) {
-            s[i] = select(-1, 1, x[i] >= 0.0);
-        }
-        var e: f32 = 0.0;
-        for (var i: u32 = 0u; i < n; i = i + 1u) {
-            var acc: f32 = 0.0;
-            for (var j: u32 = 0u; j < n; j = j + 1u) {
-                acc = acc + jm[jbase + i * n + j] * f32(s[j]);
-            }
-            e = e - 0.5 * f32(s[i]) * acc;
-        }
-        for (var i: u32 = 0u; i < n; i = i + 1u) {
-            e = e - hm[hbase + i] * f32(s[i]);
-        }
-        if (e < e_best) {
-            e_best = e;
-            for (var i: u32 = 0u; i < n; i = i + 1u) {
-                best[i] = s[i];
-            }
-        }
-    }
-
-    // ---------- polimento: descend(best) ----------
-    for (var i: u32 = 0u; i < n; i = i + 1u) {
-        work[i] = best[i];
-    }
-    for (var i: u32 = 0u; i < n; i = i + 1u) {
-        var acc: f32 = 0.0;
-        for (var j: u32 = 0u; j < n; j = j + 1u) {
-            acc = acc + jm[jbase + i * n + j] * f32(work[j]);
-        }
-        g[i] = acc;
-    }
-    for (var step: u32 = 0u; step < 8u * n; step = step + 1u) {
-        var pick: i32 = -1;
-        var pick_delta: f32 = -1e-12;
-        for (var i: u32 = 0u; i < n; i = i + 1u) {
-            let delta = 2.0 * f32(work[i]) * (g[i] + hm[hbase + i]);
-            if (delta < pick_delta) {
-                pick_delta = delta;
-                pick = i32(i);
-            }
-        }
-        if (pick < 0) {
-            break;
-        }
-        let pi = u32(pick);
-        let delta_s = -2.0 * f32(work[pi]);
-        work[pi] = -work[pi];
-        for (var k: u32 = 0u; k < n; k = k + 1u) {
-            g[k] = g[k] + jm[jbase + k * n + pi] * delta_s;
-        }
-    }
-    var e_work: f32 = 0.0;
-    for (var i: u32 = 0u; i < n; i = i + 1u) {
-        var acc: f32 = 0.0;
-        for (var j: u32 = 0u; j < n; j = j + 1u) {
-            acc = acc + jm[jbase + i * n + j] * f32(work[j]);
-        }
-        e_work = e_work - 0.5 * f32(work[i]) * acc;
-    }
-    for (var i: u32 = 0u; i < n; i = i + 1u) {
-        e_work = e_work - hm[hbase + i] * f32(work[i]);
-    }
-
-    // ---------- fuga deterministica (so se o polimento nao bateu E(s_0)) ----------
-    if (e_work >= e0) {
-        for (var i: u32 = 0u; i < n; i = i + 1u) {
-            best[i] = work[i];
-        }
-        var best_e = e_work;
-        for (var i: u32 = 0u; i < n; i = i + 1u) {
-            for (var j: u32 = 0u; j < n; j = j + 1u) {
-                s[j] = best[j];
-            }
-            s[i] = -s[i];
-            for (var j: u32 = 0u; j < n; j = j + 1u) {
-                var acc: f32 = 0.0;
-                for (var k: u32 = 0u; k < n; k = k + 1u) {
-                    acc = acc + jm[jbase + j * n + k] * f32(s[k]);
-                }
-                g[j] = acc;
-            }
-            for (var step: u32 = 0u; step < 8u * n; step = step + 1u) {
-                var pick: i32 = -1;
-                var pick_delta: f32 = -1e-12;
-                for (var j: u32 = 0u; j < n; j = j + 1u) {
-                    let delta = 2.0 * f32(s[j]) * (g[j] + hm[hbase + j]);
-                    if (delta < pick_delta) {
-                        pick_delta = delta;
-                        pick = i32(j);
-                    }
-                }
-                if (pick < 0) {
-                    break;
-                }
-                let pj = u32(pick);
-                let delta_s = -2.0 * f32(s[pj]);
-                s[pj] = -s[pj];
-                for (var k: u32 = 0u; k < n; k = k + 1u) {
-                    g[k] = g[k] + jm[jbase + k * n + pj] * delta_s;
-                }
-            }
-            var e_try: f32 = 0.0;
-            for (var j: u32 = 0u; j < n; j = j + 1u) {
-                var acc: f32 = 0.0;
-                for (var k: u32 = 0u; k < n; k = k + 1u) {
-                    acc = acc + jm[jbase + j * n + k] * f32(s[k]);
-                }
-                e_try = e_try - 0.5 * f32(s[j]) * acc;
-            }
-            for (var j: u32 = 0u; j < n; j = j + 1u) {
-                e_try = e_try - hm[hbase + j] * f32(s[j]);
-            }
-            if (e_try < best_e) {
-                best_e = e_try;
-                for (var j: u32 = 0u; j < n; j = j + 1u) {
-                    work[j] = s[j];
-                }
-            }
-        }
-    }
-
-    // ---------- saida ----------
-    var e_out: f32 = 0.0;
-    for (var i: u32 = 0u; i < n; i = i + 1u) {
-        var acc: f32 = 0.0;
-        for (var j: u32 = 0u; j < n; j = j + 1u) {
-            acc = acc + jm[jbase + i * n + j] * f32(work[j]);
-        }
-        e_out = e_out - 0.5 * f32(work[i]) * acc;
-    }
-    for (var i: u32 = 0u; i < n; i = i + 1u) {
-        e_out = e_out - hm[hbase + i] * f32(work[i]);
-    }
-    oute[inst] = e_out;
-    for (var i: u32 = 0u; i < n; i = i + 1u) {
-        outs[inst * n + i] = work[i];
-    }
-}
-"#;
+const SHADER: &str = include_str!("ising.wgsl");
 
 #[cfg(feature = "gpu")]
 mod sess {
     use super::{IsingGpuError, MAX_N, SHADER};
     use crate::core::gpu;
 
-    const STORAGE_IN: wgpu::BufferUsages = wgpu::BufferUsages::STORAGE;
-    const STORAGE_RW: wgpu::BufferUsages =
-        wgpu::BufferUsages::STORAGE.union(wgpu::BufferUsages::COPY_SRC);
+    const STORAGE_IN: wgpu::BufferUsages =
+        wgpu::BufferUsages::STORAGE.union(wgpu::BufferUsages::COPY_DST);
+    const STORAGE_RW: wgpu::BufferUsages = wgpu::BufferUsages::STORAGE
+        .union(wgpu::BufferUsages::COPY_DST)
+        .union(wgpu::BufferUsages::COPY_SRC);
     const STAGING: wgpu::BufferUsages =
         wgpu::BufferUsages::MAP_READ.union(wgpu::BufferUsages::COPY_DST);
 
@@ -307,8 +84,8 @@ mod sess {
 
     /// Estado persistente do sweep (device, pipeline e buffers por capacidade).
     ///
-    /// Criar o pipeline custa **250–550 ms**; reusar esta sessão entre lotes é a
-    /// diferença entre "0,2×" e o ganho real medido.
+    /// Criar o pipeline custa **250â€“550 ms**; reusar esta sessÃ£o entre lotes Ã© a
+    /// diferenÃ§a entre "0,2Ã—" e o ganho real medido.
     pub struct Session {
         device: wgpu::Device,
         queue: wgpu::Queue,
@@ -330,7 +107,7 @@ mod sess {
     }
 
     impl Session {
-        /// Abre a sessão (paga a compilação do shader uma vez).
+        /// Abre a sessÃ£o (paga a compilaÃ§Ã£o do shader uma vez).
         pub fn new(force_off: bool) -> Result<Self, IsingGpuError> {
             let (device, queue, adapter) = gpu::device_with(force_off)?;
             let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -412,7 +189,7 @@ mod sess {
             &self.adapter
         }
 
-        /// (Re)dimensiona os buffers para `k` instâncias de `n` sítios.
+        /// (Re)dimensiona os buffers para `k` instÃ¢ncias de `n` sÃ­tios.
         fn allocate(&mut self, k: usize, n: usize) -> Result<(), IsingGpuError> {
             let cap_k = k.next_power_of_two().max(64);
             if self.cap_k >= k && self.cap_n == n {
@@ -478,7 +255,7 @@ mod sess {
             Ok(())
         }
 
-        /// Roda `k` instâncias (`n ≤ MAX_N`) e devolve `(energias, estados)`.
+        /// Roda `k` instÃ¢ncias (`n â‰¤ MAX_N`) e devolve `(energias, estados)`.
         #[allow(clippy::too_many_arguments)]
         pub fn sweep(
             &mut self,
@@ -527,8 +304,12 @@ mod sess {
                     timestamp_writes: None,
                 });
                 pass.set_pipeline(&self.pipeline);
-                pass.set_bind_group(0, self.bind.as_ref().ok_or(IsingGpuError::InvalidShape)?, &[]);
-                pass.dispatch_workgroups((k as u32).div_ceil(64), 1, 1);
+                pass.set_bind_group(
+                    0,
+                    self.bind.as_ref().ok_or(IsingGpuError::InvalidShape)?,
+                    &[],
+                );
+                pass.dispatch_workgroups(k as u32, 1, 1);
             }
             enc.copy_buffer_to_buffer(&self.e, 0, &self.e_stage, 0, (k * 4) as u64);
             enc.copy_buffer_to_buffer(&self.s, 0, &self.s_stage, 0, (k * n * 4) as u64);
@@ -558,17 +339,17 @@ mod sess {
     }
 }
 
-/// Sessão de sweep Ising na GPU — **o caminho recomendado para lotes**.
+/// SessÃ£o de sweep Ising na GPU â€” **o caminho recomendado para lotes**.
 ///
 /// Compila o kernel uma vez e reusa buffers; cada [`IsingSweep::sweep_into`]
-/// paga só cópia + dispatch + leitura.
+/// paga sÃ³ cÃ³pia + dispatch + leitura.
 pub struct IsingSweep {
     #[cfg(feature = "gpu")]
     inner: sess::Session,
 }
 
 impl IsingSweep {
-    /// Abre a sessão (paga a compilação do shader uma vez).
+    /// Abre a sessÃ£o (paga a compilaÃ§Ã£o do shader uma vez).
     pub fn new() -> Result<Self, IsingGpuError> {
         Self::with_force_off(false)
     }
@@ -600,15 +381,15 @@ impl IsingSweep {
         }
     }
 
-    /// Roda `k` instâncias (`n ≤ MAX_N`) e devolve `(energias, estados)`.
+    /// Roda `k` instÃ¢ncias (`n â‰¤ MAX_N`) e devolve `(energias, estados)`.
     ///
-    /// * `kmat` — `[k, n, n]` acoplamentos (simétricos, diagonal zero).
-    /// * `hmat` — `[k, n]` campo externo.
-    /// * `init` — `[k, n, 2]` pares `(x_0, y_0)` por sítio.
-    /// * `c0` — `[k]` ganho `0.5 / (√n · std(J))` (o mesmo do solver).
+    /// * `kmat` â€” `[k, n, n]` acoplamentos (simÃ©tricos, diagonal zero).
+    /// * `hmat` â€” `[k, n]` campo externo.
+    /// * `init` â€” `[k, n, 2]` pares `(x_0, y_0)` por sÃ­tio.
+    /// * `c0` â€” `[k]` ganho `0.5 / (âˆšn Â· std(J))` (o mesmo do solver).
     ///
-    /// Devolve a energia `H(s)` do estado emergente (pós-polimento e fuga), com
-    /// a mesma fórmula do caminho auditado.
+    /// Devolve a energia `H(s)` do estado emergente (pÃ³s-polimento e fuga), com
+    /// a mesma fÃ³rmula do caminho auditado.
     #[allow(clippy::too_many_arguments)]
     pub fn sweep_into(
         &mut self,
@@ -643,7 +424,7 @@ impl std::fmt::Debug for IsingSweep {
     }
 }
 
-/// Sweep avulso (cria a sessão a cada chamada: paga a compilação do shader).
+/// Sweep avulso (cria a sessÃ£o a cada chamada: paga a compilaÃ§Ã£o do shader).
 ///
 /// Para lotes repetidos use [`IsingSweep`].
 #[cfg(feature = "gpu")]
@@ -662,7 +443,7 @@ pub fn sweep_into(
     IsingSweep::new()?.sweep_into(kmat, hmat, init, c0, n, k, steps, out_energy, out_states)
 }
 
-/// Sweep avulso com `force_off` (teste determinístico do fallback).
+/// Sweep avulso com `force_off` (teste determinÃ­stico do fallback).
 #[cfg(feature = "gpu")]
 #[allow(clippy::too_many_arguments)]
 pub fn sweep_into_with(
@@ -677,20 +458,11 @@ pub fn sweep_into_with(
     out_energy: &mut [f32],
     out_states: &mut [i32],
 ) -> Result<(), IsingGpuError> {
-    IsingSweep::with_force_off(force_off)?.sweep_into(
-        kmat,
-        hmat,
-        init,
-        c0,
-        n,
-        k,
-        steps,
-        out_energy,
-        out_states,
-    )
+    IsingSweep::with_force_off(force_off)?
+        .sweep_into(kmat, hmat, init, c0, n, k, steps, out_energy, out_states)
 }
 
-/// Sem a feature: recusa explícita (o chamador fica na CPU).
+/// Sem a feature: recusa explÃ­cita (o chamador fica na CPU).
 #[cfg(not(feature = "gpu"))]
 #[allow(clippy::too_many_arguments)]
 pub fn sweep_into(
@@ -707,7 +479,7 @@ pub fn sweep_into(
     Err(IsingGpuError::Off(GpuOff::NoFeature))
 }
 
-/// Sem a feature: recusa explícita (variante com `force_off`).
+/// Sem a feature: recusa explÃ­cita (variante com `force_off`).
 #[cfg(not(feature = "gpu"))]
 #[allow(clippy::too_many_arguments)]
 pub fn sweep_into_with(

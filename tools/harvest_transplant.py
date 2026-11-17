@@ -2,11 +2,14 @@
 """ETL offline INTAKE_TRANSPLANT: texto → whitening → JL → bank.bin + idx + manifest.
 
 Dry-run (--dry-run): embeddings sintéticos determinísticos (sem HF/rede).
-Doador documentado: Qwen/Qwen3-Embedding-0.6B (Apache-2.0).
+--jl-only: lê emb/bank.f32 (+ facts) já gerados por sidecar HF; só projeta JL.
+Doador documentado: Qwen/Qwen3-Embedding-0.6B (Apache-2.0, MRL→768).
 
 Uso:
   python tools/harvest_transplant.py --limit 200 --dry-run --out data
   python tools/harvest_transplant.py --limit 200 --dry-run --out data --no-whiten
+  python tools/harvest_transplant.py --jl-only --out data --seed 0xDEADBEEF --revision <hf>
+  python tools/donor_map_embed.py --out data  # sidecar HF → emb/bank.f32 (opcional)
 """
 from __future__ import annotations
 
@@ -219,6 +222,31 @@ def write_embeds(path: Path, X: list[list[float]]) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def read_embeds(path: Path) -> tuple[int, int, list[list[float]], str]:
+    raw = path.read_bytes()
+    if len(raw) < 8:
+        raise ValueError(f"bank.f32 curto: {path}")
+    n, d = struct.unpack_from("<II", raw, 0)
+    need = 8 + n * d * 4
+    if len(raw) != need:
+        raise ValueError(f"bank.f32 size mismatch: got {len(raw)} need {need}")
+    X: list[list[float]] = []
+    off = 8
+    for _ in range(n):
+        row = list(struct.unpack_from(f"<{d}f", raw, off))
+        X.append(row)
+        off += d * 4
+    return n, d, X, hashlib.sha256(raw).hexdigest()
+
+
+def load_facts_jsonl(path: Path) -> list[dict]:
+    rows: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            rows.append(json.loads(line))
+    return rows
+
+
 def write_whitening(path: Path, mu: list[float], W: list[list[float]]) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     d = len(mu)
@@ -281,27 +309,165 @@ def detect_conflicts(facts: list[dict]) -> tuple[int, int]:
     return detected, planted
 
 
+def pack_round(
+    out: Path,
+    donor: str,
+    revision: str,
+    dim_in: int,
+    seed: int,
+    labels: list[str],
+    facts: list[dict],
+    X: list[list[float]],
+    emb_sha: str,
+    whitened: bool,
+    whiten_hash: str | None,
+    claim: str = "MSG 0229 INTAKE_TRANSPLANT",
+) -> dict:
+    P = build_P(dim_in, DIM_BITS, seed)
+    bits_rows: list[list[int]] = []
+    keys: list[int] = []
+    kinds: list[int] = []
+    langs: list[int] = []
+    for lab, x, f in zip(labels, X, facts):
+        bits_rows.append(project_bits(P, x, DIM_BITS, dim_in))
+        keys.append(key_u128(lab))
+        kinds.append(int(f.get("kind", 1)))
+        langs.append(1)
+
+    bank_sha, count = write_bank(
+        out, bits_rows, keys, kinds, langs, dim_in, seed, whitened
+    )
+    detected, planted = detect_conflicts(facts)
+    by_rel: dict[str, list] = {}
+    for row in facts:
+        by_rel.setdefault(row["relation"], []).append(row)
+    shard_meta = []
+    for rel, rs in by_rel.items():
+        for i in range(0, len(rs), 48):
+            shard_meta.append(
+                {"relation": rel, "offset": i, "count": min(48, len(rs) - i)}
+            )
+    ledger = {
+        "atoms": [{"key": hex(k), "label": lab} for k, lab in zip(keys, labels)],
+        "facts": facts,
+        "shards": shard_meta,
+    }
+    (out / "sgdb_mock_ledger.json").write_text(
+        json.dumps(ledger, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    from datetime import date
+
+    manifest = {
+        "donor": donor,
+        "revision": revision,
+        "dim_in": dim_in,
+        "dim_hv": DIM_BITS,
+        "words": WORDS,
+        "seed": seed,
+        "count": count,
+        "labels": len(labels),
+        "facts": len(facts),
+        "whitened": whitened,
+        "sha256_whitening": whiten_hash,
+        "sha256_embeds": emb_sha,
+        "sha256_bank": bank_sha,
+        "shards": shard_meta,
+        "conflicts_planted": planted,
+        "conflicts_detected": detected,
+        "authority_max_transplant": 240,
+        "created": date.today().isoformat(),
+        "claim": claim,
+    }
+    (out / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return {
+        "ok": True,
+        "count": count,
+        "labels": len(labels),
+        "sha256_bank": bank_sha,
+        "whitened": whitened,
+        "conflicts_detected": detected,
+        "conflicts_planted": planted,
+        "revision": revision,
+        "donor": donor,
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=200)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--jl-only",
+        action="store_true",
+        help="Só JL+sign a partir de emb/bank.f32 + facts.jsonl (sidecar HF).",
+    )
     ap.add_argument("--out", type=Path, default=Path("data"))
-    ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    ap.add_argument(
+        "--seed",
+        type=lambda s: int(s, 0),
+        default=DEFAULT_SEED,
+        help="u64 (aceita 0x…)",
+    )
     ap.add_argument("--dim-in", type=int, default=DIM_IN)
     ap.add_argument("--no-whiten", action="store_true")
     ap.add_argument("--donor", default="Qwen/Qwen3-Embedding-0.6B")
+    ap.add_argument("--revision", default="", help="revision HF / git (manifest)")
     args = ap.parse_args()
 
+    if args.jl_only:
+        emb_path = args.out / "emb" / "bank.f32"
+        facts_path = args.out / "facts.jsonl"
+        if not emb_path.exists():
+            raise SystemExit(f"--jl-only: falta {emb_path} (rode donor_map_embed.py)")
+        if not facts_path.exists():
+            raise SystemExit(f"--jl-only: falta {facts_path}")
+        n, d, X, emb_sha = read_embeds(emb_path)
+        if d != args.dim_in:
+            raise SystemExit(f"--jl-only: dim emb={d} != --dim-in {args.dim_in}")
+        facts = load_facts_jsonl(facts_path)
+        labels = [
+            nfc(f"{f['subject']}|{f['relation']}|{f['object']}") for f in facts
+        ]
+        if len(labels) != n:
+            raise SystemExit(f"--jl-only: facts={len(labels)} != embeds n={n}")
+        whitened = False
+        whiten_hash = None
+        whiten_path = args.out / "emb" / "whitening.bin"
+        if whiten_path.exists() and not args.no_whiten:
+            # Já branqueado offline pelo sidecar: não reaplica.
+            whitened = True
+            whiten_hash = hashlib.sha256(whiten_path.read_bytes()).hexdigest()
+        rev = args.revision or "jl-only"
+        donor = args.donor if not args.donor.endswith("#dry-run-synthetic") else args.donor
+        summary = pack_round(
+            args.out,
+            donor=donor,
+            revision=rev,
+            dim_in=args.dim_in,
+            seed=args.seed,
+            labels=labels,
+            facts=facts,
+            X=X,
+            emb_sha=emb_sha,
+            whitened=whitened,
+            whiten_hash=whiten_hash,
+        )
+        print(json.dumps(summary, ensure_ascii=False))
+        return
+
     if not args.dry_run:
-        print("aviso: sem HF neste ambiente — forçando --dry-run")
+        print(
+            "aviso: embedder HF não embutido no harvest — use "
+            "tools/donor_map_embed.py + --jl-only, ou --dry-run. Forçando --dry-run."
+        )
         args.dry_run = True
 
     facts = synthetic_corpus(args.limit)
-    # Átomo = fato composto (s,r,o) — mesma lógica E3 para Spearman JL
     atom_labels = [
         nfc(f"{f['subject']}|{f['relation']}|{f['object']}") for f in facts
     ]
-    # dedup facts by label keep first
     seen: set[str] = set()
     uniq_facts: list[dict] = []
     uniq_labels: list[str] = []
@@ -314,7 +480,6 @@ def main() -> None:
     facts = uniq_facts
     labels = uniq_labels
     X = embed_synthetic(labels, args.dim_in, args.seed)
-    # Re-build as compositional: hash parts into base mix (already in embed_synthetic)
     whitened = not args.no_whiten
     whiten_hash = None
     if whitened:
@@ -324,86 +489,26 @@ def main() -> None:
     else:
         (args.out / "emb").mkdir(parents=True, exist_ok=True)
 
-    P = build_P(args.dim_in, DIM_BITS, args.seed)
-    bits_rows: list[list[int]] = []
-    keys: list[int] = []
-    kinds: list[int] = []
-    langs: list[int] = []
-    for lab, x, f in zip(labels, X, facts):
-        bits_rows.append(project_bits(P, x, DIM_BITS, args.dim_in))
-        keys.append(key_u128(lab))
-        kinds.append(int(f.get("kind", 1)))
-        langs.append(1)
-
     emb_sha = write_embeds(args.out / "emb" / "bank.f32", X)
-    bank_sha, count = write_bank(
-        args.out, bits_rows, keys, kinds, langs, args.dim_in, args.seed, whitened
-    )
-
     facts_path = args.out / "facts.jsonl"
     with facts_path.open("w", encoding="utf-8") as f:
         for row in facts:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-    detected, planted = detect_conflicts(facts)
-    by_rel: dict[str, list] = {}
-    for row in facts:
-        by_rel.setdefault(row["relation"], []).append(row)
-    shard_meta = []
-    for rel, rs in by_rel.items():
-        for i in range(0, len(rs), 48):
-            shard_meta.append(
-                {"relation": rel, "offset": i, "count": min(48, len(rs) - i)}
-            )
-
-    # Mock SGDB ledger for rebuild gate (byte-identical shard plan)
-    ledger = {
-        "atoms": [{"key": hex(k), "label": lab} for k, lab in zip(keys, labels)],
-        "facts": facts,
-        "shards": shard_meta,
-    }
-    (args.out / "sgdb_mock_ledger.json").write_text(
-        json.dumps(ledger, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    summary = pack_round(
+        args.out,
+        donor=f"{args.donor}#dry-run-synthetic",
+        revision=args.revision or "dry-run",
+        dim_in=args.dim_in,
+        seed=args.seed,
+        labels=labels,
+        facts=facts,
+        X=X,
+        emb_sha=emb_sha,
+        whitened=whitened,
+        whiten_hash=whiten_hash,
     )
-
-    manifest = {
-        "donor": f"{args.donor}#dry-run-synthetic" if args.dry_run else args.donor,
-        "revision": "dry-run",
-        "dim_in": args.dim_in,
-        "dim_hv": DIM_BITS,
-        "words": WORDS,
-        "seed": args.seed,
-        "count": count,
-        "labels": len(labels),
-        "facts": len(facts),
-        "whitened": whitened,
-        "sha256_whitening": whiten_hash,
-        "sha256_embeds": emb_sha,
-        "sha256_bank": bank_sha,
-        "shards": shard_meta,
-        "conflicts_planted": planted,
-        "conflicts_detected": detected,
-        "authority_max_transplant": 240,
-        "created": "2026-11-16",
-        "claim": "MSG 0229 INTAKE_TRANSPLANT",
-    }
-    (args.out / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    print(
-        json.dumps(
-            {
-                "ok": True,
-                "count": count,
-                "labels": len(labels),
-                "sha256_bank": bank_sha,
-                "whitened": whitened,
-                "conflicts_detected": detected,
-                "conflicts_planted": planted,
-            },
-            ensure_ascii=False,
-        )
-    )
+    print(json.dumps(summary, ensure_ascii=False))
 
 
 if __name__ == "__main__":

@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.158] - 2026-11-17
+
+### Changed
+
+- Ciclo automatico: 25 arquivo(s) (.:2, data:2, docs:6, scripts:1, src:9, tests:3, tools:2).
+- Gate: ok (133s).
+
+- `Cargo.lock`
+- `README.md`
+- `data/manifest.json`
+- `docs/API_CONTRACT.md`
+- `docs/DOACAO_PLAYBOOK.md`
+- `docs/GPU_PLAN.md`
+- `docs/HUB_DASHBOARD.md`
+- `docs/USER_DELIVERY_PLAN.md`
+- `docs/USER_GUIDE.md`
+- `src/agent/language.rs`
+- `src/agent/self_model.rs`
+- `src/api/mod.rs`
+
 ## [0.0.157] - 2026-11-17
 
 ### Changed

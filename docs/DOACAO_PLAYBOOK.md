@@ -184,17 +184,24 @@ Copy-Item -Recurse -Force "$ROUND\*" data\
 Copy-Item target/aether_transplant_hv.json "$ROUND/aether_transplant_hv.json"
 ```
 
-### 5.3 Comandos — rodada produção (com mapa real)
+### 5.3 Comandos — rodada produção (mapa real via sidecar)
 
-Quando o sidecar HF estiver ligado (mesmo contrato de artefatos):
+Pesos HF **nunca** entram no crate. Sidecar Python → `emb/bank.f32`; harvest só JL.
 
 ```powershell
-$ROUND = "data/rounds/20261116_prod_qwen3"
-# 1) Embedder real → escreve emb/bank.f32 + ids (mesmo layout do dry-run)
-# 2) Escriba 7B → facts.jsonl
-# 3) harvest (ou etapa JL-only) com --donor Qwen/Qwen3-Embedding-0.6B --seed <NOVO>
-# 4) Carga SGDB: remember(átomos) + audit_checkpoint(manifest.sha256_bank)
-# 5) probe + gate; só então publicar RELATORIO
+$ROUND = "data/rounds/$(Get-Date -Format 'yyyyMMdd')_prod_qwen3"
+New-Item -ItemType Directory -Force -Path $ROUND | Out-Null
+# 0) Partir de facts (dry-run ou escriba)
+python tools/harvest_transplant.py --limit 200 --dry-run --out $ROUND --no-whiten
+# 1) Mapa real MRL 768 (Apache) — requer sentence-transformers
+python tools/donor_map_embed.py --out $ROUND --donor Qwen/Qwen3-Embedding-0.6B --dim 768
+# 2) JL-only (sem re-sintetizar embeds)
+python tools/harvest_transplant.py --jl-only --out $ROUND --seed <NOVO> --revision <hf_rev> --no-whiten --donor Qwen/Qwen3-Embedding-0.6B
+# 3) Apontar data/ → rodada; probe + gate + uso
+Copy-Item -Recurse -Force "$ROUND\*" data\
+.\scripts\cargo.ps1 run --release --example transplant_hv_probe --features m1
+python tools/transplant_uso.py
+# 4) (opcional) remember SGDB real + RELATORIO
 ```
 
 **Contrato do artefato não muda** entre dry-run e produção: só mudam

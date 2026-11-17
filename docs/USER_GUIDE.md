@@ -50,10 +50,21 @@ Tabela canônica: [DASHBOARD_METRICS.md](DASHBOARD_METRICS.md).
 
 Um job por vez. **Cancelar job** interrompe.
 
+## 6) Doação · ETL · Transplante
+
+Painel no centro (após vazão): **origem** (doador/átomos/dim/conflitos), **destino** (HvBank/T0/auth), **gates** (ρ, R@10, lat), **E3**, **U1–U6**.
+
+1. Clique **Probe doação HV** (ETL dry-run se faltar bank + probe + gate + uso).
+2. Hover nos medidores → texto completo na coluna **Detalhe**.
+3. Playbook clonável: [DOACAO_PLAYBOOK.md](DOACAO_PLAYBOOK.md).
+
+Artefatos: `data/manifest.json`, `target/aether_transplant_hv.json`, `target/aether_transplant_uso.json`.
+
 ## Recarregar
 
-**Recarregar** só relê o JSON do scorecard já gerado.
+**Recarregar** relê scorecard + host + visão de doação (manifest/gates/uso).
 
 ## Fora deste hub (nesta fase)
 
 macOS/Linux GUI, MSI, auth/cloud — ver [USER_DELIVERY_PLAN.md](USER_DELIVERY_PLAN.md).
+Caminho HF/produção (mapa real Qwen3 MRL 768) e SGDB remember em escala — ver playbook §5.3 / gaps P0.

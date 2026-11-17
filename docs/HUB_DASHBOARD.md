@@ -27,7 +27,7 @@ Tema: slate + teal (lab). Host report é relido do JSON após o job (sem re-sond
 | Sondar hardware | CIM/PowerShell + topologia → `target/aether_host_report.json` + gaps |
 | Demo organismo | **in-process** 15 s @ 30 Hz; telemetria → anel `DemoTrace` |
 | Demo daemon | processo `aether-daemon --duration 10s`; parse de linhas → mesmo anel |
-| Probe doação HV | ETL dry-run (se faltar bank) + `transplant_hv_probe` + `transplant_hv_gate` → recarrega painel |
+| Probe doação HV | ETL dry-run (se faltar bank) + probe + gate + `transplant_uso` → arquiva `data/rounds/hub_<epoch>/` + recarrega painel |
 
 ## Gráficos (direita)
 

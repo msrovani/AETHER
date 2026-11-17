@@ -45,8 +45,9 @@ impl TransplantBatch {
             .find(|l| l.contains("sha256_bank"))
             .unwrap_or("")
             .to_string();
+        let atoms = load_atoms_from_ledger(data_dir, &facts);
         Ok(Self {
-            atoms: Vec::new(),
+            atoms,
             facts_jsonl: facts,
             shard_plan,
             manifest_sha: sha,
@@ -74,6 +75,73 @@ fn extract(line: &str, key: &str) -> Option<String> {
     let i = line.find(&pat)? + pat.len();
     let rest = &line[i..];
     Some(rest.split('"').next()?.to_string())
+}
+
+fn extract_u64(line: &str, key: &str) -> Option<u64> {
+    let pat = format!("\"{key}\": ");
+    let i = line.find(&pat)? + pat.len();
+    let rest = &line[i..];
+    let num: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    num.parse().ok()
+}
+
+fn parse_key_hex(s: &str) -> Option<u128> {
+    let s = s.trim().trim_start_matches("0x");
+    u128::from_str_radix(s, 16).ok()
+}
+
+/// Popula `AtomRecord` a partir do ledger mock (+ authority/wall dos facts).
+fn load_atoms_from_ledger(data_dir: &Path, facts: &str) -> Vec<AtomRecord> {
+    let ledger_path = data_dir.join("sgdb_mock_ledger.json");
+    let Ok(raw) = fs::read_to_string(&ledger_path) else {
+        return Vec::new();
+    };
+    // Índice (subject|relation|object) → (authority, wall_ms)
+    let mut fact_meta: std::collections::HashMap<String, (u8, u64)> =
+        std::collections::HashMap::new();
+    for line in facts.lines() {
+        let sub = extract(line, "subject").unwrap_or_default();
+        let rel = extract(line, "relation").unwrap_or_default();
+        let obj = extract(line, "object").unwrap_or_default();
+        let auth = extract_u64(line, "authority").unwrap_or(100) as u8;
+        let wall = extract_u64(line, "wall_ms").unwrap_or(0);
+        fact_meta.insert(format!("{sub}|{rel}|{obj}"), (auth.min(240), wall));
+    }
+    let mut atoms = Vec::new();
+    // Parse mínimo sem serde: blocos "key"/"label"
+    let mut i = 0usize;
+    let bytes = raw.as_str();
+    while let Some(kpos) = bytes[i..].find("\"key\"") {
+        let abs = i + kpos;
+        let Some(key_s) = extract(&bytes[abs..], "key") else {
+            i = abs + 5;
+            continue;
+        };
+        let Some(label) = extract(&bytes[abs..], "label") else {
+            i = abs + 5;
+            continue;
+        };
+        let Some(key) = parse_key_hex(&key_s) else {
+            i = abs + 5;
+            continue;
+        };
+        let (authority, wall_ms) = fact_meta
+            .get(&label)
+            .copied()
+            .unwrap_or((100, 0));
+        atoms.push(AtomRecord {
+            key,
+            label,
+            authority,
+            provenance: "Transplanted",
+            wall_ms,
+        });
+        i = abs + 5;
+    }
+    atoms
 }
 
 /// Loader de arranque: valida manifest; se faltar bank, retorna None (sem panic).

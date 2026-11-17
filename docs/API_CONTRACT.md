@@ -274,7 +274,7 @@ Schema: [`docs/INTAKE_PLAN.md`](INTAKE_PLAN.md).
 | ETL | `tools/harvest_transplant.py` | fora do crate; gera `data/` |
 | Probe | `examples/transplant_hv_probe.rs` | gates → `target/aether_transplant_hv.json` |
 | Gate | `tests/transplant_hv_gate.rs` | seed fixa; 200 átomos |
-| `HvBank` | example primeiro; `src/core/hv.rs` só pós-gates | T1/T2, nunca T0 |
+| `HvBank` | `src/core/hv.rs` (promovido MSG 0244) · probe em `examples/transplant_hv_probe.rs` | T1/T2, nunca T0 |
 | Doador | Qwen3-Embedding-0.6B (Apache) | `dim_in` no header AETHV1 |
 | Authority | ≤ 240 Transplanted; 255 = HITL | Vol. II §4 |
 

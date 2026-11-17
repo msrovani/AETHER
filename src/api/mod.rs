@@ -41,7 +41,7 @@ use std::time::Duration;
 use ndarray::{Array2, Array3};
 
 use crate::agent::{
-    AetherAgent, AgentConfig, Budget, Goal, Risk, SuccessCriteria, Task, ToolAgent,
+    AetherAgent, AgentConfig, Budget, Goal, GoalKind, Risk, SuccessCriteria, Task, ToolAgent,
 };
 use crate::core::certificate::{self, Decision, Provenance};
 use crate::core::knowledge_bridge_f1::{
@@ -70,6 +70,14 @@ pub const MAX_BODY: usize = 1 << 20;
 /// Duas fases aleatórias dão correlação ~0; o mesmo vetor dá 1. Abaixo de 0,5
 /// o fato não é "parecido" — é ruído, e responder seria inventar.
 pub const MIN_SCORE: f32 = 0.5;
+
+/// Autoridade a partir da qual `forget` só grava túmulo e escala para HITL
+/// (ADR-014/MSG 0306).
+pub const AUTHORITY_HITL: u8 = 200;
+
+/// Autoridade aprovada por humano: único valor que purga de fato, e só com
+/// confirmação explícita (`confirm: true`).
+pub const AUTHORITY_HUMAN: u8 = 255;
 
 /// Modelo sintético anunciado em `/v1/models`.
 pub const MODEL_ID: &str = "aether-phase-160";
@@ -560,6 +568,7 @@ fn write_response(stream: &mut TcpStream, status: u16, body: &Json) -> std::io::
         401 => "Unauthorized",
         403 => "Forbidden",
         404 => "Not Found",
+        409 => "Conflict",
         413 => "Payload Too Large",
         500 => "Internal Server Error",
         503 => "Service Unavailable",
@@ -618,7 +627,7 @@ fn route(state: &mut ApiState, req: &Request) -> Reply {
         ("POST", "/v1/aether/remember") => remember(state, &req.body, bound),
         ("POST", "/v1/aether/cue") => cue(state, &req.body, bound),
         ("POST", "/v1/aether/solve") => solve(&req.body),
-        ("POST", "/v1/aether/agent") => agent_route(state, &req.body),
+        ("POST", "/v1/aether/agent") => agent_route(state, &req.body, bound),
         ("POST", "/v1/aether/forget") => forget(state, &req.body, bound),
         ("POST", "/v1/chat/completions") => chat(state, &req.body, bound),
         ("POST", "/completion") => completion(state, &req.body, bound),
@@ -848,8 +857,17 @@ fn remember(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
 
 /// Remove um fato do escopo e grava o túmulo (para não ressuscitar no boot).
 ///
-/// Exige `authority >= 128` (HITL): apagar memória é ato com mandato, não
-/// efeito colateral de uma requisição qualquer.
+/// Exige `authority >= 200` (HITL, ADR-014/MSG 0306): apagar memória é ato com
+/// mandato, não efeito colateral de uma requisição qualquer.
+///
+/// * `200..=254` — grava o **túmulo** e mantém o registro no ledger: o purge
+///   fica pendente de decisão humana (`forgot:false`, `tombstoned:true`).
+/// * `255` — purge de fato aprovado por humano; exige confirmação **explícita**
+///   (`"confirm":true` no corpo), senão a rota responde `409` e nada é tocado.
+/// * `< 200` — comportamento antigo: `403 authority_required`.
+///
+/// O túmulo é gravado **antes** da remoção: se o disco falhar, o fato continua
+/// citável e o cliente vê `500`, em vez de perder o registro sem rastro.
 fn forget(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
     let doc = match parse_json(body) {
         Ok(v) => v,
@@ -869,20 +887,33 @@ fn forget(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
         .and_then(Json::as_u64)
         .unwrap_or(0)
         .min(255) as u8;
-    if authority < 128 {
+    if authority < AUTHORITY_HITL {
         return Reply::Json(
             403,
             error_json(
                 "authority_required",
-                "forget exige authority >= 128 (mandato explícito)",
+                "forget exige authority >= 200 (túmulo + HITL; 255 exige confirmação)",
+            ),
+        );
+    }
+    // 255 apaga um fato aprovado por humano: o mandato precisa ser explícito.
+    if authority == AUTHORITY_HUMAN && doc.get("confirm").and_then(Json::as_bool) != Some(true) {
+        return Reply::Json(
+            409,
+            error_json(
+                "hitl_confirmation_required",
+                "authority 255 exige confirmação explícita (`confirm: true`) — HITL",
             ),
         );
     }
     let reason = doc.get("reason").and_then(Json::as_str).unwrap_or("manual");
 
-    let removed = state.ledger.forget(scope, key);
+    // Só grava túmulo de chave existente: um `forget` de chave ausente não pode
+    // matar uma escrita futura com a mesma chave no próximo boot.
+    let exists = state.ledger.scoped(scope).any(|r| r.key == key);
+    // Túmulo ANTES da remoção (ADR-014: intenção antes do efeito).
     let mut tombstoned = false;
-    if removed {
+    if exists {
         if let Some(store) = state.store.as_mut() {
             if let Err(e) = store.tombstone(scope, key, reason, now_ms()) {
                 return Reply::Json(
@@ -893,11 +924,15 @@ fn forget(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
             tombstoned = true;
         }
     }
+    // 200..=254 é HITL: marca, mas não purga (o purge é o 255 confirmado).
+    let hitl = authority < AUTHORITY_HUMAN;
+    let removed = if hitl { false } else { state.ledger.forget(scope, key) };
     Reply::Json(
         200,
         Json::obj([
             ("forgot", Json::Bool(removed)),
             ("tombstoned", Json::Bool(tombstoned)),
+            ("hitl", Json::Bool(hitl)),
             ("key", Json::str(key.to_string())),
             ("scope", scope_json(scope)),
             ("remaining", Json::num(state.ledger.len() as f64)),
@@ -1000,7 +1035,7 @@ fn hydrate_from_sgdb(state: &mut ApiState, scope: ScopeId) -> usize {
 }
 
 /// Rota do agente: fato, SAT, QUBO, memória **ou** pipeline `steps[]`.
-fn agent_route(state: &mut ApiState, body: &[u8]) -> Reply {
+fn agent_route(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
     let doc = match parse_json(body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
@@ -1009,7 +1044,7 @@ fn agent_route(state: &mut ApiState, body: &[u8]) -> Reply {
     // `pipeline`/`steps` só desviam a rota quando são **array** (`null` num
     // corpo de tarefa única continua sendo tarefa única).
     match pipeline_requested(&doc) {
-        Ok(true) => return agent_pipeline_route(&doc),
+        Ok(true) => return agent_pipeline_route(&doc, bound),
         Ok(false) => {}
         Err(e) => return bad(&e),
     }
@@ -1138,12 +1173,18 @@ fn agent_route(state: &mut ApiState, body: &[u8]) -> Reply {
 }
 
 /// Pipeline HTTP: espelha o schema da CLI (`steps`/`pipeline` + budget/risk).
-fn agent_pipeline_route(doc: &Json) -> Reply {
+///
+/// O agente recebe o journal de undo durável ([`undo_journal_path`]) para que
+/// `memory.write` funcione pela borda e o rollback do workflow seja real:
+/// `SgdbUndoBackend::new` nunca panica em erro de I/O, então a rota não tem
+/// caminho de falha por causa do arquivo.
+fn agent_pipeline_route(doc: &Json, bound: Option<u64>) -> Reply {
     let workflow = match pipeline_goal_from_json(doc) {
         Ok(goal) => goal,
         Err(e) => return bad(&e),
     };
-    let mut agent = ToolAgent::new(&AgentConfig::default());
+    let mut agent =
+        ToolAgent::new(&agent_pipeline_config(bound)).with_undo_journal(undo_journal_path());
     let outcome = agent.solve(&workflow);
     let answer = outcome
         .outcome
@@ -1167,6 +1208,32 @@ fn agent_pipeline_route(doc: &Json) -> Reply {
 
 /// Teto de passos no workflow HTTP (MSG 0340).
 const PIPELINE_MAX_STEPS: usize = 8;
+
+/// Config do `ToolAgent` usado pela borda.
+///
+/// Quando o token está ligado a um organismo, o pipeline roda no escopo
+/// `(organism, 0, 0)` — o mesmo mapeamento de `remember`/`cue` (`scope_or_bound`)
+/// em vez de ignorar o `bound` e usar o escopo default da biblioteca.
+fn agent_pipeline_config(bound: Option<u64>) -> AgentConfig {
+    let mut cfg = AgentConfig::default();
+    if let Some(organism) = bound {
+        cfg.scope = ScopeId::new(organism, 0, 0);
+    }
+    cfg
+}
+
+/// Journal de undo da borda HTTP.
+///
+/// `AETHER_UNDO_JOURNAL` tem precedência (é o mesmo nome usado pela CLI);
+/// sem ele, cai num arquivo **por processo** no diretório temporário para que
+/// dois servidores não compartilhem *stage*/expectativa de undo.
+fn undo_journal_path() -> PathBuf {
+    match std::env::var("AETHER_UNDO_JOURNAL") {
+        Ok(path) if !path.trim().is_empty() => PathBuf::from(path.trim()),
+        _ => std::env::temp_dir().join(format!("aether_undo_http_{}.jsonl", std::process::id())),
+    }
+}
+
 /// Teto de `n` em sat/qubo na rota do agente — pipeline **e** tarefa única.
 ///
 /// Herdado do `PIPELINE_MAX_N` (MSG 0340) e mantido em 64: o expert SAT de
@@ -1244,6 +1311,34 @@ fn pipeline_step_from_json(json: &Json) -> Result<Goal, String> {
                     value: Some(value.to_string()),
                 };
             }
+            goal
+        }
+        // `act` grava na memória com before-image (`memory.write`): é o passo
+        // que exercita o undo real do pipeline HTTP.
+        "act" | "write" => {
+            let subject = json
+                .get("subject")
+                .and_then(|v| v.as_str())
+                .ok_or("act sem subject")?;
+            let relation = json
+                .get("relation")
+                .and_then(|v| v.as_str())
+                .ok_or("act sem relation")?;
+            let value = json
+                .get("query")
+                .and_then(|v| v.as_str())
+                .ok_or("act sem query")?;
+            let mut goal = Goal::fact(subject, relation);
+            goal.kind = GoalKind::Act;
+            goal.query = Some(value.to_string());
+            goal.success = SuccessCriteria::Claim {
+                subject: subject.to_string(),
+                relation: relation.to_string(),
+                value: Some(value.to_string()),
+            };
+            // `memory.write` é risco Medium: sem teto Medium a pré-condição
+            // nunca passa e o passo não teria efeito para desfazer.
+            goal.risk_ceiling = Risk::Medium;
             goal
         }
         "sat" => {
@@ -2063,5 +2158,29 @@ mod tests {
         assert!(token_eq("abc", "abc"));
         assert!(!token_eq("abc", "abd"));
         assert!(!token_eq("abc", "ab"));
+    }
+
+    #[test]
+    fn config_do_pipeline_usa_o_organismo_do_token() {
+        // O `bound` vem do token: o pipeline tem de rodar no organismo dele,
+        // como `remember`/`cue` já fazem via `scope_or_bound`.
+        assert_eq!(agent_pipeline_config(Some(7)).scope, ScopeId::new(7, 0, 0));
+        // Sem auth (`bound = None`) o escopo default da config é preservado.
+        assert_eq!(
+            agent_pipeline_config(None).scope,
+            AgentConfig::default().scope
+        );
+    }
+
+    #[test]
+    fn journal_de_undo_prefere_o_env() {
+        let previous = std::env::var("AETHER_UNDO_JOURNAL").ok();
+        std::env::set_var("AETHER_UNDO_JOURNAL", "target/test_undo_journal.jsonl");
+        let path = undo_journal_path();
+        match previous {
+            Some(value) => std::env::set_var("AETHER_UNDO_JOURNAL", value),
+            None => std::env::remove_var("AETHER_UNDO_JOURNAL"),
+        }
+        assert_eq!(path, PathBuf::from("target/test_undo_journal.jsonl"));
     }
 }

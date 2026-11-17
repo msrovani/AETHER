@@ -44,7 +44,7 @@ fluxo padrão, backends de produto A/B e superfície cloud/auth.
 | Organismo reflexivo | `src/bin/organism.rs` + `simulation/` | Demo | **Parcial** | Banner + painel ANSI: `R(t)`, entropia, `H(t)`, bits `s*`, fases |
 | Daemon encarnado | `src/bin/aether_daemon.rs` | Demo / embrião **Produto C** | **Parcial** | Linha de telemetria: `R(LAN)`, peers, `F`, sonho/ação, drops |
 | Painel ANSI | `src/simulation/panel.rs` (`PlainPanel`) | Demo | **Pronto** | Atualização ~30 ms no terminal |
-| Painel Ratatui | mesmo arquivo (`RatatuiPanel`) | Lab | **Código existe, bin não liga** | — (`--tui` é no-op) |
+| Painel Ratatui | mesmo arquivo (`RatatuiPanel`) | Lab | **Liga com `--features tui -- --tui`** | TUI no organism; sem feature → plain + aviso |
 | Example campo | `examples/field_probe.rs` | Demo | Pronto | Entropia vs carga |
 | Example transdutor | `examples/transducer_probe.rs` | Demo | Pronto | `F(t)` + sparkline Zero-UI |
 | Example BAM | `examples/bam_probe.rs` | Research | Pronto | Só medição (não produto) |
@@ -52,7 +52,7 @@ fluxo padrão, backends de produto A/B e superfície cloud/auth.
 | Contrato produtos A/B/C | `docs/TRANSDUCER_IO.md` | Spec | Contrato | Sem backend CAN/CSI shippável |
 | Transdutor sintético | `src/transducer_io.rs` | Lab | Pronto | Baseline determinístico |
 | Transdutor host (daemon) | `aether_daemon` / `HardwareTransducer` | Embrião C | Parcial | Jitter/CPU/rede do próprio processo |
-| Docs usuário | — | — | **Ausente** | Só README de `cargo run` |
+| Docs usuário | `USER_GUIDE.md` + README “5 minutos” | — | **Pronto** | Hub + demo + doação |
 | Docs engenharia | `ARCHITECTURE*.md`, `docs/*` | Eng | Pronto | Onboarding de agentes/devs |
 | Empacotamento | `Cargo.toml` `publish=false` | — | Ausente | Sem MSI/winget/crates.io |
 | GPU / wgpu | `docs/HW_TARGET.md` | Spec | Ausente no código | — |
@@ -75,9 +75,9 @@ produto. São eixos ortogonais.
 
 ### 2.4 Gaps de UX já conhecidos (demo)
 
-1. `aether-organism`: sem `--help`; `--tui` / `--plain` não alteram o painel.
-2. README cita versão **0.0.43** / 95 testes — crate está em **0.0.67+**.
-3. Daemon: telemetria densa para engenheiro, não narrativa para usuário.
+1. ~~`aether-organism` sem `--help` / `--tui`~~ → `--help` exit 0; `--tui` + `features tui` = Ratatui.
+2. ~~README versão drift~~ → README aponta `0.0.157` + “Primeiros 5 minutos”.
+3. Daemon: `--help` explica R(LAN)/F/SONHANDO (telemetria ainda densa na linha).
 4. Windows: depende de MinGW no PATH (`scripts/cargo.ps1`) — barreira de install.
 5. Multicast LAN sem auth (by design) — ok para lab, não para produto aberto.
 6. Produtos A (CAN) e B (CSI/áudio) só no contrato `TRANSDUCER_IO`.
@@ -111,11 +111,11 @@ Prioridade de entrega ao **usuário** (não ao agente):
 
 | # | Entrega | Critério de aceite |
 |---|---|---|
-| 0.1 | Ligar `--tui` / `--help` no `aether-organism` | `--help` exit 0; `--tui` renderiza Ratatui; `--plain` ANSI |
-| 0.2 | README de usuário (não só eng) | seção “Primeiros 5 minutos”, versão = `Cargo.toml`, contagem de testes atual |
-| 0.3 | Script `scripts/run-demo.ps1` | um comando: build release + organism 15 s + tip daemon |
-| 0.4 | Alinhar telemetria daemon com `--help` já existente | banner legível: o que é R, F, SONHANDO |
-| 0.5 | Congelar superfície: **não** expor BAM/JIT/governor no CLI | docs dizem “lab only” |
+| 0.1 | Ligar `--tui` / `--help` no `aether-organism` | `--help` exit 0; `--tui`+`features tui` → Ratatui; senão plain+aviso (**feito**) |
+| 0.2 | README de usuário (não só eng) | “Primeiros 5 minutos” + versão Cargo.toml (**feito**) |
+| 0.3 | Script `scripts/run-demo.ps1` | build release + organism 15 s + tip daemon/hub (**feito**) |
+| 0.4 | Alinhar telemetria daemon com `--help` já existente | R(LAN)/F/SONHANDO no help (**feito**) |
+| 0.5 | Congelar superfície: **não** expor BAM/JIT/governor no CLI | help organism/daemon dizem lab only (**feito**) |
 | **0.6 / (5)** | **Hub Windows** (`aether-dashboard`) | ACQ + T01–T12 + vazão; hover/fichas; jobs Auditoria / Benchmark / HW / demos / **Probe doação HV**; painel **Doação·ETL·Transplante** (origem/destino/gates/U1–U6); gaps heurísticos |
 
 **Resultado:** qualquer dev com Rust+MinGW roda a demo sem ler ARCHITECTURE;

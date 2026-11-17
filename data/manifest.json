@@ -1,6 +1,6 @@
 {
-  "donor": "Qwen/Qwen3-Embedding-0.6B#dry-run-synthetic",
-  "revision": "dry-run",
+  "donor": "Qwen/Qwen3-Embedding-0.6B",
+  "revision": "jl-only-smoke",
   "dim_in": 768,
   "dim_hv": 10240,
   "words": 160,
@@ -57,6 +57,6 @@
   "conflicts_planted": 5,
   "conflicts_detected": 5,
   "authority_max_transplant": 240,
-  "created": "2026-11-16",
+  "created": "2026-11-17",
   "claim": "MSG 0229 INTAKE_TRANSPLANT"
 }

@@ -693,6 +693,14 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
         let flag = args[i].clone();
         match flag.as_str() {
             "--help" | "-h" => {
+                println!("aether-daemon — organismo encarnado (LAN) v{}", env!("CARGO_PKG_VERSION"));
+                println!();
+                println!("Telemetria (coluna da linha de ciclo):");
+                println!("  R(LAN)    ordem de fase entre peers multicast (0..1; alto = acoplado)");
+                println!("  F         surpresa / free-energy do host (sobe sob stress)");
+                println!("  S         entropia de Shannon do campo");
+                println!("  SONHANDO  ciclo de amostragem quando F > --alert (senão AÇÃO)");
+                println!();
                 println!("aether-daemon [opções]");
                 println!("  --duration <s>   duração em segundos (aceita 30 ou 30s)");
                 println!("  --hz <f>         taxa do ciclo (padrão 60)");
@@ -715,6 +723,8 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
                 );
                 println!("  --sgdb-run <id>  linhagem durável no escopo (padrão 0)");
                 println!("  --help           esta ajuda");
+                println!();
+                println!("Lab only (não produto): BAM/JIT/governor — ver aether-governor / examples.");
                 std::process::exit(0);
             }
             "--duration" => {
