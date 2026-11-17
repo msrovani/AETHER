@@ -161,3 +161,50 @@ sem tocar o laço** — que é o único tipo que este projeto aceita.
 `target/gpu_census.json`, `src/core/gpu/{mod,jl}.rs`, `tests/gpu_jl_gate.rs`,
 feature `gpu` no `Cargo.toml`, e uma linha em `docs/HW_TARGET.md` §3 dizendo qual
 workload foi admitido (com o número medido).
+
+---
+
+## Resultado (2026-11-17) — G0 executado, G1 implementado e **validado**
+
+### G0 — censo medido (CPU, `examples/gpu_census.rs`)
+
+| workload | CPU medido | projeção GPU (300 GB/s, 4 TFLOP/s, +20 µs launch) | razão | veredito |
+|---|---:|---:|---:|---|
+| **JL do transplante** 10⁴ linhas (d=384 → 10.240 bits) | **13,4 s** (39,3 GFLOP, **2,9 GFLOP/s**) | 9,9 ms | **1362×** | **ACT** |
+| FFT L=8192 (4→8 linhas) | 158 µs | 21,3 µs | **7,4×** | **ACT em lote** |
+| lote Ising 10⁴ instâncias (n=20) | 123 ms (34 MB, 0,38 GFLOP) | 0,13 ms | **929×** | PROPOSE (gate estatístico) |
+| `record` T0 / M5 / solver E2 | 0,2 µs / µs / 135 µs | — | < 1× | **ABSTAIN** |
+
+### G1 — GEMM do JL: implementado e validado no **RTX 3050**
+
+* `feature = "gpu"` (+ `wgpu 22`, `bytemuck`) **fora do default**; sem a feature o
+  crate é CPU-only completo e `gpu::status()` responde `NoFeature`.
+* kernel WGSL: 1 thread por `(bit, linha)`, soma **j-ascendente** (mesma ordem do
+  CPU) e `atomicOr` na palavra de 32 bits.
+* **política de adapter**: descarta `DeviceType::Cpu` (WARP/llvmpipe) e prefere
+  `DiscreteGpu`. Medido: com a **Intel iGPU** escolhida por engano, a razão era
+  **0,9×** (pior que CPU); com o RTX 3050, **3×**.
+* **gates medidos** (`cargo test --release --features gpu --test gpu_jl_gate`):
+
+| gate | resultado |
+|---|---|
+| equivalência GPU↔CPU | **0 / 32.000 palavras divergentes** (bit a bit) |
+| razão ≥ 2× (n=2000) | **3×** (CPU 2723 ms · GPU 1058 ms; +52 ms de geração de matriz) |
+| fallback (`force_off` / sem device) | PASS, nunca `panic` |
+| fronteira estrutural (`tests/gpu_boundary_gate.rs`) | PASS — hot path, M5, F1 e solver não referenciam `core::gpu` |
+
+**Limite honesto:** 3× está longe dos 1362× projetados. O kernel é ingênuo —
+cada thread lê a linha da matriz de forma **não coalescida** (384 floats com
+passo `d`) e há 2×10⁷ `atomicOr`. O próximo passo medido é o kernel por palavra
+(32 acumuladores por thread, matriz transposta `d × bits`, sem átomos), que é o
+que a projeção assume.
+
+### G2 / G3 — não implementados (por decisão, com número)
+
+* **G2 (FFT)**: kernel WGSL de FFT não implementado. O que ficou pronto é o
+  **invariante estrutural** (organismo/hot path sem dependência gráfica) e a
+  projeção de **7,4×** para L=8192 em lote.
+* **G3 (sweep Ising)**: kernel batelado não implementado. Ficou o número
+  (**929×** de throughput) e a exigência de **gate estatístico** (o `digest` do
+  E2 e o teste denso↔esparso não valem no caminho GPU).
+

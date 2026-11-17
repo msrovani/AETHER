@@ -102,8 +102,10 @@ pub enum SuccessCriteria {
         /// Valor esperado (case-insensitive) ou `None` para qualquer um.
         value: Option<String>,
     },
-    /// Certificado físico coerente (`violations == 0` e `gap > 0`).
+    /// Certificado factível (`violations == 0`); não exige gap > 0.
     Certificate,
+    /// Certificado coerente (`is_coherent`: gap > 0 e violations == 0).
+    Coherent,
     /// Qualquer saída não vazia (tool de verificação).
     Any,
 }
@@ -128,6 +130,10 @@ impl SuccessCriteria {
                     })
             }),
             Self::Certificate => outcome
+                .certificate
+                .as_ref()
+                .is_some_and(|cert| cert.violations == 0 && cert.energy.is_finite()),
+            Self::Coherent => outcome
                 .certificate
                 .as_ref()
                 .is_some_and(|cert| cert.is_coherent()),
@@ -241,7 +247,7 @@ impl Goal {
             clauses: Vec::new(),
             j,
             h,
-            success: SuccessCriteria::Certificate,
+            success: SuccessCriteria::Coherent,
             budget: Budget::default(),
             risk_ceiling: Risk::Low,
         }

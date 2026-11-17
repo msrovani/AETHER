@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.149] - 2026-11-17
+
+### Changed
+
+- Ciclo automatico: 13 arquivo(s) (.:1, docs:1, src:10, tests:1).
+- Gate: ok (10s).
+
+- `Cargo.lock`
+- `docs/GPU_PLAN.md`
+- `src/agent/cli.rs`
+- `src/agent/mod.rs`
+- `src/agent/registry.rs`
+- `src/agent/tool.rs`
+- `src/agent/executor.rs`
+- `src/agent/planner.rs`
+- `src/agent/self_model.rs`
+- `src/agent/telemetry.rs`
+- `src/agent/tool_agent.rs`
+- `src/agent/tools.rs`
+
 ## [0.0.148] - 2026-11-17
 
 ### Changed

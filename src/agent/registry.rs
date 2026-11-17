@@ -18,10 +18,19 @@ pub struct Candidate {
 }
 
 /// Registro de ferramentas.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct ToolRegistry {
     tools: Vec<Box<dyn Tool>>,
     allowlist: Vec<&'static str>,
+}
+
+impl std::fmt::Debug for ToolRegistry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ToolRegistry")
+            .field("tools", &self.names())
+            .field("allowlist", &self.allowlist)
+            .finish()
+    }
 }
 
 impl ToolRegistry {
@@ -111,5 +120,13 @@ impl ToolRegistry {
     /// `true` se vazio.
     pub fn is_empty(&self) -> bool {
         self.tools.is_empty()
+    }
+
+    /// Custo/risco de uma tool (sem executar).
+    pub fn stats(&self, name: &str) -> Option<(Cost, Risk)> {
+        self.tools
+            .iter()
+            .find(|tool| tool.name() == name)
+            .map(|tool| (tool.cost(), tool.risk()))
     }
 }

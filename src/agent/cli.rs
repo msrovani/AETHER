@@ -17,7 +17,9 @@ use std::path::PathBuf;
 use crate::core::logic_pipeline::Clause3;
 use crate::json::Json;
 
-use super::{Action, AetherAgent, AgentConfig, Claim, ExpertId, Feedback, Outcome, Task};
+use super::{
+    Action, AetherAgent, AgentConfig, Claim, ExpertId, Feedback, Goal, Outcome, Task, ToolAgent,
+};
 
 /// Códigos de saída.
 pub const EXIT_OK: i32 = 0;
@@ -38,6 +40,8 @@ COMANDOS
   sat <arquivo.dimacs>    resolve 3-SAT e devolve certificado
   solve <arquivo.json>    resolve QUBO {n, j, h}
   memory <consulta>       consulta a memória durável (SGDB)
+  tools                   lista as ferramentas e custo/risco
+  goal                    executa um Goal com planner/verificador
   teach                   ensina um fato novo com feedback verificado
   demo                    roda o conjunto de demonstração/gates
   stats                   mostra pesos do MoE e métricas
@@ -62,6 +66,8 @@ OPÇÕES
 EXEMPLOS
   aether-agent ask --subject Brasil --relation capital
   aether-agent ask --subject Lua --relation orbita --json
+  aether-agent tools
+  aether-agent goal --facts data/agent_facts.jsonl --subject AETHER --relation proibe
   aether-agent teach --subject Itália --relation capital --value Roma
   aether-agent sat target/sat.dimacs
   aether-agent demo --json
@@ -209,6 +215,8 @@ pub fn run(argv: &[String], out: &mut dyn Write) -> i32 {
         "sat" => sat(&args, out),
         "solve" | "qubo" => solve(&args, out),
         "memory" | "recall" => memory(&args, out),
+        "tools" => tools(&args, out),
+        "goal" => goal(&args, out),
         "teach" | "learn" => teach(&args, out),
         "stats" => stats(&args, out),
         "demo" => demo(&args, out),
@@ -327,8 +335,122 @@ fn memory(args: &Args, out: &mut dyn Write) -> i32 {
     EXIT_OK
 }
 
-fn teach(args: &Args, out: &mut dyn Write) -> i32 {
-    let Some(task) = args.fact() else {
+fn tools(args: &Args, out: &mut dyn Write) -> i32 {
+    let mut cfg = args.config();
+    if let Some(path) = &args.policy {
+        cfg.tool_policy_path = Some(path.clone());
+    }
+    let agent = ToolAgent::new(&cfg);
+    if args.json {
+        let list: Vec<Json> = agent
+            .tools()
+            .into_iter()
+            .map(|schema| {
+                let (cost, risk) = agent
+                    .tool_stats(schema.name)
+                    .unwrap_or((super::Cost::local(0.0), super::Risk::Low));
+                Json::obj([
+                    ("name", Json::str(schema.name)),
+                    ("description", Json::str(schema.description)),
+                    (
+                        "args",
+                        Json::Arr(schema.args.iter().map(|a| Json::str(*a)).collect()),
+                    ),
+                    ("cost_ms", Json::num(f64::from(cost.ms))),
+                    ("tokens", Json::num(f64::from(cost.tokens))),
+                    ("risk", Json::str(risk.label())),
+                ])
+            })
+            .collect();
+        let _ = writeln!(out, "{}", Json::Arr(list));
+    } else {
+        for schema in agent.tools() {
+            let (cost, risk) = agent
+                .tool_stats(schema.name)
+                .unwrap_or((super::Cost::local(0.0), super::Risk::Low));
+            let _ = writeln!(
+                out,
+                "{:<10} {:>6.1}ms {:>5} tok risk={:<6} [{}] {}",
+                schema.name,
+                cost.ms,
+                cost.tokens,
+                risk.label(),
+                schema.args.join(","),
+                schema.description
+            );
+        }
+    }
+    EXIT_OK
+}
+
+fn goal(args: &Args, out: &mut dyn Write) -> i32 {
+    let mut cfg = args.config();
+    if let Some(path) = &args.policy {
+        cfg.tool_policy_path = Some(path.clone());
+    }
+    let goal = if let (Some(subject), Some(relation)) = (&args.subject, &args.relation) {
+        Goal::fact(subject.clone(), relation.clone())
+    } else if let Some(first) = args.positional.first() {
+        if first.ends_with(".dimacs") {
+            match std::fs::read_to_string(first) {
+                Ok(text) => match parse_dimacs(&text) {
+                    Ok((n, clauses)) => Goal::satisfy(n, clauses),
+                    Err(e) => {
+                        let _ = writeln!(out, "erro: {e}");
+                        return EXIT_FAIL;
+                    }
+                },
+                Err(e) => {
+                    let _ = writeln!(out, "erro: não li {first}: {e}");
+                    return EXIT_FAIL;
+                }
+            }
+        } else if let Some((subject, relation)) = first.split_once('|') {
+            Goal::fact(subject.to_string(), relation.to_string())
+        } else {
+            let _ = writeln!(out, "erro de uso: goal exige --subject/--relation ou \"sujeito|relação\"");
+            return EXIT_USAGE;
+        }
+    } else {
+        let _ = writeln!(out, "erro de uso: goal exige --subject e --relation");
+        return EXIT_USAGE;
+    };
+    let mut agent = ToolAgent::new(&cfg);
+    let outcome = agent.solve(&goal);
+    if args.json {
+        let _ = writeln!(out, "{}", outcome.trace.to_json());
+    } else {
+        let _ = writeln!(
+            out,
+            "sucesso={} ação={} | {}",
+            outcome.success,
+            outcome.action.label(),
+            outcome.rationale
+        );
+        for (i, step) in outcome.steps.iter().enumerate() {
+            let _ = writeln!(
+                out,
+                "  {}. {:<10} score={:.3} met={} {}us — {}",
+                i + 1,
+                step.tool,
+                step.score,
+                step.met,
+                step.elapsed_us,
+                step.detail
+            );
+        }
+        if let Some(claim) = outcome.outcome.as_ref().and_then(|o| o.first_claim()) {
+            let _ = writeln!(out, "resposta: {} (fonte {})", claim.value, claim.source.label());
+        }
+    }
+    if outcome.success {
+        EXIT_OK
+    } else {
+        EXIT_FAIL
+    }
+}
+
+fn teach(args: &Args, out: &mut dyn Write) -> i32 {    let Some(task) = args.fact() else {
         let _ = writeln!(out, "erro de uso: teach exige --subject e --relation");
         return EXIT_USAGE;
     };
@@ -737,6 +859,29 @@ mod tests {
         let mut out = Vec::new();
         let code = run(&argv, &mut out);
         (code, String::from_utf8_lossy(&out).to_string())
+    }
+
+    #[test]
+    fn tools_e_goal_mostram_autoescolha() {
+        let (code, text) = run_capture(&["tools", "--json"]);
+        assert_eq!(code, EXIT_OK, "{text}");
+        assert!(text.contains("\"name\":\"fact\""), "{text}");
+        assert!(text.contains("\"risk\":\"low\""), "{text}");
+
+        let (code, text) = run_capture(&[
+            "goal",
+            "--facts",
+            "data/agent_facts.jsonl",
+            "--subject",
+            "AETHER",
+            "--relation",
+            "proibe",
+            "--json",
+        ]);
+        assert_eq!(code, EXIT_OK, "{text}");
+        assert!(text.contains("\"success\":true"), "{text}");
+        assert!(text.contains("\"tool\":\"fact\""), "{text}");
+        assert!(text.contains("backpropagation"), "{text}");
     }
 
     #[test]

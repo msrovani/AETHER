@@ -36,18 +36,36 @@
 
 pub mod cli;
 pub mod coherence;
+pub mod executor;
 pub mod experts;
+pub mod planner;
+pub mod registry;
 pub mod router;
+pub mod self_model;
+pub mod telemetry;
+pub mod tool;
+pub mod tool_agent;
+pub mod tools;
 
 use std::path::PathBuf;
 
 use crate::core::certificate::{Certificate as EngineCertificate, Provenance};
-use crate::core::knowledge_bridge_f1::Certificate as BridgeCertificate;
+use crate::core::knowledge_bridge_f1::{Certificate as BridgeCertificate, ScopeId};
 use crate::json::Json;
 
 use self::coherence::{CoherenceEngine, CoherenceResult};
 use self::experts::{default_experts, Expert};
 use self::router::MoERouter;
+
+pub use executor::ToolExecutor;
+pub use planner::{PlanStep, Planner};
+pub use registry::ToolRegistry;
+pub use self_model::SelfModel;
+pub use tool::{
+    Budget, Cost, Effect, Goal, GoalKind, Risk, SuccessCriteria, Tool, ToolContext, ToolError,
+    ToolOutcome, ToolSchema, WorldState,
+};
+pub use tool_agent::{GoalOutcome, ToolAgent};
 
 /// Identidade estável de um especialista (1 byte para logs).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -354,6 +372,10 @@ pub struct AgentConfig {
     pub policy_path: Option<PathBuf>,
     /// Especificação do SGDB para o especialista de memória (`None` = desligado).
     pub sgdb: Option<String>,
+    /// Política do self-model das tools (P1). `None` = só memória.
+    pub tool_policy_path: Option<PathBuf>,
+    /// Escopo das tools.
+    pub scope: ScopeId,
 }
 
 impl Default for AgentConfig {
@@ -368,6 +390,8 @@ impl Default for AgentConfig {
             facts_path: PathBuf::from("data/facts.jsonl"),
             policy_path: None,
             sgdb: None,
+            tool_policy_path: None,
+            scope: ScopeId::new(1, 0, 1),
         }
     }
 }
