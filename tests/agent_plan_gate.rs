@@ -391,7 +391,7 @@ impl Tool for FailTool {
             name: "fail",
             description: "fail mock",
             args: &["subject"],
-            kinds: &[GoalKind::Answer],
+            kinds: &[GoalKind::Transform],
         }
     }
 
@@ -404,7 +404,7 @@ impl Tool for FailTool {
     }
 
     fn affordance(&self, goal: &Goal, _state: &WorldState) -> f32 {
-        if goal.kind == GoalKind::Answer {
+        if goal.kind == GoalKind::Transform {
             1.0
         } else {
             0.0
@@ -430,6 +430,7 @@ fn undo_workflow() -> Goal {
         Risk::Low,
     );
     let mut fail = Goal::fact("x", "fail");
+    fail.kind = GoalKind::Transform;
     fail.success = SuccessCriteria::Claim {
         subject: "x".into(),
         relation: "fail".into(),

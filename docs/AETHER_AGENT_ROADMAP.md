@@ -1,10 +1,10 @@
 # AETHER Agent — plano de implementação (v0.1 → v1.0)
 
-> **Versão do plano:** 2.4 — 2026-11-17
+> **Versão do plano:** 2.5 — 2026-11-17
 > Mudanças: análise cruzada; quatro trilhas (A/B/C/D); `LanguagePort` e
 > alternativas à LLM de borda; autoridade em escada; tiers de avaliação;
-> ADR-013; P0/P1 implementados; P2 (pipeline/blackboard/rollback/verify);
-> EFE pragmática; addenda do fórum (MSG 0263/0267/0283/0288).
+> ADR-013; P0/P1 implementados; P2 (pipeline/blackboard/rollback/verify/undo);
+> EFE pragmática; addenda do fórum (MSG 0263/0267/0283/0288/0306).
 >
 > O que falta para o agente **escolher sozinho o que usar**, planejar em vários
 > passos, operar ferramentas com segurança e aprender sem se enganar.
@@ -303,8 +303,10 @@ evolução.
 **Status (2026-11-17):** P2 implementado em `Goal::pipeline` +
 `ToolAgent::solve_pipeline` com blackboard (`ToolContext.claims/certificates`) e
 rollback de workflow; tools `verify` e pipeline real `fact → sat → verify`
-(dados do projeto) cobertos por `tests/agent_plan_gate.rs` (4/4); EFE pragmática
-(`Planner::min_score`) abstém quando o score não paga custo/risco.
+(dados do projeto) cobertos por `tests/agent_plan_gate.rs` (5/5); EFE pragmática
+(`Planner::min_score`) abstém quando o score não paga custo/risco; **undo LIFO**
+(`UndoOp::{Insert,Restore}`) com backend de memória testado (insert/restore).
+Stage/watermark e irreversível/HITL ficam para a próxima rodada.
 
 ### P3 — Linguagem e ferramentas externas (7–10 dias)
 
@@ -645,6 +647,7 @@ Cada commit passa `cargo test --lib agent::` e `cargo test --test agent_tools_ga
 
 | Versão | Data | Mudança |
 |---|---|---|
+| **2.5** | 2026-11-17 | undo LIFO (`Insert`/`Restore`) com backend; `verify` tool; pipeline real; EFE `min_score`; C0 parser entregue (CURSOR) |
 | **2.4** | 2026-11-17 | P2 real `fact→sat→verify`; `verify` tool; blackboard de certificados; EFE pragmática (`min_score`) e abstain por custo/risco |
 | **2.3** | 2026-11-17 | P2 implementado: `Goal::pipeline`, blackboard de claims, rollback de workflow, G-A2/G-A3 |
 | **2.2** | 2026-11-17 | incorpora MSG 0263/0267: OOV, IC95/piso por seed, tag de proveniência/2 fontes, dry-run, hold por orçamento, telemetria; P0/P1 implementados |

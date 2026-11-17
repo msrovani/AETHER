@@ -69,9 +69,7 @@ impl ToolExecutor {
             }
         } else {
             // Rewind LIFO (memória) e truncamento do blackboard.
-            if let Err(e) = ctx.rewind(effects_before) {
-                return Err(e);
-            }
+            ctx.rewind(effects_before)?;
             ctx.rollback_to(effects_before, claims_before, certificates_before);
         }
         Ok(Execution {

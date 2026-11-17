@@ -215,7 +215,7 @@ Resposta: `action`, `answer`, `support`, `consensus`, `authority`,
 | pesos MoE após feedback | transplant sobe acima dos demais |
 | CLI em processo real | `tests/agent_cli.rs` |
 | biblioteca | `tests/agent_gate.rs` (6 gates) |
-| workflow P2 | `tests/agent_plan_gate.rs` (3 gates) |
+| workflow P2 | `tests/agent_plan_gate.rs` (5 gates) |
 
 ```bash
 cargo test --lib agent::
