@@ -33,6 +33,8 @@
 | Conhecer o projeto não era testável | fatos curados só em docs | `data/agent_facts.jsonl` + `gate_memoriza_fatos_do_projeto` | `tests/agent_gate.rs` |
 | SAT “factível” reprovava no executor | `Certificate` exigia `gap > 0`, mas SAT só garante `violations == 0` | separar `SuccessCriteria::Certificate` (factível) de `Coherent` (gap > 0) | `tool.rs` |
 | Registry não compilava `Debug` | `Box<dyn Tool>` não implementa `Debug` | `impl Debug` manual listando nomes | `registry.rs` |
+| Pipeline não compartilhava resultado | cada passo via o mesmo `Goal`, sem estado | blackboard `ToolContext.claims` + append no executor | `tool.rs`, `executor.rs` |
+| Falha no meio do workflow deixava lixo | efeitos/claims parciais | rollback por passo (`rollback_to`) + rollback de workflow | `executor.rs`, `tool_agent.rs` |
 
 ## 3. Invariantes que não podem regredir
 

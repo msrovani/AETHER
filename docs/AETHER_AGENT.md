@@ -170,6 +170,20 @@ curl -s localhost:8787/v1/aether/agent -d '{"n":3,"clauses":[[1,2,0],[-1,3,0]]}'
 curl -s localhost:8787/v1/aether/agent -d '{"n":4,"j":[0,...],"h":[1,1,1,1]}'
 ```
 
+### Workflow multi-passo (P2)
+
+`Goal::pipeline(vec![...])` executa subgoals em sequência com blackboard de
+claims (`ToolContext.claims`) e rollback de workflow se um passo falhar:
+
+```rust
+let workflow = Goal::pipeline(vec![fetch_goal, transform_goal, verify_goal]);
+let outcome = agent.solve(&workflow);
+// outcome.steps: fetch → transform → verify
+// falha no passo 2: claims/effects desfeitos, action=Abstain
+```
+
+Gates: `tests/agent_plan_gate.rs` (encadeia/verifica, falha desfaz, OOD abstém).
+
 Resposta: `action`, `answer`, `support`, `consensus`, `authority`,
 `contradictions`, `steps`, `experts`, `rationale`, `certificate`.
 

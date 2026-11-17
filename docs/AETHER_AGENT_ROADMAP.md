@@ -1,10 +1,10 @@
 # AETHER Agent — plano de implementação (v0.1 → v1.0)
 
-> **Versão do plano:** 2.2 — 2026-11-17
+> **Versão do plano:** 2.3 — 2026-11-17
 > Mudanças: análise cruzada; quatro trilhas (A/B/C/D); `LanguagePort` e
 > alternativas à LLM de borda; autoridade em escada; tiers de avaliação;
-> ADR-013; P0/P1 implementados; addenda do fórum (MSG 0263/0267): OOV, IC95,
-> proveniência, dry-run, hold por orçamento, telemetria.
+> ADR-013; P0/P1 implementados; P2 (pipeline/blackboard/rollback); addenda do
+> fórum (MSG 0263/0267): OOV, IC95, proveniência, dry-run, hold, telemetria.
 >
 > O que falta para o agente **escolher sozinho o que usar**, planejar em vários
 > passos, operar ferramentas com segurança e aprender sem se enganar.
@@ -278,6 +278,10 @@ telemetria. **Status:** P0/P1 verdes; promover a P2 só com IC/10 seeds.
 
 ### P2 — Planejamento multi-passo e parada (7–10 dias)
 
+**Status:** implementado o núcleo — `Goal::pipeline`, blackboard de claims,
+rollback de workflow, G-A2/G-A3. A busca MCTS/horizonte completo segue como
+evolução.
+
 **Arquivos**
 - `planner.rs` v2: grafo de estados + `PlanStep` + replanejamento.
 - `executor.rs`: transação multi-passo, rollback em cadeia, timeouts.
@@ -296,6 +300,9 @@ telemetria. **Status:** P0/P1 verdes; promover a P2 só com IC/10 seeds.
 - Custo de decisão registrado; sem loop infinito (budget hard cap).
 
 **Saída:** agente age em sequência, verifica, desfaz e pede ajuda.
+**Status (2026-11-17):** P2 implementado em `Goal::pipeline` +
+`ToolAgent::solve_pipeline` com blackboard (`ToolContext.claims`) e rollback de
+workflow; gates `tests/agent_plan_gate.rs` (G-A2 2/3, G-A3 20 OOD) verdes.
 
 ### P3 — Linguagem e ferramentas externas (7–10 dias)
 
@@ -636,6 +643,7 @@ Cada commit passa `cargo test --lib agent::` e `cargo test --test agent_tools_ga
 
 | Versão | Data | Mudança |
 |---|---|---|
+| **2.3** | 2026-11-17 | P2 implementado: `Goal::pipeline`, blackboard de claims, rollback de workflow, G-A2/G-A3 |
 | **2.2** | 2026-11-17 | incorpora MSG 0263/0267: OOV, IC95/piso por seed, tag de proveniência/2 fontes, dry-run, hold por orçamento, telemetria; P0/P1 implementados |
 | **2.1** | 2026-11-17 | análise cruzada com sessão paralela; 4 trilhas (A/B/C/D); `LanguagePort` + alternativas; autoridade em escada; tiers T0–T3; ADR-009…013; fórum MSG 0253–0259 |
 | 2.0 | 2026-11-17 | autoescolha EFE+UCB; tools/planner/self-model; trilhas B/C/D; gates G-A/B/C/D |
