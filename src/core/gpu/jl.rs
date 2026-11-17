@@ -133,12 +133,7 @@ mod imp {
         });
         let params = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("jl-params"),
-            contents: bytemuck::cast_slice(&[
-                n_rows as u32,
-                d as u32,
-                bits as u32,
-                words as u32,
-            ]),
+            contents: bytemuck::cast_slice(&[n_rows as u32, d as u32, bits as u32, words as u32]),
             usage: wgpu::BufferUsages::UNIFORM,
         });
 

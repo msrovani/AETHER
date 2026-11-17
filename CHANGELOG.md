@@ -3,6 +3,17 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.150] - 2026-11-17
+
+### Changed
+
+- Ciclo automatico: 3 arquivo(s) (examples:1, src:2).
+- Gate: ok (7s).
+
+- `examples/gpu_census.rs`
+- `src/core/gpu/jl.rs`
+- `src/core/gpu/mod.rs`
+
 ## [0.0.149] - 2026-11-17
 
 ### Changed

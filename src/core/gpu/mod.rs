@@ -209,13 +209,13 @@ pub fn status_with(force_off: bool) -> GpuStatus {
     GpuStatus {
         available: false,
         adapter: None,
-        off: Some(if force_off
-            || matches!(std::env::var("AETHER_GPU").as_deref(), Ok("0") | Ok("off"))
-        {
-            GpuOff::Disabled
-        } else {
-            GpuOff::NoFeature
-        }),
+        off: Some(
+            if force_off || matches!(std::env::var("AETHER_GPU").as_deref(), Ok("0") | Ok("off")) {
+                GpuOff::Disabled
+            } else {
+                GpuOff::NoFeature
+            },
+        ),
     }
 }
 

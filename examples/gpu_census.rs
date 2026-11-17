@@ -202,8 +202,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // FFT: L=8192, 4 linhas → ~2,1 MFLOP por chamada; transferência 0,26 MB.
     let fft_gflop = 5.0 * 8192.0 * (8192.0f64).log2() * 4.0 * 1e-9;
     let fft_bytes = (12.0 * 8192.0) * 4.0;
-    let fft_gpu_us =
-        ((fft_gflop / (GPU_TFLOPS * 1e3)) * 1e6).max(fft_bytes / (GPU_GBPS * 1e9) * 1e6) + LAUNCH_US;
+    let fft_gpu_us = ((fft_gflop / (GPU_TFLOPS * 1e3)) * 1e6)
+        .max(fft_bytes / (GPU_GBPS * 1e9) * 1e6)
+        + LAUNCH_US;
     let fft_cpu_us = 158.0; // medido acima
     let fft_ratio = fft_cpu_us / fft_gpu_us;
     println!(
