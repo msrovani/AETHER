@@ -483,7 +483,7 @@ fn run_transplant_probe(shared: &Shared) -> Result<String, String> {
 }
 
 /// Copia artefatos ativos para `data/rounds/YYYYMMDD_hhmmss_hub/` (anti-overwrite).
-fn archive_transplant_round(root: &PathBuf) -> Result<String, String> {
+fn archive_transplant_round(root: &std::path::Path) -> Result<String, String> {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
     let secs = SystemTime::now()
