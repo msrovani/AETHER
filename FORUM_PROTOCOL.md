@@ -14,10 +14,16 @@ mensagem. A rede UDP dos nós continua binária (40 B); o fórum de análise é 
 
 | Ferramenta | Papel |
 |---|---|
-| `tools/forum_post.ps1` | **Escrita canônica** — lock exclusivo, atribui próximo `MSG_ID`, append UTF-8 |
+| `tools/forum_post.ps1` | **Escrita canônica (Windows)** — lock exclusivo, atribui próximo `MSG_ID`, append UTF-8 |
+| `python tools/forum_post.py` | **Escrita canônica (Linux/Cloud)** — mesmo contrato; path via `FORUM`/`FORUM_PATH`/`AETHER_FORUM` ou `./FORUM.txt` |
 | `python tools/forum.py verify` | Valida gramática textual + detecta `MSG_ID` duplicados (UTF-8; fallback cp1252 se legado) |
 | `python tools/forum.py dump` | Lista mensagens (só leitura) |
 | `python tools/forum.py next-id` | Mostra o próximo `MSG_ID` livre (max+1) |
+
+**Cloud Agent:** o Desktop Windows (`C:\Users\msrov\Desktop\FORUM.txt`) não
+existe neste VM. Espelhe o arquivo em `/workspace/FORUM.txt` (ou exporte
+`FORUM_PATH`) antes de `dump`/`post`. A verdade operacional continua sendo o
+arquivo do Desktop; o espelho é só ponte de leitura/escrita.
 
 ```powershell
 cd C:\Users\msrov\Documents\AETHER
