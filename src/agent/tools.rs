@@ -354,16 +354,33 @@ impl Tool for MemoryWriteTool {
             .undo_backend
             .as_ref()
             .ok_or_else(|| ToolError::Failed("memory.write exige undo_backend".into()))?;
+        // Autoridade: não sobrescreve fato verificado/HITL sem humano, e não
+        // promove autoridade sozinho (reforço conta em `reinforced`).
+        let current = backend.peek(&key);
+        if let Some(snapshot) = &current {
+            if snapshot.authority >= 200 {
+                return Err(ToolError::NeedsHuman(format!(
+                    "`{key}` tem autoridade {} (>=200): escrita exige HITL",
+                    snapshot.authority
+                )));
+            }
+        }
+        let authority = current
+            .as_ref()
+            .map(|snapshot| snapshot.authority.max(128))
+            .unwrap_or(128);
         // Watermark ANTES da escrita: o rewind volta o outbox a este ponto.
         let outbox_len = backend.outbox_len();
-        let prev = backend.write(&key, value).map_err(ToolError::Failed)?;
+        let prev = backend
+            .write(&key, value, authority)
+            .map_err(ToolError::Failed)?;
         Ok(ToolOutcome {
             claims: vec![Claim::new(
                 subject,
                 relation,
                 value,
                 1.0,
-                128,
+                authority,
                 ExpertId::Memory,
                 Provenance::Inferred,
             )],

@@ -439,7 +439,11 @@ impl UndoBackend for SgdbUndoBackend {
         Ok(())
     }
 
-    fn write(&self, key: &str, text: &str) -> Result<Option<Snapshot>, String> {
+    fn peek(&self, key: &str) -> Option<Snapshot> {
+        self.lock().records.get(key).map(|r| r.snapshot.clone())
+    }
+
+    fn write(&self, key: &str, text: &str, authority: u8) -> Result<Option<Snapshot>, String> {
         self.write_inner(key, None, |prev| {
             let (reinforced, scope, provenance) = match prev {
                 Some(previous) => (
@@ -452,7 +456,7 @@ impl UndoBackend for SgdbUndoBackend {
             Snapshot {
                 text: text.to_string(),
                 object: text.to_string(),
-                authority: AUTHORITY_QUARANTINE,
+                authority,
                 reinforced,
                 scope,
                 provenance,
@@ -634,8 +638,14 @@ mod tests {
         let journal = TempJournal::new("before");
         let backend = journal.backend();
 
-        assert!(backend.write("k", "A").unwrap().is_none());
-        let prev = backend.write("k", "B").unwrap().expect("before-image");
+        assert!(backend
+            .write("k", "A", AUTHORITY_QUARANTINE)
+            .unwrap()
+            .is_none());
+        let prev = backend
+            .write("k", "B", AUTHORITY_QUARANTINE)
+            .unwrap()
+            .expect("before-image");
         assert_eq!(prev.text, "A");
         assert_eq!(prev.object, "A");
         assert_eq!(prev.authority, AUTHORITY_QUARANTINE);
@@ -651,7 +661,7 @@ mod tests {
     fn insert_undo_remove_o_proprio_valor() {
         let journal = TempJournal::new("insert");
         let backend = journal.backend();
-        backend.write("k", "A").unwrap();
+        backend.write("k", "A", AUTHORITY_QUARANTINE).unwrap();
 
         backend.insert_undo("k").unwrap();
         assert!(backend.get("k").is_none());
@@ -664,9 +674,12 @@ mod tests {
     fn insert_undo_recusa_valor_estrangeiro() {
         let journal = TempJournal::new("stale");
         let backend = journal.backend();
-        backend.write("k", "A").unwrap();
+        backend.write("k", "A", AUTHORITY_QUARANTINE).unwrap();
         // Outro escritor grava por cima depois do insert.
-        let prev = backend.write("k", "B").unwrap().expect("before-image");
+        let prev = backend
+            .write("k", "B", AUTHORITY_QUARANTINE)
+            .unwrap()
+            .expect("before-image");
         assert_eq!(prev.text, "A");
 
         let error = backend.insert_undo("k").expect_err("deve recusar");
@@ -679,8 +692,11 @@ mod tests {
     fn restore_faz_roundtrip_e_recusa_stale() {
         let journal = TempJournal::new("restore");
         let backend = journal.backend();
-        backend.write("k", "A").unwrap();
-        let before = backend.write("k", "B").unwrap().expect("before-image");
+        backend.write("k", "A", AUTHORITY_QUARANTINE).unwrap();
+        let before = backend
+            .write("k", "B", AUTHORITY_QUARANTINE)
+            .unwrap()
+            .expect("before-image");
 
         backend.restore("k", &before).unwrap();
         assert_eq!(backend.get("k").unwrap().text, "A");
@@ -733,7 +749,9 @@ mod tests {
             .unwrap();
 
         assert!(
-            backend.write("humano", "outro").is_err(),
+            backend
+                .write("humano", "outro", AUTHORITY_QUARANTINE)
+                .is_err(),
             "sobrescrever 255 sem token é recusado"
         );
         backend
@@ -792,8 +810,8 @@ mod tests {
         let journal = TempJournal::new("replay");
         {
             let backend = journal.backend();
-            backend.write("k", "A").unwrap();
-            backend.write("k", "B").unwrap();
+            backend.write("k", "A", AUTHORITY_QUARANTINE).unwrap();
+            backend.write("k", "B", AUTHORITY_QUARANTINE).unwrap();
             assert_eq!(backend.len(), 1);
         }
 
@@ -808,7 +826,7 @@ mod tests {
         assert!(error.starts_with("stale"), "{error}");
 
         // E uma inserção nova feita depois do reopen continua desfazível.
-        reopened.write("novo", "N").unwrap();
+        reopened.write("novo", "N", AUTHORITY_QUARANTINE).unwrap();
         reopened.insert_undo("novo").unwrap();
         assert!(reopened.get("novo").is_none());
         assert_eq!(reopened.len(), 1);

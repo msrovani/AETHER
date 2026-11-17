@@ -462,9 +462,14 @@ pub trait UndoBackend: Send + Sync {
         let _ = outbox_len;
         self.stage_rewind(txn, keys)
     }
-    /// Escrita com before-image (para `memory.write`).
-    fn write(&self, key: &str, text: &str) -> Result<Option<Snapshot>, String> {
-        let _ = (key, text);
+    /// Snapshot atual da chave, **sem** escrever (pré-checagem de autoridade).
+    fn peek(&self, key: &str) -> Option<Snapshot> {
+        let _ = key;
+        None
+    }
+    /// Escrita com before-image e autoridade explícita (para `memory.write`).
+    fn write(&self, key: &str, text: &str, authority: u8) -> Result<Option<Snapshot>, String> {
+        let _ = (key, text, authority);
         Err("undo backend sem write".into())
     }
 }

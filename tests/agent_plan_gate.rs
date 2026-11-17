@@ -287,6 +287,7 @@ fn gate_a2_real_recall_sat_verify() {
 #[derive(Default)]
 struct MockStore {
     data: HashMap<String, String>,
+    auth: HashMap<String, u8>,
     outbox: Vec<String>,
     undo_calls: usize,
     stage_rewinds: usize,
@@ -339,17 +340,31 @@ impl UndoBackend for MockUndo {
         Ok(())
     }
 
-    fn write(&self, key: &str, text: &str) -> Result<Option<Snapshot>, String> {
+    fn peek(&self, key: &str) -> Option<Snapshot> {
+        let store = self.store.lock().ok()?;
+        let text = store.data.get(key)?;
+        Some(Snapshot {
+            text: text.clone(),
+            object: text.clone(),
+            authority: *store.auth.get(key).unwrap_or(&128),
+            reinforced: 0,
+            scope: "org:1/run:0".into(),
+            provenance: "mock".into(),
+        })
+    }
+
+    fn write(&self, key: &str, text: &str, authority: u8) -> Result<Option<Snapshot>, String> {
         let mut store = self.store.lock().map_err(|_| "store")?;
         let prev = store.data.get(key).map(|old| Snapshot {
             text: old.clone(),
             object: old.clone(),
-            authority: 128,
+            authority: *store.auth.get(key).unwrap_or(&128),
             reinforced: 0,
             scope: "org:1/run:0".into(),
             provenance: "mock".into(),
         });
         store.data.insert(key.to_string(), text.to_string());
+        store.auth.insert(key.to_string(), authority);
         store.outbox.push(key.to_string());
         Ok(prev)
     }

@@ -7,8 +7,9 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use aether_engine::agent::{
-    Budget, Cost, Goal, GoalKind, MemoryWriteTool, Risk, SelfModel, SuccessCriteria, Tool,
-    ToolAgent, ToolContext, ToolError, ToolOutcome, ToolRegistry, ToolSchema, WorldState,
+    Action, Budget, Cost, Goal, GoalKind, MemoryWriteTool, Risk, SelfModel, Snapshot,
+    SuccessCriteria, Tool, ToolAgent, ToolContext, ToolError, ToolOutcome, ToolRegistry,
+    ToolSchema, WorldState,
 };
 use aether_engine::core::knowledge_bridge_f1::ScopeId;
 
@@ -143,5 +144,54 @@ fn gate_memory_write_sucesso_persiste_no_journal() {
     let backend = aether_engine::agent::SgdbUndoBackend::new(&path);
     let stored = backend.get("k|rel").map(|s| s.text);
     assert_eq!(stored.as_deref(), Some("v1"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn gate_memory_write_reforco_nao_promove_autoridade() {
+    let path = temp_journal("reinforce");
+    let mut agent = agent_with_journal(path.clone());
+    assert!(agent.solve(&act_goal("k", "rel", "v1")).success);
+
+    // Reabre o journal: o reforço é aplicado sobre o registro existente.
+    let mut agent = agent_with_journal(path.clone());
+    assert!(agent.solve(&act_goal("k", "rel", "v2")).success);
+
+    let backend = aether_engine::agent::SgdbUndoBackend::new(&path);
+    let stored = backend.get("k|rel").expect("registro");
+    assert_eq!(stored.text, "v2");
+    assert_eq!(stored.authority, 128, "não promove autoridade sozinho");
+    assert_eq!(stored.reinforced, 1, "reforço conta");
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn gate_memory_write_recusa_sobrescrever_authority_200() {
+    let path = temp_journal("authority200");
+    {
+        let backend = aether_engine::agent::SgdbUndoBackend::new(&path);
+        let seed = Snapshot {
+            text: "aprovado".into(),
+            object: "aprovado".into(),
+            authority: 200,
+            reinforced: 3,
+            scope: "org:1/run:0".into(),
+            provenance: "hitl".into(),
+        };
+        backend.write_snapshot("k|rel", seed).expect("seed");
+    }
+
+    let mut agent = agent_with_journal(path.clone());
+    let outcome = agent.solve(&act_goal("k", "rel", "novo"));
+    assert!(!outcome.success);
+    assert_eq!(outcome.action, Action::Cite, "{}", outcome.rationale);
+    assert!(outcome.rationale.contains("HITL") || outcome.rationale.contains("humano"));
+
+    let backend = aether_engine::agent::SgdbUndoBackend::new(&path);
+    assert_eq!(
+        backend.get("k|rel").map(|s| s.text),
+        Some("aprovado".into()),
+        "fato verificado não pode ser sobrescrito"
+    );
     let _ = std::fs::remove_file(&path);
 }
