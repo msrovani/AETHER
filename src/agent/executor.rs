@@ -43,6 +43,8 @@ impl ToolExecutor {
             .ok_or_else(|| ToolError::InvalidArgs(format!("tool `{}` sumiu", step.tool)))?;
         // Dry-run obrigatório antes de qualquer efeito (P2 reusa isto).
         tool.dry_run(goal, ctx)?;
+        let effects_before = ctx.effects.len();
+        let claims_before = ctx.claims.len();
         let started = std::time::Instant::now();
         let outcome = tool.call(goal, ctx)?;
         ctx.charge(cost);
@@ -51,9 +53,12 @@ impl ToolExecutor {
             ctx.push_effect(effect.clone());
         }
         let met = goal.success.met(&outcome);
-        if !met {
+        if met {
+            // Blackboard: o próximo passo pode consumir estas claims.
+            ctx.claims.extend(outcome.claims.iter().cloned());
+        } else {
             // Efeitos de um passo que não passou no verificador são desfeitos.
-            ctx.rollback();
+            ctx.rollback_to(effects_before, claims_before);
         }
         Ok(Execution {
             outcome,

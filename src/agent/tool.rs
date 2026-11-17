@@ -190,6 +190,8 @@ pub struct Goal {
     pub budget: Budget,
     /// Teto de risco aceitável sem HITL.
     pub risk_ceiling: Risk,
+    /// Subgoals em sequência (P2). Vazio = goal único.
+    pub pipeline: Vec<Goal>,
 }
 
 impl Goal {
@@ -214,6 +216,7 @@ impl Goal {
             h: Vec::new(),
             budget: Budget::default(),
             risk_ceiling: Risk::Low,
+            pipeline: Vec::new(),
         }
     }
 
@@ -232,6 +235,7 @@ impl Goal {
             success: SuccessCriteria::Certificate,
             budget: Budget::default(),
             risk_ceiling: Risk::Low,
+            pipeline: Vec::new(),
         }
     }
 
@@ -250,6 +254,7 @@ impl Goal {
             success: SuccessCriteria::Coherent,
             budget: Budget::default(),
             risk_ceiling: Risk::Low,
+            pipeline: Vec::new(),
         }
     }
 
@@ -268,6 +273,7 @@ impl Goal {
             success: SuccessCriteria::NonEmpty,
             budget: Budget::default(),
             risk_ceiling: Risk::Low,
+            pipeline: Vec::new(),
         }
     }
 
@@ -276,6 +282,25 @@ impl Goal {
         self.budget = budget;
         self.risk_ceiling = risk_ceiling;
         self
+    }
+
+    /// Workflow sequencial (P2): executa subgoals em ordem, com blackboard.
+    pub fn pipeline(steps: Vec<Goal>) -> Self {
+        Self {
+            id: 0,
+            kind: GoalKind::Act,
+            subject: None,
+            relation: None,
+            query: None,
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            success: SuccessCriteria::Any,
+            budget: Budget::default(),
+            risk_ceiling: Risk::Low,
+            pipeline: steps,
+        }
     }
 
     /// Cluster de competência (contexto do self-model).
@@ -415,6 +440,8 @@ pub struct ToolContext {
     pub trace_id: u64,
     /// Efeitos acumulados.
     pub effects: Vec<Effect>,
+    /// Claims verificadas dos passos anteriores (blackboard).
+    pub claims: Vec<Claim>,
 }
 
 impl ToolContext {
@@ -427,6 +454,7 @@ impl ToolContext {
             spent_tokens: 0,
             trace_id,
             effects: Vec::new(),
+            claims: Vec::new(),
         }
     }
 
@@ -451,9 +479,16 @@ impl ToolContext {
         }
     }
 
-    /// Rollback lógico (limpa efeitos; integração real vem na P2).
+    /// Rollback lógico (limpa efeitos/claims; integração real vem na P2/P3).
     pub fn rollback(&mut self) {
         self.effects.clear();
+        self.claims.clear();
+    }
+
+    /// Rollback até um ponto anterior (transação por passo).
+    pub fn rollback_to(&mut self, effects: usize, claims: usize) {
+        self.effects.truncate(effects);
+        self.claims.truncate(claims);
     }
 }
 

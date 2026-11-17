@@ -15,7 +15,7 @@ use super::self_model::SelfModel;
 use super::telemetry::{goal_label, EpisodeTrace, StepTrace};
 use super::tool::{Budget, Cost, Goal, Risk, ToolContext, ToolSchema, WorldState};
 use super::tools::default_tools;
-use super::{Action, AgentConfig, Feedback};
+use super::{Action, AgentConfig, Claim, Feedback};
 
 /// Resultado de um goal.
 #[derive(Clone, Debug)]
@@ -30,6 +30,8 @@ pub struct GoalOutcome {
     pub steps: Vec<StepTrace>,
     /// Última saída.
     pub outcome: Option<super::tool::ToolOutcome>,
+    /// Claims verificadas do workflow (blackboard).
+    pub claims: Vec<Claim>,
     /// Motivo.
     pub rationale: String,
     /// Trace.
@@ -114,22 +116,108 @@ impl ToolAgent {
     }
 
     /// Executa o goal com orçamento, risco e verificação.
+    ///
+    /// Se `goal.pipeline` não estiver vazio, executa os subgoals em sequência,
+    /// compartilhando o blackboard (`ToolContext.claims`). Falha em qualquer
+    /// passo desfaz os efeitos/claims acumulados (rollback de workflow).
     pub fn solve(&mut self, goal: &Goal) -> GoalOutcome {
+        if !goal.pipeline.is_empty() {
+            return self.solve_pipeline(goal);
+        }
         let started = std::time::Instant::now();
         let state = WorldState {
             scope: self.scope,
             facts_loaded: 0,
             memory_hits: 0,
         };
-        let budget = goal.budget.max_steps.clamp(1, 16);
         let mut ctx = ToolContext::new(
             self.scope,
             Budget {
-                max_steps: budget,
+                max_steps: goal.budget.max_steps.clamp(1, 16),
                 ..goal.budget
             },
             goal.id,
         );
+        let (success, action, steps, last, rationale) = self.run_goal(goal, &state, &mut ctx);
+        self.finish(
+            goal,
+            success,
+            action,
+            steps,
+            last,
+            rationale,
+            ctx.claims.clone(),
+            started,
+        )
+    }
+
+    fn solve_pipeline(&mut self, workflow: &Goal) -> GoalOutcome {
+        let started = std::time::Instant::now();
+        let state = WorldState {
+            scope: self.scope,
+            facts_loaded: 0,
+            memory_hits: 0,
+        };
+        let total_steps: usize = workflow
+            .pipeline
+            .iter()
+            .map(|goal| goal.budget.max_steps.max(1))
+            .sum::<usize>()
+            .clamp(1, 32);
+        let mut ctx = ToolContext::new(
+            self.scope,
+            Budget {
+                max_steps: total_steps,
+                ..workflow.budget
+            },
+            workflow.id,
+        );
+        let mut steps: Vec<StepTrace> = Vec::new();
+        let mut last: Option<Execution> = None;
+        let mut success = true;
+        let mut action = Action::Act;
+        let mut rationale = "workflow verificado".to_string();
+
+        for (index, subgoal) in workflow.pipeline.iter().enumerate() {
+            let (ok, sub_action, mut sub_steps, sub_last, why) =
+                self.run_goal(subgoal, &state, &mut ctx);
+            steps.append(&mut sub_steps);
+            if let Some(execution) = sub_last {
+                last = Some(execution);
+            }
+            if !ok {
+                success = false;
+                action = Action::Abstain;
+                rationale = format!("passo {} falhou: {why}", index + 1);
+                ctx.rollback();
+                break;
+            }
+            if sub_action == Action::Cite {
+                success = false;
+                action = Action::Cite;
+                rationale = format!("passo {} pediu HITL", index + 1);
+                break;
+            }
+        }
+        self.finish(
+            workflow,
+            success,
+            action,
+            steps,
+            last,
+            rationale,
+            ctx.claims.clone(),
+            started,
+        )
+    }
+
+    fn run_goal(
+        &mut self,
+        goal: &Goal,
+        state: &WorldState,
+        ctx: &mut ToolContext,
+    ) -> (bool, Action, Vec<StepTrace>, Option<Execution>, String) {
+        let budget = goal.budget.max_steps.clamp(1, 16);
         let mut used: Vec<&'static str> = Vec::new();
         let mut steps: Vec<StepTrace> = Vec::new();
         let mut last: Option<Execution> = None;
@@ -140,7 +228,7 @@ impl ToolAgent {
         for _ in 0..budget {
             let Some(step) =
                 self.planner
-                    .select(goal, &state, &self.registry, &self.self_model, &used)
+                    .select(goal, state, &self.registry, &self.self_model, &used)
             else {
                 break;
             };
@@ -158,9 +246,7 @@ impl ToolAgent {
                 rationale = "orçamento insuficiente: hold".to_string();
                 continue;
             }
-            let execution = self
-                .executor
-                .execute(&mut self.registry, &step, goal, &mut ctx);
+            let execution = self.executor.execute(&mut self.registry, &step, goal, ctx);
             match execution {
                 Ok(execution) => {
                     let met = execution.met;
@@ -205,7 +291,21 @@ impl ToolAgent {
                 rationale = "tool pediu HITL".to_string();
             }
         }
+        (success, action, steps, last, rationale)
+    }
 
+    #[allow(clippy::too_many_arguments)]
+    fn finish(
+        &mut self,
+        goal: &Goal,
+        success: bool,
+        action: Action,
+        steps: Vec<StepTrace>,
+        last: Option<Execution>,
+        rationale: String,
+        claims: Vec<Claim>,
+        started: std::time::Instant,
+    ) -> GoalOutcome {
         let total_us = started.elapsed().as_micros() as u64;
         let answer = last
             .as_ref()
@@ -227,6 +327,7 @@ impl ToolAgent {
             action,
             steps,
             outcome: last.map(|execution| execution.outcome),
+            claims,
             rationale,
             trace,
         }

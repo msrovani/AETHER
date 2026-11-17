@@ -42,16 +42,12 @@ fn projector() -> JlProjector {
     JlProjector::new(D_IN, BITS, 512, 0xE3_0001)
 }
 
-/// Matriz JL transposta (d x bits), que é o layout coalescido do kernel.
+/// Matriz JL transposta (d x bits), layout do kernel v2.
 fn transposed_matrix(proj: &mut JlProjector) -> Vec<f32> {
     let mut row_major = vec![0.0f32; BITS * D_IN];
     proj.fill_matrix(&mut row_major);
     let mut t = vec![0.0f32; BITS * D_IN];
-    for bit in 0..BITS {
-        for j in 0..D_IN {
-            t[j * BITS + bit] = row_major[bit * D_IN + j];
-        }
-    }
+    jl::transpose_into(&row_major, BITS, D_IN, &mut t);
     t
 }
 
@@ -67,8 +63,7 @@ fn jl_gpu_igual_ao_cpu_bit_a_bit() {
     let n = 200usize;
     let words = BITS / 64;
     let mut proj = projector();
-    let mut mat = vec![0.0f32; BITS * D_IN];
-    proj.fill_matrix(&mut mat);
+    let mat = transposed_matrix(&mut proj);
     let x = make_rows(n, 0x7E57);
 
     let mut cpu = vec![0u64; n * words];
@@ -106,8 +101,7 @@ fn gpu_razao_minima_2x() {
     let n = 2000usize;
     let words = BITS / 64;
     let mut proj = projector();
-    let mut mat = vec![0.0f32; BITS * D_IN];
-    proj.fill_matrix(&mut mat);
+    let mat = transposed_matrix(&mut proj);
     let x = make_rows(n, 0xA11CE);
 
     let mut cpu = vec![0u64; n * words];
@@ -124,7 +118,7 @@ fn gpu_razao_minima_2x() {
 
     // custo de gerar+transpor a matriz na CPU (uma vez por sessão)
     let t = Instant::now();
-    proj.fill_matrix(&mut mat);
+    let _ = transposed_matrix(&mut proj);
     let fill_ms = t.elapsed().as_secs_f64() * 1e3;
 
     let ratio = cpu_ms / gpu_ms;
@@ -150,11 +144,10 @@ fn fallback_force_off_nao_panica() {
     // com force_off o kernel recusa e o chamador usa CPU
     let n = 2usize;
     let mut proj = projector();
-    let mut mat = vec![0.0f32; BITS * D_IN];
-    proj.fill_matrix(&mut mat);
+    let mat = transposed_matrix(&mut proj);
     let x = make_rows(n, 3);
     let mut out = vec![0u64; n * (BITS / 64)];
-    let err = jl::project_into_with(true, &mat, &x, n, D_IN, BITS, &mut out);
+    let err = jl::project_into_with(jl::DEFAULT_KERNEL, true, &mat, &x, n, D_IN, BITS, &mut out);
     assert_eq!(err, Err(jl::JlGpuError::Off(gpu::GpuOff::Disabled)));
 
     // e a referência CPU continua exata

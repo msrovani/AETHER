@@ -81,6 +81,9 @@ impl EpisodeTrace {
 
 /// Resumo legível de um goal (sem depender de `Debug`).
 pub fn goal_label(goal: &Goal) -> String {
+    if !goal.pipeline.is_empty() {
+        return format!("pipeline:{}", goal.pipeline.len());
+    }
     match goal.kind {
         super::tool::GoalKind::Answer => {
             if let (Some(subject), Some(relation)) = (&goal.subject, &goal.relation) {

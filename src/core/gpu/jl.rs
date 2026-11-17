@@ -36,8 +36,87 @@ impl From<GpuOff> for JlGpuError {
 /// Largura do *workgroup* (threads) do kernel.
 pub const WG: u32 = 64;
 
+/// Kernel **v2**: coalescido, sem átomos, 32 acumuladores por thread.
+///
+/// A matriz vem **transposta** (`d × bits`): as 32 colunas de cada thread são
+/// 32 `f32` consecutivos, então um warp lê linhas de cache inteiras. A soma
+/// continua j-ascendente, então o bit é idêntico ao caminho CPU.
 #[cfg(feature = "gpu")]
-const SHADER: &str = r#"
+const SHADER_V2: &str = r#"
+struct Params {
+    n_rows: u32,
+    d: u32,
+    bits: u32,
+    words: u32,   // palavras de 32 bits por linha (2 x u64 words)
+};
+
+@group(0) @binding(0) var<uniform> p: Params;
+@group(0) @binding(1) var<storage, read> mat: array<f32>;
+@group(0) @binding(2) var<storage, read> x: array<f32>;
+@group(0) @binding(3) var<storage, read_write> out: array<u32>;
+
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    let word = gid.x;
+    let row = gid.y;
+    if (word >= p.words || row >= p.n_rows) {
+        return;
+    }
+    var acc: array<f32, 32>;
+    for (var b: u32 = 0u; b < 32u; b = b + 1u) {
+        acc[b] = 0.0;
+    }
+    let xbase = row * p.d;
+    let mbase = word * 32u;
+    for (var j: u32 = 0u; j < p.d; j = j + 1u) {
+        let xv = x[xbase + j];
+        let rb = j * p.bits + mbase;
+        for (var b: u32 = 0u; b < 32u; b = b + 1u) {
+            acc[b] = acc[b] + mat[rb + b] * xv;
+        }
+    }
+    var packed: u32 = 0u;
+    for (var b: u32 = 0u; b < 32u; b = b + 1u) {
+        if (acc[b] >= 0.0) {
+            packed = packed | (1u << b);
+        }
+    }
+    out[row * p.words + word] = packed;
+}
+"#;
+
+/// Qual kernel usar.
+///
+/// * [`JlKernel::V1`] — 1 thread por `(bit, linha)`, matriz row-major, `atomicOr`.
+///   Foi o primeiro a validar (bit-a-bit, 3× no RTX 3050).
+/// * [`JlKernel::V2`] — 1 thread por `(palavra de 32 bits, linha)`, matriz
+///   **transposta** (`d × bits`), 32 acumuladores, sem átomos (coalescido).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JlKernel {
+    /// Kernel original (átomos, row-major).
+    V1,
+    /// Kernel coalescido (sem átomos, matriz transposta).
+    V2,
+}
+
+/// Kernel padrão do caminho GPU.
+pub const DEFAULT_KERNEL: JlKernel = JlKernel::V2;
+
+/// Transpõe a matriz JL (`bits × d` → `d × bits`), sem alocar.
+///
+/// É o layout que o kernel v2 exige; faça isso **uma vez por sessão** e reusa
+/// o buffer entre lotes (o custo é ~15,7 MB de cópia).
+pub fn transpose_into(row_major: &[f32], bits: usize, d: usize, out: &mut [f32]) {
+    assert!(row_major.len() >= bits * d && out.len() >= bits * d);
+    for bit in 0..bits {
+        for j in 0..d {
+            out[j * bits + bit] = row_major[bit * d + j];
+        }
+    }
+}
+
+#[cfg(feature = "gpu")]
+const SHADER_V1: &str = r#"
 struct Params {
     n_rows: u32,
     d: u32,
@@ -73,7 +152,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 "#;
 #[cfg(feature = "gpu")]
 mod imp {
-    use super::{JlGpuError, SHADER, WG};
+    use super::{JlGpuError, JlKernel, DEFAULT_KERNEL, SHADER_V1, SHADER_V2, WG};
     use crate::core::gpu;
 
     /// Roda o GEMM do JL. `out_words` tem `n_rows · words` `u64`.
@@ -87,12 +166,13 @@ mod imp {
         bits: usize,
         out_words: &mut [u64],
     ) -> Result<(), JlGpuError> {
-        project_into_with(false, mat, rows, n_rows, d, bits, out_words)
+        project_into_with(DEFAULT_KERNEL, false, mat, rows, n_rows, d, bits, out_words)
     }
 
     /// Igual a [project_into], com orce_off (teste determinístico do fallback).
     #[allow(clippy::too_many_arguments)]
     pub fn project_into_with(
+        kernel: JlKernel,
         force_off: bool,
         mat: &[f32],
         rows: &[f32],
@@ -131,16 +211,27 @@ mod imp {
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        // v1 usa palavras de 64 bits; v2 usa palavras de 32 bits (2× words)
+        let w32 = match kernel {
+            JlKernel::V1 => words,
+            JlKernel::V2 => words * 2,
+        };
         let params = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("jl-params"),
-            contents: bytemuck::cast_slice(&[n_rows as u32, d as u32, bits as u32, words as u32]),
+            contents: bytemuck::cast_slice(&[n_rows as u32, d as u32, bits as u32, w32 as u32]),
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
         // --- pipeline ---
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("jl-shader"),
-            source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+            source: wgpu::ShaderSource::Wgsl(
+                match kernel {
+                    JlKernel::V1 => SHADER_V1,
+                    JlKernel::V2 => SHADER_V2,
+                }
+                .into(),
+            ),
         });
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("jl-layout"),
@@ -234,7 +325,7 @@ mod imp {
             });
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind, &[]);
-            let gx = (bits as u32).div_ceil(WG);
+            let gx = (w32 as u32).div_ceil(WG);
             pass.dispatch_workgroups(gx, n_rows as u32, 1);
         }
         encoder.copy_buffer_to_buffer(&out_buf, 0, &staging, 0, (n_rows * words * 8) as u64);
@@ -267,8 +358,11 @@ mod imp {
 pub use imp::{project_into, project_into_with};
 
 /// Sem a feature: recusa explícita (o chamador cai para CPU).
+/// Assinatura espelha a variante `feature = "gpu"` (8 args); allow local.
 #[cfg(not(feature = "gpu"))]
+#[allow(clippy::too_many_arguments)]
 pub fn project_into_with(
+    _kernel: JlKernel,
     _force_off: bool,
     _mat: &[f32],
     _rows: &[f32],
