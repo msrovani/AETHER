@@ -217,6 +217,7 @@ Resposta: `action`, `answer`, `support`, `consensus`, `authority`,
 | biblioteca | `tests/agent_gate.rs` (6 gates) |
 | workflow P2/P3 | `tests/agent_plan_gate.rs` (15 gates: pipeline, undo LIFO, stage, HITL, irreversível pré-call) |
 | undo durável | `tests/agent_undo_sgdb_gate.rs` (6) + 11 unit tests em `src/agent/undo_sgdb.rs` |
+| autoridade por evidência | `tests/agent_certificate_authority.rs` (3: 96/128/200) |
 | stress transacional | `tests/agent_undo_stress.rs` (240 escritas/rewinds aleatórios vs modelo) |
 | calibração P4 | `tests/agent_self_model_gate.rs` (4: ECE, Brier, temperatura, persistência) |
 | HTTP | `tests/api_agent.rs` (14: pipeline, caps, HITL, undo) |

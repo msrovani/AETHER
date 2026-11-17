@@ -3,6 +3,45 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.166] - 2026-11-17
+
+### Added
+
+- **Autoridade por evidência (fecha a escada):** `VerifiedFact` no blackboard;
+  `verify` liga claim de solver a certificado válido (`violations=0`), e
+  `memory.write` grava em **200** só quando o fato está verificado. Sem
+  certificado, quarentena (96); com 2 fontes, 128.
+- Gate `tests/agent_certificate_authority.rs` (3): promove com certificado,
+  fica em quarentena sem certificado, não promove com `violations>0`.
+- Gate `tests/agent_undo_stress.rs`: 240 escritas/rewinds aleatórios contra
+  modelo independente (undo LIFO + CAS + watermark).
+
+### Changed
+
+- `ToolContext.verified` entra no `rollback_to` (HITL/rollback não deixa
+  evidência órfã).
+- Planner usa `p_sucesso` calibrado (temperatura P4; identidade por default).
+
+### Fixed
+
+- `authority >= 255` virou `== AUTHORITY_HITL` (clippy `absurd_extreme_comparisons`).
+- Comentário do `forget`: 255 sem store retorna `500 ledger_io` nas duas rotas.
+
+### Gates
+
+- lib **165**; `agent_plan_gate` **15**; `agent_tools_gate` **5**;
+  `agent_undo_sgdb_gate` **6** + 11 unit; `agent_undo_stress` **1**;
+  `agent_certificate_authority` **3**; `agent_gate` **6**; `agent_cli` **2**;
+  `agent_eval_gate` **2**; `agent_eval_suite` **1** (24 casos);
+  `agent_self_model_gate` **4**; `language_port_gate` **9**;
+  `api_agent` **14**; `api_http` **9**; `api_integrity` **10**;
+  `api_lifecycle` **5**; `api_sgdb` **2**; `api_eval` **1**.
+
+### Pendente (próximo ciclo)
+
+- MCTS atrás de gate medido; D1 orçamentos p50/p99/RSS; D3 red team;
+  CI `--features gpu`; `cargo fmt --check`; B-G0/B1/B4; FFT G2.
+
 ## [0.0.165] - 2026-11-17
 
 ### Changed
@@ -11,7 +50,7 @@ Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto
 - `VerifiedFact` + rollback de `verified` no HITL (`memory.write` → 200).
 - Forget `authority=255` sem store → `500 ledger_io` (ledger e memory).
 - Docs: CYCLE_CLOSE doação, EXTERNAL_API, USER_DELIVERY 0.6, playbook §15.
-- Gates verdes: api_agent, api_lifecycle, agent_certificate_authority, undo/tools. JL tiled já está em `act` (o item JL-V4 do board 0414 está encerrado). Seguem abertos: FFT G2, MCTS, CI `--features gpu`, `cargo fmt --check`, B-G0/B1/B4.
+- Revalidado neste fecho: `api_agent` 14/14, `api_lifecycle` 5/5, `agent_certificate_authority` 3/3. JL tiled já está em `act` (o item JL-V4 do board 0414 está encerrado). Seguem abertos: FFT G2, MCTS, CI `--features gpu`, `cargo fmt --check`, B-G0/B1/B4.
 
 ### Files
 

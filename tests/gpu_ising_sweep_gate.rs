@@ -491,20 +491,36 @@ fn e2c_glass_com_vies_na_gpu() {
     let mut sweep = ising::IsingSweep::new().expect("sessão GPU");
     let mut gpu_e = vec![0.0f32; k_inst];
     let mut gpu_s = vec![0i32; k_inst * N];
-    let _ = sweep.sweep_into(&j32, &h32, &init, &c0, N, k_inst, STEPS, &mut gpu_e, &mut gpu_s);
+    let _ = sweep.sweep_into(
+        &j32, &h32, &init, &c0, N, k_inst, STEPS, &mut gpu_e, &mut gpu_s,
+    );
     let mut gpu_ms = f64::INFINITY;
     for _ in 0..3 {
         let t = Instant::now();
         sweep
-            .sweep_into(&j32, &h32, &init, &c0, N, k_inst, STEPS, &mut gpu_e, &mut gpu_s)
+            .sweep_into(
+                &j32, &h32, &init, &c0, N, k_inst, STEPS, &mut gpu_e, &mut gpu_s,
+            )
             .expect("kernel GPU");
         gpu_ms = gpu_ms.min(t.elapsed().as_secs_f64() * 1e3);
     }
 
     let gpu: Vec<f64> = gpu_e.iter().map(|v| f64::from(*v)).collect();
-    let igual = cpu.iter().zip(&gpu).filter(|(a, b)| (*a - *b).abs() <= 1e-3).count();
-    let melhor = cpu.iter().zip(&gpu).filter(|(a, b)| **b < **a - 1e-3).count();
-    let pior = cpu.iter().zip(&gpu).filter(|(a, b)| **b > **a + 1e-3).count();
+    let igual = cpu
+        .iter()
+        .zip(&gpu)
+        .filter(|(a, b)| (*a - *b).abs() <= 1e-3)
+        .count();
+    let melhor = cpu
+        .iter()
+        .zip(&gpu)
+        .filter(|(a, b)| **b < **a - 1e-3)
+        .count();
+    let pior = cpu
+        .iter()
+        .zip(&gpu)
+        .filter(|(a, b)| **b > **a + 1e-3)
+        .count();
     let dentro5 = cpu
         .iter()
         .zip(&gpu)

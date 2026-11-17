@@ -320,10 +320,13 @@ planner podia escolher `ask.human` (custo zero) no lugar de uma tool executável
    solver/verificação com certificado ⇒ 200 + `Observed`.
 5. `ask.human` é tool de **escalação** (`Tool::escalation`): score fora do EFE,
    só aparece quando nenhuma tool executável paga o piso.
+6. **200 exige certificado**: `verify` registra `VerifiedFact` (claim de solver
+   + certificado com `violations=0`); `memory.write` só grava em 200 quando o
+   fato está verificado. Corroboração (2 fontes) para em 128; 255 é humano.
 
-**Status.** Implementado (`d3daf36`, `975ff0d`, `40af2e3`), incluindo a
-promoção por corroboração (`UndoBackend::write_sourced` + proveniência
-registrada); parte de API em `199ade4`.
+**Status.** Implementado (`d3daf36`, `975ff0d`, `40af2e3`, `0.0.166`), incluindo
+promoção por corroboração (`write_sourced` + proveniência) e por certificado
+(`VerifiedFact`); parte de API em `199ade4`.
 
 **Consequências.**
 - Um fato inferido não "vira verdade" por reescrita; promoção exige

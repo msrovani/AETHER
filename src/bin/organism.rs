@@ -150,7 +150,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     cfg.decision_dim = 64;
 
-    println!("AETHER — organismo pós-token v{}", env!("CARGO_PKG_VERSION"));
+    println!(
+        "AETHER — organismo pós-token v{}",
+        env!("CARGO_PKG_VERSION")
+    );
     println!(
         "nós=3 canais={} janela={} passos={} hz={} ruído_sensor={} perturb_em={:?}",
         cfg.sensor_channels, cfg.window, cfg.steps, cfg.hz, cfg.sensor_noise, cfg.perturb_after

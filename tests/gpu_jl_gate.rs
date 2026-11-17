@@ -162,17 +162,53 @@ fn jl_gpu_v1_vs_v2() {
     let mut out_v1 = vec![0u64; n * words];
     let mut out_v2 = vec![0u64; n * words];
     // warm-up separado por shader (cada call recompila o pipeline)
-    let _ = jl::project_into_with(jl::JlKernel::V1, false, &row, &x, n, D_IN, BITS, &mut out_v1);
-    let _ = jl::project_into_with(jl::JlKernel::V2, false, &col, &x, n, D_IN, BITS, &mut out_v2);
+    let _ = jl::project_into_with(
+        jl::JlKernel::V1,
+        false,
+        &row,
+        &x,
+        n,
+        D_IN,
+        BITS,
+        &mut out_v1,
+    );
+    let _ = jl::project_into_with(
+        jl::JlKernel::V2,
+        false,
+        &col,
+        &x,
+        n,
+        D_IN,
+        BITS,
+        &mut out_v2,
+    );
 
     let t = Instant::now();
-    jl::project_into_with(jl::JlKernel::V1, false, &row, &x, n, D_IN, BITS, &mut out_v1)
-        .expect("kernel V1");
+    jl::project_into_with(
+        jl::JlKernel::V1,
+        false,
+        &row,
+        &x,
+        n,
+        D_IN,
+        BITS,
+        &mut out_v1,
+    )
+    .expect("kernel V1");
     let v1_ms = t.elapsed().as_secs_f64() * 1e3;
 
     let t = Instant::now();
-    jl::project_into_with(jl::JlKernel::V2, false, &col, &x, n, D_IN, BITS, &mut out_v2)
-        .expect("kernel V2");
+    jl::project_into_with(
+        jl::JlKernel::V2,
+        false,
+        &col,
+        &x,
+        n,
+        D_IN,
+        BITS,
+        &mut out_v2,
+    )
+    .expect("kernel V2");
     let v2_ms = t.elapsed().as_secs_f64() * 1e3;
 
     let mism = out_v1

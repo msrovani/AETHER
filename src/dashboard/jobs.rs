@@ -479,9 +479,7 @@ fn run_transplant_probe(shared: &Shared) -> Result<String, String> {
         ));
     }
     let round = archive_transplant_round(&root)?;
-    Ok(format!(
-        "doação OK · probe · gate · uso · round={round}"
-    ))
+    Ok(format!("doação OK · probe · gate · uso · round={round}"))
 }
 
 /// Copia artefatos ativos para `data/rounds/YYYYMMDD_hhmmss_hub/` (anti-overwrite).
@@ -504,8 +502,14 @@ fn archive_transplant_round(root: &PathBuf) -> Result<String, String> {
         ("data/sgdb_mock_ledger.json", "sgdb_mock_ledger.json"),
         ("data/hv/bank.bin", "hv/bank.bin"),
         ("data/hv/bank.idx", "hv/bank.idx"),
-        ("target/aether_transplant_hv.json", "aether_transplant_hv.json"),
-        ("target/aether_transplant_uso.json", "aether_transplant_uso.json"),
+        (
+            "target/aether_transplant_hv.json",
+            "aether_transplant_hv.json",
+        ),
+        (
+            "target/aether_transplant_uso.json",
+            "aether_transplant_uso.json",
+        ),
         ("target/aether_e3.json", "aether_e3.json"),
     ];
     for (src, rel) in copies {

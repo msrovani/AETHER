@@ -81,10 +81,7 @@ fn extract_u64(line: &str, key: &str) -> Option<u64> {
     let pat = format!("\"{key}\": ");
     let i = line.find(&pat)? + pat.len();
     let rest = &line[i..];
-    let num: String = rest
-        .chars()
-        .take_while(|c| c.is_ascii_digit())
-        .collect();
+    let num: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
     num.parse().ok()
 }
 
@@ -128,10 +125,7 @@ fn load_atoms_from_ledger(data_dir: &Path, facts: &str) -> Vec<AtomRecord> {
             i = abs + 5;
             continue;
         };
-        let (authority, wall_ms) = fact_meta
-            .get(&label)
-            .copied()
-            .unwrap_or((100, 0));
+        let (authority, wall_ms) = fact_meta.get(&label).copied().unwrap_or((100, 0));
         atoms.push(AtomRecord {
             key,
             label,
