@@ -152,13 +152,59 @@ fn tiled_razao_minima_10x() {
         "razão {ratio:.2}× < 10× (o v2 media 5×; o tiled tem de superar)"
     );
 
-    // bit-exato também no lote grande
-    let mism = cpu
-        .iter()
-        .zip(gpu_out.iter())
-        .filter(|(a, b)| a != b)
-        .count();
-    assert_eq!(mism, 0, "{mism} palavras divergentes no lote de {n}");
+    // bit-exato também no lote grande: divergência só é aceitável se o produto
+    // interno daquele bit for ~0 (o WGSL funde mul+add; o sinal de |dot|≈0
+    // vira). Qualquer outra divergência é bug de índice.
+    let words = BITS / 64;
+    let mut mism = 0usize;
+    let mut worst_dot = 0.0f64;
+    for (i, (a, b)) in cpu.iter().zip(gpu_out.iter()).enumerate() {
+        if a == b {
+            continue;
+        }
+        mism += 1;
+        let row = i / words;
+        let w = i % words;
+        for bit in 0..64usize {
+            if (a >> bit) & 1 == (b >> bit) & 1 {
+                continue;
+            }
+            let bcol = w * 64 + bit;
+            let mut dot = 0.0f64;
+            for j in 0..D_IN {
+                dot += f64::from(mat[j * BITS + bcol]) * f64::from(x[row * D_IN + j]);
+            }
+            worst_dot = worst_dot.max(dot.abs());
+        }
+    }
+    println!("  divergências no lote grande: {mism} palavra(s) · maior |dot| {worst_dot:.3e}");
+    assert!(
+        mism <= 4 && (mism as f64) / ((n * words) as f64) < 1e-5,
+        "{mism} palavras divergentes em {} (limite 4 e 1e-5)",
+        n * words
+    );
+    for (i, (a, b)) in cpu.iter().zip(gpu_out.iter()).enumerate() {
+        if a == b {
+            continue;
+        }
+        let row = i / words;
+        let w = i % words;
+        for bit in 0..64usize {
+            if (a >> bit) & 1 == (b >> bit) & 1 {
+                continue;
+            }
+            let bcol = w * 64 + bit;
+            let mut dot = 0.0f64;
+            for j in 0..D_IN {
+                dot += f64::from(mat[j * BITS + bcol]) * f64::from(x[row * D_IN + j]);
+            }
+            assert!(
+                dot.abs() < 1e-3,
+                "bit ({row}, {bcol}) divergiu com |dot| = {:.3e} — não é arredondamento",
+                dot.abs()
+            );
+        }
+    }
 }
 
 #[test]
