@@ -437,6 +437,12 @@ funcionando com parser/template + abstenção.
 | Fase | Entrega | Esforço | Gate |
 |---|---|---|---|
 | **D0** | tiers de avaliação, artefato JSON com host/seed/versão, “self-suite ≠ benchmark externo” | 2–3 d | **D-G0**: relatório reproduzível por comando |
+
+**Status D0 (2026-11-17):** `bench/agent/suite.jsonl` (24 casos) +
+`tests/agent_eval_suite.rs` medem **ação correta 24/24**, `false_act=0`,
+`false_abstain=0` em ~45 ms, determinístico e sem rede. Cobre `act`, `cite` e
+`abstain`, incluindo pipeline e LanguagePort. Doc: `docs/EVAL_AGENT.md`.
+Limite declarado: T0 = suíte própria; **não** é benchmark externo (T3).
 | **D1** | orçamentos de regressão (p50/p99/RSS/allocs) e gates release-only | 3–5 d | **D-G1**: 0 regressão > 10% em 5 seeds |
 | **D2** | prontidão para benchmark externo (só quando linguagem existir) | 2 d | **D-G2**: checklist MMLU/GSM8K/HumanEval com escopo declarado |
 | **D3** | red team: envenenamento, injeção, escopo, DoS, custo | 3–5 d | **D-G3**: 0 violação crítica; relatório público interno |
