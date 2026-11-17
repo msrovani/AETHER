@@ -625,10 +625,12 @@ fn route(state: &mut ApiState, req: &Request) -> Reply {
         (
             "POST",
             "/v1/aether/remember"
+                | "/v1/aether/memory/remember"
                 | "/v1/aether/cue"
                 | "/v1/aether/solve"
                 | "/v1/aether/agent"
                 | "/v1/aether/forget"
+                | "/v1/aether/memory/forget"
                 | "/v1/chat/completions"
                 | "/completion"
         )
@@ -646,11 +648,13 @@ fn route(state: &mut ApiState, req: &Request) -> Reply {
         ("GET", "/health") => Reply::Json(200, health(state)),
         ("GET", "/props") => Reply::Json(200, props(state)),
         ("GET", "/v1/models") => Reply::Json(200, models()),
-        ("POST", "/v1/aether/remember") => remember(state, req, bound),
+        ("POST", "/v1/aether/remember") => remember(state, req, bound, false),
+        ("POST", "/v1/aether/memory/remember") => remember(state, req, bound, true),
         ("POST", "/v1/aether/cue") => cue(state, &req.body, bound),
         ("POST", "/v1/aether/solve") => solve(&req.body),
         ("POST", "/v1/aether/agent") => agent_route(state, &req.body, bound),
-        ("POST", "/v1/aether/forget") => forget(state, req, bound),
+        ("POST", "/v1/aether/forget") => forget(state, req, bound, false),
+        ("POST", "/v1/aether/memory/forget") => forget(state, req, bound, true),
         ("POST", "/v1/chat/completions") => chat(state, &req.body, bound),
         ("POST", "/completion") => completion(state, &req.body, bound),
         ("OPTIONS", _) => Reply::Json(204, Json::Null),
@@ -783,7 +787,19 @@ fn models() -> Json {
     ])
 }
 
-fn remember(state: &mut ApiState, req: &Request, bound: Option<u64>) -> Reply {
+/// Grava um fato no ledger (F1).
+///
+/// Dois contratos explícitos, por rota:
+///
+/// * `/v1/aether/remember` — **ledger local confiável** (organismo/chat e
+///   avaliação): a `authority` do corpo é o mandato e é preservada (0..=255).
+///   É a rota que a documentação usa para semear fatos com 255.
+/// * `/v1/aether/memory/remember` — **memória exposta ao cliente**: ignora a
+///   autoridade do corpo. Fato novo entra em [`AUTHORITY_QUARANTINE`] (96), e
+///   200/255 só com o segredo HITL do servidor no cabeçalho (promoção
+///   server-side). A resposta informa `authority` efetiva e, quando o pedido
+///   foi rebaixado, `authority_requested`.
+fn remember(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: bool) -> Reply {
     let doc = match parse_json(&req.body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
@@ -802,14 +818,14 @@ fn remember(state: &mut ApiState, req: &Request, bound: Option<u64>) -> Reply {
         None => return bad("key ausente (número ou string decimal)"),
     };
     let certificate = cert_from(doc.get("certificate"));
-    // Autoridade é do **servidor**, não do corpo. Fato novo entra em
-    // quarentena (96); 200/255 só com o segredo HITL apresentado no cabeçalho.
     let requested = doc
         .get("authority")
         .and_then(Json::as_u64)
         .unwrap_or(0)
         .min(255) as u8;
-    let authority = if requested >= AUTHORITY_HITL && hitl_authorized(state, req) {
+    // Rota de memória: o cliente não promove. Rota de ledger: autoridade é do
+    // host local (ver doc acima) e é preservada como sempre foi.
+    let authority = if !memory || (requested >= AUTHORITY_HITL && hitl_authorized(state, req)) {
         requested
     } else {
         AUTHORITY_QUARANTINE
@@ -914,19 +930,22 @@ fn remember(state: &mut ApiState, req: &Request, bound: Option<u64>) -> Reply {
 
 /// Remove um fato do escopo e grava o túmulo (para não ressuscitar no boot).
 ///
-/// * `< 200` — comportamento antigo: `403 authority_required`.
-/// * `200..=254` — grava o **túmulo** e mantém o registro no ledger: o purge
-///   fica pendente de decisão humana (`forgot:false`, `tombstoned:true`).
-/// * `255` — purga de fato aprovado por humano (`forgot:true`).
+/// Dois contratos explícitos, por rota:
 ///
-/// `200/255` só valem com o **segredo HITL do servidor** apresentado no
-/// cabeçalho `x-aether-hitl` (ou em `Authorization`/`X-Aether-Token`, quando for
-/// o mesmo segredo); sem ele a rota responde `403 hitl_required`. Corpo
-/// (`authority`/`confirm`) não concede poder: é dado do cliente, não mandato.
+/// * `/v1/aether/forget` — **ledger local confiável**: a `authority` do corpo é
+///   o mandato (como em `remember`). `< 200` → `403 authority_required`;
+///   `200..=254` grava túmulo e **não** purga (`forgot:false`, HITL pendente);
+///   `255` purga.
+/// * `/v1/aether/memory/forget` — memória exposta ao cliente: o corpo não
+///   concede poder. `200/255` exigem o **segredo HITL do servidor** no
+///   cabeçalho `x-aether-hitl` (ou `Authorization`/`X-Aether-Token`, quando for
+///   o mesmo segredo); sem ele, `403 hitl_required`. Para 255 exige ledger
+///   persistente (túmulo durável antes do purge), senão `500 ledger_io`.
 ///
-/// O túmulo é gravado **antes** da remoção: se o disco falhar, o fato continua
-/// citável e o cliente vê `500`, em vez de perder o registro sem rastro.
-fn forget(state: &mut ApiState, req: &Request, bound: Option<u64>) -> Reply {
+/// Em ambas, o túmulo é gravado **antes** da remoção: se o disco falhar, o fato
+/// continua citável e o cliente vê `500`, em vez de perder o registro sem
+/// rastro.
+fn forget(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: bool) -> Reply {
     let doc = match parse_json(&req.body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
@@ -954,9 +973,9 @@ fn forget(state: &mut ApiState, req: &Request, bound: Option<u64>) -> Reply {
             ),
         );
     }
-    // 200/255 só com o segredo do servidor: `{"authority":255,"confirm":true}`
-    // não vale como mandato humano.
-    if !hitl_authorized(state, req) {
+    // Só a rota de memória depende do segredo do servidor: na rota de ledger a
+    // `authority` do host local é o mandato (mesma distinção de `remember`).
+    if memory && !hitl_authorized(state, req) {
         return Reply::Json(
             403,
             error_json(
@@ -981,15 +1000,13 @@ fn forget(state: &mut ApiState, req: &Request, bound: Option<u64>) -> Reply {
                 );
             }
             tombstoned = true;
-        } else if authority == AUTHORITY_HUMAN {
-            // Sem store não há onde gravar o túmulo. Purgar aqui apagaria o
-            // fato da memória e ele ressuscitaria no próximo boot.
+        } else if memory && authority == AUTHORITY_HUMAN {
+            // Rota de memória: sem store não há onde gravar o túmulo. Purgar
+            // aqui apagaria o fato e ele ressuscitaria no próximo boot. (O
+            // ledger local pode ser efêmero por desenho — testes/embutido.)
             return Reply::Json(
                 500,
-                error_json(
-                    "ledger_io",
-                    "sem store para gravar o túmulo antes do purge",
-                ),
+                error_json("ledger_io", "sem store para gravar o túmulo antes do purge"),
             );
         }
     }

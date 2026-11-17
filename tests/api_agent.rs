@@ -470,14 +470,19 @@ fn api_agent_forget_200_tombstone_sem_purge() {
     assert_eq!(status, 200, "{resp}");
 
     // Sem o segredo HITL, 200 não deleta (o corpo não autoriza nada).
-    let (status, resp) = request(addr, "POST", "/v1/aether/forget", &forget_body(1, 1, 200));
+    let (status, resp) = request(
+        addr,
+        "POST",
+        "/v1/aether/memory/forget",
+        &forget_body(1, 1, 200),
+    );
     assert_eq!(status, 403, "{resp}");
     assert_eq!(error_kind(&json_of(&resp)), "hitl_required", "{resp}");
 
     let (status, resp) = request_with_hitl(
         addr,
         "POST",
-        "/v1/aether/forget",
+        "/v1/aether/memory/forget",
         &forget_body(1, 1, 200),
         Some(HITL_TOKEN),
     );
@@ -500,7 +505,7 @@ fn api_agent_forget_200_tombstone_sem_purge() {
     let (status, resp) = request_with_hitl(
         addr,
         "POST",
-        "/v1/aether/forget",
+        "/v1/aether/memory/forget",
         &forget_body(1, 1, 255),
         Some(HITL_TOKEN),
     );
@@ -512,7 +517,8 @@ fn api_agent_forget_200_tombstone_sem_purge() {
     let _ = std::fs::remove_file(&file);
 }
 
-/// `remember` ignora a autoridade do corpo: fato novo entra em quarentena (96).
+/// Rota de memória ignora a autoridade do corpo: fato novo entra em quarentena
+/// (96); a rota de ledger confiável preserva a autoridade explícita do host.
 #[test]
 fn api_agent_remember_ignora_authority_do_cliente() {
     let addr = start_cfg(ApiConfig {
@@ -521,11 +527,11 @@ fn api_agent_remember_ignora_authority_do_cliente() {
         ..ApiConfig::default()
     });
 
-    // 255 no corpo não vira 255 no ledger: é 96, e a resposta sinaliza.
+    // 255 no corpo não vira 255 na memória: é 96, e a resposta sinaliza.
     let (status, resp) = request(
         addr,
         "POST",
-        "/v1/aether/remember",
+        "/v1/aether/memory/remember",
         &remember_body_with_authority(1, 1, 255),
     );
     assert_eq!(status, 200, "{resp}");
@@ -545,19 +551,43 @@ fn api_agent_remember_ignora_authority_do_cliente() {
     let (_, resp) = request(
         addr,
         "POST",
-        "/v1/aether/remember",
+        "/v1/aether/memory/remember",
         &remember_body_with_authority(2, 2, 128),
     );
     assert!(resp.contains("\"authority\":96"), "{resp}");
 
     // E `forget` < 200 continua recusado como antes.
-    let (status, resp) = request(addr, "POST", "/v1/aether/forget", &forget_body(1, 1, 128));
+    let (status, resp) = request(
+        addr,
+        "POST",
+        "/v1/aether/memory/forget",
+        &forget_body(1, 1, 128),
+    );
     assert_eq!(status, 403, "{resp}");
     assert_eq!(error_kind(&json_of(&resp)), "authority_required", "{resp}");
 
     // A recusa não apagou o fato.
     let (_, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(1));
     assert!(resp.contains("\"key\":\"1\""), "{resp}");
+
+    // Rota de ledger (organismo/chat): autoridade explícita do host é
+    // preservada — é o contrato antigo, documentado em docs/EXTERNAL_API.md.
+    let (status, resp) = request(
+        addr,
+        "POST",
+        "/v1/aether/remember",
+        &remember_body_with_authority(3, 3, 255),
+    );
+    assert_eq!(status, 200, "{resp}");
+    assert!(resp.contains("\"authority\":255"), "{resp}");
+    let (_, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(3));
+    assert!(resp.contains("\"key\":\"3\""), "{resp}");
+    assert!(resp.contains("\"authority\":255"), "{resp}");
+
+    // Na rota de ledger o corpo É o mandato: 255 purga sem header HITL.
+    let (status, resp) = request(addr, "POST", "/v1/aether/forget", &forget_body(3, 3, 255));
+    assert_eq!(status, 200, "{resp}");
+    assert!(resp.contains("\"forgot\":true"), "{resp}");
 }
 
 /// 255 purga um fato aprovado por humano, mas **só** com o segredo HITL do
@@ -570,11 +600,11 @@ fn api_agent_forget_255_exige_segredo_hitl() {
         ..ApiConfig::default()
     });
 
-    // O único caminho para um fato 255 é o HITL do servidor.
+    // O único caminho para um fato 255 na rota de memória é o HITL do servidor.
     let (status, resp) = request_with_hitl(
         addr,
         "POST",
-        "/v1/aether/remember",
+        "/v1/aether/memory/remember",
         &remember_body_with_authority(9, 1, 255),
         Some(HITL_TOKEN),
     );
@@ -582,17 +612,20 @@ fn api_agent_forget_255_exige_segredo_hitl() {
     assert!(resp.contains("\"authority\":255"), "{resp}");
 
     // Sem segredo (mesmo pedindo `confirm:true`) a rota recusa.
-    let body = format!(
-        r#"{{"key":"9","scope":{{"organism":1,"run":1,"app":1}},
-            "authority":255,"confirm":true,"reason":"teste"}}"#
-    );
-    let (status, resp) = request(addr, "POST", "/v1/aether/forget", &body);
+    let body = r#"{"key":"9","scope":{"organism":1,"run":1,"app":1},
+        "authority":255,"confirm":true,"reason":"teste"}"#;
+    let (status, resp) = request(addr, "POST", "/v1/aether/memory/forget", body);
     assert_eq!(status, 403, "{resp}");
     assert_eq!(error_kind(&json_of(&resp)), "hitl_required", "{resp}");
 
     // Segredo errado também não passa.
-    let (status, resp) =
-        request_with_hitl(addr, "POST", "/v1/aether/forget", &body, Some("errado"));
+    let (status, resp) = request_with_hitl(
+        addr,
+        "POST",
+        "/v1/aether/memory/forget",
+        &body,
+        Some("errado"),
+    );
     assert_eq!(status, 403, "{resp}");
     assert_eq!(error_kind(&json_of(&resp)), "hitl_required", "{resp}");
 
@@ -608,15 +641,12 @@ fn api_agent_forget_255_exige_segredo_hitl() {
     let (status, resp) = request_with_hitl(
         addr,
         "POST",
-        "/v1/aether/forget",
+        "/v1/aether/memory/forget",
         &forget_body(9, 1, 255),
         Some(HITL_TOKEN),
     );
     assert_eq!(status, 500, "{resp}");
     assert_eq!(error_kind(&json_of(&resp)), "ledger_io", "{resp}");
     let (_, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(1));
-    assert!(
-        resp.contains("\"key\":\"9\""),
-        "purge sem túmulo: {resp}"
-    );
+    assert!(resp.contains("\"key\":\"9\""), "purge sem túmulo: {resp}");
 }

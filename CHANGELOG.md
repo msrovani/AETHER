@@ -3,6 +3,19 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.161] - 2026-11-17
+
+### Changed
+
+- Ciclo automatico: 5 arquivo(s) (.:1, bench:1, src:1, tests:2).
+- Gate: ok (31s).
+
+- `Cargo.lock`
+- `src/api/mod.rs`
+- `tests/api_agent.rs`
+- `bench/`
+- `tests/agent_eval_suite.rs`
+
 ## [0.0.160] - 2026-11-17
 
 ### Changed

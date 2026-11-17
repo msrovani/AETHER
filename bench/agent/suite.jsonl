@@ -1,0 +1,24 @@
+{"id":"fact-known-aether-usa","goal":"fact:AETHER:usa","expect":{"action":"act","success":true,"answer_contains":"fase"}}
+{"id":"fact-known-brasil-capital","goal":"fact:Brasil:capital","expect":{"action":"act","success":true,"answer_contains":"Bras"}}
+{"id":"fact-known-ising-energia","goal":"fact:Ising:minimiza","expect":{"action":"act","success":true,"answer_contains":"energia"}}
+{"id":"fact-unknown-subject","goal":"fact:Zzyzx:capital","expect":{"action":"abstain","success":false}}
+{"id":"fact-unknown-relation","goal":"fact:AETHER:desconhecida","expect":{"action":"abstain","success":false}}
+{"id":"sat-three-var-certificate","goal":"sat:3:0,1,1,1;0,-1,2,1","expect":{"action":"act","success":true}}
+{"id":"sat-two-var-single-clause","goal":"sat:2:0,1,1,1","expect":{"action":"act","success":true}}
+{"id":"sat-four-var-mixed","goal":"sat:4:0,1,1,-1,2,1;1,1,2,1,3,-1","expect":{"action":"act","success":true}}
+{"id":"sat-three-var-unsat-chain","goal":"sat:3:0,1,1,1;0,1,1,-1;0,-1,2,1;0,-1,2,-1","expect":{"action":"abstain","success":false}}
+{"id":"sat-two-var-all-clauses-conflict","goal":"sat:2:0,1,1,1;0,-1,1,1;0,1,1,-1;0,-1,1,-1","expect":{"action":"abstain","success":false}}
+{"id":"qubo-four-positive","goal":"qubo:4:1,1,1,1:zeros","expect":{"action":"act","success":true,"answer_contains":"++++"}}
+{"id":"qubo-three-positive","goal":"qubo:3:1,1,1:zeros","expect":{"action":"act","success":true}}
+{"id":"qubo-two-negative","goal":"qubo:2:-1,-1:zeros","expect":{"action":"act","success":true}}
+{"id":"ood-verify-without-evidence","goal":"verify:x","expect":{"action":"abstain","success":false}}
+{"id":"ood-act-low-ceiling","goal":"act:AETHER:proibe:backpropagation:low","expect":{"action":"abstain","success":false}}
+{"id":"ood-memory-empty-query","goal":"memory:","expect":{"action":"abstain","success":false}}
+{"id":"cite-parse-oov","goal":"memory:conte uma piada","expect":{"action":"cite","success":false}}
+{"id":"cite-parse-missing-slot","goal":"memory:qual e a capital","expect":{"action":"cite","success":false}}
+{"id":"effect-write-medium-no-undo","goal":"act:AETHER:proibe:backpropagation:medium","expect":{"action":"abstain","success":false}}
+{"id":"language-recall-parse","goal":"memory:recall memoria","expect":{"action":"act","success":true,"answer_contains":"memoria"}}
+{"id":"pipeline-fact-sat-verify","goal":"pipeline:fact:AETHER:usa|sat:3:0,1,1,1;0,-1,2,1|verify:x","expect":{"action":"act","success":true,"answer_contains":"ok"}}
+{"id":"pipeline-fact-qubo","goal":"pipeline:fact:AETHER:usa|qubo:4:1,1,1,1:zeros","expect":{"action":"act","success":true}}
+{"id":"pipeline-fail-unknown-fact","goal":"pipeline:fact:Zzyzx:capital|sat:3:0,1,1,1;0,-1,2,1","expect":{"action":"abstain","success":false}}
+{"id":"pipeline-fail-unsat","goal":"pipeline:fact:AETHER:usa|sat:3:0,1,1,1;0,1,1,-1;0,-1,2,1;0,-1,2,-1","expect":{"action":"abstain","success":false}}
