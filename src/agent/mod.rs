@@ -73,6 +73,7 @@ pub use tool::{
     ToolError, ToolOutcome, ToolSchema, UndoBackend, UndoOp, WorldState,
 };
 pub use tool_agent::{GoalOutcome, ToolAgent};
+pub use tools::MemoryWriteTool;
 
 /// Identidade estável de um especialista (1 byte para logs).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

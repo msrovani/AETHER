@@ -99,6 +99,10 @@ fn landscape(k: usize, n: usize, seed: u64) -> Vec<f64> {
 }
 
 /// Estatística KS de duas amostras (sem dependência nova).
+///
+/// Avança **os dois** lados sobre valores empatados antes de medir a diferença
+/// das CDFs — com energias inteiras há muitos empates e a variante ingênua
+/// (avançar um lado só) infla `D`.
 fn ks_statistic(a: &[f64], b: &[f64]) -> f64 {
     let mut x = a.to_vec();
     let mut y = b.to_vec();
@@ -106,14 +110,20 @@ fn ks_statistic(a: &[f64], b: &[f64]) -> f64 {
     y.sort_by(|p, q| p.partial_cmp(q).unwrap());
     let (na, nb) = (x.len() as f64, y.len() as f64);
     let (mut i, mut m, mut d) = (0usize, 0usize, 0.0f64);
-    while i < x.len() && m < y.len() {
-        let (fa, fb) = ((i + 1) as f64 / na, (m + 1) as f64 / nb);
-        d = d.max((fa - fb).abs());
-        if x[i] <= y[m] {
+    while i < x.len() || m < y.len() {
+        let v = match (x.get(i), y.get(m)) {
+            (Some(p), Some(q)) => p.min(*q),
+            (Some(p), None) => *p,
+            (None, Some(q)) => *q,
+            (None, None) => break,
+        };
+        while i < x.len() && x[i] <= v {
             i += 1;
-        } else {
+        }
+        while m < y.len() && y[m] <= v {
             m += 1;
         }
+        d = d.max((i as f64 / na - m as f64 / nb).abs());
     }
     d
 }
@@ -176,14 +186,21 @@ fn sweep_gpu_pareia_com_o_solver() {
     // --- GPU ---
     let mut gpu_e = vec![0.0f32; K];
     let mut gpu_s = vec![0i32; K * N];
-    ising::sweep_into(&j32, &h32, &b.init, &b.c0, N, K, STEPS, &mut gpu_e, &mut gpu_s)
-        .expect("kernel GPU");
+    ising::sweep_into(
+        &j32, &h32, &b.init, &b.c0, N, K, STEPS, &mut gpu_e, &mut gpu_s,
+    )
+    .expect("kernel GPU");
 
     // --- gate 1a: a energia reportada corresponde ao estado devolvido ---
     let mut worst_self = 0.0f64;
     for inst in 0..K {
         let s = &gpu_s[inst * N..(inst + 1) * N];
-        let e = energy_f64(&b.j64[inst * N * N..(inst + 1) * N * N], &b.h64[inst * N..(inst + 1) * N], N, s);
+        let e = energy_f64(
+            &b.j64[inst * N * N..(inst + 1) * N * N],
+            &b.h64[inst * N..(inst + 1) * N],
+            N,
+            s,
+        );
         worst_self = worst_self.max((e - f64::from(gpu_e[inst])).abs());
     }
 
@@ -213,8 +230,15 @@ fn sweep_gpu_pareia_com_o_solver() {
         mean(&cpu_e),
         mean(&gpu64)
     );
-    assert!(worst_self <= 1e-3, "energia reportada ≠ H(estado): {worst_self:.3e}");
-    assert!(frac >= 0.95, "só {:.1}% das instâncias com |ΔE| ≤ 1e-3", 100.0 * frac);
+    assert!(
+        worst_self <= 1e-3,
+        "energia reportada ≠ H(estado): {worst_self:.3e}"
+    );
+    assert!(
+        frac >= 0.95,
+        "só {:.1}% das instâncias com |ΔE| ≤ 1e-3",
+        100.0 * frac
+    );
     assert!(ks <= 0.15, "KS {ks:.3} — distribuições de ótimos divergem");
     assert!(
         mean(&gpu64) <= mean(&cpu_e) + 1e-3,
@@ -244,8 +268,10 @@ fn sweep_gpu_razao_minima_2x() {
     let mut gpu_s = vec![0i32; K * N];
 
     // aquece o pipeline (compilação de shader na primeira chamada)
-    ising::sweep_into(&j32, &h32, &b.init, &b.c0, N, K, STEPS, &mut gpu_e, &mut gpu_s)
-        .expect("kernel GPU");
+    ising::sweep_into(
+        &j32, &h32, &b.init, &b.c0, N, K, STEPS, &mut gpu_e, &mut gpu_s,
+    )
+    .expect("kernel GPU");
 
     let mut cpu_best = f64::INFINITY;
     let mut gpu_best = f64::INFINITY;
@@ -258,8 +284,10 @@ fn sweep_gpu_razao_minima_2x() {
         cpu_best = cpu_best.min(t.elapsed().as_secs_f64());
 
         let t = Instant::now();
-        ising::sweep_into(&j32, &h32, &b.init, &b.c0, N, K, STEPS, &mut gpu_e, &mut gpu_s)
-            .expect("kernel GPU");
+        ising::sweep_into(
+            &j32, &h32, &b.init, &b.c0, N, K, STEPS, &mut gpu_e, &mut gpu_s,
+        )
+        .expect("kernel GPU");
         gpu_best = gpu_best.min(t.elapsed().as_secs_f64());
     }
     let ratio = cpu_best / gpu_best;
@@ -298,7 +326,9 @@ fn fallback_e_shape_invalido_nao_panicam() {
     let init_big = vec![0.1f32; k * n_big * 2];
     let mut e_big = vec![0.0f32; k];
     let mut s_big = vec![0i32; k * n_big];
-    let err = ising::sweep_into(&j_big, &h_big, &init_big, &c0, n_big, k, 4, &mut e_big, &mut s_big);
+    let err = ising::sweep_into(
+        &j_big, &h_big, &init_big, &c0, n_big, k, 4, &mut e_big, &mut s_big,
+    );
     assert_eq!(err, Err(ising::IsingGpuError::InvalidShape));
 
     // buffers curtos
@@ -308,4 +338,31 @@ fn fallback_e_shape_invalido_nao_panicam() {
     // steps == 0 é config inválida, não divisão por zero
     let err = ising::sweep_into(&j, &h, &init, &c0, n, k, 0, &mut e, &mut s);
     assert_eq!(err, Err(ising::IsingGpuError::InvalidShape));
+}
+
+/// Diagnóstico do custo fixo por chamada (criação de pipeline + buffers).
+#[test]
+#[ignore = "diagnóstico: custo fixo por chamada vs kernel"]
+fn bench_bruto() {
+    let st = gpu::status();
+    if !st.available {
+        return;
+    }
+    for k in [200usize, 2_000, 10_000] {
+        let j64 = landscape(k, N, SEED);
+        let b = bundles(&j64, k, N, SEED);
+        let j32: Vec<f32> = b.j64.iter().map(|v| *v as f32).collect();
+        let h32: Vec<f32> = b.h64.iter().map(|v| *v as f32).collect();
+        let mut e = vec![0.0f32; k];
+        let mut s = vec![0i32; k * N];
+        let _ = ising::sweep_into(&j32, &h32, &b.init, &b.c0, N, k, STEPS, &mut e, &mut s);
+        let mut times = Vec::new();
+        for _ in 0..5 {
+            let t = Instant::now();
+            ising::sweep_into(&j32, &h32, &b.init, &b.c0, N, k, STEPS, &mut e, &mut s)
+                .expect("gpu");
+            times.push(t.elapsed().as_secs_f64() * 1e3);
+        }
+        println!("k={k}: {times:?} ms");
+    }
 }

@@ -117,8 +117,29 @@ fn api_agent_aceita_pipeline_steps() {
     assert_eq!(status, 200, "{resp}");
     assert!(resp.contains("\"pipeline\":true"), "{resp}");
     assert!(resp.contains("\"trace\""), "{resp}");
-    assert!(
-        resp.contains("\"success\":true") || resp.contains("\"action\""),
-        "{resp}"
-    );
+    assert!(resp.contains("\"success\":true"), "{resp}");
+}
+
+#[test]
+fn api_agent_pipeline_rejeita_acima_do_cap() {
+    let addr = start();
+    let too_many = r#"{"steps":[
+      {"kind":"fact","subject":"Brasil","relation":"capital"},
+      {"kind":"fact","subject":"Brasil","relation":"capital"},
+      {"kind":"fact","subject":"Brasil","relation":"capital"},
+      {"kind":"fact","subject":"Brasil","relation":"capital"},
+      {"kind":"fact","subject":"Brasil","relation":"capital"},
+      {"kind":"fact","subject":"Brasil","relation":"capital"},
+      {"kind":"fact","subject":"Brasil","relation":"capital"},
+      {"kind":"fact","subject":"Brasil","relation":"capital"},
+      {"kind":"fact","subject":"Brasil","relation":"capital"}
+    ]}"#;
+    let (status, resp) = request(addr, "POST", "/v1/aether/agent", too_many);
+    assert_eq!(status, 400, "{resp}");
+    assert!(resp.contains("8 steps") || resp.contains("pipeline"), "{resp}");
+
+    let big_n = r#"{"steps":[{"kind":"sat","n":65,"clauses":[[1,2,0]]}]}"#;
+    let (status, resp) = request(addr, "POST", "/v1/aether/agent", big_n);
+    assert_eq!(status, 400, "{resp}");
+    assert!(resp.contains("n fora") || resp.contains("64"), "{resp}");
 }

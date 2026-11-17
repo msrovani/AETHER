@@ -3,6 +3,25 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.156] - 2026-11-17
+
+### Changed
+
+- Ciclo automatico: 11 arquivo(s) (.:1, src:6, tests:4).
+- Gate: ok (13s).
+
+- `Cargo.lock`
+- `src/agent/executor.rs`
+- `src/agent/mod.rs`
+- `src/agent/tool.rs`
+- `src/agent/tool_agent.rs`
+- `src/agent/tools.rs`
+- `src/api/mod.rs`
+- `tests/agent_plan_gate.rs`
+- `tests/api_agent.rs`
+- `tests/gpu_ising_sweep_gate.rs`
+- `tests/gpu_jl_gate.rs`
+
 ## [0.0.155] - 2026-11-17
 
 ### Changed

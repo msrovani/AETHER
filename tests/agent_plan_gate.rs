@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use aether_engine::agent::{
-    AgentConfig, Budget, Claim, Cost, Effect, Goal, GoalKind, Risk, SelfModel, Snapshot,
+    Action, AgentConfig, Budget, Claim, Cost, Effect, Goal, GoalKind, Risk, SelfModel, Snapshot,
     SuccessCriteria, Tool, ToolAgent, ToolContext, ToolError, ToolOutcome, ToolRegistry,
     ToolSchema, UndoBackend, WorldState,
 };
@@ -287,6 +287,7 @@ fn gate_a2_real_recall_sat_verify() {
 struct MockStore {
     data: HashMap<String, String>,
     undo_calls: usize,
+    stage_rewinds: usize,
 }
 
 struct MockUndo {
@@ -309,7 +310,25 @@ impl UndoBackend for MockUndo {
     }
 
     fn stage_rewind(&self, _txn: u64, _keys: &[String]) -> Result<(), String> {
+        // Watermark de outbox: não apaga o store (Insert/Restore fazem isso).
+        let mut store = self.store.lock().map_err(|_| "store")?;
+        store.stage_rewinds += 1;
+        store.undo_calls += 1;
         Ok(())
+    }
+
+    fn write(&self, key: &str, text: &str) -> Result<Option<Snapshot>, String> {
+        let mut store = self.store.lock().map_err(|_| "store")?;
+        let prev = store.data.get(key).map(|old| Snapshot {
+            text: old.clone(),
+            object: old.clone(),
+            authority: 128,
+            reinforced: 0,
+            scope: "org:1/run:0".into(),
+            provenance: "mock".into(),
+        });
+        store.data.insert(key.to_string(), text.to_string());
+        Ok(prev)
     }
 }
 
@@ -370,10 +389,15 @@ impl Tool for WriteTool {
                 aether_engine::agent::ExpertId::Transplant,
                 Provenance::Transplanted,
             )],
-            effects: vec![Effect::MemoryWrite {
-                key: self.key.to_string(),
-                prev: self.prev.clone(),
-            }],
+            effects: vec![
+                Effect::Stage {
+                    keys: vec![self.key.to_string()],
+                },
+                Effect::MemoryWrite {
+                    key: self.key.to_string(),
+                    prev: self.prev.clone(),
+                },
+            ],
             ..ToolOutcome::default()
         })
     }
@@ -486,7 +510,9 @@ fn gate_undo_insert_restore_em_falha() {
     let outcome = agent.solve(&undo_workflow());
     assert!(!outcome.success);
     assert!(store.lock().unwrap().data.is_empty());
-    assert_eq!(store.lock().unwrap().undo_calls, 1);
+    // MemoryWrite + Stage (watermark outbox).
+    assert_eq!(store.lock().unwrap().undo_calls, 2);
+    assert_eq!(store.lock().unwrap().stage_rewinds, 1);
 
     // RESTORE: passo 1 atualiza; passo 2 falha; store volta ao valor anterior.
     let store = Arc::new(Mutex::new(MockStore::default()));
@@ -506,7 +532,215 @@ fn gate_undo_insert_restore_em_falha() {
         store.lock().unwrap().data.get("k").map(String::as_str),
         Some("old")
     );
-    assert_eq!(store.lock().unwrap().undo_calls, 1);
+    assert_eq!(store.lock().unwrap().undo_calls, 2);
+    assert_eq!(store.lock().unwrap().stage_rewinds, 1);
+}
+
+struct HighRiskTool;
+
+impl Tool for HighRiskTool {
+    fn name(&self) -> &'static str {
+        "danger"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "danger",
+            description: "risco alto",
+            args: &["subject"],
+            kinds: &[GoalKind::Act],
+        }
+    }
+
+    fn cost(&self) -> Cost {
+        Cost::local(1.0)
+    }
+
+    fn risk(&self) -> Risk {
+        Risk::High
+    }
+
+    fn affordance(&self, goal: &Goal, _state: &WorldState) -> f32 {
+        if goal.kind == GoalKind::Act {
+            1.0
+        } else {
+            0.0
+        }
+    }
+
+    fn preconditions(&self, goal: &Goal, state: &WorldState) -> bool {
+        self.affordance(goal, state) > 0.0
+    }
+
+    fn call(&mut self, _goal: &Goal, _ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
+        Ok(ToolOutcome {
+            claims: vec![Claim::new(
+                "x",
+                "danger",
+                "boom",
+                1.0,
+                200,
+                aether_engine::agent::ExpertId::Transplant,
+                Provenance::Transplanted,
+            )],
+            confidence: 1.0,
+            ..ToolOutcome::default()
+        })
+    }
+}
+
+struct IrreversibleTool;
+
+impl Tool for IrreversibleTool {
+    fn name(&self) -> &'static str {
+        "burn"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "burn",
+            description: "efeito irreversível",
+            args: &["subject"],
+            kinds: &[GoalKind::Act],
+        }
+    }
+
+    fn cost(&self) -> Cost {
+        Cost::local(1.0)
+    }
+
+    fn risk(&self) -> Risk {
+        Risk::Medium
+    }
+
+    fn affordance(&self, goal: &Goal, _state: &WorldState) -> f32 {
+        if goal.kind == GoalKind::Act {
+            1.0
+        } else {
+            0.0
+        }
+    }
+
+    fn preconditions(&self, goal: &Goal, state: &WorldState) -> bool {
+        self.affordance(goal, state) > 0.0
+    }
+
+    fn call(&mut self, _goal: &Goal, _ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
+        Ok(ToolOutcome {
+            claims: vec![Claim::new(
+                "x",
+                "burn",
+                "ash",
+                1.0,
+                200,
+                aether_engine::agent::ExpertId::Transplant,
+                Provenance::Transplanted,
+            )],
+            effects: vec![Effect::Irreversible { kind: "burn" }],
+            confidence: 1.0,
+            ..ToolOutcome::default()
+        })
+    }
+}
+
+fn act_goal(subject: &str, relation: &str, value: &str, risk: Risk) -> Goal {
+    let mut g = Goal::fact(subject, relation);
+    g.kind = GoalKind::Act;
+    g.query = Some(value.into());
+    g.success = SuccessCriteria::Claim {
+        subject: subject.into(),
+        relation: relation.into(),
+        value: Some(value.into()),
+    };
+    g.with_budget(
+        Budget {
+            max_steps: 2,
+            max_ms: 1_000,
+            max_tokens: 0,
+        },
+        risk,
+    )
+}
+
+#[test]
+fn gate_hitl_risco_acima_do_teto() {
+    let mut registry = ToolRegistry::new(vec!["danger"]);
+    registry.register(Box::new(HighRiskTool)).unwrap();
+    let mut agent = ToolAgent::with_registry(
+        registry,
+        SelfModel::new(None),
+        aether_engine::core::knowledge_bridge_f1::ScopeId::new(1, 0, 1),
+    );
+    let outcome = agent.solve(&act_goal("x", "danger", "boom", Risk::Medium));
+    assert!(!outcome.success);
+    assert_eq!(outcome.action, Action::Cite);
+    assert!(outcome.rationale.contains("humano") || outcome.rationale.contains("teto"));
+}
+
+#[test]
+fn gate_hitl_irreversivel_sem_teto_high() {
+    let mut registry = ToolRegistry::new(vec!["burn"]);
+    registry.register(Box::new(IrreversibleTool)).unwrap();
+    let mut agent = ToolAgent::with_registry(
+        registry,
+        SelfModel::new(None),
+        aether_engine::core::knowledge_bridge_f1::ScopeId::new(1, 0, 1),
+    );
+    let outcome = agent.solve(&act_goal("x", "burn", "ash", Risk::Medium));
+    assert!(!outcome.success);
+    assert_eq!(outcome.action, Action::Cite);
+    assert!(
+        outcome.rationale.contains("irrevers")
+            || outcome.rationale.contains("humano")
+            || outcome.rationale.contains("high")
+    );
+}
+
+#[test]
+fn gate_memory_write_com_stage_e_undo() {
+    let store = Arc::new(Mutex::new(MockStore::default()));
+    let mut registry = ToolRegistry::new(vec!["memory.write", "fail"]);
+    registry
+        .register(Box::new(aether_engine::agent::MemoryWriteTool))
+        .unwrap();
+    registry.register(Box::new(FailTool)).unwrap();
+    let mut agent = ToolAgent::with_registry(
+        registry,
+        SelfModel::new(None),
+        aether_engine::core::knowledge_bridge_f1::ScopeId::new(1, 0, 1),
+    )
+    .with_undo_backend(Arc::new(MockUndo {
+        store: Arc::clone(&store),
+    }));
+
+    let write = act_goal("k", "rel", "v1", Risk::Medium);
+    let mut fail = Goal::fact("x", "fail");
+    fail.kind = GoalKind::Transform;
+    fail.success = SuccessCriteria::Claim {
+        subject: "x".into(),
+        relation: "fail".into(),
+        value: Some("nunca".into()),
+    };
+    let fail = fail.with_budget(
+        Budget {
+            max_steps: 1,
+            max_ms: 1_000,
+            max_tokens: 0,
+        },
+        Risk::Low,
+    );
+    let pipeline = Goal::pipeline(vec![write, fail]).with_budget(
+        Budget {
+            max_steps: 4,
+            max_ms: 3_000,
+            max_tokens: 0,
+        },
+        Risk::Medium,
+    );
+    let outcome = agent.solve(&pipeline);
+    assert!(!outcome.success);
+    assert!(store.lock().unwrap().data.is_empty());
+    assert!(store.lock().unwrap().stage_rewinds >= 1);
 }
 
 #[test]

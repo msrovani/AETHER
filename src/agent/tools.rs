@@ -5,11 +5,12 @@
 
 use super::experts::{make_logic, make_memory, make_solver, make_transplant, Expert};
 use super::tool::{
-    outcome_from_expert, Cost, Goal, GoalKind, Risk, Tool, ToolContext, ToolError, ToolOutcome,
-    ToolSchema, WorldState,
+    outcome_from_expert, Cost, Effect, Goal, GoalKind, Risk, Tool, ToolContext, ToolError,
+    ToolOutcome, ToolSchema, WorldState,
 };
-use super::{ExpertId, Task};
+use super::{Claim, ExpertId, Task};
 use crate::agent::AgentConfig;
+use crate::core::certificate::Provenance;
 
 /// Tool de fato relacional (FHRR/transplante).
 pub struct FactTool {
@@ -292,6 +293,92 @@ impl Tool for MemoryTool {
     }
 }
 
+/// Escrita de memória com before-image (MSG 0316 pendente → fechado).
+///
+/// Requer `ToolContext.undo_backend` com `write`. Emite `Stage` + `MemoryWrite`.
+#[derive(Debug, Default)]
+pub struct MemoryWriteTool;
+
+impl Tool for MemoryWriteTool {
+    fn name(&self) -> &'static str {
+        "memory.write"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "memory.write",
+            description: "escreve fato na memória com Effect.prev para undo",
+            args: &["subject", "relation", "query"],
+            kinds: &[GoalKind::Act, GoalKind::Answer],
+        }
+    }
+
+    fn cost(&self) -> Cost {
+        Cost::local(40.0)
+    }
+
+    fn risk(&self) -> Risk {
+        Risk::Medium
+    }
+
+    fn affordance(&self, goal: &Goal, _state: &WorldState) -> f32 {
+        let has_key = goal.subject.is_some() && goal.relation.is_some();
+        let has_val = goal.query.as_ref().is_some_and(|q| !q.is_empty());
+        if has_key && has_val && matches!(goal.kind, GoalKind::Act | GoalKind::Answer) {
+            0.95
+        } else {
+            0.0
+        }
+    }
+
+    fn preconditions(&self, goal: &Goal, state: &WorldState) -> bool {
+        self.affordance(goal, state) > 0.0 && goal.risk_ceiling >= Risk::Medium
+    }
+
+    fn call(&mut self, goal: &Goal, ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
+        let subject = goal
+            .subject
+            .as_deref()
+            .ok_or_else(|| ToolError::InvalidArgs("subject ausente".into()))?;
+        let relation = goal
+            .relation
+            .as_deref()
+            .ok_or_else(|| ToolError::InvalidArgs("relation ausente".into()))?;
+        let value = goal
+            .query
+            .as_deref()
+            .ok_or_else(|| ToolError::InvalidArgs("query/valor ausente".into()))?;
+        let key = format!("{subject}|{relation}");
+        let backend = ctx
+            .undo_backend
+            .as_ref()
+            .ok_or_else(|| ToolError::Failed("memory.write exige undo_backend".into()))?;
+        let prev = backend
+            .write(&key, value)
+            .map_err(|e| ToolError::Failed(e))?;
+        Ok(ToolOutcome {
+            claims: vec![Claim::new(
+                subject,
+                relation,
+                value,
+                1.0,
+                128,
+                ExpertId::Memory,
+                Provenance::Inferred,
+            )],
+            effects: vec![
+                Effect::Stage {
+                    keys: vec![key.clone()],
+                },
+                Effect::MemoryWrite { key, prev },
+            ],
+            confidence: 1.0,
+            detail: "memory.write ok".into(),
+            ..ToolOutcome::default()
+        })
+    }
+}
+
 /// Tool de HITL: não executa, apenas sinaliza.
 #[derive(Debug)]
 pub struct AskHumanTool;
@@ -353,6 +440,7 @@ pub fn default_tools(cfg: &AgentConfig) -> Vec<Box<dyn Tool>> {
         }
     }
     tools.push(Box::new(AskHumanTool));
+    tools.push(Box::new(MemoryWriteTool));
     // C0 LanguagePort (MSG 0292 ACK_Q1): tool em language.rs, registro aqui.
     tools.push(Box::new(super::language::LanguageParseTool::new()));
     tools

@@ -1124,12 +1124,23 @@ fn agent_pipeline_route(doc: &Json) -> Reply {
     )
 }
 
+/// Teto de passos no workflow HTTP (MSG 0340).
+const PIPELINE_MAX_STEPS: usize = 8;
+/// Teto de `n` em sat/qubo do pipeline HTTP (MSG 0340).
+const PIPELINE_MAX_N: usize = 64;
+
 fn pipeline_goal_from_json(doc: &Json) -> Result<Goal, String> {
     let steps = doc
         .get("pipeline")
         .and_then(|v| v.as_arr())
         .or_else(|| doc.get("steps").and_then(|v| v.as_arr()))
         .ok_or_else(|| "pipeline exige `steps` ou `pipeline` array".to_string())?;
+    if steps.len() > PIPELINE_MAX_STEPS {
+        return Err(format!(
+            "pipeline acima de {PIPELINE_MAX_STEPS} steps (recebeu {})",
+            steps.len()
+        ));
+    }
     let mut goals = Vec::new();
     for step in steps {
         goals.push(pipeline_step_from_json(step)?);
@@ -1174,6 +1185,9 @@ fn pipeline_step_from_json(json: &Json) -> Result<Goal, String> {
         }
         "sat" => {
             let n = json.get("n").and_then(|v| v.as_u64()).ok_or("sat sem n")? as usize;
+            if n == 0 || n > PIPELINE_MAX_N {
+                return Err(format!("sat n fora de 1..={PIPELINE_MAX_N}"));
+            }
             let clauses = json
                 .get("clauses")
                 .and_then(pipeline_clauses)
@@ -1182,6 +1196,9 @@ fn pipeline_step_from_json(json: &Json) -> Result<Goal, String> {
         }
         "qubo" | "optimize" => {
             let n = json.get("n").and_then(|v| v.as_u64()).ok_or("qubo sem n")? as usize;
+            if n == 0 || n > PIPELINE_MAX_N {
+                return Err(format!("qubo n fora de 1..={PIPELINE_MAX_N}"));
+            }
             let j = json
                 .get("j")
                 .and_then(|v| v.as_arr())
@@ -1213,8 +1230,9 @@ fn pipeline_step_from_json(json: &Json) -> Result<Goal, String> {
 }
 
 fn pipeline_parse_budget(json: &Json) -> Result<Budget, String> {
+    let max_steps = json.get("max_steps").and_then(|v| v.as_u64()).unwrap_or(4) as usize;
     Ok(Budget {
-        max_steps: json.get("max_steps").and_then(|v| v.as_u64()).unwrap_or(4) as usize,
+        max_steps: max_steps.clamp(1, PIPELINE_MAX_STEPS),
         max_ms: json.get("max_ms").and_then(|v| v.as_u64()).unwrap_or(2_000),
         max_tokens: json.get("max_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
     })

@@ -366,6 +366,11 @@ pub enum Effect {
         /// Snapshot anterior (None = não existia).
         prev: Option<Snapshot>,
     },
+    /// Marca de stage/outbox (watermark LIFO; nunca forget cego).
+    Stage {
+        /// Chaves staged nesta marca.
+        keys: Vec<String>,
+    },
     /// Efeito sem compensação automática (exige HITL).
     Irreversible {
         /// Tipo do efeito.
@@ -412,6 +417,11 @@ pub trait UndoBackend: Send + Sync {
     fn restore(&self, key: &str, prev: &Snapshot) -> Result<(), String>;
     /// Descarta outbox até a marca (undo de Stage).
     fn stage_rewind(&self, txn: u64, keys: &[String]) -> Result<(), String>;
+    /// Escrita com before-image (para `memory.write`).
+    fn write(&self, key: &str, text: &str) -> Result<Option<Snapshot>, String> {
+        let _ = (key, text);
+        Err("undo backend sem write".into())
+    }
 }
 
 /// Resultado de uma tool.
@@ -575,6 +585,11 @@ impl ToolContext {
         self.spent_tokens = self.spent_tokens.saturating_add(cost.tokens);
     }
 
+    /// Tamanho do log de undo (watermark estável para rewind).
+    pub fn undo_len(&self) -> usize {
+        self.undo_log.len()
+    }
+
     /// Registra um efeito e a operação de undo correspondente.
     pub fn push_effect(&mut self, effect: Effect) {
         match &effect {
@@ -590,6 +605,12 @@ impl ToolContext {
             Effect::MemoryWrite { key, prev: None } => {
                 self.undo_log.push(UndoOp::Insert { key: key.clone() });
             }
+            Effect::Stage { keys } => {
+                self.undo_log.push(UndoOp::Stage {
+                    txn: self.txn,
+                    keys: keys.clone(),
+                });
+            }
             Effect::Irreversible { kind } => {
                 self.undo_log.push(UndoOp::Irreversible { kind });
             }
@@ -598,7 +619,7 @@ impl ToolContext {
         self.effects.push(effect);
     }
 
-    /// Rewind LIFO até a marca `watermark` (inclusive efeitos posteriores).
+    /// Rewind LIFO até a marca `watermark` (índice em `undo_log`).
     pub fn rewind(&mut self, watermark: usize) -> Result<(), ToolError> {
         if self.undo_log.len() <= watermark {
             return Ok(());

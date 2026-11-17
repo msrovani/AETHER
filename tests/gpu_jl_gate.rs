@@ -137,6 +137,47 @@ fn gpu_razao_minima_1_5x() {
 }
 
 #[test]
+fn v1_equivale_v2_e_razao_kernel() {
+    // Gate V1÷V2: mesma saída bit-a-bit; V2 não pode regredir vs V1 sob carga.
+    let st = gpu::status();
+    if !st.available {
+        eprintln!("skip v1÷v2: sem adapter ({})", st.summary());
+        return;
+    }
+    println!("adapter em uso: {}", st.summary());
+    let n = 512usize;
+    let words = BITS / 64;
+    let mut proj = projector();
+    let mat = transposed_matrix(&mut proj);
+    let x = make_rows(n, 0x0B1D_0002);
+
+    let mut out_v1 = vec![0u64; n * words];
+    let mut out_v2 = vec![0u64; n * words];
+    // aquecimento
+    let _ = jl::project_into_with(jl::JlKernel::V1, false, &mat, &x, n, D_IN, BITS, &mut out_v1);
+    let _ = jl::project_into_with(jl::JlKernel::V2, false, &mat, &x, n, D_IN, BITS, &mut out_v2);
+
+    let t = Instant::now();
+    jl::project_into_with(jl::JlKernel::V1, false, &mat, &x, n, D_IN, BITS, &mut out_v1)
+        .expect("kernel V1");
+    let v1_ms = t.elapsed().as_secs_f64() * 1e3;
+
+    let t = Instant::now();
+    jl::project_into_with(jl::JlKernel::V2, false, &mat, &x, n, D_IN, BITS, &mut out_v2)
+        .expect("kernel V2");
+    let v2_ms = t.elapsed().as_secs_f64() * 1e3;
+
+    assert_eq!(out_v1, out_v2, "V1 e V2 devem coincidir bit a bit");
+    let ratio = v1_ms / v2_ms.max(1e-9);
+    println!("n={n}: V1 {v1_ms:.2} ms · V2 {v2_ms:.2} ms ⇒ V1/V2 = {ratio:.2}×");
+    // Informação: não bloqueia se V2 ≈ V1 (hardware/driver); só exige equivalência.
+    assert!(
+        out_v1.iter().any(|w| *w != 0),
+        "saída GPU não pode ser toda zero"
+    );
+}
+
+#[test]
 fn fallback_force_off_nao_panica() {
     let st = gpu::status_with(true);
     assert!(!st.available, "force_off deveria desligar");

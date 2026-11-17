@@ -41,8 +41,18 @@ impl ToolExecutor {
         let tool = registry
             .get_mut(step.tool)
             .ok_or_else(|| ToolError::InvalidArgs(format!("tool `{}` sumiu", step.tool)))?;
+        // SCHEMA_6: risco acima do teto ⇒ HITL **antes** da call.
+        if tool.risk() > goal.risk_ceiling {
+            return Err(ToolError::NeedsHuman(format!(
+                "tool `{}` risco {} > teto {}",
+                step.tool,
+                tool.risk().label(),
+                goal.risk_ceiling.label()
+            )));
+        }
         // Dry-run obrigatório antes de qualquer efeito (P2 reusa isto).
         tool.dry_run(goal, ctx)?;
+        let undo_before = ctx.undo_len();
         let effects_before = ctx.effects.len();
         let claims_before = ctx.claims.len();
         let certificates_before = ctx.certificates.len();
@@ -51,13 +61,23 @@ impl ToolExecutor {
             Ok(outcome) => outcome,
             Err(e) => {
                 // Efeitos já registrados antes do erro precisam ser desfeitos.
-                let _ = ctx.rewind(effects_before);
+                let _ = ctx.rewind(undo_before);
                 return Err(e);
             }
         };
         ctx.charge(cost);
         let elapsed_us = started.elapsed().as_micros() as u64;
         for effect in &outcome.effects {
+            // Irreversível sem teto High: não aplica e pede HITL.
+            if matches!(effect, super::tool::Effect::Irreversible { .. })
+                && goal.risk_ceiling < super::tool::Risk::High
+            {
+                let _ = ctx.rewind(undo_before);
+                return Err(ToolError::NeedsHuman(format!(
+                    "efeito irreversível exige risk_ceiling=high (teto={})",
+                    goal.risk_ceiling.label()
+                )));
+            }
             ctx.push_effect(effect.clone());
         }
         let met = goal.success.met(&outcome);
@@ -69,7 +89,7 @@ impl ToolExecutor {
             }
         } else {
             // Rewind LIFO (memória) e truncamento do blackboard.
-            ctx.rewind(effects_before)?;
+            ctx.rewind(undo_before)?;
             ctx.rollback_to(effects_before, claims_before, certificates_before);
         }
         Ok(Execution {

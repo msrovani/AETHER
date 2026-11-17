@@ -477,6 +477,7 @@ fn tools_allowlist() -> Vec<&'static str> {
         "sat",
         "qubo",
         "memory",
+        "memory.write",
         "verify",
         "ask.human",
         "language.parse",
