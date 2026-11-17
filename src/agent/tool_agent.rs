@@ -276,6 +276,10 @@ impl ToolAgent {
         let mut success = false;
 
         for _ in 0..budget {
+            if ctx.spent_steps >= ctx.budget.max_steps {
+                rationale = "orçamento de passos esgotado".to_string();
+                break;
+            }
             let Some(step) =
                 self.planner
                     .select(goal, state, &self.registry, &self.self_model, &used)
