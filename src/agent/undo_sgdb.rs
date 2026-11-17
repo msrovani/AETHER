@@ -94,6 +94,8 @@ struct State {
     marks: BTreeMap<u64, usize>,
     /// Token que libera operações em autoridade `255`.
     token: Option<String>,
+    /// Linhas do diário já aplicadas (sync incremental entre processos).
+    applied_lines: usize,
 }
 
 /// Backend de undo durável local (JSONL append-only + `BTreeMap`).
@@ -182,7 +184,7 @@ impl SgdbUndoBackend {
 
     /// Valor corrente (sem tombstones).
     pub fn get(&self, key: &str) -> Option<Snapshot> {
-        let state = self.lock();
+        let state = self.lock_synced();
         state
             .records
             .get(key)
@@ -192,7 +194,7 @@ impl SgdbUndoBackend {
 
     /// `true` se a chave foi marcada como tombstone (HITL, não apagada).
     pub fn is_tombstoned(&self, key: &str) -> bool {
-        self.lock()
+        self.lock_synced()
             .records
             .get(key)
             .is_some_and(|record| record.tombstone)
@@ -200,7 +202,7 @@ impl SgdbUndoBackend {
 
     /// Chaves vivas.
     pub fn len(&self) -> usize {
-        self.lock()
+        self.lock_synced()
             .records
             .values()
             .filter(|record| !record.tombstone)
@@ -247,19 +249,23 @@ impl SgdbUndoBackend {
 
     /// Registra keys staged por uma transação (watermark LIFO).
     pub fn stage(&self, txn: u64, keys: &[String]) {
-        let mut state = self.lock();
+        let mut state = self.lock_synced();
         let entry = state.staged.entry(txn).or_default();
         entry.extend(keys.iter().cloned());
     }
 
     /// Registra a marca explícita de `txn` (índice no *outbox* da transação).
     pub fn stage_mark(&self, txn: u64, outbox_len: usize) {
-        self.lock().marks.insert(txn, outbox_len);
+        self.lock_synced().marks.insert(txn, outbox_len);
     }
 
     /// Quantas keys a transação tem staged agora.
     pub fn staged_len(&self, txn: u64) -> usize {
-        self.lock().staged.get(&txn).map(Vec::len).unwrap_or(0)
+        self.lock_synced()
+            .staged
+            .get(&txn)
+            .map(Vec::len)
+            .unwrap_or(0)
     }
 
     /// Trava o estado (um lock envenenado não derruba o backend).
@@ -267,6 +273,34 @@ impl SgdbUndoBackend {
         self.state
             .lock()
             .unwrap_or_else(|poison| poison.into_inner())
+    }
+
+    /// Trava o estado e aplica linhas novas do diário (outro processo escreveu).
+    fn lock_synced(&self) -> MutexGuard<'_, State> {
+        let mut state = self.lock();
+        self.sync(&mut state);
+        state
+    }
+
+    /// Aplica incrementalmente o que outro processo anexou ao diário.
+    fn sync(&self, state: &mut State) {
+        let Ok(text) = std::fs::read_to_string(&self.path) else {
+            return;
+        };
+        let total = text.lines().count();
+        if total <= state.applied_lines {
+            return;
+        }
+        for line in text.lines().skip(state.applied_lines) {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            if let Ok(value) = Json::parse(line) {
+                apply_line(&value, state);
+            }
+        }
+        state.applied_lines = total;
     }
 
     /// Núcleo do `write`: decide o próximo snapshot sob o mesmo lock.
@@ -282,7 +316,7 @@ impl SgdbUndoBackend {
         if key.trim().is_empty() {
             return Err("args: chave vazia".into());
         }
-        let mut state = self.lock();
+        let mut state = self.lock_synced();
         let prev = state.records.get(key).cloned();
         if let Some(current) = &prev {
             if current.snapshot.authority == AUTHORITY_HUMAN && !token_ok(&state, token) {
@@ -307,6 +341,7 @@ impl SgdbUndoBackend {
         ]);
         // Intenção antes da mutação: um crash aqui deixa o diário coerente.
         self.append_line(&line)?;
+        state.applied_lines += 1;
         state.records.insert(key.to_string(), next.clone());
         if prev.is_none() {
             state
@@ -321,7 +356,7 @@ impl SgdbUndoBackend {
 
     /// Núcleo do `restore`: compare-and-swap contra a expectativa do diário.
     fn restore_inner(&self, key: &str, prev: &Snapshot, token: Option<&str>) -> Result<(), String> {
-        let mut state = self.lock();
+        let mut state = self.lock_synced();
         if prev.authority == AUTHORITY_HUMAN && !token_ok(&state, token) {
             return Err("hitl: authority=255 exige token".into());
         }
@@ -347,6 +382,7 @@ impl SgdbUndoBackend {
             ("prev", record_to_json(&record)),
         ]);
         self.append_line(&line)?;
+        state.applied_lines += 1;
         state.records.insert(key.to_string(), record.clone());
         state.last_write.insert(key.to_string(), record.snapshot);
         Ok(())
@@ -369,7 +405,7 @@ impl SgdbUndoBackend {
 
 impl UndoBackend for SgdbUndoBackend {
     fn insert_undo(&self, key: &str) -> Result<(), String> {
-        let mut state = self.lock();
+        let mut state = self.lock_synced();
         let Some(current) = state.records.get(key).cloned() else {
             // Nada a apagar: insert já desfeito (ou nunca existiu).
             return Ok(());
@@ -386,6 +422,7 @@ impl UndoBackend for SgdbUndoBackend {
                     ),
                 ]);
                 self.append_line(&line)?;
+                state.applied_lines += 1;
                 if let Some(record) = state.records.get_mut(key) {
                     record.tombstone = true;
                 }
@@ -408,6 +445,7 @@ impl UndoBackend for SgdbUndoBackend {
             ("expected", record_to_json(&current)),
         ]);
         self.append_line(&line)?;
+        state.applied_lines += 1;
         state.records.remove(key);
         state.insert_marks.remove(key);
         state.last_write.remove(key);
@@ -419,7 +457,7 @@ impl UndoBackend for SgdbUndoBackend {
     }
 
     fn stage_rewind(&self, txn: u64, keys: &[String]) -> Result<(), String> {
-        let mut state = self.lock();
+        let mut state = self.lock_synced();
         let len = state.staged.get(&txn).map(Vec::len).unwrap_or(0);
         // Marca explícita (`stage_mark`) ou inferida pelo tamanho do lote.
         let mark = state
@@ -440,7 +478,10 @@ impl UndoBackend for SgdbUndoBackend {
     }
 
     fn peek(&self, key: &str) -> Option<Snapshot> {
-        self.lock().records.get(key).map(|r| r.snapshot.clone())
+        self.lock_synced()
+            .records
+            .get(key)
+            .map(|r| r.snapshot.clone())
     }
 
     fn write(&self, key: &str, text: &str, authority: u8) -> Result<Option<Snapshot>, String> {
@@ -578,6 +619,7 @@ fn load_into(path: &Path, state: &mut State) -> io::Result<usize> {
             applied += 1;
         }
     }
+    state.applied_lines = text.lines().count();
     Ok(applied)
 }
 
@@ -830,5 +872,37 @@ mod tests {
         reopened.insert_undo("novo").unwrap();
         assert!(reopened.get("novo").is_none());
         assert_eq!(reopened.len(), 1);
+    }
+
+    #[test]
+    fn dois_backends_veem_escritas_um_do_outro() {
+        // T6: dois processos no mesmo diário. B é aberto antes da escrita de A
+        // e precisa enxergá-la (e o undo dela) via sync incremental.
+        let journal = TempJournal::new("twoproc");
+        let a = journal.backend();
+        let b = journal.backend();
+
+        assert!(a.write("k", "A", AUTHORITY_QUARANTINE).unwrap().is_none());
+        assert_eq!(b.get("k").map(|s| s.text), Some("A".to_string()));
+
+        // B desfaz: só apaga se o valor ainda for o que A escreveu (CAS).
+        b.insert_undo("k").unwrap();
+        assert!(a.get("k").is_none(), "A não viu o undo de B");
+        assert!(b.get("k").is_none());
+    }
+
+    #[test]
+    fn dois_backends_nao_apagam_valor_de_terceiro() {
+        let journal = TempJournal::new("twoproc-stale");
+        let a = journal.backend();
+        let b = journal.backend();
+
+        a.write("k", "A", AUTHORITY_QUARANTINE).unwrap();
+        // B abre depois, vê "A"; A reescreve para "A2".
+        assert_eq!(b.get("k").map(|s| s.text), Some("A".to_string()));
+        a.write("k", "A2", AUTHORITY_QUARANTINE).unwrap();
+        let error = b.insert_undo("k").expect_err("stale: valor mudou");
+        assert!(error.starts_with("stale"), "{error}");
+        assert_eq!(a.get("k").map(|s| s.text), Some("A2".to_string()));
     }
 }
