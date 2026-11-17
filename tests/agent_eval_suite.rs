@@ -76,7 +76,10 @@ fn t0_agent_eval_suite() {
     });
     let registry: Vec<&str> = agent.tools().iter().map(|schema| schema.name).collect();
     println!("tools do registry: {registry:?}");
-    println!("facts: data/facts.jsonl | self-model: {}", policy_path.display());
+    println!(
+        "facts: data/facts.jsonl | self-model: {}",
+        policy_path.display()
+    );
 
     let started = std::time::Instant::now();
     let mut rows: Vec<Row> = Vec::with_capacity(cases.len());
@@ -87,8 +90,12 @@ fn t0_agent_eval_suite() {
     let mut mismatches: Vec<String> = Vec::new();
 
     for case in &cases {
-        let goal = parse_goal(&case.goal_spec)
-            .unwrap_or_else(|e| panic!("caso `{}`: goal inválido `{}`: {e}", case.id, case.goal_spec));
+        let goal = parse_goal(&case.goal_spec).unwrap_or_else(|e| {
+            panic!(
+                "caso `{}`: goal inválido `{}`: {e}",
+                case.id, case.goal_spec
+            )
+        });
         let outcome = agent.solve(&goal);
         let observed_action = outcome.action;
         let observed_success = outcome.success;
@@ -171,7 +178,10 @@ fn t0_agent_eval_suite() {
     let false_abstain_rate = false_abstain as f64 / n as f64;
     println!("--- metricas T0 (suite propria) ---");
     println!("n={n}");
-    println!("action_accuracy={action_accuracy:.3} ({}/{n})", n - wrong_action);
+    println!(
+        "action_accuracy={action_accuracy:.3} ({}/{n})",
+        n - wrong_action
+    );
     println!("false_act_rate={false_act_rate:.3} ({false_act}/{n})");
     println!("false_abstain_rate={false_abstain_rate:.3} ({false_abstain}/{n})");
     println!(
@@ -186,12 +196,12 @@ fn t0_agent_eval_suite() {
         "a suíte não exercita act/cite/abstain: {seen_actions:?}"
     );
 
-
     // O self-model é temporário: nada fica no perfil do usuário.
     let _ = fs::remove_file(&policy_path);
 
     assert_eq!(
-        wrong_action, 0,
+        wrong_action,
+        0,
         "action_accuracy={action_accuracy:.3} (exige 1.0)\n{}\n{}",
         mismatches.join("\n"),
         table(&rows)
@@ -393,7 +403,11 @@ fn parse_goal(spec: &str) -> Result<Goal, String> {
                 parse_numbers(parts[2])?
             };
             if j.len() != n * n {
-                return Err(format!("qubo: j com {} valores (esperado {})", j.len(), n * n));
+                return Err(format!(
+                    "qubo: j com {} valores (esperado {})",
+                    j.len(),
+                    n * n
+                ));
             }
             Ok(Goal::optimize(n, j, h))
         }
@@ -410,7 +424,12 @@ fn parse_clause(text: &str) -> Result<Clause3, String> {
     };
     match lit.len() {
         4 | 6 => {}
-        _ => return Err(format!("cláusula `{text}`: 4 ou 6 campos, veio {}", lit.len())),
+        _ => {
+            return Err(format!(
+                "cláusula `{text}`: 4 ou 6 campos, veio {}",
+                lit.len()
+            ))
+        }
     }
     let i = parse(lit[0], "i")?;
     let si = parse(lit[1], "si")?;
