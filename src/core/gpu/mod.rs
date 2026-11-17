@@ -20,8 +20,11 @@
 
 pub mod jl;
 
+#[cfg(feature = "gpu")]
 use std::future::Future;
+#[cfg(feature = "gpu")]
 use std::pin::pin;
+#[cfg(feature = "gpu")]
 use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 /// Motivo de a GPU estar indisponível (telemetria, nunca erro fatal).
@@ -50,6 +53,7 @@ impl GpuOff {
 }
 
 /// Executa um futuro até completar (micro-executor: sem dependência externa).
+#[cfg(feature = "gpu")]
 fn block_on<F: Future>(fut: F) -> F::Output {
     fn noop_raw() -> RawWaker {
         fn clone(_: *const ()) -> RawWaker {

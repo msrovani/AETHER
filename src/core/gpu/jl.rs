@@ -36,6 +36,7 @@ impl From<GpuOff> for JlGpuError {
 /// Largura do *workgroup* (threads) do kernel.
 pub const WG: u32 = 64;
 
+#[cfg(feature = "gpu")]
 const SHADER: &str = r#"
 struct Params {
     n_rows: u32,

@@ -661,6 +661,35 @@ impl Expert for MemoryExpert {
     fn learn(&mut self, _task: &Task, _feedback: &Feedback) {}
 }
 
+/// Fábrica do especialista de transplante (usada pelas tools do agente).
+pub fn make_transplant(
+    dim: usize,
+    traces: usize,
+    facts_path: &Path,
+) -> Option<Box<dyn Expert>> {
+    let facts = load_facts(facts_path);
+    TransplantExpert::new(dim, traces, &facts)
+        .ok()
+        .map(|expert| Box::new(expert) as Box<dyn Expert>)
+}
+
+/// Fábrica do especialista SAT.
+pub fn make_logic(n_max: usize, m_max: usize) -> Box<dyn Expert> {
+    Box::new(LogicExpert::new(n_max, m_max))
+}
+
+/// Fábrica do especialista QUBO.
+pub fn make_solver(n_max: usize, steps: usize) -> Box<dyn Expert> {
+    Box::new(SolverExpert::new(n_max, steps))
+}
+
+/// Fábrica do especialista de memória durável.
+pub fn make_memory(spec: &str) -> Option<Box<dyn Expert>> {
+    MemoryExpert::new(spec)
+        .ok()
+        .map(|expert| Box::new(expert) as Box<dyn Expert>)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
