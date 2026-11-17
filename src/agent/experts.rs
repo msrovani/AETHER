@@ -20,16 +20,15 @@ use ndarray::{Array2, Array3};
 
 use crate::core::certificate::{self, Certificate as EngineCertificate, Provenance};
 use crate::core::fhrr::FhrrStore;
-use crate::core::logic_pipeline::{violations_3, Clause3, LogicPipeline};
+use crate::core::logic_pipeline::{violations_3, LogicPipeline};
 use crate::core::thermodynamic_solver::{
     IsingLandscape, RelaxOutcome, ThermodynamicIsingSolver,
 };
-use crate::core::transplant::phase_similarity;
 use crate::json::Json;
 use crate::knowledge::sgdb::{
     open, SgdbClient, SgdbConfig, Transport,
 };
-use crate::phase_memory::{ComplexPhaseMemory, RecallConfidence};
+use crate::phase_memory::ComplexPhaseMemory;
 use crate::core::knowledge_bridge_f1::ScopeId;
 
 use super::{
@@ -320,6 +319,7 @@ impl PhaseExpert {
     }
 
     /// Semeia padrões rotulados (para testes/demos).
+    #[allow(dead_code)]
     pub fn with_patterns(dim: usize, patterns: &[Vec<f32>], labels: &[String]) -> Self {
         let mut expert = Self::new(dim);
         for (pattern, label) in patterns.iter().zip(labels.iter()) {
@@ -436,7 +436,7 @@ impl LogicExpert {
             pipeline: LogicPipeline::new(n_max, m_max, 400, 2, 3, 0.5),
             n_max,
             m_max,
-            seed: 0xA37E_10G1C as u64,
+            seed: 0xA37E_10C1,
         }
     }
 }
@@ -516,19 +516,15 @@ impl Expert for LogicExpert {
 // ---------------------------------------------------------------------------
 
 struct SolverExpert {
-    solver: ThermodynamicIsingSolver,
     n_max: usize,
+    steps: usize,
 }
 
 impl SolverExpert {
     fn new(n_max: usize, steps: usize) -> Self {
-        Self {
-            solver: ThermodynamicIsingSolver::new(1, n_max, steps, 0.05),
-            n_max,
-        }
+        Self { n_max, steps }
     }
 }
-
 impl Expert for SolverExpert {
     fn id(&self) -> ExpertId {
         ExpertId::Solver
@@ -555,8 +551,9 @@ impl Expert for SolverExpert {
         let j3 = Array3::from_shape_fn((1, *n, *n), |(_, i, k)| j[i * n + k]);
         let h2 = Array2::from_shape_fn((1, *n), |(_, i)| h[i]);
         let landscape = IsingLandscape::new(j3.view(), h2.view());
-        let mut out = RelaxOutcome::with_capacity(1, *n, self.solver.steps());
-        if let Err(e) = self.solver.relax_into(landscape, &mut out) {
+        let mut solver = ThermodynamicIsingSolver::new(1, *n, self.steps, 0.05);
+        let mut out = RelaxOutcome::with_capacity(1, *n, self.steps);
+        if let Err(e) = solver.relax_into(landscape, &mut out) {
             return ExpertOutput::empty(self.id(), e.to_string());
         }
         let state: Vec<i8> = out.states.row(0).to_vec();
@@ -677,6 +674,7 @@ impl Expert for MemoryExpert {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::logic_pipeline::Clause3;
 
     fn fact_task(s: &str, r: &str) -> Task {
         Task::Fact {
@@ -745,15 +743,12 @@ mod tests {
     fn solver_resolve_qubo_trivial() {
         let mut expert = SolverExpert::new(8, 200);
         let n = 4;
-        // Favorece todos +1: J = I, h = 0.
-        let mut j = vec![0.0; n * n];
-        for i in 0..n {
-            j[i * n + i] = 1.0;
-        }
+        // Campo h=+1 favorece todos +1 (J=0): mínimo único.
+        let j = vec![0.0; n * n];
         let out = expert.infer(&Task::Optimize {
             n,
             j,
-            h: vec![0.0; n],
+            h: vec![1.0; n],
         });
         assert_eq!(out.claims.len(), 1);
         assert_eq!(out.claims[0].value, "++++");

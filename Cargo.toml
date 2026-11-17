@@ -1,6 +1,6 @@
 ﻿[package]
 name = "aether_engine"
-version = "0.0.142"
+version = "0.0.143"
 edition = "2021"
 rust-version = "1.78"
 description = "AETHER ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
@@ -47,7 +47,7 @@ required-features = ["m1", "m2", "m3", "m5"]
 # Features de modulo: permitem build isolado de cada pilar (paralelismo de agentes
 # sem colisao de codigo) e compilacao enxuta quando so um pilar e necessario.
 [features]
-default = ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "sgdb"]
+default = ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "sgdb", "agent"]
 m1 = []
 m2 = []
 m3 = []
@@ -79,6 +79,8 @@ hw-entropy = []
 # T2: encaixe operacional do neural-sgdb (MCP sobre stdio/HTTP + outbox).
 # Sem dependencia nova: JSON-RPC/HTTP/1.1 e JSON minimo vivem no crate.
 sgdb = ["m1"]
+# Agente: especialistas (FHRR, fase, lógica, solver, SGDB) + MoE + coerência.
+agent = ["m1", "m5", "sgdb"]
 
 [dependencies]
 ndarray = { version = "0.16", features = ["rayon"] }

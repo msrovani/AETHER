@@ -11,7 +11,7 @@
 //! Contradição **não resolvida** ⇒ [`Action::Abstain`]. Contradição com uma
 //! fonte claramente dominante ⇒ [`Action::Cite`] (cita, não age).
 
-use crate::core::certificate::{Certificate as EngineCertificate, Decision, Provenance};
+use crate::core::certificate::{Certificate as EngineCertificate, Decision};
 
 use super::{Action, Claim, ExpertId, ExpertOutput};
 
@@ -126,37 +126,43 @@ impl CoherenceEngine {
         let mut details: Vec<Contradiction> = Vec::new();
         let mut total_sources = 0usize;
         let mut agreeing_sources = 0usize;
+        let mut contested = false;
 
         for (_, list) in groups {
             total_sources += list.len();
             // Agrupa valores distintos, mantendo a melhor claim de cada.
             let mut values: Vec<Claim> = Vec::new();
-            for claim in list {
-                match values.iter_mut().find(|c| c.same_value(&claim)) {
+            for claim in &list {
+                match values.iter_mut().find(|c| c.same_value(claim)) {
                     Some(best) => {
                         if claim.confidence > best.confidence
                             || (claim.confidence == best.confidence
                                 && claim.authority > best.authority)
                         {
-                            *best = claim;
+                            *best = claim.clone();
                         }
                     }
-                    None => values.push(claim),
+                    None => values.push(claim.clone()),
                 }
             }
             if values.len() == 1 {
-                agreeing_sources += 1;
+                agreeing_sources += list.len();
                 winners.push(values.remove(0));
                 continue;
             }
             // Conflito: a fonte com autoridade dominante vence, mas a ação
             // vira `Cite` (não se age com evidência contestada).
+            contested = true;
             values.sort_by(|a, b| b.authority.cmp(&a.authority));
             let top = values[0].authority;
             let second = values.get(1).map_or(0, |c| c.authority);
             if top >= second.saturating_add(64) {
-                agreeing_sources += 1;
-                winners.push(values.remove(0));
+                let winner = values.remove(0);
+                agreeing_sources += list
+                    .iter()
+                    .filter(|claim| claim.same_value(&winner))
+                    .count();
+                winners.push(winner);
             } else {
                 details.push(Contradiction {
                     subject: values[0].subject.clone(),
@@ -195,7 +201,6 @@ impl CoherenceEngine {
             (agreeing_sources as f32 / total_sources as f32).min(1.0)
         };
         let authority = winner.authority;
-        let contested = !details.is_empty();
         let certificate = EngineCertificate::new(
             0.0,
             f64::from(support),
@@ -244,14 +249,10 @@ impl CoherenceEngine {
     }
 }
 
-/// Proveniência sintética para claims de memória textual.
-pub fn memory_provenance() -> Provenance {
-    Provenance::Transplanted
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::certificate::Provenance;
 
     fn output(value: &str, confidence: f32, authority: u8, source: ExpertId) -> ExpertOutput {
         ExpertOutput {

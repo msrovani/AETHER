@@ -24,6 +24,10 @@ pub mod core;
 pub mod error;
 pub mod json;
 
+/// Agente AETHER: inferência, MoE, coerência e autoaprendizado (`T2`).
+#[cfg(feature = "agent")]
+pub mod agent;
+
 /// Ponte SGDB / intake (INTAKE_TRANSPLANT) — fora do hot path.
 #[cfg(feature = "m1")]
 pub mod knowledge;

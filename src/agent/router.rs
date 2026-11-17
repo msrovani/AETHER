@@ -34,14 +34,16 @@ pub struct MoERouter {
 impl MoERouter {
     /// Cria o roteador (pesos uniformes).
     pub fn new(seed: u64, path: Option<PathBuf>) -> Self {
-        Self {
+        let mut router = Self {
             weights: [1.0; SLOTS],
             gamma: 0.15,
             episodes: 0,
             rng: seed | 1,
             path,
             selected: Vec::new(),
-        }
+        };
+        router.normalize();
+        router
     }
 
     /// Ajusta o fator de exploração.
