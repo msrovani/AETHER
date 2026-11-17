@@ -926,18 +926,24 @@ fn forget(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
     }
     // 200..=254 é HITL: marca, mas não purga (o purge é o 255 confirmado).
     let hitl = authority < AUTHORITY_HUMAN;
-    let removed = if hitl { false } else { state.ledger.forget(scope, key) };
-    Reply::Json(
-        200,
-        Json::obj([
-            ("forgot", Json::Bool(removed)),
-            ("tombstoned", Json::Bool(tombstoned)),
-            ("hitl", Json::Bool(hitl)),
-            ("key", Json::str(key.to_string())),
-            ("scope", scope_json(scope)),
-            ("remaining", Json::num(state.ledger.len() as f64)),
-        ]),
-    )
+    let removed = if hitl {
+        false
+    } else {
+        state.ledger.forget(scope, key)
+    };
+    let mut fields: Vec<(String, Json)> = vec![
+        ("forgot".into(), Json::Bool(removed)),
+        ("tombstoned".into(), Json::Bool(tombstoned)),
+        ("key".into(), Json::str(key.to_string())),
+        ("scope".into(), scope_json(scope)),
+        ("remaining".into(), Json::num(state.ledger.len() as f64)),
+    ];
+    // Campo só no ramo novo: a resposta do purge 255 confirmado mantém o shape
+    // antigo (`forgot`/`tombstoned`/`key`/`scope`/`remaining`).
+    if hitl {
+        fields.insert(2, ("hitl".into(), Json::Bool(true)));
+    }
+    Reply::Json(200, Json::Obj(fields))
 }
 
 fn cue(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {

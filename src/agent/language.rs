@@ -281,21 +281,123 @@ const INTENTS: &[(&str, &str)] = &[
 /// Palavras funcionais/fillers consumidas sem virar slot (nem OOV).
 const STOPWORDS: &[&str] = &[
     // artigos/preposições/contrações
-    "a", "as", "o", "os", "ao", "aos", "um", "uma", "uns", "umas", "de", "do", "da", "dos", "das",
-    "dum", "duma", "em", "no", "na", "nos", "nas", "num", "numa", "e", "eh", "ou", "que", "se",
-    "para", "pra", "por", "com", "sem", "sobre", "entre", "ate", //
+    "a",
+    "as",
+    "o",
+    "os",
+    "ao",
+    "aos",
+    "um",
+    "uma",
+    "uns",
+    "umas",
+    "de",
+    "do",
+    "da",
+    "dos",
+    "das",
+    "dum",
+    "duma",
+    "em",
+    "no",
+    "na",
+    "nos",
+    "nas",
+    "num",
+    "numa",
+    "e",
+    "eh",
+    "ou",
+    "que",
+    "se",
+    "para",
+    "pra",
+    "por",
+    "com",
+    "sem",
+    "sobre",
+    "entre",
+    "ate", //
     // pronomes/verbos de fala (preâmbulo de paráfrase)
-    "me", "mim", "meu", "minha", "meus", "minhas", "te", "ti", "seu", "sua", "voce", "vc", "vcs",
-    "gostaria", "quero", "queria", "pode", "poderia", "saber", "sabe", "diz", "diga", "digam",
-    "dizer", "favor", "pfv", "please", "tell", "give", "show", "list", //
+    "me",
+    "mim",
+    "meu",
+    "minha",
+    "meus",
+    "minhas",
+    "te",
+    "ti",
+    "seu",
+    "sua",
+    "voce",
+    "vc",
+    "vcs",
+    "gostaria",
+    "quero",
+    "queria",
+    "pode",
+    "poderia",
+    "saber",
+    "sabe",
+    "diz",
+    "diga",
+    "digam",
+    "dizer",
+    "favor",
+    "pfv",
+    "please",
+    "tell",
+    "give",
+    "show",
+    "list", //
     // cópulas/tempo
-    "seria", "sera", "sao", "foi", "era", "esta", "estao", "tem", "ter", "ha", "agora", "entao",
-    "ai", "oi", "ola", "bom", "boa", "dia", "tarde", "noite", //
+    "seria",
+    "sera",
+    "sao",
+    "foi",
+    "era",
+    "esta",
+    "estao",
+    "tem",
+    "ter",
+    "ha",
+    "agora",
+    "entao",
+    "ai",
+    "oi",
+    "ola",
+    "bom",
+    "boa",
+    "dia",
+    "tarde",
+    "noite", //
     // predicados de verificação (não são slots)
-    "passou", "passado", "passada", "funcionou", "funciona", "vale", "valido", "ok", "sucesso", //
+    "passou",
+    "passado",
+    "passada",
+    "funcionou",
+    "funciona",
+    "vale",
+    "valido",
+    "ok",
+    "sucesso", //
     // inglês funcional
-    "the", "of", "is", "are", "in", "on", "for", "to", "and", "or", "it", "this", "that", "its",
-    "was", "were",
+    "the",
+    "of",
+    "is",
+    "are",
+    "in",
+    "on",
+    "for",
+    "to",
+    "and",
+    "or",
+    "it",
+    "this",
+    "that",
+    "its",
+    "was",
+    "were",
 ];
 
 /// Marcadores de injeção de instrução (recusa explícita, nunca goal).
@@ -680,7 +782,9 @@ fn relation_candidates(toks: &[Tok<'_>], consumed: &[bool]) -> Vec<RelCand> {
 }
 
 fn is_relation_token(fold: &str) -> bool {
-    RELATIONS.iter().any(|(alias, _)| alias_match(fold, alias).is_some())
+    RELATIONS
+        .iter()
+        .any(|(alias, _)| alias_match(fold, alias).is_some())
 }
 
 /// Resto não consumido vira o `subject` (na ordem original, caixa preservada).

@@ -254,11 +254,25 @@ Para esses casos, o LLM (remoto ou pequeno) continua sendo a opção pragmática
 A diferença é que ele deixa de ser **o centro** e passa a ser **uma tool** com
 custo, risco e validação — exatamente o que o plano híbrido já diz.
 
+## 6.1 C1 — confiança calibrada no parser (código em `src/agent/language.rs`)
+
+O `ParserPort` não devolve mais confiança `1.0` fixa. Fluxo:
+
+* `analyze(text, schema)` → `ParseReport` com `confidence`, `is_oov` e slots.
+* Score (pesos fixos): `0.30·intent + 0.40·cobertura + 0.20·margem + 0.10·(1−penalidade)`.
+* Teto de abstenção: `ABSTAIN_CEILING = 0.49` — abaixo disso o host deve
+  abster/`ask`, nunca chutar Goal.
+* OOV tipado: `LanguageError::Oov` / `ParseReport.is_oov`; falso positivo no
+  gate L1/C-G0 conta no denominador dos OOV, não nos 95% do schema.
+* Gates: `tests/language_port_gate.rs` (`gate_c1_*`); canônico PT ≥ 0,85;
+  OOV aritmético abstém; a tool `language.parse` propaga a confiança.
+
 ## 7. Experimentos baratos antes de escolher (gates)
 
 | ID | Experimento | Métrica | Decisão |
 |---|---|---|---|
 | **L1** | Grammar Pruning/parser em 100 comandos do agente | exact match/slot F1, p99, **OOV fora do schema** | default se ≥95%, <10 ms e OOV ≤5%; se OOV >5%, abstenção/ask (não LLM) |
+| **C1** | Confiança calibrada + OOV explícito (MSG 0374) | canônico ≥0,85; OOV ≤ teto 0,49; ordem de confiança | parser default se os `gate_c1_*` passam |
 | **L2** | xLSTM/RWKV/Mamba/BLT 1–3B em 50 prompts | qualidade, RAM, tok/s | small_lm se couber no budget |
 | **L3** | LCM/Mimir-like com SONAR em sumarização/comandos | similaridade semântica, decoder latency | concept se ≥0,9 e <50 ms |
 | **L4** | ESN/LAERC em corpus de domínio | perplexity/BLiMP, p99 | edge se ≥ baseline local |

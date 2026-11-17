@@ -141,9 +141,7 @@ fn remember_body(key: u64, organism: u64) -> String {
 }
 
 fn cue_body(organism: u64) -> String {
-    format!(
-        r#"{{"scope":{{"organism":{organism},"run":1,"app":1}},"query":{PHASES}}}"#
-    )
+    format!(r#"{{"scope":{{"organism":{organism},"run":1,"app":1}},"query":{PHASES}}}"#)
 }
 
 fn forget_body(key: u64, organism: u64, authority: u64, confirm: bool) -> String {
@@ -413,8 +411,14 @@ fn api_agent_pipeline_desfaz_escrita_no_rollback() {
 
     // A escrita aconteceu (linha `write`) e foi compensada (linha `delete`).
     let text = std::fs::read_to_string(&journal).unwrap_or_default();
-    assert!(text.contains("\"op\":\"write\""), "journal sem escrita: {text}");
-    assert!(text.contains("\"op\":\"delete\""), "journal sem undo: {text}");
+    assert!(
+        text.contains("\"op\":\"write\""),
+        "journal sem escrita: {text}"
+    );
+    assert!(
+        text.contains("\"op\":\"delete\""),
+        "journal sem undo: {text}"
+    );
     assert!(text.contains("k|rel"), "journal não fala da chave: {text}");
 
     // Reabrir o journal (replay) prova que o valor não sobreviveu ao rollback.
@@ -503,5 +507,8 @@ fn api_agent_forget_255_sem_confirmacao_e_recusado() {
 
     // Recusa não é purga: o fato continua citável.
     let (_, resp) = request(addr, "POST", "/v1/aether/cue", &cue_body(1));
-    assert!(resp.contains("\"key\":\"9\""), "recusa apagou o fato: {resp}");
+    assert!(
+        resp.contains("\"key\":\"9\""),
+        "recusa apagou o fato: {resp}"
+    );
 }
