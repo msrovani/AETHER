@@ -317,7 +317,7 @@ const STOPWORDS: &[&str] = &[
     "sem",
     "sobre",
     "entre",
-    "ate", //
+    "ate",
     // pronomes/verbos de fala (preâmbulo de paráfrase)
     "me",
     "mim",
@@ -349,7 +349,7 @@ const STOPWORDS: &[&str] = &[
     "tell",
     "give",
     "show",
-    "list", //
+    "list",
     // cópulas/tempo
     "seria",
     "sera",
@@ -370,7 +370,7 @@ const STOPWORDS: &[&str] = &[
     "boa",
     "dia",
     "tarde",
-    "noite", //
+    "noite",
     // predicados de verificação (não são slots)
     "passou",
     "passado",
@@ -380,7 +380,7 @@ const STOPWORDS: &[&str] = &[
     "vale",
     "valido",
     "ok",
-    "sucesso", //
+    "sucesso",
     // inglês funcional
     "the",
     "of",
