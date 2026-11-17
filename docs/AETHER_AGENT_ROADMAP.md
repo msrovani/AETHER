@@ -47,6 +47,12 @@ nenhum.
 | CLI + rota HTTP | `aether-agent`, `POST /v1/aether/agent` |
 | Política persistida | `gate_orcamento_e_politica_persistente` |
 
+**P0/P1 (tools/planner) já implementados** em `src/agent/tool.rs`,
+`registry.rs`, `executor.rs`, `self_model.rs`, `planner.rs`, `telemetry.rs`,
+`tool_agent.rs` e `tools.rs`; gate `tests/agent_tools_gate.rs` (G-A1) verde em
+5 seeds. O `aether-agent tools` lista o registry e `aether-agent goal` executa
+com plano/verificação.
+
 **Limite atual:** o **host** escolhe a `Task` (`Fact`, `Satisfy`, `Optimize`…);
 o agente só escolhe **qual especialista** executa aquela tarefa. Não há registro
 de ferramentas, efeitos, pré-condições, planejamento multi-passo, linguagem,
@@ -390,6 +396,9 @@ funcionando com parser/template + abstenção.
 | 6 | `aether-agent tools/goal` | `cli.rs` | JSON com plano e motivo |
 | 7 | Telemetria `EpisodeTrace` | `telemetry.rs` | JSON reproduzível |
 | 8 | Gate G-A1 | `tests/agent_tools_gate.rs` | verde em 5 seeds |
+
+**Status (2026-11-17):** itens 1–8 implementados e verdes; `aether-agent
+tools/goal` já usa `ToolAgent` (P1). Próximo: P2 multi-passo.
 
 **Fora do sprint:** MCTS, LLM, shell, metas endógenas.
 

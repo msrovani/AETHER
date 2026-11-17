@@ -77,11 +77,7 @@ impl ToolAgent {
     }
 
     /// Cria com registry/self-model injetados (testes/gates).
-    pub fn with_registry(
-        registry: ToolRegistry,
-        self_model: SelfModel,
-        scope: ScopeId,
-    ) -> Self {
+    pub fn with_registry(registry: ToolRegistry, self_model: SelfModel, scope: ScopeId) -> Self {
         Self {
             registry,
             self_model,
@@ -125,11 +121,15 @@ impl ToolAgent {
             facts_loaded: 0,
             memory_hits: 0,
         };
-        let budget = goal.budget.max_steps.max(1).min(16);
-        let mut ctx = ToolContext::new(self.scope, Budget {
-            max_steps: budget,
-            ..goal.budget
-        }, goal.id);
+        let budget = goal.budget.max_steps.clamp(1, 16);
+        let mut ctx = ToolContext::new(
+            self.scope,
+            Budget {
+                max_steps: budget,
+                ..goal.budget
+            },
+            goal.id,
+        );
         let mut used: Vec<&'static str> = Vec::new();
         let mut steps: Vec<StepTrace> = Vec::new();
         let mut last: Option<Execution> = None;
@@ -138,13 +138,10 @@ impl ToolAgent {
         let mut success = false;
 
         for _ in 0..budget {
-            let Some(step) = self.planner.select(
-                goal,
-                &state,
-                &self.registry,
-                &self.self_model,
-                &used,
-            ) else {
+            let Some(step) =
+                self.planner
+                    .select(goal, &state, &self.registry, &self.self_model, &used)
+            else {
                 break;
             };
             used.push(step.tool);
@@ -154,7 +151,12 @@ impl ToolAgent {
             match execution {
                 Ok(execution) => {
                     let met = execution.met;
-                    steps.push(step_trace(&step, execution.met, execution.elapsed_us, &execution));
+                    steps.push(step_trace(
+                        &step,
+                        execution.met,
+                        execution.elapsed_us,
+                        &execution,
+                    ));
                     last = Some(execution);
                     if met {
                         success = true;
@@ -192,6 +194,10 @@ impl ToolAgent {
         }
 
         let total_us = started.elapsed().as_micros() as u64;
+        let answer = last
+            .as_ref()
+            .and_then(|execution| execution.outcome.first_claim())
+            .map(|claim| claim.value.clone());
         let trace = EpisodeTrace {
             goal: goal_label(goal),
             steps: steps.clone(),
@@ -199,6 +205,7 @@ impl ToolAgent {
             action,
             total_us,
             rationale: rationale.clone(),
+            answer: answer.clone(),
         };
         self.traces.push(trace.clone());
         GoalOutcome {

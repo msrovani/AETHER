@@ -662,11 +662,7 @@ impl Expert for MemoryExpert {
 }
 
 /// Fábrica do especialista de transplante (usada pelas tools do agente).
-pub fn make_transplant(
-    dim: usize,
-    traces: usize,
-    facts_path: &Path,
-) -> Option<Box<dyn Expert>> {
+pub fn make_transplant(dim: usize, traces: usize, facts_path: &Path) -> Option<Box<dyn Expert>> {
     let facts = load_facts(facts_path);
     TransplantExpert::new(dim, traces, &facts)
         .ok()

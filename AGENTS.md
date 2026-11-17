@@ -87,6 +87,8 @@ aether-agent ask --subject Brasil --relation capital --json
 aether-agent sat target/instancia.dimacs --json
 aether-agent solve target/qubo.json --json
 aether-agent demo --json          # inferência + SAT + QUBO + aprendizado
+aether-agent tools                # registry de tools (custo/risco)
+aether-agent goal --facts data/agent_facts.jsonl --subject AETHER --relation proibe --json
 aether-agent ask --facts data/agent_facts.jsonl --subject AETHER --relation proibe --json
 ```
 

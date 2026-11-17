@@ -1,8 +1,8 @@
 //! Executor: orçamento, chamada da tool, verificação e rollback.
 
+use super::planner::PlanStep;
 use super::registry::ToolRegistry;
 use super::tool::{Goal, ToolContext, ToolError, ToolOutcome};
-use super::planner::PlanStep;
 
 /// Resultado da execução de um passo.
 #[derive(Clone, Debug)]

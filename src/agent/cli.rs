@@ -408,7 +408,10 @@ fn goal(args: &Args, out: &mut dyn Write) -> i32 {
         } else if let Some((subject, relation)) = first.split_once('|') {
             Goal::fact(subject.to_string(), relation.to_string())
         } else {
-            let _ = writeln!(out, "erro de uso: goal exige --subject/--relation ou \"sujeito|relação\"");
+            let _ = writeln!(
+                out,
+                "erro de uso: goal exige --subject/--relation ou \"sujeito|relação\""
+            );
             return EXIT_USAGE;
         }
     } else {
@@ -440,7 +443,12 @@ fn goal(args: &Args, out: &mut dyn Write) -> i32 {
             );
         }
         if let Some(claim) = outcome.outcome.as_ref().and_then(|o| o.first_claim()) {
-            let _ = writeln!(out, "resposta: {} (fonte {})", claim.value, claim.source.label());
+            let _ = writeln!(
+                out,
+                "resposta: {} (fonte {})",
+                claim.value,
+                claim.source.label()
+            );
         }
     }
     if outcome.success {
@@ -450,7 +458,8 @@ fn goal(args: &Args, out: &mut dyn Write) -> i32 {
     }
 }
 
-fn teach(args: &Args, out: &mut dyn Write) -> i32 {    let Some(task) = args.fact() else {
+fn teach(args: &Args, out: &mut dyn Write) -> i32 {
+    let Some(task) = args.fact() else {
         let _ = writeln!(out, "erro de uso: teach exige --subject e --relation");
         return EXIT_USAGE;
     };

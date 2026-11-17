@@ -168,7 +168,10 @@ fn p1_tool_agent_responde_fato_e_sat_e_qubo() {
 
     let fact = agent.solve(&Goal::fact("AETHER", "proibe"));
     assert!(fact.success, "{:?}", fact.rationale);
-    assert_eq!(fact.outcome.unwrap().first_claim().unwrap().value, "backpropagation");
+    assert_eq!(
+        fact.outcome.unwrap().first_claim().unwrap().value,
+        "backpropagation"
+    );
 
     let sat = agent.solve(&Goal::satisfy(
         3,

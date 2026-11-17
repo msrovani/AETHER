@@ -25,8 +25,7 @@ impl std::fmt::Debug for FactTool {
 impl FactTool {
     /// Cria a tool a partir da configuração.
     pub fn new(cfg: &AgentConfig) -> Option<Self> {
-        make_transplant(cfg.dim, cfg.traces, &cfg.facts_path)
-            .map(|expert| Self { expert })
+        make_transplant(cfg.dim, cfg.traces, &cfg.facts_path).map(|expert| Self { expert })
     }
 }
 

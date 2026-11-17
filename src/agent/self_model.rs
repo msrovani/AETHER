@@ -194,10 +194,8 @@ impl SelfModel {
             let alpha = entry.get("alpha").and_then(|v| v.as_f64()).unwrap_or(1.0);
             let beta = entry.get("beta").and_then(|v| v.as_f64()).unwrap_or(1.0);
             if alpha.is_finite() && beta.is_finite() && alpha > 0.0 && beta > 0.0 {
-                self.stats.insert(
-                    (tool.to_string(), cluster),
-                    Beta { alpha, beta },
-                );
+                self.stats
+                    .insert((tool.to_string(), cluster), Beta { alpha, beta });
             }
         }
     }

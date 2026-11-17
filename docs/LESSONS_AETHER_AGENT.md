@@ -31,6 +31,8 @@
 | Feature `api` quebrava sem default | `api` referenciava `agent`, que referenciava `sgdb` | `api = [\"m1\",\"sgdb\",\"agent\"]` + check `--no-default-features` | `Cargo.toml` |
 | Agente agia no desconhecido | confiança do FHRR sem piso virava `act` | `query_selective` + `gap_min` + abstenção | `coherence.rs`, `experts.rs` |
 | Conhecer o projeto não era testável | fatos curados só em docs | `data/agent_facts.jsonl` + `gate_memoriza_fatos_do_projeto` | `tests/agent_gate.rs` |
+| SAT “factível” reprovava no executor | `Certificate` exigia `gap > 0`, mas SAT só garante `violations == 0` | separar `SuccessCriteria::Certificate` (factível) de `Coherent` (gap > 0) | `tool.rs` |
+| Registry não compilava `Debug` | `Box<dyn Tool>` não implementa `Debug` | `impl Debug` manual listando nomes | `registry.rs` |
 
 ## 3. Invariantes que não podem regredir
 

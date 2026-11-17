@@ -125,7 +125,7 @@ impl SuccessCriteria {
             } => outcome.claims.iter().any(|claim| {
                 claim.subject.eq_ignore_ascii_case(subject)
                     && claim.relation.eq_ignore_ascii_case(relation)
-                    && value.as_ref().is_none_or(|want| {
+                    && value.as_ref().map_or(true, |want| {
                         claim.value.trim().eq_ignore_ascii_case(want.trim())
                     })
             }),
@@ -281,9 +281,13 @@ impl Goal {
     /// Cluster de competência (contexto do self-model).
     pub fn cluster(&self) -> u64 {
         let mut h = u64::from(self.kind.code()) | 1;
-        for text in [self.subject.as_deref(), self.relation.as_deref(), self.query.as_deref()]
-            .into_iter()
-            .flatten()
+        for text in [
+            self.subject.as_deref(),
+            self.relation.as_deref(),
+            self.query.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
         {
             for b in text.bytes() {
                 h ^= u64::from(b);

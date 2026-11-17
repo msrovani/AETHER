@@ -53,7 +53,10 @@ impl ToolRegistry {
         }
         let schema = tool.schema();
         if schema.name != name {
-            return Err(format!("schema.name `{}` != tool.name `{name}`", schema.name));
+            return Err(format!(
+                "schema.name `{}` != tool.name `{name}`",
+                schema.name
+            ));
         }
         if schema.args.is_empty() {
             return Err(format!("tool `{name}` sem args declarados"));

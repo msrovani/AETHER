@@ -82,8 +82,7 @@ impl Planner {
                 let cost = f64::from(candidate.cost.ms) / 1_000.0
                     + f64::from(candidate.cost.tokens) / 10_000.0;
                 let risk = candidate.risk.penalty();
-                let score = f64::from(candidate.affordance) * (0.5 + 0.5 * p)
-                    + self.lambda_ucb * u
+                let score = f64::from(candidate.affordance) * (0.5 + 0.5 * p) + self.lambda_ucb * u
                     - self.lambda_cost * cost
                     - self.lambda_risk * risk;
                 PlanStep {

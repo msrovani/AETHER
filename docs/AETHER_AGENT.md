@@ -134,6 +134,11 @@ Feedback { correct: Some(true), expected: Some(Claim { .. }) }
 aether-agent ask --subject Brasil --relation capital
 aether-agent ask --subject Atlântida --relation capital --json   # abstém (exit 1)
 
+# registry + autoescolha de ferramenta (P1)
+aether-agent tools
+aether-agent goal --facts data/agent_facts.jsonl \
+  --subject AETHER --relation proibe --json
+
 # lógica / otimização
 aether-agent sat target/instancia.dimacs
 aether-agent solve target/qubo.json

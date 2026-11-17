@@ -39,6 +39,8 @@ pub struct EpisodeTrace {
     pub total_us: u64,
     /// Motivo.
     pub rationale: String,
+    /// Resposta principal (se houver).
+    pub answer: Option<String>,
 }
 
 impl EpisodeTrace {
@@ -65,6 +67,13 @@ impl EpisodeTrace {
             ("action", Json::str(self.action.label())),
             ("total_us", Json::num(self.total_us as f64)),
             ("rationale", Json::str(self.rationale.clone())),
+            (
+                "answer",
+                self.answer
+                    .as_ref()
+                    .map(|answer| Json::str(answer.clone()))
+                    .unwrap_or(Json::Null),
+            ),
             ("steps", Json::Arr(steps)),
         ])
     }
