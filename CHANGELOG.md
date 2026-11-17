@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.146] - 2026-11-17
+
+### Changed
+
+- Ciclo automatico: 16 arquivo(s) (.:5, data:1, docs:4, examples:1, src:3, tests:2).
+- Gate: ok (11s).
+
+- `AGENTS.md`
+- `COGNITIVE_BENCHMARK_SUITE.md`
+- `Cargo.lock`
+- `Cargo.toml`
+- `README.md`
+- `docs/AETHER_AGENT.md`
+- `src/core/mod.rs`
+- `src/core/transplant.rs`
+- `tests/agent_gate.rs`
+- `data/agent_facts.jsonl`
+- `docs/ADR_AGENT.md`
+- `docs/AETHER_AGENT_ROADMAP.md`
+
 ## [0.0.145] - 2026-11-17
 
 ### Changed

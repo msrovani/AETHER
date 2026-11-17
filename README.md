@@ -14,6 +14,9 @@ zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
 * **docs/O_PROBLEMA_DOS_3_CORPOS_NAO.md** (+ `_VOL2`, `_VOL3`) — dossiê dos três "NÃO" (linguagem, lógica, self): tese, preço em hardware e gestão do conhecimento. Registro mestre no Vol. III §11.
 * **docs/SGDB_INTEGRATION.md** — encaixe operacional do `neural-sgdb` (`T2`): MCP, outbox, leitura de fase e gates F4.
 * **docs/AETHER_AGENT.md** — organismo agêntico: inferência, MoE, coerência e autoaprendizado (`aether-agent`).
+* **docs/AETHER_AGENT_ROADMAP.md** - plano v0.1→v1.0: autonomia (autoescolha EFE/UCB), transplante em escala e híbrido LLM; tiers e gates.
+* **docs/ADR_AGENT.md** — decisões (T2, sem gradiente, memória=prior, feedback verificado, linguagem na borda).
+* **docs/LESSONS_AETHER_AGENT.md** — lições do agente: o que quebrou, invariantes e receitas.
 * **AGENTS.md** — ritual para agentes de IA usarem a memória (`context` antes, `put` depois) sem tratar memória como instrução.
 
 ## Pilares

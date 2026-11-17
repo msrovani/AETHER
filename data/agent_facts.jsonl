@@ -1,0 +1,12 @@
+{"subject":"AETHER","relation":"proibe","object":"backpropagation"}
+{"subject":"AETHER","relation":"usa","object":"fase"}
+{"subject":"AETHER","relation":"tem","object":"transplante"}
+{"subject":"AETHER","relation":"roda","object":"T2"}
+{"subject":"aether-agent","relation":"usa","object":"EXP3"}
+{"subject":"aether-agent","relation":"produz","object":"certificado"}
+{"subject":"aether-agent","relation":"abstem","object":"desconhecido"}
+{"subject":"aether-agent","relation":"aprende","object":"feedback-verificado"}
+{"subject":"neural-sgdb","relation":"guarda","object":"memoria"}
+{"subject":"neural-sgdb","relation":"respeita","object":"escopo"}
+{"subject":"aether-agent","relation":"planeja","object":"P0-P5"}
+{"subject":"aether-agent","relation":"mede","object":"gates"}

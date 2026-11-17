@@ -202,6 +202,35 @@ fn gate_orcamento_e_politica_persistente() {
 }
 
 #[test]
+fn gate_memoriza_fatos_do_projeto() {
+    // O corpus curado em `data/agent_facts.jsonl` é a memória do agente sobre
+    // o próprio projeto: se a doc mudar, o fato muda aqui e o gate quebra.
+    let mut agent = AetherAgent::new(AgentConfig {
+        facts_path: PathBuf::from("data/agent_facts.jsonl"),
+        dim: 512,
+        traces: 4,
+        top_k: 1,
+        max_steps: 1,
+        sgdb: None,
+        ..AgentConfig::default()
+    });
+    for (subject, relation, expected) in [
+        ("AETHER", "proibe", "backpropagation"),
+        ("aether-agent", "usa", "EXP3"),
+        ("aether-agent", "abstem", "desconhecido"),
+        ("neural-sgdb", "respeita", "escopo"),
+    ] {
+        let outcome = agent.ask_fact(subject, relation);
+        assert_eq!(outcome.action, Action::Act, "{subject}|{relation}");
+        assert_eq!(
+            outcome.answer.expect("resposta").value,
+            expected,
+            "{subject}|{relation}"
+        );
+    }
+}
+
+#[test]
 fn gate_contradicao_nao_vira_ato() {
     // Dois especialistas discordam com autoridade equivalente: o agente não age.
     // A coerência é testada diretamente para isolar o gate de roteamento.

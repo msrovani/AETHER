@@ -4,6 +4,13 @@
 > em um agente com **inferência, MoE, coerência e autoaprendizado** — sem LLM,
 > sem tokenização, sem backpropagation.
 
+**Posicionamento:** isto **não** é um chatbot nem um concorrente de LLM. É um
+**coprocessador cognitivo**: memória auditável, solver com certificado e
+abstenção calibrada. A suíte própria (ACQ 100) mede metas internas, não
+inteligência geral. O produto é híbrido — LLM na borda para linguagem/extração,
+AETHER no meio para memória/verificação/decisão. Ver
+`docs/AETHER_AGENT_ROADMAP.md` (Tiers T0–T3, Trilha C).
+
 ## Premissas → implementação
 
 | Premissa | Onde vive | O que é medido |
@@ -61,6 +68,11 @@ e grava `e ⊗ r ⊗ v` no FHRR com `traces` redundantes. Isso é um transplante
 *lossy* e explícito: não é embedding semântico; é endereçamento por conteúdo.
 `query_selective` devolve `None` quando a evidência do papel é fraca — é a
 primeira linha de abstenção.
+
+O corpus curado do próprio projeto vive em **`data/agent_facts.jsonl`**
+(`AETHER|proibe|backpropagation`, `aether-agent|usa|EXP3`, …). Use
+`aether-agent ask --facts data/agent_facts.jsonl --subject … --relation …`; o
+gate `gate_memoriza_fatos_do_projeto` garante que doc e memória não divergem.
 
 ## MoE sem gradiente
 
@@ -166,7 +178,7 @@ Resposta: `action`, `answer`, `support`, `consensus`, `authority`,
 | fatos novos aprendidos | 5/5 |
 | pesos MoE após feedback | transplant sobe acima dos demais |
 | CLI em processo real | `tests/agent_cli.rs` |
-| biblioteca | `tests/agent_gate.rs` (5 gates) |
+| biblioteca | `tests/agent_gate.rs` (6 gates) |
 
 ```bash
 cargo test --lib agent::
@@ -179,9 +191,12 @@ cargo test --features api --test api_agent
 
 | Lacuna | Próximo passo |
 |---|---|
-| Entender linguagem natural | adaptador de borda (texto → `Task`), fora do núcleo; o motor não tokeniza |
+| Entender linguagem natural | adaptador de borda (texto → `Task`), fora do núcleo; o motor não tokeniza — ver Trilha C |
+| Transdutor semântico real (E3) | hoje a borda é hash; “gato/gata”/paráfrase → abstenção — Trilha B0 |
+| Escala de memória | 205 átomos hoje; 10k/100k/1M exigem LSH/shard/SGDB — Trilha B |
+| Benchmark externo (MMLU/GSM8K) | N/A enquanto não houver gerador; só Tier 3 |
 | Ferramentas externas | `Tool` trait com efeitos (HTTP, arquivo, SGDB) e sandbox |
-| Planejamento multi-passo | busca em árvore sobre `Task` + custo do certificado |
+| Planejamento multi-passo | busca em árvore sobre `Task` + custo do certificado — ver `docs/AETHER_AGENT_ROADMAP.md` |
 | Mundo/modelo preditivo | usar `reservoir`/`koopman_sindy` como especialista |
 | MoE com milhares de especialistas | LSH no gate; hoje 5 especialistas |
 | Segurança de aprendizado | quarentena de fatos novos, autoridade mínima, revisão HITL |
@@ -190,3 +205,6 @@ cargo test --features api --test api_agent
 O agente é **completo no ciclo** (percebe–infere–coere–age–aprende) e
 **incompleto em ambição**: não é uma AGI, é um organismo determinístico com
 memória, roteamento e abstenção. O que ele promete, ele mede.
+
+Documentos irmãos: `docs/AETHER_AGENT_ROADMAP.md` (plano), `docs/ADR_AGENT.md`
+(decisões) e `docs/LESSONS_AETHER_AGENT.md` (lições/receitas).

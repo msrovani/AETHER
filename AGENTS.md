@@ -55,6 +55,12 @@ export AETHER_SGDB_URL=http://127.0.0.1:8090/mcp
 export AETHER_SGDB_OUTBOX=target/aether_sgdb.jsonl
 ```
 
+**Escopo canônico do projeto:** `scope_app=AETHER`, `scope_run=org:1/run:0`
+(`--organism 1 --run 0`), com a entidade `aether/fact`. A CLI já usa esse
+escopo por default. Gravação feita com outro `scope_run` (ex.: `engine/agent`)
+não aparece no `aether-sgdb context` padrão — use o mesmo `--run` ou uma
+entidade explícita.
+
 ## Comandos úteis
 
 | Situação | Comando |
@@ -72,11 +78,16 @@ export AETHER_SGDB_OUTBOX=target/aether_sgdb.jsonl
 Para perguntas **estruturadas** (não linguagem natural), use o organismo
 agêntico — ele devolve ação, certificado e abstenção:
 
+> **Posicionamento:** o AETHER é coprocessador, não LLM. Não rode MMLU/GSM8K
+> como se fosse chatbot. Para linguagem, use um LLM na borda; fato extraído por
+> LLM entra em quarentena (autoridade 60–120) e nunca vira 255 sem HITL.
+
 ```bash
 aether-agent ask --subject Brasil --relation capital --json
 aether-agent sat target/instancia.dimacs --json
 aether-agent solve target/qubo.json --json
 aether-agent demo --json          # inferência + SAT + QUBO + aprendizado
+aether-agent ask --facts data/agent_facts.jsonl --subject AETHER --relation proibe --json
 ```
 
 Regras: se `action = abstain`, **não invente**; se `cite`, cite sem agir. O
@@ -97,6 +108,9 @@ tokeniza.
 ## Onde ler mais
 
 - `docs/AETHER_AGENT.md` — agente: especialistas, MoE/EXP3, coerência, limites.
+- `docs/AETHER_AGENT_ROADMAP.md` — plano v0.1→v1.0: autonomia (autoescolha EFE/UCB), trilhas de transplante em escala e híbrido LLM; tiers de avaliação e gates.
+- `docs/ADR_AGENT.md` — decisões de arquitetura do agente (ADR-001…012).
+- `docs/LESSONS_AETHER_AGENT.md` — lições, invariantes e receitas de extensão.
 - `docs/SGDB_INTEGRATION.md` — arquitetura, CLI completa, env, troubleshooting.
 - `docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md` §3–§8 — doutrina do encaixe.
 - `src/knowledge/sgdb/` — implementação (`wire`, `transport`, `client`,

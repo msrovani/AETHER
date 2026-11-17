@@ -101,6 +101,10 @@ pub mod affinity;
 pub mod fhrr_bam;
 // E1 — Phase-Language Head (sharded + ressonador ACF + acoplamento RG).
 pub mod gpu_gate;
+
+// GPU opt-in (--features gpu): GEMM do transplante. Sem a feature, CPU-only.
+#[cfg(feature = "gpu")]
+pub mod gpu;
 pub mod noise;
 // E1 — núcleo independente (m5); o acoplamento RG é opcional sob `m1`.
 #[cfg(feature = "m5")]

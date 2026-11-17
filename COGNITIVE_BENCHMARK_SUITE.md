@@ -1,5 +1,12 @@
 # PROJETO AETHER — Suíte de Auditoria Cognitiva, Estresse e Throughput (`aether_eval`)
 
+> **Nota de escopo (2026-11).** O AETHER **não é um LLM**. Esta suíte mede 12
+> metas internas (mais vazão) e o `ACQ 100` significa **100% da cobertura da
+> própria suíte**, não inteligência geral. MMLU/GSM8K/HumanEval/LMSYS Arena são
+> **N/A** enquanto não houver gerador/adaptador de linguagem (Tier 3 em
+> `docs/AETHER_AGENT_ROADMAP.md`). Não use este placar como comparação com GPT
+> ou qualquer assistente conversacional.
+
 Atue como um Engenheiro Principal de Avaliação de Sistemas Cognitivos, Física Computacional e Rust HPC. Sua missão é criar uma suíte completa de testes e benchmarks automatizados (`tests/cognitive_audit.rs` e `benches/throughput_tps.rs`) que avalie quantitativamente o motor `aether_core` em **13 dimensões críticas**, gerando ao final um relatório estruturado (`target/aether_scorecard.json` e resumo no terminal).
 
 ---
