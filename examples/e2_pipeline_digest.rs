@@ -17,7 +17,11 @@ use aether_engine::core::certificate::{Certificate, Provenance};
 use aether_engine::core::logic_pipeline::{Clause3, LogicPipeline};
 
 /// Digest gravado na primeira execução (baseline do lote A).
-const EXPECTED_DIGEST: u64 = 0xa3f3_babd_84c2_c30f;
+///
+/// Histórico: `0xa3f3babd84c2c30f` (lote A, sem B3) → **`0x6a49e419d006125d`**
+/// (B3: reinício que fecha a factibilidade encerra os demais — mudança
+/// *deliberada* de trajetória, com G1/G2 re-validados em 60 instâncias).
+const EXPECTED_DIGEST: u64 = 0x6a49_e419_d006_125d;
 
 const SEEDS: u64 = 8;
 const STEPS: usize = 32;
@@ -34,7 +38,7 @@ fn next_f64(state: &mut u64) -> f64 {
 fn random_3sat(n: usize, m: usize, seed: u64) -> Vec<Clause3> {
     let mut state = seed | 1;
     let mut out = Vec::with_capacity(m);
-    let mut pick = |state: &mut u64, n: usize| (next_f64(state).abs() * n as f64) as usize % n;
+    let pick = |state: &mut u64, n: usize| (next_f64(state).abs() * n as f64) as usize % n;
     while out.len() < m {
         let a = pick(&mut state, n);
         let mut b = pick(&mut state, n);

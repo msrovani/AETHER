@@ -830,12 +830,22 @@ fn clause_state(c: &Clause3, fixed: &[Option<i8>]) -> CState {
     }
 }
 
-/// Orçamento de sondagens de literal falho por consulta.
+/// Teto de sondagens de literal falho por consulta.
 ///
-/// A sondagem completa custa `2n` propagações e dominava o passe simbólico
-/// (94 µs em n=20). Só sondamos variáveis em cláusulas **quase-unitárias**
-/// (exatamente 2 variáveis livres) e com teto fixo: em 3-SAT aleatório no
+/// A sondagem completa custa `2n` propagações e dominava o passe simbólico.
+/// Só sondamos variáveis em cláusulas **quase-unitárias** (exatamente 2 livres)
+/// e com orçamento proporcional ao tamanho da instância: em 3-SAT aleatório no
 /// limiar não há candidatas, então o custo cai para a propagação de unidades.
+/// Teto de sondagens de literal falho por consulta.
+///
+/// A sondagem completa custa `2n` propagandas e dominava o passe simbólico.
+/// Só sondamos variáveis em cláusulas **quase-unitárias** (exatamente 2 livres)
+/// e com teto fixo: em 3-SAT aleatório no limiar não há candidatas, então o
+/// custo cai para a propagação de unidades.
+///
+/// Medido (`docs/E2_OPTIMIZATION.md`): orçamento **proporcional a `m`** não
+/// trouxe ganho mensurável (`n=32`: fixadas e tempo idênticos ao teto fixo),
+/// então o teto fixo fica — menos um knob sem evidência.
 pub const PROBE_MAX: usize = 24;
 
 /// Workspace do presolve simbólico: **listas de ocorrências** + *trail*.
@@ -1112,6 +1122,9 @@ pub struct LogicPipeline {
     loc_val: Vec<f64>,
     /// Mapa variável-expandida → índice local no componente.
     local_of: Vec<u32>,
+    /// Epoch do mapa acima (evita zerar local_of a cada componente).
+    local_epoch_of: Vec<u32>,
+    local_epoch: u32,
     /// Cursor de construção da CSR.
     csr_fill: Vec<u32>,
     residual: Vec<usize>,
@@ -1125,7 +1138,6 @@ pub struct LogicPipeline {
 
     hc: Vec<f64>,
     sub_state: Vec<i8>,
-    sub_best: Vec<i8>,
 
     lambda: Vec<f64>,
     bsb: BsbCore,
@@ -1190,6 +1202,8 @@ impl LogicPipeline {
             loc_col: vec![0; 18 * m_max + 8],
             loc_val: vec![0.0; 18 * m_max + 8],
             local_of: vec![u32::MAX; n_exp_max],
+            local_epoch_of: vec![0; n_exp_max],
+            local_epoch: 0,
             csr_fill: vec![0; n_exp_max],
             residual: Vec::with_capacity(n_exp_max),
             exp_state: vec![1; n_exp_max],
@@ -1200,7 +1214,6 @@ impl LogicPipeline {
             comp_vars: vec![0; n_exp_max],
             hc: vec![0.0; n_exp_max],
             sub_state: vec![1; n_exp_max],
-            sub_best: vec![1; n_exp_max],
             lambda: vec![1.0; m_max],
             bsb: BsbCore::new(n_exp_max, steps, 0.05),
             best_orig: vec![1; n_max],
@@ -1484,40 +1497,40 @@ impl LogicPipeline {
         let mut largest_last = 0usize;
         let mut bsb_runs = 0usize;
 
-        for round in 0..self.rounds {
+        'outer: for round in 0..self.rounds {
             rounds_run += 1;
             self.emit_qubo(n_exp);
             self.build_csr(n_exp);
-            let t_bsb = Instant::now();
 
-            // --- resolve cada componente ---
-            let mut comps = 0usize;
-            let mut largest = 0usize;
-            for r in 0..n_exp {
-                let s = self.counts[r];
-                if s == 0 {
-                    continue;
-                }
-                comps += 1;
-                largest = largest.max(s);
-                let start = self.offsets[r];
-                if s == 1 {
-                    let v = self.comp_vars[start];
-                    // mínimo exato de −h·s com um spin
-                    self.exp_state[v] = if self.hq[v] > 0.0 { 1 } else { -1 };
-                    continue;
-                }
-                for a in 0..s {
-                    self.hc[a] = self.hq[self.comp_vars[start + a]];
-                }
-                self.gather_component(start, s);
-                let mut local_best = f64::INFINITY;
-                for restart in 0..self.restarts {
+            // --- reinícios em volta dos componentes: se um reinício já fecha a
+            // factibilidade (`viol == 0`), os outros só gastariam tempo.
+            for restart in 0..self.restarts {
+                let t_bsb = Instant::now();
+                let mut comps = 0usize;
+                let mut largest = 0usize;
+                for r in 0..n_exp {
+                    let s = self.counts[r];
+                    if s == 0 {
+                        continue;
+                    }
+                    comps += 1;
+                    largest = largest.max(s);
+                    let start = self.offsets[r];
+                    if s == 1 {
+                        let v = self.comp_vars[start];
+                        // mínimo exato de −h·s com um spin
+                        self.exp_state[v] = if self.hq[v] > 0.0 { 1 } else { -1 };
+                        continue;
+                    }
+                    for a in 0..s {
+                        self.hc[a] = self.hq[self.comp_vars[start + a]];
+                    }
+                    self.gather_component(start, s);
                     let sd = seed
                         ^ (round as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)
                         ^ (restart as u64).wrapping_mul(0x85EB_CA77_C2B2_AE63)
                         ^ (start as u64).wrapping_mul(0xC2B2_AE3D_27D4_EB4F);
-                    let e = self.bsb.relax_csr_into(
+                    let _e = self.bsb.relax_csr_into(
                         &self.loc_ptr[..=s],
                         &self.loc_col,
                         &self.loc_val,
@@ -1527,56 +1540,53 @@ impl LogicPipeline {
                         &mut self.sub_state[..s],
                     );
                     bsb_runs += 1;
-                    if e < local_best {
-                        local_best = e;
-                        self.sub_best[..s].copy_from_slice(&self.sub_state[..s]);
+                    for a in 0..s {
+                        let v = self.comp_vars[start + a];
+                        self.exp_state[v] = self.sub_state[a];
                     }
                 }
-                for a in 0..s {
-                    let v = self.comp_vars[start + a];
-                    self.exp_state[v] = self.sub_best[a];
-                }
-            }
-            comps_last = comps;
-            largest_last = largest;
-            self.last.bsb_us += t_bsb.elapsed().as_secs_f64() * 1e6;
+                comps_last = comps;
+                largest_last = largest;
+                self.last.bsb_us += t_bsb.elapsed().as_secs_f64() * 1e6;
 
-            // --- monta a atribuição original ---
-            for v in 0..n {
-                self.cur_orig[v] = match self.fixed3[v] {
-                    Some(s) => s,
-                    None => self.exp_state[self.res_of[v]],
-                };
-            }
-            // --- reparo de factibilidade (min-conflicts com tabu) ---
-            let t_rep = Instant::now();
-            let viol = self.repair_into(n, clauses);
-            self.last.repair_us += t_rep.elapsed().as_secs_f64() * 1e6;
-            // devolve o reparo ao estado expandido (aux ficam como estão: E/ΔE
-            // passam a ser diagnóstico, a decisão é a contagem exata)
-            for v in 0..n {
-                if self.fixed3[v].is_none() {
-                    self.exp_state[self.res_of[v]] = self.cur_orig[v];
+                // --- monta a atribuição original ---
+                for v in 0..n {
+                    self.cur_orig[v] = match self.fixed3[v] {
+                        Some(s) => s,
+                        None => self.exp_state[self.res_of[v]],
+                    };
+                }
+                // --- reparo de factibilidade (min-conflicts com tabu) ---
+                let t_rep = Instant::now();
+                let viol = self.repair_into(n, clauses);
+                self.last.repair_us += t_rep.elapsed().as_secs_f64() * 1e6;
+                // devolve o reparo ao estado expandido (aux ficam como estão:
+                // E/ΔE passam a ser diagnóstico, a decisão é a contagem exata)
+                for v in 0..n {
+                    if self.fixed3[v].is_none() {
+                        self.exp_state[self.res_of[v]] = self.cur_orig[v];
+                    }
+                }
+                let e = row_energy_csr(
+                    &self.csr_ptr[..=n_exp],
+                    &self.csr_col,
+                    &self.csr_val,
+                    &self.hq[..n_exp],
+                    n_exp,
+                    &self.exp_state[..n_exp],
+                );
+                if viol < best_viol || (viol == best_viol && e < best_energy) {
+                    best_viol = viol;
+                    best_energy = e;
+                    self.best_orig[..n].copy_from_slice(&self.cur_orig[..n]);
+                }
+                if viol == 0 {
+                    decisive_rounds += 1;
+                    // já decidido: mais reinícios/rodadas só gastariam tempo
+                    break 'outer;
                 }
             }
-            let e = row_energy_csr(
-                &self.csr_ptr[..=n_exp],
-                &self.csr_col,
-                &self.csr_val,
-                &self.hq[..n_exp],
-                n_exp,
-                &self.exp_state[..n_exp],
-            );
-            if viol < best_viol || (viol == best_viol && e < best_energy) {
-                best_viol = viol;
-                best_energy = e;
-                self.best_orig[..n].copy_from_slice(&self.cur_orig[..n]);
-            }
-            if viol == 0 {
-                decisive_rounds += 1;
-                // já decidido: mais rodadas só gastariam tempo
-                break;
-            }
+
             // --- osciladores de Lagrange: sobe o peso das cláusulas violadas ---
             for (ci, c) in clauses.iter().enumerate() {
                 if !c.satisfied(&self.cur_orig[..n]) {
@@ -1903,42 +1913,48 @@ impl LogicPipeline {
 
     /// Recorta o CSR global nas linhas do componente `comp_vars[start..start+s]`.
     ///
-    /// Devolve `nnz` local. As colunas são remapeadas para índices locais e
-    /// reordenadas (o kernel esparso soma em ordem crescente de coluna local).
+    /// Devolve `nnz` local. **Não há reordenação**: `comp_vars` de um componente
+    /// já vem em ordem crescente de índice global (a contagem é feita num passo
+    /// sobre `0..n_exp`), e as linhas da CSR também — logo o remapeamento
+    /// preserva a ordem crescente de coluna local, que é o que o kernel esparso
+    /// exige para reproduzir a soma densa. `debug_assert!` verifica isso.
+    ///
+    /// O mapa global→local usa **epoch**: nada de zerar `local_of` a cada
+    /// componente (era `O(s)` por componente por rodada).
     fn gather_component(&mut self, start: usize, s: usize) -> usize {
-        for a in 0..s {
-            self.local_of[self.comp_vars[start + a]] = a as u32;
+        self.local_epoch = self.local_epoch.wrapping_add(1);
+        if self.local_epoch == 0 {
+            self.local_epoch_of.fill(0);
+            self.local_epoch = 1;
+        }
+        let epoch = self.local_epoch;
+        for (a, &v) in self.comp_vars[start..start + s].iter().enumerate() {
+            self.local_of[v] = a as u32;
+            self.local_epoch_of[v] = epoch;
         }
         let mut write = 0u32;
         self.loc_ptr[0] = 0;
-        for a in 0..s {
-            let v = self.comp_vars[start + a];
+        for (a, &v) in self.comp_vars[start..start + s].iter().enumerate() {
+            let row_start = write as usize;
             for k in self.csr_ptr[v] as usize..self.csr_ptr[v + 1] as usize {
-                let lw = self.local_of[self.csr_col[k] as usize];
-                if lw != u32::MAX {
-                    self.loc_col[write as usize] = lw;
-                    self.loc_val[write as usize] = self.csr_val[k];
-                    write += 1;
+                let w = self.csr_col[k] as usize;
+                // Vizinho fora do componente: fica de fora do sub-QUBO (é o que
+                // o kernel denso fazia, olhando só as colunas do componente).
+                if self.local_epoch_of[w] != epoch {
+                    continue;
                 }
-            }
-            let (row_start, row_end) = (self.loc_ptr[a] as usize, write as usize);
-            if row_end > row_start + 1 {
-                for x in (row_start + 1)..row_end {
-                    let (c, v) = (self.loc_col[x], self.loc_val[x]);
-                    let mut b = x;
-                    while b > row_start && self.loc_col[b - 1] > c {
-                        self.loc_col[b] = self.loc_col[b - 1];
-                        self.loc_val[b] = self.loc_val[b - 1];
-                        b -= 1;
-                    }
-                    self.loc_col[b] = c;
-                    self.loc_val[b] = v;
+                let lw = self.local_of[w];
+                if write as usize > row_start {
+                    debug_assert!(
+                        lw > self.loc_col[write as usize - 1],
+                        "coluna local fora de ordem (a CSR precisa estar crescente)"
+                    );
                 }
+                self.loc_col[write as usize] = lw;
+                self.loc_val[write as usize] = self.csr_val[k];
+                write += 1;
             }
             self.loc_ptr[a + 1] = write;
-        }
-        for a in 0..s {
-            self.local_of[self.comp_vars[start + a]] = u32::MAX;
         }
         write as usize
     }
@@ -1991,6 +2007,9 @@ impl LogicPipeline {
     /// dá para calculá-los em `O(#termos)` — sem construir a matriz densa.
     /// Se nenhum spin pode ser fixado, a etapa de persistência é pulada com
     /// resultado **idêntico** (ela fixaria zero) e sem o custo `O(n_exp²)`.
+    ///
+    /// A expansão aqui é **especializada** para o caso "tudo livre" (é o estado
+    /// nesta etapa): ~10 operações por termo, contra ~25 do `emit_bit2` genérico.
     fn dominance_may_fire(&mut self, n_exp: usize) -> bool {
         self.lin[..n_exp].fill(0.0);
         self.qsum[..n_exp].fill(0.0);
@@ -1998,14 +2017,11 @@ impl LogicPipeline {
         for ti in 0..self.terms.len() {
             let t = self.terms[ti];
             let c = t.coeff * self.lambda[t.clause as usize];
-            if t.deg == 1 {
-                let x = t.a.var as usize;
-                if t.a.neg {
-                    self.lin[x] -= c;
-                } else {
-                    self.lin[x] += c;
-                }
-            } else {
+            let x = t.a.var as usize;
+            let y = t.b.var as usize;
+            if t.deg >= 2 && x == y {
+                // Caso degenerado (literal repetido): `b² = b`. Delega para a
+                // expansão genérica para não divergir do `emit_bit2`.
                 emit_bit2(
                     None,
                     &mut self.lin[..n_exp],
@@ -2018,6 +2034,34 @@ impl LogicPipeline {
                     t.b,
                     c,
                 );
+                continue;
+            }
+            let quad = |x: usize, y: usize, cc: f64,
+                            qsum: &mut [f64], jabs: &mut [f64]| {
+                qsum[x] += cc;
+                qsum[y] += cc;
+                jabs[x] += cc.abs() * 0.25;
+                jabs[y] += cc.abs() * 0.25;
+            };
+            match (t.deg, t.a.neg, t.b.neg) {
+                (1, false, _) => self.lin[x] += c,
+                (1, true, _) => self.lin[x] -= c,
+                (_, false, false) => {
+                    quad(x, y, c, &mut self.qsum, &mut self.jabs);
+                }
+                (_, true, false) => {
+                    self.lin[y] += c;
+                    quad(x, y, -c, &mut self.qsum, &mut self.jabs);
+                }
+                (_, false, true) => {
+                    self.lin[x] += c;
+                    quad(x, y, -c, &mut self.qsum, &mut self.jabs);
+                }
+                (_, true, true) => {
+                    self.lin[x] -= c;
+                    self.lin[y] -= c;
+                    quad(x, y, c, &mut self.qsum, &mut self.jabs);
+                }
             }
         }
         for v in 0..n_exp {
