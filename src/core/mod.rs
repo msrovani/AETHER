@@ -13,6 +13,9 @@ pub mod certificate;
 #[cfg(feature = "m1")]
 pub mod presolve;
 // E2c-3 - busca exata guiada por persistencia (roof dual como propagador).
+// Depende de `certificate`/`presolve` (ambos `m1`); sem o gate, `cargo check
+// --no-default-features --features m2` quebra (CI feature isolada).
+#[cfg(feature = "m1")]
 pub mod persistency_search;
 
 // E2 — pipeline lógico de 5 estágios (presolve → persistência → decomposição

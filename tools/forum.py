@@ -25,7 +25,25 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-DEFAULT_FORUM = Path(r"C:\Users\msrov\Desktop\FORUM.txt")
+def _default_forum() -> Path:
+    """Path do fórum: env → Desktop Windows → ./FORUM.txt (Cloud/Linux)."""
+    import os
+
+    for key in ("FORUM", "FORUM_PATH", "AETHER_FORUM"):
+        v = os.environ.get(key)
+        if v:
+            return Path(v)
+    win = Path(r"C:\Users\msrov\Desktop\FORUM.txt")
+    if win.exists():
+        return win
+    local = Path.cwd() / "FORUM.txt"
+    if local.exists():
+        return local
+    # preferência documental no Windows; fallback local para Cloud Agent
+    return win if os.name == "nt" else local
+
+
+DEFAULT_FORUM = _default_forum()
 
 MSG_START = re.compile(r"^===MSG\s+(\d+)===\s*$")
 MSG_END = re.compile(r"^===END\s+(\d+)===\s*$")
