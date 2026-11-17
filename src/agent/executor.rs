@@ -50,6 +50,21 @@ impl ToolExecutor {
                 goal.risk_ceiling.label()
             )));
         }
+        // ADR-014/T5: efeito irreversível **declarado** também barra antes da
+        // call. O gate pós-call abaixo continua como backstop para tools que
+        // declaram menos do que fazem.
+        if goal.risk_ceiling < super::tool::Risk::High
+            && tool
+                .planned_effects(goal)
+                .iter()
+                .any(|e| matches!(e, super::tool::Effect::Irreversible { .. }))
+        {
+            return Err(ToolError::NeedsHuman(format!(
+                "tool `{}` declara efeito irreversível; teto={} < high",
+                step.tool,
+                goal.risk_ceiling.label()
+            )));
+        }
         // Dry-run obrigatório antes de qualquer efeito (P2 reusa isto).
         tool.dry_run(goal, ctx)?;
         let undo_before = ctx.undo_len();
@@ -61,22 +76,36 @@ impl ToolExecutor {
             Ok(outcome) => outcome,
             Err(e) => {
                 // Efeitos já registrados antes do erro precisam ser desfeitos.
-                let _ = ctx.rewind(undo_before);
+                let report = ctx.rewind_report(undo_before);
+                if !report.is_ok() {
+                    return Err(ToolError::Failed(format!(
+                        "{e}; {} — {}",
+                        report.summary(),
+                        report.failed.join("; ")
+                    )));
+                }
                 return Err(e);
             }
         };
         ctx.charge(cost);
         let elapsed_us = started.elapsed().as_micros() as u64;
         for effect in &outcome.effects {
-            // Irreversível sem teto High: não aplica e pede HITL.
+            // Irreversível sem teto High: desfaz o que der e pede HITL.
             if matches!(effect, super::tool::Effect::Irreversible { .. })
                 && goal.risk_ceiling < super::tool::Risk::High
             {
-                let _ = ctx.rewind(undo_before);
-                return Err(ToolError::NeedsHuman(format!(
-                    "efeito irreversível exige risk_ceiling=high (teto={})",
-                    goal.risk_ceiling.label()
-                )));
+                let report = ctx.rewind_report(undo_before);
+                ctx.rollback_to(effects_before, claims_before, certificates_before);
+                return Err(match report.failed.first() {
+                    Some(why) => ToolError::Failed(format!(
+                        "{} — efeito irreversível já ocorreu ({why})",
+                        report.summary()
+                    )),
+                    None => ToolError::NeedsHuman(format!(
+                        "efeito irreversível exige risk_ceiling=high (teto={})",
+                        goal.risk_ceiling.label()
+                    )),
+                });
             }
             ctx.push_effect(effect.clone());
         }
@@ -88,9 +117,17 @@ impl ToolExecutor {
                 ctx.certificates.push(*cert);
             }
         } else {
-            // Rewind LIFO (memória) e truncamento do blackboard.
-            ctx.rewind(undo_before)?;
+            // Rewind LIFO (memória) e truncamento do blackboard — sempre, mesmo
+            // quando a compensação falha (o erro é propagado depois).
+            let report = ctx.rewind_report(undo_before);
             ctx.rollback_to(effects_before, claims_before, certificates_before);
+            if !report.is_ok() {
+                return Err(ToolError::Failed(format!(
+                    "{}: {}",
+                    report.summary(),
+                    report.failed.join("; ")
+                )));
+            }
         }
         Ok(Execution {
             outcome,

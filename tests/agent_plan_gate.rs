@@ -7,6 +7,7 @@
 #![cfg(feature = "agent")]
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use aether_engine::agent::{
@@ -286,6 +287,7 @@ fn gate_a2_real_recall_sat_verify() {
 #[derive(Default)]
 struct MockStore {
     data: HashMap<String, String>,
+    outbox: Vec<String>,
     undo_calls: usize,
     stage_rewinds: usize,
 }
@@ -317,6 +319,26 @@ impl UndoBackend for MockUndo {
         Ok(())
     }
 
+    fn outbox_len(&self) -> usize {
+        self.store.lock().map(|s| s.outbox.len()).unwrap_or(0)
+    }
+
+    fn stage_rewind_to(
+        &self,
+        _txn: u64,
+        _keys: &[String],
+        outbox_len: usize,
+    ) -> Result<(), String> {
+        let mut store = self.store.lock().map_err(|_| "store")?;
+        if store.outbox.len() < outbox_len {
+            return Err("stale: outbox já abaixo da marca".into());
+        }
+        store.outbox.truncate(outbox_len);
+        store.stage_rewinds += 1;
+        store.undo_calls += 1;
+        Ok(())
+    }
+
     fn write(&self, key: &str, text: &str) -> Result<Option<Snapshot>, String> {
         let mut store = self.store.lock().map_err(|_| "store")?;
         let prev = store.data.get(key).map(|old| Snapshot {
@@ -328,6 +350,7 @@ impl UndoBackend for MockUndo {
             provenance: "mock".into(),
         });
         store.data.insert(key.to_string(), text.to_string());
+        store.outbox.push(key.to_string());
         Ok(prev)
     }
 }
@@ -373,12 +396,23 @@ impl Tool for WriteTool {
         self.affordance(goal, state) > 0.0
     }
 
-    fn call(&mut self, _goal: &Goal, _ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
-        self.store
-            .lock()
-            .map_err(|_| ToolError::Failed("store".into()))?
-            .data
-            .insert(self.key.to_string(), self.value.to_string());
+    fn call(&mut self, _goal: &Goal, ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
+        let seq = ctx.next_stage_seq();
+        let outbox_len = ctx
+            .undo_backend
+            .as_ref()
+            .map(|b| b.outbox_len())
+            .unwrap_or(0);
+        {
+            let mut store = self
+                .store
+                .lock()
+                .map_err(|_| ToolError::Failed("store".into()))?;
+            store
+                .data
+                .insert(self.key.to_string(), self.value.to_string());
+            store.outbox.push(self.key.to_string());
+        }
         Ok(ToolOutcome {
             claims: vec![Claim::new(
                 "x",
@@ -392,6 +426,8 @@ impl Tool for WriteTool {
             effects: vec![
                 Effect::Stage {
                     keys: vec![self.key.to_string()],
+                    seq,
+                    outbox_len,
                 },
                 Effect::MemoryWrite {
                     key: self.key.to_string(),
@@ -741,6 +777,219 @@ fn gate_memory_write_com_stage_e_undo() {
     assert!(!outcome.success);
     assert!(store.lock().unwrap().data.is_empty());
     assert!(store.lock().unwrap().stage_rewinds >= 1);
+    // Watermark: o outbox volta exatamente à marca (nada pendente).
+    assert!(store.lock().unwrap().outbox.is_empty());
+}
+
+/// Tool segura de baixo risco (deve vencer o candidato acima do teto).
+struct SafeActTool;
+
+impl Tool for SafeActTool {
+    fn name(&self) -> &'static str {
+        "safe"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "safe",
+            description: "tool segura",
+            args: &["subject"],
+            kinds: &[GoalKind::Act],
+        }
+    }
+
+    fn cost(&self) -> Cost {
+        Cost::local(1.0)
+    }
+
+    fn risk(&self) -> Risk {
+        Risk::Low
+    }
+
+    fn affordance(&self, goal: &Goal, _state: &WorldState) -> f32 {
+        if goal.kind == GoalKind::Act {
+            1.0
+        } else {
+            0.0
+        }
+    }
+
+    fn preconditions(&self, goal: &Goal, state: &WorldState) -> bool {
+        self.affordance(goal, state) > 0.0
+    }
+
+    fn call(&mut self, goal: &Goal, _ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
+        Ok(ToolOutcome {
+            claims: vec![Claim::new(
+                "x",
+                goal.relation.as_deref().unwrap_or("value"),
+                goal.query.clone().unwrap_or_default(),
+                1.0,
+                200,
+                aether_engine::agent::ExpertId::Transplant,
+                Provenance::Transplanted,
+            )],
+            confidence: 1.0,
+            ..ToolOutcome::default()
+        })
+    }
+}
+
+#[test]
+fn gate_hitl_nao_preempta_tool_segura() {
+    // Candidato High existe, mas a tool segura paga o piso EFE: deve agir.
+    let mut registry = ToolRegistry::new(vec!["safe", "danger"]);
+    registry.register(Box::new(SafeActTool)).unwrap();
+    registry.register(Box::new(HighRiskTool)).unwrap();
+    let mut agent = ToolAgent::with_registry(
+        registry,
+        SelfModel::new(None),
+        aether_engine::core::knowledge_bridge_f1::ScopeId::new(1, 0, 1),
+    );
+    let outcome = agent.solve(&act_goal("x", "value", "ok", Risk::Medium));
+    assert!(outcome.success, "rationale={}", outcome.rationale);
+    assert_eq!(outcome.action, Action::Act);
+}
+
+/// Tool que declara efeito irreversível ANTES da call e conta execuções.
+struct DeclaredBurnTool {
+    calls: Arc<AtomicUsize>,
+}
+
+impl Tool for DeclaredBurnTool {
+    fn name(&self) -> &'static str {
+        "declared_burn"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "declared_burn",
+            description: "declara irreversível",
+            args: &["subject"],
+            kinds: &[GoalKind::Act],
+        }
+    }
+
+    fn cost(&self) -> Cost {
+        Cost::local(1.0)
+    }
+
+    fn risk(&self) -> Risk {
+        Risk::Low
+    }
+
+    fn affordance(&self, goal: &Goal, _state: &WorldState) -> f32 {
+        if goal.kind == GoalKind::Act {
+            1.0
+        } else {
+            0.0
+        }
+    }
+
+    fn preconditions(&self, goal: &Goal, state: &WorldState) -> bool {
+        self.affordance(goal, state) > 0.0
+    }
+
+    fn planned_effects(&self, _goal: &Goal) -> Vec<Effect> {
+        vec![Effect::Irreversible {
+            kind: "declared_burn",
+        }]
+    }
+
+    fn call(&mut self, _goal: &Goal, _ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(ToolOutcome::empty("não deveria executar"))
+    }
+}
+
+#[test]
+fn gate_irreversivel_declarado_nao_executa_pre_call() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut registry = ToolRegistry::new(vec!["declared_burn"]);
+    registry
+        .register(Box::new(DeclaredBurnTool {
+            calls: Arc::clone(&calls),
+        }))
+        .unwrap();
+    let mut agent = ToolAgent::with_registry(
+        registry,
+        SelfModel::new(None),
+        aether_engine::core::knowledge_bridge_f1::ScopeId::new(1, 0, 1),
+    );
+    let outcome = agent.solve(&act_goal("x", "burn", "ash", Risk::Medium));
+    assert_eq!(outcome.action, Action::Cite, "{}", outcome.rationale);
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        0,
+        "efeito ocorreu antes do HITL"
+    );
+}
+
+/// Backend cuja compensação sempre falha (T7).
+struct FailingUndo;
+
+impl UndoBackend for FailingUndo {
+    fn insert_undo(&self, _key: &str) -> Result<(), String> {
+        Err("disco cheio".into())
+    }
+
+    fn restore(&self, _key: &str, _prev: &Snapshot) -> Result<(), String> {
+        Err("disco cheio".into())
+    }
+
+    fn stage_rewind(&self, _txn: u64, _keys: &[String]) -> Result<(), String> {
+        Err("disco cheio".into())
+    }
+}
+
+#[test]
+fn gate_undo_falha_nao_e_engolida() {
+    let scope = aether_engine::core::knowledge_bridge_f1::ScopeId::new(1, 0, 1);
+    let budget = Budget {
+        max_steps: 1,
+        max_ms: 1_000,
+        max_tokens: 0,
+    };
+    let mut ctx = ToolContext::new(scope, budget, 7).with_undo_backend(Arc::new(FailingUndo));
+    ctx.push_effect(Effect::MemoryWrite {
+        key: "k".into(),
+        prev: None,
+    });
+    let err = ctx.rewind(0);
+    assert!(err.is_err(), "undo falho não pode virar sucesso");
+    // Log preservado para nova tentativa/HITL.
+    assert_eq!(ctx.undo_len(), 1);
+}
+
+#[test]
+fn gate_undo_sem_backend_nao_descarta_em_silencio() {
+    let scope = aether_engine::core::knowledge_bridge_f1::ScopeId::new(1, 0, 1);
+    let budget = Budget {
+        max_steps: 1,
+        max_ms: 1_000,
+        max_tokens: 0,
+    };
+    let mut ctx = ToolContext::new(scope, budget, 8);
+    ctx.push_effect(Effect::MemoryWrite {
+        key: "k".into(),
+        prev: None,
+    });
+    assert!(ctx.rewind(0).is_err(), "sem backend deve falhar visível");
+    assert_eq!(ctx.undo_len(), 1);
+}
+
+#[test]
+fn gate_stage_idempotente_conta_stale() {
+    // Replay de rewind de stage não pode falhar nem apagar o store.
+    let store = Arc::new(Mutex::new(MockStore::default()));
+    let backend = MockUndo {
+        store: Arc::clone(&store),
+    };
+    assert_eq!(backend.outbox_len(), 0);
+    assert!(backend.stage_rewind_to(1, &["k".into()], 0).is_ok());
+    // Segundo rewind no mesmo ponto continua ok (idempotente).
+    assert!(backend.stage_rewind_to(1, &["k".into()], 0).is_ok());
+    assert_eq!(store.lock().unwrap().stage_rewinds, 2);
 }
 
 #[test]

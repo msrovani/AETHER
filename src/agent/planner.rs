@@ -59,12 +59,18 @@ impl Planner {
         self_model: &SelfModel,
         used: &[&str],
     ) -> Option<PlanStep> {
-        // Risco acima do teto passa mesmo com score < min_score: o executor
-        // devolve NeedsHuman/Cite (SCHEMA_6). Sem isso, Risk::High (penalty 1.5)
-        // cai abaixo do piso EFE e vira Abstain silencioso.
-        self.rank(goal, state, registry, self_model, used)
-            .into_iter()
-            .find(|step| step.score >= self.min_score || step.risk > goal.risk_ceiling)
+        let steps = self.rank(goal, state, registry, self_model, used);
+        // 1) Preferência: candidato legal que paga o piso EFE.
+        if let Some(step) = steps
+            .iter()
+            .find(|step| step.risk <= goal.risk_ceiling && step.score >= self.min_score)
+        {
+            return Some(step.clone());
+        }
+        // 2) Só então escala: risco acima do teto vira proposta HITL para o
+        // executor devolver Cite/NeedsHuman (SCHEMA_6). Nunca preempta uma tool
+        // segura: o score de risco-alto é apenas "consolação".
+        steps.into_iter().find(|step| step.risk > goal.risk_ceiling)
     }
 
     /// Ranking completo (para CLI/diagnóstico).

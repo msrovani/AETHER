@@ -370,6 +370,10 @@ pub enum Effect {
     Stage {
         /// Chaves staged nesta marca.
         keys: Vec<String>,
+        /// Sequência monotônica dentro da transação (watermark estável).
+        seq: u64,
+        /// Comprimento do outbox imediatamente antes da escrita.
+        outbox_len: usize,
     },
     /// Efeito sem compensação automática (exige HITL).
     Irreversible {
@@ -399,14 +403,46 @@ pub enum UndoOp {
     Stage {
         /// Transação.
         txn: u64,
+        /// Sequência da marca.
+        seq: u64,
         /// Chaves staged.
         keys: Vec<String>,
+        /// Comprimento do outbox antes da escrita.
+        outbox_len: usize,
     },
     /// Efeito sem compensação.
     Irreversible {
         /// Tipo.
         kind: &'static str,
     },
+}
+
+/// Resultado de um rewind (nunca silencioso).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UndoReport {
+    /// Operações aplicadas com sucesso.
+    pub applied: usize,
+    /// Operações já aplicadas antes (replay idempotente).
+    pub stale: usize,
+    /// Falhas: a transação NÃO pode ser considerada desfeita.
+    pub failed: Vec<String>,
+}
+
+impl UndoReport {
+    /// Sem falhas?
+    pub fn is_ok(&self) -> bool {
+        self.failed.is_empty()
+    }
+
+    /// Resumo curto para rationale/telemetria.
+    pub fn summary(&self) -> String {
+        format!(
+            "undo: {} aplicadas, {} stale, {} falhas",
+            self.applied,
+            self.stale,
+            self.failed.len()
+        )
+    }
 }
 
 /// Backend de undo (memória real ou mock).
@@ -417,6 +453,15 @@ pub trait UndoBackend: Send + Sync {
     fn restore(&self, key: &str, prev: &Snapshot) -> Result<(), String>;
     /// Descarta outbox até a marca (undo de Stage).
     fn stage_rewind(&self, txn: u64, keys: &[String]) -> Result<(), String>;
+    /// Comprimento atual do outbox (watermark pré-escrita).
+    fn outbox_len(&self) -> usize {
+        0
+    }
+    /// Rewind de stage com marca explícita. Default delega ao formato antigo.
+    fn stage_rewind_to(&self, txn: u64, keys: &[String], outbox_len: usize) -> Result<(), String> {
+        let _ = outbox_len;
+        self.stage_rewind(txn, keys)
+    }
     /// Escrita com before-image (para `memory.write`).
     fn write(&self, key: &str, text: &str) -> Result<Option<Snapshot>, String> {
         let _ = (key, text);
@@ -524,6 +569,8 @@ pub struct ToolContext {
     undo_log: Vec<UndoOp>,
     /// Transação corrente.
     txn: u64,
+    /// Sequência monotônica de stages dentro da transação.
+    stage_seq: u64,
 }
 
 impl ToolContext {
@@ -562,7 +609,14 @@ impl ToolContext {
             undo_backend: None,
             undo_log: Vec::new(),
             txn: trace_id,
+            stage_seq: 0,
         }
+    }
+
+    /// Próxima sequência de stage (watermark estável por passo).
+    pub fn next_stage_seq(&mut self) -> u64 {
+        self.stage_seq += 1;
+        self.stage_seq
     }
 
     /// Define o backend de undo (memória/mock).
@@ -605,10 +659,16 @@ impl ToolContext {
             Effect::MemoryWrite { key, prev: None } => {
                 self.undo_log.push(UndoOp::Insert { key: key.clone() });
             }
-            Effect::Stage { keys } => {
+            Effect::Stage {
+                keys,
+                seq,
+                outbox_len,
+            } => {
                 self.undo_log.push(UndoOp::Stage {
                     txn: self.txn,
+                    seq: *seq,
                     keys: keys.clone(),
+                    outbox_len: *outbox_len,
                 });
             }
             Effect::Irreversible { kind } => {
@@ -619,41 +679,85 @@ impl ToolContext {
         self.effects.push(effect);
     }
 
-    /// Rewind LIFO até a marca `watermark` (índice em `undo_log`).
-    pub fn rewind(&mut self, watermark: usize) -> Result<(), ToolError> {
+    /// Rewind LIFO até a marca `watermark`, devolvendo relatório completo.
+    ///
+    /// - `stale` quando o backend já aplicou a operação (replay idempotente);
+    /// - `failed` quando a compensação não pôde ser aplicada: nesse caso o log
+    ///   **não** é truncado e a transação não pode ser considerada desfeita.
+    pub fn rewind_report(&mut self, watermark: usize) -> UndoReport {
+        let mut report = UndoReport::default();
         if self.undo_log.len() <= watermark {
-            return Ok(());
+            return report;
         }
-        if let Some(backend) = &self.undo_backend {
-            for op in self.undo_log[watermark..].iter().rev() {
-                match op {
-                    UndoOp::Insert { key } => backend
-                        .insert_undo(key)
-                        .map_err(|e| ToolError::Failed(format!("undo insert: {e}")))?,
-                    UndoOp::Restore { key, prev } => backend
-                        .restore(key, prev)
-                        .map_err(|e| ToolError::Failed(format!("undo restore: {e}")))?,
-                    UndoOp::Stage { txn, keys } => backend
-                        .stage_rewind(*txn, keys)
-                        .map_err(|e| ToolError::Failed(format!("undo stage: {e}")))?,
-                    UndoOp::Irreversible { kind } => {
-                        return Err(ToolError::Failed(format!(
-                            "efeito irreversível `{kind}`: exige HITL"
-                        )));
-                    }
+        let Some(backend) = self.undo_backend.as_ref() else {
+            report
+                .failed
+                .push("undo sem backend: efeito registrado não pode ser compensado".to_string());
+            return report;
+        };
+        for op in self.undo_log[watermark..].iter().rev() {
+            let result = match op {
+                UndoOp::Insert { key } => backend.insert_undo(key),
+                UndoOp::Restore { key, prev } => backend.restore(key, prev),
+                UndoOp::Stage {
+                    txn,
+                    keys,
+                    outbox_len,
+                    ..
+                } => backend.stage_rewind_to(*txn, keys, *outbox_len),
+                UndoOp::Irreversible { kind } => {
+                    report
+                        .failed
+                        .push(format!("efeito irreversível `{kind}`: exige HITL"));
+                    break;
+                }
+            };
+            match result {
+                Ok(()) => report.applied += 1,
+                Err(e) if e.starts_with("stale") => report.stale += 1,
+                Err(e) => {
+                    report.failed.push(format!("undo: {e}"));
+                    break;
                 }
             }
         }
-        self.undo_log.truncate(watermark);
-        Ok(())
+        if report.is_ok() {
+            self.undo_log.truncate(watermark);
+        }
+        report
+    }
+
+    /// Rewind LIFO até a marca (erro se alguma compensação falhar).
+    pub fn rewind(&mut self, watermark: usize) -> Result<(), ToolError> {
+        let report = self.rewind_report(watermark);
+        if report.is_ok() {
+            Ok(())
+        } else {
+            Err(ToolError::Failed(format!(
+                "{}: {}",
+                report.summary(),
+                report.failed.join("; ")
+            )))
+        }
     }
 
     /// Rollback lógico completo (rewind + limpa blackboard).
-    pub fn rollback(&mut self) {
-        let _ = self.rewind(0);
+    ///
+    /// Devolve `Err` se alguma compensação falhou; nesse caso o log de undo é
+    /// preservado para nova tentativa/HITL.
+    pub fn rollback(&mut self) -> Result<(), ToolError> {
+        let report = self.rewind_report(0);
+        if !report.is_ok() {
+            return Err(ToolError::Failed(format!(
+                "{}: {}",
+                report.summary(),
+                report.failed.join("; ")
+            )));
+        }
         self.effects.clear();
         self.claims.clear();
         self.certificates.clear();
+        Ok(())
     }
 
     /// Trunca estruturas após um rewind já aplicado.
@@ -721,6 +825,14 @@ pub trait Tool: Send {
     /// Default: no-op. Tools com efeito devem validar argumentos/sandbox aqui.
     fn dry_run(&self, _goal: &Goal, _ctx: &ToolContext) -> Result<(), ToolError> {
         Ok(())
+    }
+
+    /// Efeitos que a tool **planeja** produzir, declarados antes da `call`.
+    ///
+    /// O executor usa isto para bloquear `Irreversible` antes do efeito
+    /// (ADR-014/SCHEMA_6). Default: nenhum efeito declarado.
+    fn planned_effects(&self, _goal: &Goal) -> Vec<Effect> {
+        Vec::new()
     }
 }
 

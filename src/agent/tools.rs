@@ -349,13 +349,14 @@ impl Tool for MemoryWriteTool {
             .as_deref()
             .ok_or_else(|| ToolError::InvalidArgs("query/valor ausente".into()))?;
         let key = format!("{subject}|{relation}");
+        let seq = ctx.next_stage_seq();
         let backend = ctx
             .undo_backend
             .as_ref()
             .ok_or_else(|| ToolError::Failed("memory.write exige undo_backend".into()))?;
-        let prev = backend
-            .write(&key, value)
-            .map_err(|e| ToolError::Failed(e))?;
+        // Watermark ANTES da escrita: o rewind volta o outbox a este ponto.
+        let outbox_len = backend.outbox_len();
+        let prev = backend.write(&key, value).map_err(ToolError::Failed)?;
         Ok(ToolOutcome {
             claims: vec![Claim::new(
                 subject,
@@ -369,6 +370,8 @@ impl Tool for MemoryWriteTool {
             effects: vec![
                 Effect::Stage {
                     keys: vec![key.clone()],
+                    seq,
+                    outbox_len,
                 },
                 Effect::MemoryWrite { key, prev },
             ],

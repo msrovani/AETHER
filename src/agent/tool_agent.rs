@@ -221,14 +221,20 @@ impl ToolAgent {
             if !ok {
                 success = false;
                 action = Action::Abstain;
-                rationale = format!("passo {} falhou: {why}", index + 1);
-                ctx.rollback();
+                rationale = match ctx.rollback() {
+                    Ok(()) => format!("passo {} falhou: {why}", index + 1),
+                    Err(e) => format!("passo {} falhou: {why}; {e}", index + 1),
+                };
                 break;
             }
             if sub_action == Action::Cite {
                 success = false;
                 action = Action::Cite;
-                rationale = format!("passo {} pediu HITL", index + 1);
+                // HITL aborta o workflow: nada do que já foi aplicado fica.
+                rationale = match ctx.rollback() {
+                    Ok(()) => format!("passo {} pediu HITL", index + 1),
+                    Err(e) => format!("passo {} pediu HITL; {e}", index + 1),
+                };
                 break;
             }
         }
