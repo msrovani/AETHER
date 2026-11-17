@@ -266,6 +266,8 @@ impl ToolAgent {
         ctx: &mut ToolContext,
     ) -> (bool, Action, Vec<StepTrace>, Option<Execution>, String) {
         let budget = goal.budget.max_steps.clamp(1, 16);
+        let claims_before = ctx.claims.len();
+        let certificates_before = ctx.certificates.len();
         let mut used: Vec<&'static str> = Vec::new();
         let mut steps: Vec<StepTrace> = Vec::new();
         let mut last: Option<Execution> = None;
@@ -335,8 +337,12 @@ impl ToolAgent {
 
         if let Some(execution) = &last {
             if execution.outcome.needs_human {
+                // HITL não é sucesso: nada do passo entra no resultado.
+                success = false;
                 action = Action::Cite;
                 rationale = "tool pediu HITL".to_string();
+                let effects = ctx.effects.len();
+                ctx.rollback_to(effects, claims_before, certificates_before);
             }
         }
         (success, action, steps, last, rationale)

@@ -439,6 +439,10 @@ impl Tool for AskHumanTool {
         self.affordance(goal, state) > 0.0
     }
 
+    fn escalation(&self) -> bool {
+        true
+    }
+
     fn call(&mut self, _goal: &Goal, _ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
         Ok(ToolOutcome {
             needs_human: true,

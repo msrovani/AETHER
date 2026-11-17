@@ -459,7 +459,7 @@ impl UndoBackend for SgdbUndoBackend {
         self.restore_inner(key, prev, None)
     }
 
-    fn stage_begin(&self, txn: u64, keys: &[String], _outbox_len: usize) -> Result<(), String> {
+    fn stage_begin(&self, txn: u64, keys: &[String], _outbox_len: usize) -> Result<usize, String> {
         // Backend por transação: a marca é o tamanho corrente de `staged[txn]`.
         // Um `outbox` global (mock) usa o valor recebido; aqui ele é redundante.
         let mut state = self.lock_synced();
@@ -470,6 +470,23 @@ impl UndoBackend for SgdbUndoBackend {
             .entry(txn)
             .or_default()
             .extend(keys.iter().cloned());
+        Ok(current)
+    }
+
+    fn stage_rewind_to(&self, txn: u64, _keys: &[String], outbox_len: usize) -> Result<(), String> {
+        // Usa a marca do próprio op (não o `marks` global, que é sobrescrito
+        // por stages aninhados da mesma transação).
+        let mut state = self.lock_synced();
+        let Some(entry) = state.staged.get_mut(&txn) else {
+            return Err(format!("stage sem marca para txn `{txn}`"));
+        };
+        if entry.len() < outbox_len {
+            return Err(format!(
+                "stale: stage `{txn}` já abaixo da marca {}",
+                outbox_len
+            ));
+        }
+        entry.truncate(outbox_len);
         Ok(())
     }
 
@@ -871,6 +888,32 @@ mod tests {
         backend.stage_rewind(8, &other).unwrap();
         assert_eq!(backend.staged_len(8), 1);
         assert_eq!(backend.staged_len(7), 0);
+    }
+
+    #[test]
+    fn stage_aninhado_volta_para_cada_marca() {
+        let journal = TempJournal::new("stage-nested");
+        let backend = journal.backend();
+        let k1 = vec!["a".to_string()];
+        let k2 = vec!["b".to_string()];
+
+        let m1 = backend.stage_begin(3, &k1, 0).unwrap();
+        assert_eq!(m1, 0);
+        let m2 = backend.stage_begin(3, &k2, m1).unwrap();
+        assert_eq!(m2, 1);
+        assert_eq!(backend.staged_len(3), 2);
+
+        // Desfaz o lote 2 e depois o lote 1, cada um na sua marca.
+        backend.stage_rewind_to(3, &k2, m2).unwrap();
+        assert_eq!(backend.staged_len(3), 1);
+        backend.stage_rewind_to(3, &k1, m1).unwrap();
+        assert_eq!(backend.staged_len(3), 0);
+
+        // Replay do lote 2 depois de esvaziar é stale, não erro fatal.
+        let error = backend
+            .stage_rewind_to(3, &k2, m2)
+            .expect_err("stale esperado");
+        assert!(error.starts_with("stale"), "{error}");
     }
 
     #[test]

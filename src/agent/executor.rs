@@ -2,7 +2,7 @@
 
 use super::planner::PlanStep;
 use super::registry::ToolRegistry;
-use super::tool::{Goal, ToolContext, ToolError, ToolOutcome};
+use super::tool::{Cost, Goal, ToolContext, ToolError, ToolOutcome};
 
 /// Resultado da execução de um passo.
 #[derive(Clone, Debug)]
@@ -67,6 +67,7 @@ impl ToolExecutor {
         }
         // Dry-run obrigatório antes de qualquer efeito (P2 reusa isto).
         tool.dry_run(goal, ctx)?;
+        ctx.spent_steps += 1;
         let undo_before = ctx.undo_len();
         let effects_before = ctx.effects.len();
         let claims_before = ctx.claims.len();

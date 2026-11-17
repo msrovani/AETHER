@@ -97,8 +97,11 @@ impl Planner {
                 let cost = f64::from(candidate.cost.ms) / 1_000.0
                     + f64::from(candidate.cost.tokens) / 10_000.0;
                 let risk = candidate.risk.penalty();
-                // Acima do teto: ainda propõe (score = affordance) para o executor HITL.
-                let score = if over_ceiling {
+                // Escalação (`ask.human`) nunca compete com tool executável:
+                // score muito abaixo do piso; só aparece no ranking/diagnóstico.
+                let score = if candidate.escalation {
+                    -1_000.0
+                } else if over_ceiling {
                     f64::from(candidate.affordance)
                 } else {
                     f64::from(candidate.affordance) * (0.5 + 0.5 * p) + self.lambda_ucb * u
@@ -110,6 +113,7 @@ impl Planner {
                     score,
                     cost: candidate.cost,
                     risk: candidate.risk,
+                    escalation: candidate.escalation,
                     reason: if over_ceiling {
                         format!(
                             "HITL: risco {} > teto {}; affordance={:.2}",

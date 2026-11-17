@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use aether_engine::agent::{
     Action, Budget, Cost, Goal, GoalKind, MemoryWriteTool, Risk, SelfModel, Snapshot,
     SuccessCriteria, Tool, ToolAgent, ToolContext, ToolError, ToolOutcome, ToolRegistry,
-    ToolSchema, WorldState,
+    ToolSchema, WorldState, AUTHORITY_QUARANTINE,
 };
 use aether_engine::core::knowledge_bridge_f1::ScopeId;
 
@@ -160,7 +160,10 @@ fn gate_memory_write_reforco_nao_promove_autoridade() {
     let backend = aether_engine::agent::SgdbUndoBackend::new(&path);
     let stored = backend.get("k|rel").expect("registro");
     assert_eq!(stored.text, "v2");
-    assert_eq!(stored.authority, 128, "não promove autoridade sozinho");
+    assert_eq!(
+        stored.authority, AUTHORITY_QUARANTINE,
+        "fato inferido fica em quarentena, não promove sozinho"
+    );
     assert_eq!(stored.reinforced, 1, "reforço conta");
     let _ = std::fs::remove_file(&path);
 }

@@ -71,7 +71,8 @@ pub use registry::ToolRegistry;
 pub use self_model::SelfModel;
 pub use tool::{
     Budget, Cost, Effect, Goal, GoalKind, Risk, Snapshot, SuccessCriteria, Tool, ToolContext,
-    ToolError, ToolOutcome, ToolSchema, UndoBackend, UndoOp, WorldState,
+    ToolError, ToolOutcome, ToolSchema, UndoBackend, UndoOp, WorldState, AUTHORITY_CORROBORATED,
+    AUTHORITY_HITL, AUTHORITY_QUARANTINE, AUTHORITY_VERIFIED,
 };
 pub use tool_agent::{GoalOutcome, ToolAgent};
 pub use tools::MemoryWriteTool;

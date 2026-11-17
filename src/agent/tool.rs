@@ -353,7 +353,8 @@ pub const AUTHORITY_HITL: u8 = 255;
 
 /// Snapshot de uma memória antes de uma escrita (para undo).
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Snapshot {    /// Texto anterior.
+pub struct Snapshot {
+    /// Texto anterior.
     pub text: String,
     /// Objeto/valor anterior.
     pub object: String,
@@ -478,13 +479,13 @@ pub trait UndoBackend: Send + Sync {
         let _ = key;
         None
     }
-    /// Registra a marca de stage antes da escrita (watermark por transação).
+    /// Registra a marca de stage antes da escrita (watermark por transação) e
+    /// devolve a marca efetiva (índice que `stage_rewind_to` deve usar).
     ///
-    /// Default: no-op (backends sem outbox). Backends com outbox devem
-    /// persistir `keys` + `outbox_len` para que `stage_rewind` tenha alvo.
-    fn stage_begin(&self, txn: u64, keys: &[String], outbox_len: usize) -> Result<(), String> {
-        let _ = (txn, keys, outbox_len);
-        Ok(())
+    /// Default: no-op (backends sem outbox).
+    fn stage_begin(&self, txn: u64, keys: &[String], outbox_len: usize) -> Result<usize, String> {
+        let _ = (txn, keys);
+        Ok(outbox_len)
     }
     /// Escrita com before-image e autoridade explícita (para `memory.write`).
     fn write(&self, key: &str, text: &str, authority: u8) -> Result<Option<Snapshot>, String> {
@@ -581,6 +582,8 @@ pub struct ToolContext {
     pub spent_tokens: u32,
     /// Trace.
     pub trace_id: u64,
+    /// Passos executados (limite global do contexto).
+    pub spent_steps: usize,
     /// Efeitos acumulados.
     pub effects: Vec<Effect>,
     /// Claims verificadas dos passos anteriores (blackboard).
@@ -626,6 +629,7 @@ impl ToolContext {
             budget,
             spent_ms: 0.0,
             spent_tokens: 0,
+            spent_steps: 0,
             trace_id,
             effects: Vec::new(),
             claims: Vec::new(),
@@ -653,7 +657,8 @@ impl ToolContext {
     pub fn can_spend(&self, cost: Cost) -> bool {
         let ms = self.spent_ms + cost.ms;
         let tokens = self.spent_tokens.saturating_add(cost.tokens);
-        ms as u64 <= self.budget.max_ms
+        self.spent_steps < self.budget.max_steps
+            && ms as u64 <= self.budget.max_ms
             && (self.budget.max_tokens == 0 || tokens <= self.budget.max_tokens)
     }
 
@@ -688,15 +693,19 @@ impl ToolContext {
                 seq,
                 outbox_len,
             } => {
-                // Materializa a marca no backend (journal) antes do undo op.
-                if let Some(backend) = &self.undo_backend {
-                    let _ = backend.stage_begin(self.txn, keys, *outbox_len);
-                }
+                // Materializa a marca no backend (journal) antes do undo op e
+                // guarda a marca efetiva devolvida por ele.
+                let mark = match &self.undo_backend {
+                    Some(backend) => backend
+                        .stage_begin(self.txn, keys, *outbox_len)
+                        .unwrap_or(*outbox_len),
+                    None => *outbox_len,
+                };
                 self.undo_log.push(UndoOp::Stage {
                     txn: self.txn,
                     seq: *seq,
                     keys: keys.clone(),
-                    outbox_len: *outbox_len,
+                    outbox_len: mark,
                 });
             }
             Effect::Irreversible { kind } => {
@@ -861,6 +870,12 @@ pub trait Tool: Send {
     /// (ADR-014/SCHEMA_6). Default: nenhum efeito declarado.
     fn planned_effects(&self, _goal: &Goal) -> Vec<Effect> {
         Vec::new()
+    }
+
+    /// Tool de escalação (não executa; apenas pede humano). Nunca compete com
+    /// tools executáveis no ranking EFE.
+    fn escalation(&self) -> bool {
+        false
     }
 }
 
