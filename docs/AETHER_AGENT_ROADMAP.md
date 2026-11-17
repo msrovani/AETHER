@@ -1,10 +1,10 @@
 # AETHER Agent — plano de implementação (v0.1 → v1.0)
 
-> **Versão do plano:** 2.5 — 2026-11-17
+> **Versão do plano:** 2.6 — 2026-11-17
 > Mudanças: análise cruzada; quatro trilhas (A/B/C/D); `LanguagePort` e
 > alternativas à LLM de borda; autoridade em escada; tiers de avaliação;
 > ADR-013; P0/P1 implementados; P2 (pipeline/blackboard/rollback/verify/undo);
-> EFE pragmática; addenda do fórum (MSG 0263/0267/0283/0288/0306).
+> P3 em andamento (Stage/HITL/memory.write, HTTP caps); EFE pragmática.
 >
 > O que falta para o agente **escolher sozinho o que usar**, planejar em vários
 > passos, operar ferramentas com segurança e aprender sem se enganar.
@@ -332,6 +332,12 @@ Stage/watermark e irreversível/HITL ficam para a próxima rodada.
 **Saída:** o agente usa o mundo real de forma limitada e auditável, e entende
 pedidos em linguagem via adaptador validado.
 
+**Status P3 (2026-11-17):** C0 `LanguagePort`/`parser` entregue (CURSOR, MSG
+0305) e `language.parse` registrado; undo `Insert/Restore` verde; **Stage/
+watermark, Irreversible/HITL e `memory.write` implementados** por CURSOR (MSG
+0333/0339); HTTP pipeline com caps em andamento (MSG 0344). HITL risco>teto:
+planner propõe e executor devolve `Cite` (MSG 0351 fechado).
+
 ### P4 — Aprendizado em escala e memória como prior (7–10 dias)
 
 **Arquivos**
@@ -647,6 +653,7 @@ Cada commit passa `cargo test --lib agent::` e `cargo test --test agent_tools_ga
 
 | Versão | Data | Mudança |
 |---|---|---|
+| **2.6** | 2026-11-17 | P3: `language.parse`; undo Stage/watermark/HITL/memory.write (CURSOR); HTTP caps (0344); HITL risco>teto → Cite (0351) |
 | **2.5** | 2026-11-17 | undo LIFO (`Insert`/`Restore`) com backend; `verify` tool; pipeline real; EFE `min_score`; C0 parser entregue (CURSOR) |
 | **2.4** | 2026-11-17 | P2 real `fact→sat→verify`; `verify` tool; blackboard de certificados; EFE pragmática (`min_score`) e abstain por custo/risco |
 | **2.3** | 2026-11-17 | P2 implementado: `Goal::pipeline`, blackboard de claims, rollback de workflow, G-A2/G-A3 |

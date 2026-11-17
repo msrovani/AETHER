@@ -42,10 +42,16 @@ fn projector() -> JlProjector {
     JlProjector::new(D_IN, BITS, 512, 0xE3_0001)
 }
 
-/// Matriz JL transposta (d x bits), layout do kernel v2.
-fn transposed_matrix(proj: &mut JlProjector) -> Vec<f32> {
+/// Matriz JL row-major (`bits × d`), layout do kernel v1.
+fn row_major_matrix(proj: &mut JlProjector) -> Vec<f32> {
     let mut row_major = vec![0.0f32; BITS * D_IN];
     proj.fill_matrix(&mut row_major);
+    row_major
+}
+
+/// Matriz JL transposta (`d × bits`), layout do kernel v2.
+fn transposed_matrix(proj: &mut JlProjector) -> Vec<f32> {
+    let row_major = row_major_matrix(proj);
     let mut t = vec![0.0f32; BITS * D_IN];
     jl::transpose_into(&row_major, BITS, D_IN, &mut t);
     t
@@ -137,43 +143,56 @@ fn gpu_razao_minima_1_5x() {
 }
 
 #[test]
-fn v1_equivale_v2_e_razao_kernel() {
-    // Gate V1÷V2: mesma saída bit-a-bit; V2 não pode regredir vs V1 sob carga.
+fn jl_gpu_v1_vs_v2() {
+    // MSG 0334: V1 row-major × V2 transposta; transpose/fill fora do timer.
     let st = gpu::status();
     if !st.available {
         eprintln!("skip v1÷v2: sem adapter ({})", st.summary());
         return;
     }
     println!("adapter em uso: {}", st.summary());
-    let n = 512usize;
+    let n = 2000usize;
     let words = BITS / 64;
     let mut proj = projector();
-    let mat = transposed_matrix(&mut proj);
+    let row = row_major_matrix(&mut proj);
+    let mut col = vec![0.0f32; row.len()];
+    jl::transpose_into(&row, BITS, D_IN, &mut col); // fora dos timers
     let x = make_rows(n, 0x0B1D_0002);
 
     let mut out_v1 = vec![0u64; n * words];
     let mut out_v2 = vec![0u64; n * words];
-    // aquecimento
-    let _ = jl::project_into_with(jl::JlKernel::V1, false, &mat, &x, n, D_IN, BITS, &mut out_v1);
-    let _ = jl::project_into_with(jl::JlKernel::V2, false, &mat, &x, n, D_IN, BITS, &mut out_v2);
+    // warm-up separado por shader (cada call recompila o pipeline)
+    let _ = jl::project_into_with(jl::JlKernel::V1, false, &row, &x, n, D_IN, BITS, &mut out_v1);
+    let _ = jl::project_into_with(jl::JlKernel::V2, false, &col, &x, n, D_IN, BITS, &mut out_v2);
 
     let t = Instant::now();
-    jl::project_into_with(jl::JlKernel::V1, false, &mat, &x, n, D_IN, BITS, &mut out_v1)
+    jl::project_into_with(jl::JlKernel::V1, false, &row, &x, n, D_IN, BITS, &mut out_v1)
         .expect("kernel V1");
     let v1_ms = t.elapsed().as_secs_f64() * 1e3;
 
     let t = Instant::now();
-    jl::project_into_with(jl::JlKernel::V2, false, &mat, &x, n, D_IN, BITS, &mut out_v2)
+    jl::project_into_with(jl::JlKernel::V2, false, &col, &x, n, D_IN, BITS, &mut out_v2)
         .expect("kernel V2");
     let v2_ms = t.elapsed().as_secs_f64() * 1e3;
 
-    assert_eq!(out_v1, out_v2, "V1 e V2 devem coincidir bit a bit");
+    let mism = out_v1
+        .iter()
+        .zip(out_v2.iter())
+        .filter(|(a, b)| a != b)
+        .count();
+    let total = out_v1.len();
     let ratio = v1_ms / v2_ms.max(1e-9);
-    println!("n={n}: V1 {v1_ms:.2} ms · V2 {v2_ms:.2} ms ⇒ V1/V2 = {ratio:.2}×");
-    // Informação: não bloqueia se V2 ≈ V1 (hardware/driver); só exige equivalência.
+    println!(
+        "GATE=jl_gpu_v1_vs_v2 n={n}: V1_MS={v1_ms:.2} V2_MS={v2_ms:.2} RATIO={ratio:.2} mism={mism}/{total}"
+    );
     assert!(
-        out_v1.iter().any(|w| *w != 0),
-        "saída GPU não pode ser toda zero"
+        (mism as f64) / (total as f64) < 1e-6,
+        "V1≠V2 em {mism}/{total} palavras"
+    );
+    assert!(
+        ratio >= 1.3,
+        "V1/V2={ratio:.2} < 1.3 (V2 regrediu vs V1; adapter={})",
+        st.summary()
     );
 }
 

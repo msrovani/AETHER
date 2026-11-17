@@ -59,9 +59,12 @@ impl Planner {
         self_model: &SelfModel,
         used: &[&str],
     ) -> Option<PlanStep> {
+        // Risco acima do teto passa mesmo com score < min_score: o executor
+        // devolve NeedsHuman/Cite (SCHEMA_6). Sem isso, Risk::High (penalty 1.5)
+        // cai abaixo do piso EFE e vira Abstain silencioso.
         self.rank(goal, state, registry, self_model, used)
             .into_iter()
-            .find(|step| step.score >= self.min_score)
+            .find(|step| step.score >= self.min_score || step.risk > goal.risk_ceiling)
     }
 
     /// Ranking completo (para CLI/diagnóstico).
@@ -78,29 +81,44 @@ impl Planner {
             .into_iter()
             .filter(|candidate| !used.contains(&candidate.name))
             .filter(|candidate| candidate.affordance >= self.min_affordance)
-            .filter(|candidate| candidate.risk <= goal.risk_ceiling)
+            // Risco > teto não é filtrado aqui: o executor escala HITL antes da call (SCHEMA_6).
             .map(|candidate| {
+                let over_ceiling = candidate.risk > goal.risk_ceiling;
                 let p = self_model.success(candidate.name, goal);
                 let u = self_model.ucb(candidate.name, goal);
                 let cost = f64::from(candidate.cost.ms) / 1_000.0
                     + f64::from(candidate.cost.tokens) / 10_000.0;
                 let risk = candidate.risk.penalty();
-                let score = f64::from(candidate.affordance) * (0.5 + 0.5 * p) + self.lambda_ucb * u
-                    - self.lambda_cost * cost
-                    - self.lambda_risk * risk;
+                // Acima do teto: ainda propõe (score = affordance) para o executor HITL.
+                let score = if over_ceiling {
+                    f64::from(candidate.affordance)
+                } else {
+                    f64::from(candidate.affordance) * (0.5 + 0.5 * p) + self.lambda_ucb * u
+                        - self.lambda_cost * cost
+                        - self.lambda_risk * risk
+                };
                 PlanStep {
                     tool: candidate.name,
                     score,
                     cost: candidate.cost,
                     risk: candidate.risk,
-                    reason: format!(
-                        "affordance={:.2} p_sucesso={:.2} ucb={:.2} custo={:.2}ms risco={}",
-                        candidate.affordance,
-                        p,
-                        u,
-                        candidate.cost.ms,
-                        candidate.risk.label()
-                    ),
+                    reason: if over_ceiling {
+                        format!(
+                            "HITL: risco {} > teto {}; affordance={:.2}",
+                            candidate.risk.label(),
+                            goal.risk_ceiling.label(),
+                            candidate.affordance
+                        )
+                    } else {
+                        format!(
+                            "affordance={:.2} p_sucesso={:.2} ucb={:.2} custo={:.2}ms risco={}",
+                            candidate.affordance,
+                            p,
+                            u,
+                            candidate.cost.ms,
+                            candidate.risk.label()
+                        )
+                    },
                 }
             })
             .collect();
