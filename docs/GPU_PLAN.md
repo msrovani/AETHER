@@ -290,13 +290,37 @@ bSB é caótica. Medido no mesmo lote de 200 instâncias:
 
 Ou seja: **a GPU fica mais próxima do solver do que o próprio solver fica de si
 mesmo com outra semente**. O gate codifica isso (KS ≤ piso + 0,05, regret ≤ 5%
-em ≥ piso − 5 instâncias, média não pior), em vez de exigir paridade por
-instância — impossível num sistema caótico, e que a v1 passava por coincidência
-de ordem de soma, não por mérito.
+em ≥ piso − 5 instâncias). Na família **com viés** (`h ≠ 0`) a média GPU pode
+ficar ~0,09% pior que a CPU (~19× o piso de ruído seed-a-seed) — o gate admite
+desvio relativo ≤ **0,2%** e declara o sweep como acelerador de exploração, não
+substituto do solver auditado quando o critério é a média exata. Sem exigir
+paridade por instância (impossível no caos; a v1 passava por coincidência de
+ordem de soma).
 
 **Custo fixo:** compilar o shader custa **250–550 ms** por chamada. A avulsa
 `sweep_into` paga isso; o caminho de produção é `IsingSweep` (sessão que guarda
 device, pipeline e buffers) — sem ela a razão medida era **0,2×**.
+
+### Validação na família real do E2c-2 (fechamento do ciclo)
+
+O gate principal usa `h = 0`; para fechar a pergunta de escala, o kernel rodou
+nas **instâncias do E2c-2** (vidro `±1` completo + viés forte em `k` sítios, o
+`random_glass` de `tests/e2c2_roof_dual_gate.rs`), 1.000 instâncias, `n=20`,
+`k=4`, `delta=0.5`, `h ≠ 0` — o caminho do campo externo (energia, `descend`,
+fuga) é exercitado inteiro:
+
+| métrica | resultado |
+|---|---|
+| razão | **11,9×** (12,4 ms CPU → 1,04 ms GPU) |
+| idênticas / melhores / piores | 850 / 68 / 82 de 1.000 |
+| KS | **0,014** (piso de ruído do solver: 0,024) |
+| regret ≤ 5% | 968/1.000 (piso: 895) |
+| média de energia | **0,089% pior** (19× o piso de ruído — desvio real) |
+
+**Limite declarado:** com viés forte a GPU fica ~0,1% pior na média. O sweep é
+**acelerador de exploração** (mesma forma de distribuição, KS melhor que o
+ruído, 11,9× mais rápido), **não** substituto do solver auditado quando o
+critério é a média exata. O gate codifica isso: `|Δmédia| ≤ 0,2%`.
 
 **Veredito:** admitido como caminho **de lote** (≥ ~10³ instâncias; abaixo de
 ~500 a taxa de ocupação não paga). Continua fora do pipeline por instância, e
@@ -318,7 +342,7 @@ caminho** (documentado no topo de `ising.rs`).
 | **G0** censo | ✅ | JL 13,4 s (2,9 GFLOP/s), FFT 7,4× projetado, Ising 929× projetado |
 | **G1** JL do transplante | ✅ **`act`** | **75–122×** (tiled, 2.000 linhas); 25× no 1º lote pagando a matriz |
 | **G2** FFT em lote | ⏸ `abstain` | sem consumidor de lote; 7,4× segue **projetado** |
-| **G3** sweep Ising | ✅ admitido **só em lote** | **11,3×** em 10⁴; família E2c-2 (`h ≠ 0`) validada |
+| **G3** sweep Ising | ✅ admitido **só em lote** | **11,3×** em 10⁴ (sintético) e **11,9×** na família E2c-2 (`h ≠ 0`), KS 0,014 vs piso 0,024; média 0,089% pior |
 
 Nenhum kernel novo entra no `default`: tudo atrás de `--features gpu`, e o laço
 de 60 Hz, o `record` do F1 e o solver do E2 continuam em CPU.

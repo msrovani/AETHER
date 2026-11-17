@@ -1,7 +1,7 @@
 # Fechamento de ciclo — Doação / Hub / Onda 0 / B0 mínimo
 
-Data: **2026-11-17** · Versão: **0.0.165**  
-CLAIM / tópico: `INTAKE_TRANSPLANT` · MSG 0229 / 0244 / 0245 · RELATORIO **MSG 0416** (`CICLO_DOACAO_ONDA0_CLOSE`)
+Data: **2026-11-17** · Versão: **0.0.167**  
+CLAIM / tópico: `INTAKE_TRANSPLANT` · MSG 0229 / 0244 / 0245 · RELATORIO **MSG 0416** (`CICLO_DOACAO_ONDA0_CLOSE`) · mediação CURSOR **MSG 0418–042x** · trilha agent DEEPSEEK **MSG 0419**
 
 ## O que este ciclo fechou
 
@@ -46,10 +46,27 @@ CLAIM / tópico: `INTAKE_TRANSPLANT` · MSG 0229 / 0244 / 0245 · RELATORIO **MS
 | **SGDB-remember** | `remember` + `audit_checkpoint` + `contradicts` no neural-sgdb (não só mock) | Bridge popula `AtomRecord` do mock; sem URL/stdio estável neste ambiente |
 | **Escriba** | GLiNER/REBEL → Qwen2.5-7B → facts.jsonl | Fora do mínimo B0 |
 | **FFT-G2** | Kernel WGSL FFT L=8192×B≥16; erro≤1e-4; razão≥2×; `force_off` sem panic; organismo sem `core::gpu` | `docs/GPU_PLAN.md` G2 — projeção 7,4×, sem consumidor de lote |
-| **MCTS_gate** | Planejador de horizonte | Fora do sprint; P2 entrega pipeline de um passo + rollback |
+| **MCTS_gate** | Só se depth>3 ∧ branching>5 ∧ Δsucesso≥10pp ∧ p95≤100ms (MSG 0419) | Fora do sprint; P2 = um passo + rollback |
+| **D1** | Orçamentos p50/p99/RSS/allocs **release-only** | Ainda não gate oficial |
+| **D3** | Red-team (injeção / envenenamento / escopo / DoS / custo) | Pós-P3 |
 | **CI gpu** | Job opt-in `--features gpu` com adapter | Gates JL/Ising rodam à mão |
-| **fmt** | `cargo fmt --all --check` | Dívida em arquivos de outros donos |
+| **B-G0 / B1 / B4** | Labels reais; LSH≥10k; rodada produção | Doação lab ≠ produção |
+| **SGDB-remember** | remember + audit_checkpoint reais | Sem URL/stdio estável neste host |
 | **Ratatui default** | `run-demo.ps1` ainda `--plain`; TUI exige `--features tui` | Aceite Onda 0.1 honesto |
+
+### Gates de regressão (rodar ao abrir próximo ciclo)
+
+```powershell
+cargo test --release --features api --test api_agent
+cargo test --release --test agent_plan_gate
+cargo test --release --test agent_undo_sgdb_gate
+cargo test --release --test language_port_gate
+cargo test --release --test agent_self_model_gate
+cargo test --release --test e2c2_roof_dual_gate
+cargo test --release --test f1_knowledge_bridge_gate
+cargo test --release --features gpu --test gpu_jl_tiled_gate -- --nocapture
+cargo test --release --features gpu --test gpu_ising_sweep_gate -- --nocapture
+```
 
 ## Aprendizados (memória de ciclo)
 

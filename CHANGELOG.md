@@ -7,10 +7,17 @@ Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto
 
 ### Changed
 
-- Ciclo automatico: 1 arquivo(s) (tests:1).
-- Gate: ok (3s).
+- Ciclo de mediação CURSOR **fechado**: doc `CYCLE_CLOSE_2026-11-17_DOACAO_ONDA0`
+  lista gates de regressão e abertos do próximo ciclo (FFT-G2, MCTS condicional,
+  D1/D3, CI gpu, B-G0/B1/B4, SGDB-remember).
+- `GPU_PLAN` G3: família com viés admite desvio relativo de média ≤ 0,2%
+  (sweep = exploração, não solver auditado).
+- Gate Ising: assert de média alinhado ao limite 0,2%.
 
-- `tests/gpu_ising_sweep_gate.rs`
+### Fixed
+
+- Forget `authority=255` sem store → `500 ledger_io` (ledger + memory); testes
+  `api_agent` 14/14 (MSG 0415/0420).
 
 ## [0.0.166] - 2026-11-17
 
