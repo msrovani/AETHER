@@ -3,6 +3,25 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.168] - 2026-11-17
+
+### Added
+
+- `docs/CYCLE_CLOSE_2026-11-17_GPU.md`: fechamento do track **GPU** (G0–G3) com
+  números medidos, contrato de determinismo e **gates ainda necessários**
+  (CI gpu, FFT-G2, borda do bit-exato do JL, simetria do `J` no Ising).
+
+### Changed
+
+- `tests/gpu_ising_sweep_gate`: 4º gate — o sweep na **família real do E2c-2**
+  (vidro `±1` com viés forte, `h ≠ 0`), 1.000 instâncias: 850/1.000 idênticas,
+  KS 0,014 (piso de ruído 0,024), **11,9×** e **média 0,089% pior** (limite
+  declarado e codificado no próprio gate).
+- `docs/GPU_PLAN.md`: fechamento do ciclo (tabela G0–G3 com G1 `act` e G2
+  `abstain`), validação E2c-2 e a dívida de gates.
+- `docs/HW_TARGET.md` §4: tolerância de determinismo do JL
+  (`|dot| < 1e-3`, medido 1 palavra em 320.000).
+
 ## [0.0.167] - 2026-11-17
 
 ### Changed
