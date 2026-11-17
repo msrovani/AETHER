@@ -993,6 +993,55 @@ fn gate_stage_idempotente_conta_stale() {
 }
 
 #[test]
+fn gate_pipeline_hitl_desfaz_passos_anteriores() {
+    // Passo 1 escreve; passo 2 pede HITL: o pipeline aborta em Cite e desfaz.
+    let store = Arc::new(Mutex::new(MockStore::default()));
+    let mut registry = ToolRegistry::new(vec!["write", "danger"]);
+    registry
+        .register(Box::new(WriteTool {
+            store: Arc::clone(&store),
+            key: "k",
+            value: "v",
+            prev: None,
+        }))
+        .unwrap();
+    registry.register(Box::new(HighRiskTool)).unwrap();
+    let mut agent = ToolAgent::with_registry(
+        registry,
+        SelfModel::new(None),
+        aether_engine::core::knowledge_bridge_f1::ScopeId::new(1, 0, 1),
+    )
+    .with_undo_backend(Arc::new(MockUndo {
+        store: Arc::clone(&store),
+    }));
+    let write = Goal::fact("x", "write").with_budget(
+        Budget {
+            max_steps: 1,
+            max_ms: 1_000,
+            max_tokens: 0,
+        },
+        Risk::Low,
+    );
+    let pipeline = Goal::pipeline(vec![write, act_goal("x", "danger", "boom", Risk::Medium)])
+        .with_budget(
+            Budget {
+                max_steps: 4,
+                max_ms: 3_000,
+                max_tokens: 0,
+            },
+            Risk::Medium,
+        );
+    let outcome = agent.solve(&pipeline);
+    assert!(!outcome.success);
+    assert_eq!(outcome.action, Action::Cite, "{}", outcome.rationale);
+    assert!(
+        store.lock().unwrap().data.is_empty(),
+        "escrita parcial ficou aplicada"
+    );
+    assert!(store.lock().unwrap().outbox.is_empty());
+}
+
+#[test]
 fn gate_a3_ood_abstem_sem_candidato() {
     let registry = registry(vec![ChainTool {
         name: "fetch",

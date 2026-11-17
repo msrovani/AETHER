@@ -281,9 +281,12 @@ nunca engolir erro; (5) `Stage` carregar `seq` + `outbox_len`; (6) replay stale
 não apaga valor de writer concorrente (CAS/token); (7) autoridade ≥200 vira
 tombstone + HITL, 255 só com token humano.
 
-**Status.** Propósito aceito; implementação em mediação (MSG 0306/0333).
-Referências: Sagas (SIGMOD 1987), ARIES (VLDB 1992), arXiv:2609.15397,
-arXiv:2609.35366, arXiv:2602.14849.
+**Status.** Aceito e parcialmente implementado (commit `3ecec5d`): `(2)` gate
+pré-call via `Tool::planned_effects`, `(4)` `UndoReport{applied,stale,failed}`,
+`(5)` `Stage{seq,outbox_len}` com `stage_rewind_to`. Abertos: `(1)` journal
+durável antes da escrita, `(3)` atomicidade do backend, `(6)` CAS/token,
+`(7)` tombstone/HITL. Referências: Sagas (SIGMOD 1987), ARIES (VLDB 1992),
+arXiv:2609.15397, arXiv:2609.35366, arXiv:2602.14849.
 
 **Consequências.**
 - Crash-safe só com journal durável `(txn, seq)`; o `Vec` atual é protótipo.

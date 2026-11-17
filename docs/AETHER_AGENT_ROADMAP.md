@@ -332,11 +332,23 @@ Stage/watermark e irreversível/HITL ficam para a próxima rodada.
 **Saída:** o agente usa o mundo real de forma limitada e auditável, e entende
 pedidos em linguagem via adaptador validado.
 
-**Status P3 (2026-11-17):** C0 `LanguagePort`/`parser` entregue (CURSOR, MSG
-0305) e `language.parse` registrado; undo `Insert/Restore` verde; **Stage/
-watermark, Irreversible/HITL e `memory.write` implementados** por CURSOR (MSG
-0333/0339); HTTP pipeline com caps em andamento (MSG 0344). HITL risco>teto:
-planner propõe e executor devolve `Cite` (MSG 0351 fechado).
+**Status P3 (2026-11-17, pós-commit `3ecec5d`):**
+
+| Item | Estado |
+|---|---|
+| C0 `LanguagePort`/`parser` + `language.parse` | entregue (CURSOR, MSG 0305) |
+| undo `Insert/Restore` LIFO | verde (`gate_undo_insert_restore_em_falha`) |
+| `Stage`/watermark | **verde**: `seq` + `outbox_len` por passo, rewind por marca (`gate_stage_idempotente_conta_stale`, outbox volta a 0) |
+| Irreversível pré-call | **verde**: `Tool::planned_effects` barra antes da `call`; `gate_irreversivel_declarado_nao_executa_pre_call` (contador = 0) |
+| Undo não engolido | **verde**: `UndoReport{applied,stale,failed}`, log preservado em falha (`gate_undo_falha_nao_e_engolida`, `gate_undo_sem_backend_nao_descarta_em_silencio`) |
+| HITL não preempta tool segura | **verde**: `Planner::select` prefere candidato legal que paga o piso (`gate_hitl_nao_preempta_tool_segura`) |
+| `memory.write` | mock com before-image + Stage; backend SGDB real em integração |
+| HTTP pipeline | caps 8 steps / n≤64 / `success` (CURSOR MSG 0345); hardening P0 em andamento |
+| Pipeline abortado por HITL | **verde**: `ctx.rollback()` no `break` |
+
+Pendências abertas: T4 tombstone (autoridade ≥200 / token 255), T6 crash entre
+write e log (journal durável), T8 CAS/replay concorrente, T9 reinforce com
+autoridade; backend `UndoBackend` de produção.
 
 #### Auditoria de undo/compensação (memo, 2026-11-17)
 
@@ -345,12 +357,10 @@ tombstone/HITL, idempotência de replay. Riscos a corrigir:
 
 1. **Intenção de undo antes do efeito**: hoje `write` ocorre e o `Effect` é
    registrado depois; crash no meio perde o before-image.
-2. **Gate irreversível antes da call**: hoje o gate é pós-call; efeito pode já
-   ter ocorrido.
-3. **Undo não pode ser engolido**: `rewind` deve devolver `UndoReport` e
-   escalar falha para HITL, não truncar silenciosamente.
-4. **Watermark explícito**: `Stage` precisa de `seq` + `outbox_len` por passo;
-   `txn = trace_id` colide em dois stages do mesmo trace.
+2. ~~**Gate irreversível antes da call**~~ — fechado em `3ecec5d`
+   (`planned_effects`).
+3. ~~**Undo não pode ser engolido**~~ — fechado em `3ecec5d` (`UndoReport`).
+4. ~~**Watermark explícito**~~ — fechado em `3ecec5d` (`seq` + `outbox_len`).
 5. **Idempotência/condição**: `Insert`-undo não pode apagar valor de writer
    concorrente; `Restore` deve usar CAS/token; replay stale conta, não falha.
 6. **Tombstone**: `authority >= 200` vira tombstone + HITL; `255` só com token

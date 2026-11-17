@@ -218,15 +218,6 @@ impl ToolAgent {
             if let Some(execution) = sub_last {
                 last = Some(execution);
             }
-            if !ok {
-                success = false;
-                action = Action::Abstain;
-                rationale = match ctx.rollback() {
-                    Ok(()) => format!("passo {} falhou: {why}", index + 1),
-                    Err(e) => format!("passo {} falhou: {why}; {e}", index + 1),
-                };
-                break;
-            }
             if sub_action == Action::Cite {
                 success = false;
                 action = Action::Cite;
@@ -234,6 +225,15 @@ impl ToolAgent {
                 rationale = match ctx.rollback() {
                     Ok(()) => format!("passo {} pediu HITL", index + 1),
                     Err(e) => format!("passo {} pediu HITL; {e}", index + 1),
+                };
+                break;
+            }
+            if !ok {
+                success = false;
+                action = Action::Abstain;
+                rationale = match ctx.rollback() {
+                    Ok(()) => format!("passo {} falhou: {why}", index + 1),
+                    Err(e) => format!("passo {} falhou: {why}; {e}", index + 1),
                 };
                 break;
             }
