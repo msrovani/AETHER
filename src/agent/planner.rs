@@ -33,6 +33,8 @@ pub struct Planner {
     pub lambda_risk: f64,
     /// Piso de affordance.
     pub min_affordance: f32,
+    /// Piso de score: abaixo disso, agir é pior que abster (EFE pragmática).
+    pub min_score: f64,
 }
 
 impl Default for Planner {
@@ -42,6 +44,7 @@ impl Default for Planner {
             lambda_cost: 0.20,
             lambda_risk: 1.0,
             min_affordance: 0.01,
+            min_score: 0.05,
         }
     }
 }
@@ -58,7 +61,7 @@ impl Planner {
     ) -> Option<PlanStep> {
         self.rank(goal, state, registry, self_model, used)
             .into_iter()
-            .next()
+            .find(|step| step.score >= self.min_score)
     }
 
     /// Ranking completo (para CLI/diagnóstico).

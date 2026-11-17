@@ -45,6 +45,7 @@ impl ToolExecutor {
         tool.dry_run(goal, ctx)?;
         let effects_before = ctx.effects.len();
         let claims_before = ctx.claims.len();
+        let certificates_before = ctx.certificates.len();
         let started = std::time::Instant::now();
         let outcome = tool.call(goal, ctx)?;
         ctx.charge(cost);
@@ -56,9 +57,12 @@ impl ToolExecutor {
         if met {
             // Blackboard: o próximo passo pode consumir estas claims.
             ctx.claims.extend(outcome.claims.iter().cloned());
+            if let Some(cert) = &outcome.certificate {
+                ctx.certificates.push(*cert);
+            }
         } else {
             // Efeitos de um passo que não passou no verificador são desfeitos.
-            ctx.rollback_to(effects_before, claims_before);
+            ctx.rollback_to(effects_before, claims_before, certificates_before);
         }
         Ok(Execution {
             outcome,

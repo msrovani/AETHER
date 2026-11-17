@@ -7,10 +7,11 @@
 #![cfg(feature = "agent")]
 
 use aether_engine::agent::{
-    Budget, Claim, Cost, Goal, GoalKind, Risk, SelfModel, SuccessCriteria, Tool, ToolAgent,
-    ToolContext, ToolError, ToolOutcome, ToolRegistry, ToolSchema, WorldState,
+    AgentConfig, Budget, Claim, Cost, Goal, GoalKind, Risk, SelfModel, SuccessCriteria, Tool,
+    ToolAgent, ToolContext, ToolError, ToolOutcome, ToolRegistry, ToolSchema, WorldState,
 };
 use aether_engine::core::certificate::Provenance;
+use aether_engine::core::logic_pipeline::Clause3;
 
 struct ChainTool {
     name: &'static str,
@@ -219,6 +220,63 @@ fn gate_a2_falha_no_meio_desfaz_workflow() {
         outcome.claims.is_empty(),
         "rollback não limpou o blackboard"
     );
+}
+
+#[test]
+fn gate_a2_real_recall_sat_verify() {
+    // Q4 do fórum: recall (fact) → SAT → verify certificate, com tools reais.
+    let mut agent = ToolAgent::new(&AgentConfig {
+        facts_path: "data/agent_facts.jsonl".into(),
+        ..AgentConfig::default()
+    });
+    let fact = Goal::fact("AETHER", "proibe").with_budget(
+        Budget {
+            max_steps: 1,
+            max_ms: 1_000,
+            max_tokens: 0,
+        },
+        Risk::Low,
+    );
+    let sat = Goal::satisfy(
+        3,
+        vec![Clause3::new2(0, 1, 1, 1), Clause3::new2(0, -1, 2, 1)],
+    )
+    .with_budget(
+        Budget {
+            max_steps: 1,
+            max_ms: 2_000,
+            max_tokens: 0,
+        },
+        Risk::Low,
+    );
+    let mut verify = Goal::fact("x", "verified");
+    verify.kind = GoalKind::Verify;
+    verify.success = SuccessCriteria::Any;
+    verify = verify.with_budget(
+        Budget {
+            max_steps: 1,
+            max_ms: 1_000,
+            max_tokens: 0,
+        },
+        Risk::Low,
+    );
+    let workflow = Goal::pipeline(vec![fact, sat, verify]).with_budget(
+        Budget {
+            max_steps: 6,
+            max_ms: 5_000,
+            max_tokens: 0,
+        },
+        Risk::Low,
+    );
+    let outcome = agent.solve(&workflow);
+    assert!(outcome.success, "{:?}", outcome.rationale);
+    let tools: Vec<&str> = outcome
+        .steps
+        .iter()
+        .map(|step| step.tool.as_str())
+        .collect();
+    assert_eq!(tools, ["fact", "sat", "verify"]);
+    assert_eq!(outcome.trace.answer.as_deref(), Some("ok"));
 }
 
 #[test]

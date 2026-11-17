@@ -83,6 +83,74 @@ fn mock_registry(order: [(&'static str, bool); 2]) -> ToolRegistry {
 }
 
 #[test]
+fn gate_a3_efe_abstem_quando_custo_domina() {
+    struct ExpensiveTool;
+    impl Tool for ExpensiveTool {
+        fn name(&self) -> &'static str {
+            "expensive"
+        }
+        fn schema(&self) -> ToolSchema {
+            ToolSchema {
+                name: "expensive",
+                description: "caro",
+                args: &["subject", "relation"],
+                kinds: &[GoalKind::Answer],
+            }
+        }
+        fn cost(&self) -> Cost {
+            Cost::local(10_000.0)
+        }
+        fn risk(&self) -> Risk {
+            Risk::Low
+        }
+        fn affordance(&self, goal: &Goal, _state: &WorldState) -> f32 {
+            if goal.kind == GoalKind::Answer {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        fn preconditions(&self, goal: &Goal, state: &WorldState) -> bool {
+            self.affordance(goal, state) > 0.0
+        }
+        fn call(&mut self, _goal: &Goal, _ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
+            Ok(ToolOutcome {
+                claims: vec![Claim::new(
+                    "Brasil",
+                    "capital",
+                    "Brasília",
+                    1.0,
+                    200,
+                    aether_engine::agent::ExpertId::Transplant,
+                    Provenance::Transplanted,
+                )],
+                ..ToolOutcome::default()
+            })
+        }
+    }
+
+    let mut registry = ToolRegistry::new(vec!["expensive"]);
+    registry.register(Box::new(ExpensiveTool)).unwrap();
+    let mut agent = ToolAgent::with_registry(
+        registry,
+        SelfModel::new(None),
+        aether_engine::core::knowledge_bridge_f1::ScopeId::new(1, 0, 1),
+    );
+    let goal = Goal::fact("Brasil", "capital");
+    let ranked = agent.plan(&goal);
+    assert!(!ranked.is_empty());
+    assert!(
+        ranked[0].score < 0.05,
+        "score deveria ficar abaixo do piso: {}",
+        ranked[0].score
+    );
+    let outcome = agent.solve(&goal);
+    assert!(!outcome.success);
+    assert_eq!(outcome.action, aether_engine::agent::Action::Abstain);
+    assert!(outcome.steps.is_empty());
+}
+
+#[test]
 fn gate_a1_planner_aprende_ferramenta_certa() {
     let goal = Goal::fact("Brasil", "capital");
     let state = WorldState::default();

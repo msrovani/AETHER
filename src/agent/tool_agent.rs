@@ -13,9 +13,13 @@ use super::planner::{PlanStep, Planner};
 use super::registry::ToolRegistry;
 use super::self_model::SelfModel;
 use super::telemetry::{goal_label, EpisodeTrace, StepTrace};
-use super::tool::{Budget, Cost, Goal, Risk, ToolContext, ToolSchema, WorldState};
+use super::tool::{
+    Budget, Cost, Goal, GoalKind, Risk, Tool, ToolContext, ToolError, ToolOutcome, ToolSchema,
+    WorldState,
+};
 use super::tools::default_tools;
-use super::{Action, AgentConfig, Claim, Feedback};
+use super::{Action, AgentConfig, Claim, ExpertId, Feedback};
+use crate::core::certificate::Provenance;
 
 /// Resultado de um goal.
 #[derive(Clone, Debug)]
@@ -66,6 +70,7 @@ impl ToolAgent {
         for tool in default_tools(cfg) {
             let _ = registry.register(tool);
         }
+        let _ = registry.register(Box::new(VerifyTool));
         let mut self_model = SelfModel::new(cfg.tool_policy_path.clone());
         self_model.load();
         Self {
@@ -373,6 +378,82 @@ fn step_trace(step: &PlanStep, met: bool, elapsed_us: u64, execution: &Execution
     }
 }
 
+/// Tool de verificação: confere claims/certificados do blackboard.
+///
+/// É a peça que fecha o pipeline `fact → sat → verify` sem depender de um
+/// verificador externo. Não age; só atesta.
+#[derive(Debug)]
+pub struct VerifyTool;
+
+impl Tool for VerifyTool {
+    fn name(&self) -> &'static str {
+        "verify"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "verify",
+            description: "verifica claims/certificados do blackboard",
+            args: &["subject", "relation"],
+            kinds: &[GoalKind::Verify],
+        }
+    }
+
+    fn cost(&self) -> Cost {
+        Cost::local(1.0)
+    }
+
+    fn risk(&self) -> Risk {
+        Risk::Low
+    }
+
+    fn affordance(&self, goal: &Goal, _state: &WorldState) -> f32 {
+        if goal.kind == GoalKind::Verify {
+            1.0
+        } else {
+            0.0
+        }
+    }
+
+    fn preconditions(&self, goal: &Goal, state: &WorldState) -> bool {
+        self.affordance(goal, state) > 0.0
+    }
+
+    fn call(&mut self, _goal: &Goal, ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
+        let has_claim = !ctx.claims.is_empty();
+        let has_cert = ctx
+            .certificates
+            .iter()
+            .any(|cert| cert.violations == 0 && cert.energy.is_finite());
+        if has_claim && has_cert {
+            Ok(ToolOutcome {
+                claims: vec![Claim::new(
+                    "verify",
+                    "certificate",
+                    "ok",
+                    1.0,
+                    200,
+                    ExpertId::Logic,
+                    Provenance::Inferred,
+                )],
+                confidence: 1.0,
+                detail: format!(
+                    "verificado: {} claim(s), {} certificado(s)",
+                    ctx.claims.len(),
+                    ctx.certificates.len()
+                ),
+                ..ToolOutcome::default()
+            })
+        } else {
+            Ok(ToolOutcome::empty(format!(
+                "sem evidência: claims={}, certs={}",
+                ctx.claims.len(),
+                ctx.certificates.len()
+            )))
+        }
+    }
+}
+
 fn tools_allowlist() -> Vec<&'static str> {
-    vec!["fact", "sat", "qubo", "memory", "ask.human"]
+    vec!["fact", "sat", "qubo", "memory", "verify", "ask.human"]
 }

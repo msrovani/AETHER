@@ -35,6 +35,8 @@
 | Registry não compilava `Debug` | `Box<dyn Tool>` não implementa `Debug` | `impl Debug` manual listando nomes | `registry.rs` |
 | Pipeline não compartilhava resultado | cada passo via o mesmo `Goal`, sem estado | blackboard `ToolContext.claims` + append no executor | `tool.rs`, `executor.rs` |
 | Falha no meio do workflow deixava lixo | efeitos/claims parciais | rollback por passo (`rollback_to`) + rollback de workflow | `executor.rs`, `tool_agent.rs` |
+| `verify` não tinha o que verificar | blackboard só guardava claims | `ToolContext.certificates` + `VerifyTool` | `tool.rs`, `tool_agent.rs` |
+| Agir sempre que havia candidato | score não comparava com abstenção | `Planner::min_score` (EFE pragmática) | `planner.rs` |
 
 ## 3. Invariantes que não podem regredir
 
@@ -100,8 +102,8 @@ gravação via MCP direto precisa repetir o mesmo `scope_run`/entidade.
 ## 7. Testes e custo
 
 - `cargo test --lib agent::` — 18 testes; `tests/agent_gate.rs` — 6 gates;
-  `tests/agent_tools_gate.rs` — 4 (G-A1); `tests/agent_plan_gate.rs` — 3
-  (G-A2/G-A3); `tests/agent_cli.rs` — 2; `tests/api_agent.rs` — 2.
+  `tests/agent_tools_gate.rs` — 5 (G-A1 + EFE); `tests/agent_plan_gate.rs` — 4
+  (G-A2 real/G-A3); `tests/agent_cli.rs` — 2; `tests/api_agent.rs` — 2.
 - `cargo test --lib` — 143 testes (após o agente).
 - Gates de latência (`e1_language_gate::g5`, `phase5_hardware::t12_*`) exigem
   **release**; em debug eles medem o interpretador, não o motor.

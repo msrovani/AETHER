@@ -442,6 +442,8 @@ pub struct ToolContext {
     pub effects: Vec<Effect>,
     /// Claims verificadas dos passos anteriores (blackboard).
     pub claims: Vec<Claim>,
+    /// Certificados dos passos anteriores (verificação).
+    pub certificates: Vec<EngineCertificate>,
 }
 
 impl ToolContext {
@@ -455,6 +457,7 @@ impl ToolContext {
             trace_id,
             effects: Vec::new(),
             claims: Vec::new(),
+            certificates: Vec::new(),
         }
     }
 
@@ -483,12 +486,14 @@ impl ToolContext {
     pub fn rollback(&mut self) {
         self.effects.clear();
         self.claims.clear();
+        self.certificates.clear();
     }
 
     /// Rollback até um ponto anterior (transação por passo).
-    pub fn rollback_to(&mut self, effects: usize, claims: usize) {
+    pub fn rollback_to(&mut self, effects: usize, claims: usize, certificates: usize) {
         self.effects.truncate(effects);
         self.claims.truncate(claims);
+        self.certificates.truncate(certificates);
     }
 }
 
