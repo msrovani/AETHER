@@ -6,7 +6,7 @@
 use super::experts::{make_logic, make_memory, make_solver, make_transplant, Expert};
 use super::tool::{
     outcome_from_expert, Cost, Effect, Goal, GoalKind, Risk, Tool, ToolContext, ToolError,
-    ToolOutcome, ToolSchema, WorldState, AUTHORITY_QUARANTINE,
+    ToolOutcome, ToolSchema, WorldState, AUTHORITY_CORROBORATED, AUTHORITY_QUARANTINE,
 };
 use super::{Claim, ExpertId, Task};
 use crate::agent::AgentConfig;
@@ -366,15 +366,27 @@ impl Tool for MemoryWriteTool {
             }
         }
         // Autoridade: nunca promove sozinho. Fato novo entra em quarentena
-        // (proveniência `Inferred`); promoção exige corroboração/HITL fora daqui.
-        let authority = current
-            .as_ref()
-            .map(|snapshot| snapshot.authority)
-            .unwrap_or(AUTHORITY_QUARANTINE);
+        // (proveniência `Inferred`); promoção exige HITL (>=200) ou
+        // **corroboração**: outra fonte independente já registrou o mesmo valor.
+        const SOURCE: &str = "inferred";
+        let corroborated = current.as_ref().is_some_and(|snapshot| {
+            snapshot.text == value
+                && !snapshot.provenance.is_empty()
+                && snapshot.provenance != SOURCE
+                && snapshot.authority < AUTHORITY_CORROBORATED
+        });
+        let authority = if corroborated {
+            AUTHORITY_CORROBORATED
+        } else {
+            current
+                .as_ref()
+                .map(|snapshot| snapshot.authority)
+                .unwrap_or(AUTHORITY_QUARANTINE)
+        };
         // Watermark ANTES da escrita: o rewind volta o outbox a este ponto.
         let outbox_len = backend.outbox_len();
         let prev = backend
-            .write(&key, value, authority)
+            .write_sourced(&key, value, authority, SOURCE)
             .map_err(ToolError::Failed)?;
         Ok(ToolOutcome {
             claims: vec![Claim::new(

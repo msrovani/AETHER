@@ -492,6 +492,20 @@ pub trait UndoBackend: Send + Sync {
         let _ = (key, text, authority);
         Err("undo backend sem write".into())
     }
+    /// Escrita que registra a **fonte** (proveniência) do fato.
+    ///
+    /// Duas fontes independentes com o mesmo valor corroboram o fato. Default
+    /// delega a [`Self::write`] (backends sem proveniência).
+    fn write_sourced(
+        &self,
+        key: &str,
+        text: &str,
+        authority: u8,
+        source: &str,
+    ) -> Result<Option<Snapshot>, String> {
+        let _ = source;
+        self.write(key, text, authority)
+    }
 }
 
 /// Resultado de uma tool.

@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use aether_engine::agent::{
     Action, Budget, Cost, Goal, GoalKind, MemoryWriteTool, Risk, SelfModel, Snapshot,
     SuccessCriteria, Tool, ToolAgent, ToolContext, ToolError, ToolOutcome, ToolRegistry,
-    ToolSchema, WorldState, AUTHORITY_QUARANTINE,
+    ToolSchema, WorldState, AUTHORITY_CORROBORATED, AUTHORITY_QUARANTINE,
 };
 use aether_engine::core::knowledge_bridge_f1::ScopeId;
 
@@ -165,6 +165,65 @@ fn gate_memory_write_reforco_nao_promove_autoridade() {
         "fato inferido fica em quarentena, não promove sozinho"
     );
     assert_eq!(stored.reinforced, 1, "reforço conta");
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn gate_corroboracao_promove_quarentena_para_corroborado() {
+    // Fonte independente (transplante) já registrou o valor; a inferência
+    // concordante corrobora e sobe 96 -> 128, sem humano.
+    let path = temp_journal("corrobora");
+    {
+        let backend = aether_engine::agent::SgdbUndoBackend::new(&path);
+        let seed = Snapshot {
+            text: "v1".into(),
+            object: "v1".into(),
+            authority: AUTHORITY_QUARANTINE,
+            reinforced: 0,
+            scope: "org:1/run:0".into(),
+            provenance: "transplant".into(),
+        };
+        backend.write_snapshot("k|rel", seed).expect("seed");
+    }
+
+    let mut agent = agent_with_journal(path.clone());
+    let outcome = agent.solve(&act_goal("k", "rel", "v1"));
+    assert!(outcome.success, "{}", outcome.rationale);
+
+    let backend = aether_engine::agent::SgdbUndoBackend::new(&path);
+    let stored = backend.get("k|rel").expect("registro");
+    assert_eq!(stored.authority, AUTHORITY_CORROBORATED, "2 fontes => 128");
+    assert_eq!(stored.provenance, "inferred", "fonte registrada");
+    assert_eq!(stored.text, "v1");
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn gate_corroboracao_exige_mesmo_valor() {
+    let path = temp_journal("corrobora-diff");
+    {
+        let backend = aether_engine::agent::SgdbUndoBackend::new(&path);
+        let seed = Snapshot {
+            text: "v1".into(),
+            object: "v1".into(),
+            authority: AUTHORITY_QUARANTINE,
+            reinforced: 0,
+            scope: "org:1/run:0".into(),
+            provenance: "transplant".into(),
+        };
+        backend.write_snapshot("k|rel", seed).expect("seed");
+    }
+
+    let mut agent = agent_with_journal(path.clone());
+    assert!(agent.solve(&act_goal("k", "rel", "v2")).success);
+
+    let backend = aether_engine::agent::SgdbUndoBackend::new(&path);
+    let stored = backend.get("k|rel").expect("registro");
+    assert_eq!(stored.text, "v2");
+    assert_eq!(
+        stored.authority, AUTHORITY_QUARANTINE,
+        "valor divergente não corrobora"
+    );
     let _ = std::fs::remove_file(&path);
 }
 

@@ -445,10 +445,7 @@ impl JournalLock {
                     std::thread::sleep(std::time::Duration::from_millis(5));
                 }
                 Err(error) => {
-                    return Err(format!(
-                        "io: lock do diário {}: {error}",
-                        journal.display()
-                    ));
+                    return Err(format!("io: lock do diário {}: {error}", journal.display()));
                 }
             }
         }
@@ -600,6 +597,32 @@ impl UndoBackend for SgdbUndoBackend {
                 reinforced,
                 scope,
                 provenance,
+            }
+        })
+    }
+
+    fn write_sourced(
+        &self,
+        key: &str,
+        text: &str,
+        authority: u8,
+        source: &str,
+    ) -> Result<Option<Snapshot>, String> {
+        self.write_inner(key, None, |prev| {
+            let (reinforced, scope) = match prev {
+                Some(previous) => (
+                    previous.snapshot.reinforced.saturating_add(1),
+                    previous.snapshot.scope.clone(),
+                ),
+                None => (0, String::new()),
+            };
+            Snapshot {
+                text: text.to_string(),
+                object: text.to_string(),
+                authority,
+                reinforced,
+                scope,
+                provenance: source.to_string(),
             }
         })
     }
