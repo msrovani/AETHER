@@ -92,7 +92,7 @@ impl Planner {
             // Risco > teto não é filtrado aqui: o executor escala HITL antes da call (SCHEMA_6).
             .map(|candidate| {
                 let over_ceiling = candidate.risk > goal.risk_ceiling;
-                let p = self_model.success(candidate.name, goal);
+                let p = self_model.calibrated_success(candidate.name, goal);
                 let u = self_model.ucb(candidate.name, goal);
                 let cost = f64::from(candidate.cost.ms) / 1_000.0
                     + f64::from(candidate.cost.tokens) / 10_000.0;
