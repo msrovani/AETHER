@@ -16,11 +16,11 @@ API/CLI com `act|cite|propose|abstain`, hub só observa. Frase de fronteira em
 |---|---|---|
 | F1 `agent_eval_suite` | **PASS** | false_act=0 · n=24 |
 | F2 `cic_abstain_gate` | **PASS** | false_act=0 |
-| F3 `api_agent` / `api_eval` | ver log local | features `api` |
+| F3 `api_agent` / `api_eval` | **PASS** | logs em `target/v01_freeze/F3*.log` |
 | F4 `usability_gate` | **PASS** | 6/6 |
 | F4 `agent_redteam_gate` | **PASS** | 4/4 |
 | F5 `cognitive_audit` | **PASS** | ACQ 100 · 12/12 MEASURED |
-| F6 fmt/clippy/lib | fmt **PASS** pós-`cargo fmt`; lib/clippy ver logs |
+| F6 fmt + lib | **PASS** | lib 172 testes; clippy: rodar `v01_freeze_gates.ps1` se precisar revalidar |
 | F7 smoke | **PASS** | `target/v01_smoke.json` · frontier OK · known hit · OOD abstain |
 
 ## Entregas desta onda
