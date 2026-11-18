@@ -20,11 +20,11 @@ $fail = 0
 $cargo = Join-Path $PSScriptRoot "cargo.ps1"
 
 function Invoke-Cargo {
-    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CargoArgs)
     if (Test-Path $cargo) {
-        & $cargo @Args
+        & $cargo @CargoArgs
     } else {
-        & cargo @Args
+        & cargo @CargoArgs
     }
 }
 
@@ -47,17 +47,20 @@ function Run-Gate([string]$Id, [string[]]$CargoArgs) {
 }
 
 Write-Host "=== F6 fmt ==="
-Invoke-Cargo fmt -- --check 2>&1 | Out-Null
+Invoke-Cargo @("fmt", "--", "--check") 2>&1 | Out-Null
 $fmt = $LASTEXITCODE
 if ($fmt -ne 0) { $fail++ }
 $lines.Add("$(if ($fmt -eq 0) {'PASS'} else {'FAIL'}) F6_fmt exit=$fmt") | Out-Null
+Write-Host $lines[-1]
 
 Write-Host "=== F6 clippy ==="
-Invoke-Cargo clippy --release --all-targets -- -D warnings 2>&1 |
-    Tee-Object (Join-Path $OutDir "F6_clippy.log") | Out-Null
+# Array explícito: PowerShell não pode engolir `-D` como parâmetro do wrapper.
+$clippyOut = & { Invoke-Cargo @("clippy", "--release", "--all-targets", "--", "-D", "warnings") 2>&1 | Out-String }
 $cl = $LASTEXITCODE
+$clippyOut | Set-Content (Join-Path $OutDir "F6_clippy.log") -Encoding utf8
 if ($cl -ne 0) { $fail++ }
 $lines.Add("$(if ($cl -eq 0) {'PASS'} else {'FAIL'}) F6_clippy exit=$cl") | Out-Null
+Write-Host $lines[-1]
 
 Run-Gate "F6_lib" @("test", "--release", "--lib")
 Run-Gate "F1_agent_eval" @("test", "--release", "--test", "agent_eval_suite", "--", "--nocapture")

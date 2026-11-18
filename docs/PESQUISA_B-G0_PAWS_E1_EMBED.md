@@ -85,7 +85,8 @@ OPENCODE mediu RTX 3050: **19,33 txt/s** (bf16 batch64 n=1000) ≈ **1,79×** vs
 - IPEX + P-cores: latência ~30 ms (i9-13900HK) — útil p/ R3/R5, não substitui D1.
 - Medir no host: ST onnx/openvino vs R4 CUDA 19,33 e A1 CPU 10,82 (mesmo n/batch/seed).
 - Smoke R5 (MSG 0619): **ABSTAIN** exit 3 — ST onnx exige `optimum`; ORT 1.32 presente.
-- Errata venv (MSG 0632): `pip install optimum` rebaixou transformers e quebrou ST 6.3; restaurado. Conflito residual optimum↔transformers≥5. R5 fica ABSTAIN até caminho sem quebrar ST6.
+- Errata venv (MSG 0632): `pip install optimum` rebaixou transformers e quebrou ST 6.3; restaurado. Conflito residual optimum↔transformers≥5.
+- Caminho (MSG 0639/0652): export ONNX manual sem optimum; **last_token** pooling (não masked_mean) → cosine médio **1,0** (gate 0,99 PASS). Taxa n128 ainda pendente em janela limpa.
 
 ## A3 / lei E1B (MSG 0624)
 

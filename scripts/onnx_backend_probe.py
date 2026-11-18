@@ -111,8 +111,20 @@ def make_onnx_embedder(onnx_path: Path, st_model, dim: int, batch: int):
     if pooling is None:
         raise RuntimeError("SentenceTransformer sem modulo Pooling — ABSTAIN")
 
+    # Mesmo orçamento de threads do caminho torch (tune_cpu_threads = n//2):
+    # ORT default usa todos os lógicos e empurra para E-cores neste host híbrido.
+    import os
+
+    n_logical = os.cpu_count() or 4
+    want_threads = max(2, n_logical // 2)
+    env_threads = os.environ.get("AETHER_EMBED_THREADS", "").strip()
+    if env_threads:
+        want_threads = max(1, int(env_threads))
+    so = ort.SessionOptions()
+    so.intra_op_num_threads = want_threads
+
     sess = ort.InferenceSession(
-        str(onnx_path), providers=["CPUExecutionProvider"]
+        str(onnx_path), sess_options=so, providers=["CPUExecutionProvider"]
     )
 
     def embed(texts: list[str]) -> "object":
