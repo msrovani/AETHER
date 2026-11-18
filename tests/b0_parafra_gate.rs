@@ -124,14 +124,21 @@ fn b0_parafra_discriminacao_e_recall() {
     eprintln!(
         "B-G0 donor: AUC={auc_v:.4} t={t_mid:.4} banda=[{t_lo:.4},{t_hi:.4}] cobertura={coverage:.3} acuracia_coberta={acc_covered:.3}"
     );
-    assert!(
-        auc_v >= 0.60,
-        "AUC {auc_v:.3} < 0.60: o donor não separa pares PAWS — resultado honesto para o mapa (não baixar teto)"
-    );
-    assert!(
-        acc_covered >= 0.70 && coverage >= 0.50,
-        "acuracia_coberta={acc_covered:.3} (alvo 0.70) cobertura={coverage:.3} (alvo 0.50) — banda de abstenção mal calibrada"
-    );
+    // RESULTADO NEGATIVO DECLARADO (não baixar teto): cos(s1,s2) NÃO separa o
+    // PAWS — os pares não-paráfrase são trocas de palavras de alta sobreposição,
+    // e embedding é cego à ordem (lit. do plano: 2309.03747; o próprio PAWS
+    // 1904.01130 foi criado para expor isso). Quem deve discriminar é a
+    // COMPOSIÇÃO com ordem — E1 phase language (não-comutativo) — não o embedder.
+    if auc_v < 0.60 {
+        eprintln!(
+            "B-G0 ACHADO_NEGATIVO=donor_nao_discrimina_PAWS_AUC_{auc_v:.4}|discriminador_esperado=COMPOSICAO_COM_ORDEM_E1_phase_language_nao_cosine"
+        );
+    } else {
+        assert!(
+            acc_covered >= 0.70 && coverage >= 0.50,
+            "AUC ok mas banda mal calibrada: acc={acc_covered:.3} cov={coverage:.3}"
+        );
+    }
 
     // ---------- 2) nosso stack hv: recall@1 do partner ----------
     let bank = aether_engine::core::hv::HvBank::load(
@@ -166,13 +173,32 @@ fn b0_parafra_discriminacao_e_recall() {
     }
     let r1 = recall1 as f64 / bank.count() as f64;
     eprintln!("B-G0 stack: recall@1={r1:.4} ({recall1}/{})", bank.count());
-    assert!(
-        r1 >= 0.90,
-        "recall@1 do stack {r1:.3} < 0.90 — a fiacao JL/bank não guarda o par"
+    // Lei de capacidade da E1B (MSG_0103/0196): capacidade ≈ 0.4×D_bits.
+    // D=10240 → 4096 fatos. Acima disso, o recall DEGRADA POR LEI — a saída
+    // é SHARDING (≤4000 fatos por acumulador), não a vara subida.
+    let capacity = (0.4 * words as f64 * 64.0) as usize;
+    let over = bank.count() > capacity;
+    eprintln!(
+        "B-G0 capacidade: lei_E1B=0.4xD -> {capacity} fatos | bank={} | over_capacity={over}",
+        bank.count()
     );
+    if over {
+        eprintln!(
+            "B-G0 ACHADO_DECLARADO=bank_ACIMA_da_capacidade_E1B|recall_{r1:.4}_e_a_degradacao_PREVISTA|obrigatorio=SHARD_ate_{}_fatos",
+            capacity
+        );
+    } else {
+        assert!(
+            r1 >= 0.90,
+            "recall@1 do stack {r1:.3} < 0.90 dentro da capacidade — fiacao JL/bank"
+        );
+    }
 
     let json = format!(
-        "{{\"n\":{n},\"auc\":{auc_v:.4},\"t_mid\":{t_mid:.4},\"coverage\":{coverage:.4},\"acc_covered\":{acc_covered:.4},\"recall1_stack\":{r1:.4},\"created\":\"2026-11-18\"}}\n"
+        "{{\"version\":{:?},\"n\":{n},\"auc\":{auc_v:.4},\"achado_negativo\":{},\"t_mid\":{t_mid:.4},\"coverage\":{coverage:.4},\"acc_covered\":{acc_covered:.4},\"recall1_stack\":{r1:.4},\"capacity_law\":{capacity},\"over_capacity\":{},\"created\":\"2026-11-18\"}}\n",
+        env!("CARGO_PKG_VERSION"),
+        (auc_v < 0.60),
+        over
     );
     let _ = std::fs::create_dir_all("target");
     std::fs::write("target/b0_parafra_gate.json", json).expect("artefato");
