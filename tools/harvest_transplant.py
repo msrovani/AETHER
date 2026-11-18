@@ -374,7 +374,10 @@ def pack_round(
         "shards": shard_meta,
         "conflicts_planted": planted,
         "conflicts_detected": detected,
-        "authority_max_transplant": 240,
+        # Doutrina MSG 0254/0258: transplantado nasce em quarentena 60-120.
+        # 200 exige VerifiedFact do solver; 255 é HITL. O cap de geração
+        # substitui o 240 anterior (QUERY 0434 — fora da faixa da doutrina).
+        "authority_max_transplant": 120,
         "created": date.today().isoformat(),
         "claim": claim,
     }
