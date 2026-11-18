@@ -3,6 +3,16 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.177] - 2026-11-18
+
+### Changed
+
+- Ciclo automatico: 2 arquivo(s) (scripts:1, src:1).
+- Gate: ok (8s).
+
+- `scripts/v01_freeze_gates.ps1`
+- `src/transducer_host.rs`
+
 ## [0.0.176] - 2026-11-18
 
 ### Changed

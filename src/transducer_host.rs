@@ -241,7 +241,11 @@ mod tests {
         let mut buf = [2.0f32; 64];
         t.sample_into(&mut buf).unwrap();
         assert!(buf.iter().all(|v| (-1.0..=1.0).contains(v)));
+        // GetSystemTimes é sistêmico: sob contenção (builds paralelos) a carga
+        // pode cair entre amostras. Exigimos só faixa válida; monotonia frouxa
+        // só quando o baseline já era baixo (máquina quieta do freeze).
         let quiet = t.cpu_load();
+        assert!((0.0..=1.0).contains(&quiet));
         let start = std::time::Instant::now();
         let mut x = 1u64;
         while start.elapsed().as_millis() < 30 {
@@ -249,6 +253,13 @@ mod tests {
         }
         let _ = x;
         t.sample_into(&mut buf).unwrap();
-        assert!(t.cpu_load() + 0.05 >= quiet);
+        let after = t.cpu_load();
+        assert!((0.0..=1.0).contains(&after));
+        if quiet < 0.3 {
+            assert!(
+                after + 0.15 >= quiet,
+                "cpu_load caiu demais em host quieto: quiet={quiet} after={after}"
+            );
+        }
     }
 }

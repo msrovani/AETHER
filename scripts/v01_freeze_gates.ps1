@@ -17,12 +17,15 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 $report = Join-Path $OutDir "gates_f1_f6.txt"
 $lines = New-Object System.Collections.Generic.List[string]
 $fail = 0
-$cargo = Join-Path $PSScriptRoot "cargo.ps1"
+$cargoPs1 = Join-Path $PSScriptRoot "cargo.ps1"
+$cargoExe = Join-Path $env:USERPROFILE ".cargo\bin\cargo.exe"
 
-function Invoke-Cargo {
-    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CargoArgs)
-    if (Test-Path $cargo) {
-        & $cargo @CargoArgs
+function Invoke-CargoDirect {
+    param([string[]]$CargoArgs)
+    if (Test-Path $cargoPs1) {
+        & $cargoPs1 @CargoArgs
+    } elseif (Test-Path $cargoExe) {
+        & $cargoExe @CargoArgs
     } else {
         & cargo @CargoArgs
     }
@@ -31,7 +34,7 @@ function Invoke-Cargo {
 function Run-Gate([string]$Id, [string[]]$CargoArgs) {
     Write-Host "=== $Id ==="
     $logPath = Join-Path $OutDir "$Id.log"
-    $out = & { Invoke-Cargo @CargoArgs 2>&1 | Out-String }
+    $out = & { Invoke-CargoDirect -CargoArgs $CargoArgs 2>&1 | Out-String }
     $code = $LASTEXITCODE
     $out | Set-Content $logPath -Encoding utf8
     $tail = ($out -split "`n" | Where-Object { $_ -match 'test result:|ACQ|false_act|FAIL|error:' } | Select-Object -Last 5) -join " | "
@@ -47,15 +50,14 @@ function Run-Gate([string]$Id, [string[]]$CargoArgs) {
 }
 
 Write-Host "=== F6 fmt ==="
-Invoke-Cargo @("fmt", "--", "--check") 2>&1 | Out-Null
+Invoke-CargoDirect -CargoArgs @("fmt", "--", "--check") 2>&1 | Out-Null
 $fmt = $LASTEXITCODE
 if ($fmt -ne 0) { $fail++ }
 $lines.Add("$(if ($fmt -eq 0) {'PASS'} else {'FAIL'}) F6_fmt exit=$fmt") | Out-Null
 Write-Host $lines[-1]
 
 Write-Host "=== F6 clippy ==="
-# Array explícito: PowerShell não pode engolir `-D` como parâmetro do wrapper.
-$clippyOut = & { Invoke-Cargo @("clippy", "--release", "--all-targets", "--", "-D", "warnings") 2>&1 | Out-String }
+$clippyOut = & { Invoke-CargoDirect -CargoArgs @("clippy", "--release", "--all-targets", "--", "-D", "warnings") 2>&1 | Out-String }
 $cl = $LASTEXITCODE
 $clippyOut | Set-Content (Join-Path $OutDir "F6_clippy.log") -Encoding utf8
 if ($cl -ne 0) { $fail++ }
