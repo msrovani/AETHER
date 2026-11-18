@@ -52,6 +52,9 @@ pub mod morphogenesis;
 #[cfg(feature = "m8")]
 pub mod transducer_io;
 
+#[cfg(all(feature = "m8", windows))]
+pub mod transducer_host;
+
 #[cfg(feature = "dashboard")]
 pub mod dashboard;
 

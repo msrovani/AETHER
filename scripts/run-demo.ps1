@@ -1,4 +1,6 @@
 ﻿# Demo rápida AETHER (Onda 0): build release + organismo ~15 s + tip daemon/hub.
+# Onda S (2026-11-17): o default permanece --plain. TUI só com --features tui
+# e a flag --tui. BAM/JIT/governor continuam fora deste script.
 # Uso (raiz do repo):
 #   .\scripts\run-demo.ps1
 #   .\scripts\run-demo.ps1 -Duration 10s

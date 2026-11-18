@@ -1,0 +1,19 @@
+{
+  "round": "20261117_b1",
+  "atoms": 10000,
+  "source": "google-research-datasets/paws-x en",
+  "donor": "Qwen/Qwen3-Embedding-0.6B",
+  "revision": "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+  "model_license": "Apache-2.0",
+  "recall_at_10": 1.0,
+  "p99_us": 642,
+  "rss_bytes": 18231296,
+  "index": "varredura exata; LSH só acima de 10000 e o p99 de 0,64 ms não pediu",
+  "lab_gates_release": {
+    "transplant_hv_gate": "5/5",
+    "e3_transplant_gate": "6/6",
+    "note": "rodaram no bank de data/, que esta rodada não sobrescreveu"
+  },
+  "b2_100k": "não medido: o corpus desta rodada tem 10000 átomos",
+  "escriba_7b": "abstenção: RAM 15,7 GB e sem CUDA; o peso cheio não entra"
+}

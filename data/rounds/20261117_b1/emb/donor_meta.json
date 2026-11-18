@@ -1,0 +1,9 @@
+{
+  "donor": "Qwen/Qwen3-Embedding-0.6B",
+  "dim": 768,
+  "count": 10000,
+  "sha256_embeds": "ce93315aefd3ce2ece780b514f0b212461675efe95e51e8a9f7b021e733a0107",
+  "license": "Apache-2.0",
+  "max_seq_length": 64,
+  "dtype": "float32"
+}

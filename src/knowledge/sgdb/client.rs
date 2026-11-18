@@ -161,18 +161,22 @@ fn env_nonempty(name: &str) -> Option<String> {
 /// Primeira chave de armazenamento devolvida por `remember`.
 fn storage_key_of(result: &Json) -> Option<String> {
     let payload = wire::payload_json(result);
-    payload
-        .get("key")
-        .and_then(|v| v.as_str())
-        .map(str::to_string)
-        .or_else(|| {
-            payload
-                .get("keys")
-                .and_then(|v| v.as_arr())
-                .and_then(|keys| keys.first())
-                .and_then(|v| v.as_str())
-                .map(str::to_string)
-        })
+    let from = |json: &Json| {
+        json.get("storage_key")
+            .or_else(|| json.get("key"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .or_else(|| {
+                json.get("keys")
+                    .and_then(|v| v.as_arr())
+                    .and_then(|keys| keys.first())
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
+            })
+    };
+    from(&payload)
+        .or_else(|| result.get("structuredContent").and_then(from))
+        .or_else(|| from(result))
 }
 
 /// Abre o transporte a partir de uma especificação.
@@ -365,7 +369,7 @@ impl<T: Transport> SgdbClient<T> {
             ("jsonrpc", Json::str("2.0")),
             ("method", Json::str("notifications/initialized")),
         ]);
-        let _ = self.transport.call(&note);
+        let _ = self.transport.notify(&note);
         self.initialized = true;
         Ok(())
     }
@@ -670,6 +674,27 @@ impl<T: Transport> SgdbClient<T> {
                 ("scope_app", Json::str(self.cfg.scope_app.clone())),
                 ("scope_run", Json::str(wire::scope_run(scope))),
             ]),
+        )
+    }
+
+    /// Liga duas chaves com `contradicts` sem apagar nenhuma das duas.
+    pub fn associate_contradicts(&mut self, a: &str, b: &str) -> Result<Json, SgdbError> {
+        self.call_tool(
+            "curate",
+            Json::obj([
+                ("op", Json::str("associate")),
+                ("a", Json::str(a)),
+                ("b", Json::str(b)),
+                ("kind", Json::str("contradicts")),
+            ]),
+        )
+    }
+
+    /// Lista as chaves que contradizem `key` (não apaga o fato).
+    pub fn contradicts_of(&mut self, key: &str) -> Result<Json, SgdbError> {
+        self.call_tool(
+            "curate",
+            Json::obj([("op", Json::str("contradicts")), ("key", Json::str(key))]),
         )
     }
 

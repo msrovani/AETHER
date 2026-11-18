@@ -5,14 +5,32 @@ Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto
 
 ## [Unreleased]
 
+## [0.0.169] - 2026-11-17
+
 ### Added
 
-- `examples/fft_gpu_probe.rs`: probe de crossover CPU×GPU do FFT em lote
-  (L=8192, B=64..2048, mesmo processo, 5 reps min/p50). Resultado medido na
-  RTX 3050: **sem crossover** — razão 0,18–0,22× (o GPU perde e2e em qualquer
-  lote), custo fixo **11,4 ms/chamada** p50, 1ª chamada 712 ms. Artefato
-  `target/fft_gpu_probe.json`; veredicto em `docs/GPU_PLAN.md` §G2 e
-  `docs/HW_TARGET.md` §3 (fórum MSG 0438).
+- Quadro de ondas H/M/G/A/K/P/S fechado: `docs/CYCLE_CLOSE_2026-11-17_ONDAS.md`.
+- SGDB stdio real: `tests/sgdb_stdio_gate` (remember/recall/audit/`contradicts`);
+  `Transport::notify` para `notifications/initialized` sem deadlock.
+- FFT em lote (`src/core/gpu/fft.rs` + `tests/gpu_fft_gate`): erro L2 4,16e-7
+  vs `rustfft`; razão 0,20 → **abstain** (barra ≥2×); `force_off` sem panic.
+- CI opt-in `gate-gpu` (`workflow_dispatch` + self-hosted `gpu`).
+- Agente: D1 (`agent_budget_gate`), MCTS medida/abstain (`mcts_measure_gate`),
+  D3 red team (`agent_redteam_gate`), LinUCB opt-in (`linucb.rs` +
+  `agent_learn_gate`, EXP3 permanece default), `semantic.match`.
+- Produto C: `SystemTelemetryTransducer`, daemon `--host`/`--human`/`--log`,
+  `scripts/package-daemon.ps1`, `scripts/two-instances.ps1`.
+- Conhecimento: rodadas `data/rounds/20261117_bg0` (B-G0) e
+  `data/rounds/20261117_b1` (10k paws-x; recall@10=1,0; p99=642 µs);
+  `tools/bg0_probe.py`; `tests/b1_10k_gate`.
+- `examples/fft_gpu_probe.rs` (já em Unreleased da 0.0.168+): cruzamento
+  medido na 3050 sem crossover (0,18–0,22×); alinhado ao abstain de G1.
+
+### Changed
+
+- README e crate em **0.0.169**.
+- `scripts/run-demo.ps1` registra default `--plain` (Onda S).
+- `gpu_boundary_gate` inclui `wave_interference` no hot path sem GPU.
 
 ### Fixed
 

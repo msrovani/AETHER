@@ -18,6 +18,7 @@
 //! core::spsc_ring; nada de ponteiro solto, nada de I/O.
 #![allow(unsafe_code)]
 
+pub mod fft;
 pub mod ising;
 pub mod jl;
 pub mod jl_tiled;

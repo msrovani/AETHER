@@ -1,0 +1,62 @@
+{
+  "donor": "Qwen/Qwen3-Embedding-0.6B",
+  "revision": "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+  "dim_in": 768,
+  "dim_hv": 10240,
+  "words": 160,
+  "seed": 3735928559,
+  "count": 209,
+  "labels": 209,
+  "facts": 209,
+  "whitened": false,
+  "sha256_whitening": null,
+  "sha256_embeds": "afbf46f4a3f812184b0c152fb3510ba5aa037564ab711749923a2e41ca07d479",
+  "sha256_bank": "7eb733c1ff4031f5931ccbbe42adc8d77e40d3548d92e8e723dbc22fea2e8867",
+  "shards": [
+    {
+      "relation": "capital",
+      "offset": 0,
+      "count": 20
+    },
+    {
+      "relation": "é_um",
+      "offset": 0,
+      "count": 45
+    },
+    {
+      "relation": "é",
+      "offset": 0,
+      "count": 20
+    },
+    {
+      "relation": "é_uma",
+      "offset": 0,
+      "count": 48
+    },
+    {
+      "relation": "é_uma",
+      "offset": 48,
+      "count": 14
+    },
+    {
+      "relation": "orbita",
+      "offset": 0,
+      "count": 21
+    },
+    {
+      "relation": "usa",
+      "offset": 0,
+      "count": 21
+    },
+    {
+      "relation": "minimiza",
+      "offset": 0,
+      "count": 20
+    }
+  ],
+  "conflicts_planted": 5,
+  "conflicts_detected": 5,
+  "authority_max_transplant": 240,
+  "created": "2026-11-17",
+  "claim": "MSG 0229 INTAKE_TRANSPLANT"
+}

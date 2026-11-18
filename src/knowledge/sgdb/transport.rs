@@ -33,6 +33,12 @@ pub trait Transport: std::fmt::Debug + Send {
     /// Envia uma requisição e devolve o `result` (erro JSON-RPC vira [`SgdbError`]).
     fn call(&mut self, request: &Json) -> Result<Json, SgdbError>;
 
+    /// Notificação MCP: não espera resposta. O default chama [`call`] para
+    /// transportes que respondem mesmo assim (mock). Stdio só escreve.
+    fn notify(&mut self, request: &Json) -> Result<(), SgdbError> {
+        self.call(request).map(|_| ())
+    }
+
     /// Descrição curta do destino (usada por `doctor`/CLI).
     fn describe(&self) -> String {
         "transporte".to_string()
@@ -42,6 +48,10 @@ pub trait Transport: std::fmt::Debug + Send {
 impl<T: Transport + ?Sized> Transport for Box<T> {
     fn call(&mut self, request: &Json) -> Result<Json, SgdbError> {
         (**self).call(request)
+    }
+
+    fn notify(&mut self, request: &Json) -> Result<(), SgdbError> {
+        (**self).notify(request)
     }
 
     fn describe(&self) -> String {
@@ -979,6 +989,16 @@ impl Transport for StdioTransport {
             }
             return unwrap_response(&response);
         }
+    }
+
+    fn notify(&mut self, request: &Json) -> Result<(), SgdbError> {
+        self.calls += 1;
+        let mut line = request.to_text();
+        line.push('\n');
+        self.stdin
+            .write_all(line.as_bytes())
+            .and_then(|_| self.stdin.flush())
+            .map_err(|_| SgdbError::Offline)
     }
 
     fn describe(&self) -> String {

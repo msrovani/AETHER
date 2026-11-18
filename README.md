@@ -1,6 +1,6 @@
 # AETHER — motor cognitivo pós-token em Rust
 
-Versão crate: **0.0.157** (ver `Cargo.toml`). Suite recente: ~318 testes na auditoria cognitiva (`docs/COGNITIVE_AUDIT_RUN_2026-11-17.md`); `cargo test --release` reporta dezenas de alvos.
+Versão crate: **0.0.169** (ver `Cargo.toml`). Suite recente: ~318 testes na auditoria cognitiva (`docs/COGNITIVE_AUDIT_RUN_2026-11-17.md`); `cargo test --release` reporta dezenas de alvos.
 
 Protótipo experimental de computação baseada em física contínua: **zero tokens,
 zero transformers, zero protocolos semânticos de rede, zero backpropagation**.

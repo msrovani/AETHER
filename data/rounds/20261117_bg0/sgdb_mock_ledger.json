@@ -1,0 +1,3392 @@
+{
+  "atoms": [
+    {
+      "key": "0x7358db36b335cdc214f76d5e853d82a1",
+      "label": "Brasil|capital|Brasília"
+    },
+    {
+      "key": "0x612eca05dc12363f9ec5d93acc00c3c6",
+      "label": "São Paulo|é_um|estado"
+    },
+    {
+      "key": "0x9e3e8dcc7e9b61a99ec8fbfed196f13e",
+      "label": "Rio de Janeiro|é_um|estado"
+    },
+    {
+      "key": "0x7c7d99c41e7aec57600a56173fee5143",
+      "label": "água|é|H2O"
+    },
+    {
+      "key": "0x72983df06d3ad8d2974d683ecccfdedb",
+      "label": "sol|é_uma|estrela"
+    },
+    {
+      "key": "0x71ff16398f11cf1214ed099f117e08c5",
+      "label": "Lua|orbita|Terra"
+    },
+    {
+      "key": "0x91ff780f26066e6c935aa75b76f925b3",
+      "label": "Python|é_uma|linguagem"
+    },
+    {
+      "key": "0x52c305f7b355d3c733d8aea70dcc646c",
+      "label": "Rust|é_uma|linguagem"
+    },
+    {
+      "key": "0x63f9359ff0d9bd75e820bad0bfcb3408",
+      "label": "AETHER|usa|fase"
+    },
+    {
+      "key": "0xbd446f8a5bda4fe580d956fd4c29d660",
+      "label": "Ising|minimiza|energia"
+    },
+    {
+      "key": "0x4b3301e57c814d43be52fad6715d4eea",
+      "label": "Brasil_1|capital|Brasília_1"
+    },
+    {
+      "key": "0xb676242778a3cb451c79a02cd3506cce",
+      "label": "São Paulo_1|é_um|estado_1"
+    },
+    {
+      "key": "0xcb4be0dbf54c71f5a3df84caaa578aca",
+      "label": "Rio de Janeiro_1|é_um|estado_1"
+    },
+    {
+      "key": "0x5943d9ae7b30b211aca1d74b00b5b1d4",
+      "label": "água_1|é|H2O_1"
+    },
+    {
+      "key": "0xe37ad530ce822a3c9cf2fa38f39b263b",
+      "label": "sol_1|é_uma|estrela_1"
+    },
+    {
+      "key": "0xb80ca9c14a856daa3107f3e9b7b68fd3",
+      "label": "Lua_1|orbita|Terra_1"
+    },
+    {
+      "key": "0x8aeab4cc490cff98b81ca03c5d45f7bf",
+      "label": "Python_1|é_uma|linguagem_1"
+    },
+    {
+      "key": "0xa98dbb950963023dc1276a7854d3ab16",
+      "label": "Rust_1|é_uma|linguagem_1"
+    },
+    {
+      "key": "0xe536a817dd93e13d48a2a4d7b494c8a8",
+      "label": "AETHER_1|usa|fase_1"
+    },
+    {
+      "key": "0xcacc0dd5c433821813e6d482d5b8d54a",
+      "label": "Ising_1|minimiza|energia_1"
+    },
+    {
+      "key": "0xd258571963d4c9c05af576bd116a6aa6",
+      "label": "Brasil_2|capital|Brasília_2"
+    },
+    {
+      "key": "0xed00f9ec3d01be2c0fd73c0c4f449714",
+      "label": "São Paulo_2|é_um|estado_2"
+    },
+    {
+      "key": "0xb994eadd7b54e69d86bd9713099fddab",
+      "label": "Rio de Janeiro_2|é_um|estado_2"
+    },
+    {
+      "key": "0xc05f00488c765e5adf43f64b0dbf506c",
+      "label": "água_2|é|H2O_2"
+    },
+    {
+      "key": "0xc5f368deddf19ca4f6a06425c979c0b8",
+      "label": "sol_2|é_uma|estrela_2"
+    },
+    {
+      "key": "0xc319ffe0fd7c11dac9e58660071f0b37",
+      "label": "Lua_2|orbita|Terra_2"
+    },
+    {
+      "key": "0x7e56df02d22d490129a0316a2c97c854",
+      "label": "Python_2|é_uma|linguagem_2"
+    },
+    {
+      "key": "0x25ce5cf5c0cdbe2b8f8a51abf7a95e00",
+      "label": "Rust_2|é_uma|linguagem_2"
+    },
+    {
+      "key": "0xd10a259b148e4dc342d053c58e693176",
+      "label": "AETHER_2|usa|fase_2"
+    },
+    {
+      "key": "0xa3219030a552e820fd68772efcddc079",
+      "label": "Ising_2|minimiza|energia_2"
+    },
+    {
+      "key": "0x5b8bf1d45b7cfce52945b6fb4a7e1e8c",
+      "label": "Brasil_3|capital|Brasília_3"
+    },
+    {
+      "key": "0x211fba91143599e16360b2d4255fe27",
+      "label": "São Paulo_3|é_um|estado_3"
+    },
+    {
+      "key": "0xcef879cd2f61daa803a92cc04feb6334",
+      "label": "Rio de Janeiro_3|é_um|estado_3"
+    },
+    {
+      "key": "0x5635f3a3cca0b139fd3d094619f25bd4",
+      "label": "água_3|é|H2O_3"
+    },
+    {
+      "key": "0xe966ba5423b609ae3d89d8f5a1a44a2",
+      "label": "sol_3|é_uma|estrela_3"
+    },
+    {
+      "key": "0x30e1e824b123727fb29d86d89bd3e730",
+      "label": "Lua_3|orbita|Terra_3"
+    },
+    {
+      "key": "0x67d93c75fff80d0de8afdffe87332419",
+      "label": "Python_3|é_uma|linguagem_3"
+    },
+    {
+      "key": "0xcd4716a6e79d65e0e103ca28b2576796",
+      "label": "Rust_3|é_uma|linguagem_3"
+    },
+    {
+      "key": "0x4634ab22cffb5ff6df805bb214c4ee94",
+      "label": "Rust_3|é_uma|NÃO_linguagem_3"
+    },
+    {
+      "key": "0x863fe570a412df42f95fcac667c6aba6",
+      "label": "AETHER_3|usa|fase_3"
+    },
+    {
+      "key": "0x43361d07934f2e5618327e6a7e75a85c",
+      "label": "Ising_3|minimiza|energia_3"
+    },
+    {
+      "key": "0xc264428b3c0421f30b1ef2a952e04fac",
+      "label": "Brasil_4|capital|Brasília_4"
+    },
+    {
+      "key": "0x7d9f622ad4e4b87fdf37c18e7ece55ee",
+      "label": "São Paulo_4|é_um|estado_4"
+    },
+    {
+      "key": "0x19a26a24d50bd8147329b576204e7286",
+      "label": "Rio de Janeiro_4|é_um|estado_4"
+    },
+    {
+      "key": "0x7d4436eb95757e12b76a4d70942a0cba",
+      "label": "água_4|é|H2O_4"
+    },
+    {
+      "key": "0xbc1754e80d56d046a0ce0041000c17fd",
+      "label": "sol_4|é_uma|estrela_4"
+    },
+    {
+      "key": "0x9ac187289289c3181b759d88109b470f",
+      "label": "Lua_4|orbita|Terra_4"
+    },
+    {
+      "key": "0x3f91697e3d93b3bb3389f2f666a204ba",
+      "label": "Python_4|é_uma|linguagem_4"
+    },
+    {
+      "key": "0x78bdcfd242b694eec52368df9525d06b",
+      "label": "Rust_4|é_uma|linguagem_4"
+    },
+    {
+      "key": "0x5961e49e77eb7203089ce92f7abb2cf6",
+      "label": "AETHER_4|usa|fase_4"
+    },
+    {
+      "key": "0xe68bd516e66353628d39badc470facc5",
+      "label": "Ising_4|minimiza|energia_4"
+    },
+    {
+      "key": "0xc14f5104829409b9dff068b50efd18f8",
+      "label": "Brasil_5|capital|Brasília_5"
+    },
+    {
+      "key": "0x44401b8bd9a713ae19a047bc5fa6477e",
+      "label": "São Paulo_5|é_um|estado_5"
+    },
+    {
+      "key": "0xd01e2a6eec6236d10de06d07d11ae12a",
+      "label": "Rio de Janeiro_5|é_um|estado_5"
+    },
+    {
+      "key": "0x290161bb726ac683fcc09db277c36235",
+      "label": "água_5|é|H2O_5"
+    },
+    {
+      "key": "0xa322e128a2dfbab7b057b606c93f624f",
+      "label": "sol_5|é_uma|estrela_5"
+    },
+    {
+      "key": "0xeb2fd546b919a39077855d382e21ec87",
+      "label": "Lua_5|orbita|Terra_5"
+    },
+    {
+      "key": "0xacc653831db64b28c0f6826e24f4fd32",
+      "label": "Python_5|é_uma|linguagem_5"
+    },
+    {
+      "key": "0x55e16252fed5c688f57d73895e183153",
+      "label": "Rust_5|é_uma|linguagem_5"
+    },
+    {
+      "key": "0x116c9f21658f94979709cc06fdc12846",
+      "label": "AETHER_5|usa|fase_5"
+    },
+    {
+      "key": "0x50d11832e34013c647c01903bc6d61a5",
+      "label": "Ising_5|minimiza|energia_5"
+    },
+    {
+      "key": "0x8ea26616a6f3cda2ced10151189a432e",
+      "label": "Brasil_6|capital|Brasília_6"
+    },
+    {
+      "key": "0x98911edfcfccb8abe532f921dc67d4ef",
+      "label": "São Paulo_6|é_um|estado_6"
+    },
+    {
+      "key": "0xc4248ecfe951b7dbad147940f5e88d34",
+      "label": "Rio de Janeiro_6|é_um|estado_6"
+    },
+    {
+      "key": "0x4cdeec7c650e60c5d335c555dc50c256",
+      "label": "água_6|é|H2O_6"
+    },
+    {
+      "key": "0xb2d137b44c221939b5b1bf3d2163844a",
+      "label": "sol_6|é_uma|estrela_6"
+    },
+    {
+      "key": "0x6ca944e74c435ac6c87547830016ed2f",
+      "label": "Lua_6|orbita|Terra_6"
+    },
+    {
+      "key": "0xba800d7b1a805687379318b0815152f3",
+      "label": "Python_6|é_uma|linguagem_6"
+    },
+    {
+      "key": "0x45e83d1c96428f435beec539c73ac6e0",
+      "label": "Rust_6|é_uma|linguagem_6"
+    },
+    {
+      "key": "0x397a0f1324dd9df177122715374ef029",
+      "label": "AETHER_6|usa|fase_6"
+    },
+    {
+      "key": "0x54e029d2dbcd505c58472a4a8b60e40",
+      "label": "Ising_6|minimiza|energia_6"
+    },
+    {
+      "key": "0xa1d6fcfc26c03c1a6332ae6523db0d36",
+      "label": "Brasil_7|capital|Brasília_7"
+    },
+    {
+      "key": "0x201e3ad414de00c7d0e268087b2a495",
+      "label": "São Paulo_7|é_um|estado_7"
+    },
+    {
+      "key": "0xb605d0af768ddaa79de5fe7d9136d140",
+      "label": "Rio de Janeiro_7|é_um|estado_7"
+    },
+    {
+      "key": "0x5e510513d4e5933b33274e00f0626f50",
+      "label": "água_7|é|H2O_7"
+    },
+    {
+      "key": "0xb6b5401d29356d5629f0aeb6cb2f73d9",
+      "label": "sol_7|é_uma|estrela_7"
+    },
+    {
+      "key": "0x9ae2ab2c5cf1b19741268788ccb51139",
+      "label": "sol_7|é_uma|NÃO_estrela_7"
+    },
+    {
+      "key": "0x2480150ef28d1c42e0f3de98c3de9404",
+      "label": "Lua_7|orbita|Terra_7"
+    },
+    {
+      "key": "0xee1ef36252d5c7273e8f95b1d81799ce",
+      "label": "Python_7|é_uma|linguagem_7"
+    },
+    {
+      "key": "0xb240091d80322ac0c1030bcf71c41501",
+      "label": "Rust_7|é_uma|linguagem_7"
+    },
+    {
+      "key": "0x44f6b933b596404ecc15391547a46922",
+      "label": "AETHER_7|usa|fase_7"
+    },
+    {
+      "key": "0x58f4813163b24ca087f804b8c9f5472e",
+      "label": "Ising_7|minimiza|energia_7"
+    },
+    {
+      "key": "0x872a20f4d3681af40e96226c8d53c4c4",
+      "label": "Brasil_8|capital|Brasília_8"
+    },
+    {
+      "key": "0x342316d17f411abfce607722fb84f6e",
+      "label": "São Paulo_8|é_um|estado_8"
+    },
+    {
+      "key": "0x8ef154b2d5cdb8e68f04cbc1469de83b",
+      "label": "Rio de Janeiro_8|é_um|estado_8"
+    },
+    {
+      "key": "0xce27bcb371899810fafb5ec352d42928",
+      "label": "água_8|é|H2O_8"
+    },
+    {
+      "key": "0xd56d2c7bbd7253f72da3ea9ebd3b74de",
+      "label": "sol_8|é_uma|estrela_8"
+    },
+    {
+      "key": "0x698dc3307852d300e503706c5f9c923d",
+      "label": "Lua_8|orbita|Terra_8"
+    },
+    {
+      "key": "0x4188ee54f32258cffb030bd4bea30175",
+      "label": "Python_8|é_uma|linguagem_8"
+    },
+    {
+      "key": "0xe22df76767ba46b31c0c4d27d75477b0",
+      "label": "Rust_8|é_uma|linguagem_8"
+    },
+    {
+      "key": "0x26af906bc6f4a138b108b8db70fe8407",
+      "label": "AETHER_8|usa|fase_8"
+    },
+    {
+      "key": "0x8de032ed5956184d25f9ff3e74d9590e",
+      "label": "Ising_8|minimiza|energia_8"
+    },
+    {
+      "key": "0x3f97ea0489524944599ba3055b177e1d",
+      "label": "Brasil_9|capital|Brasília_9"
+    },
+    {
+      "key": "0xc5ac8a88d2224eb401591a998145298d",
+      "label": "São Paulo_9|é_um|estado_9"
+    },
+    {
+      "key": "0x3d0599f0226a02196065045822b5dd83",
+      "label": "Rio de Janeiro_9|é_um|estado_9"
+    },
+    {
+      "key": "0xe116a5d00cf425b57f2ad7cb1174c1c3",
+      "label": "água_9|é|H2O_9"
+    },
+    {
+      "key": "0x9a8e514837c40a5a52e12822e808a274",
+      "label": "sol_9|é_uma|estrela_9"
+    },
+    {
+      "key": "0xe88afaf19e5929b0e397762d1d958f33",
+      "label": "Lua_9|orbita|Terra_9"
+    },
+    {
+      "key": "0x50ae7dfe6f45d98fe4e82b36b2447135",
+      "label": "Python_9|é_uma|linguagem_9"
+    },
+    {
+      "key": "0x829b70ff200962d950d55a3f75ecf8e3",
+      "label": "Rust_9|é_uma|linguagem_9"
+    },
+    {
+      "key": "0x97a5d21e4e797fa1affe53f8e7114a12",
+      "label": "AETHER_9|usa|fase_9"
+    },
+    {
+      "key": "0xa1a05f9d51eddcd81defc8956869097a",
+      "label": "Ising_9|minimiza|energia_9"
+    },
+    {
+      "key": "0xf29c477eec1588068ac306a06a731525",
+      "label": "Brasil_10|capital|Brasília_10"
+    },
+    {
+      "key": "0xff759fe1935cb10dc9e2c419e5062bd1",
+      "label": "São Paulo_10|é_um|estado_10"
+    },
+    {
+      "key": "0x3218804a33cb73be94f7415f891ef9c6",
+      "label": "Rio de Janeiro_10|é_um|estado_10"
+    },
+    {
+      "key": "0x942ff02247bbb14644468b2173e53b39",
+      "label": "água_10|é|H2O_10"
+    },
+    {
+      "key": "0xc105ef49d67725f007a52f7fd47aee25",
+      "label": "sol_10|é_uma|estrela_10"
+    },
+    {
+      "key": "0xd09ae7b16bbb0c0515e13521997dfaa1",
+      "label": "Lua_10|orbita|Terra_10"
+    },
+    {
+      "key": "0xb13a8b45034ac364fa35c3568fa9e7e3",
+      "label": "Python_10|é_uma|linguagem_10"
+    },
+    {
+      "key": "0xf23f96a55b92c77e0b8dbd65785dee3e",
+      "label": "Rust_10|é_uma|linguagem_10"
+    },
+    {
+      "key": "0xeef778235659d2f5d0e500ef4d3fe43c",
+      "label": "AETHER_10|usa|fase_10"
+    },
+    {
+      "key": "0x24e4fddcf70e28a6765b06cab15e8323",
+      "label": "Ising_10|minimiza|energia_10"
+    },
+    {
+      "key": "0x3618e8e56cb30ba7c0c5431e0aee8fe5",
+      "label": "Brasil_11|capital|Brasília_11"
+    },
+    {
+      "key": "0x392d12ea29fc954eaf378f1b252759ab",
+      "label": "São Paulo_11|é_um|estado_11"
+    },
+    {
+      "key": "0x1312f73fd71fb85376aca1d1a86da144",
+      "label": "São Paulo_11|é_um|NÃO_estado_11"
+    },
+    {
+      "key": "0x590168c383ac6d18832d2765e54eaea2",
+      "label": "Rio de Janeiro_11|é_um|estado_11"
+    },
+    {
+      "key": "0x22190ef2233280385f16f072517528db",
+      "label": "água_11|é|H2O_11"
+    },
+    {
+      "key": "0xc7ef78bb7ed75ea3ed319e114463dea4",
+      "label": "sol_11|é_uma|estrela_11"
+    },
+    {
+      "key": "0xe2f78e767204921bd75994253d7b7d71",
+      "label": "Lua_11|orbita|Terra_11"
+    },
+    {
+      "key": "0xa82e50f557e44e4d8bec316ef5edccec",
+      "label": "Python_11|é_uma|linguagem_11"
+    },
+    {
+      "key": "0x8eb597e491fadf97437c5d6a8996fc3d",
+      "label": "Rust_11|é_uma|linguagem_11"
+    },
+    {
+      "key": "0x7e49727ba7530eca521cdb2f3b35b311",
+      "label": "AETHER_11|usa|fase_11"
+    },
+    {
+      "key": "0xca5afa38196f54e8130586922edce081",
+      "label": "Ising_11|minimiza|energia_11"
+    },
+    {
+      "key": "0xe67566faa1c5e5430e46ea514c690f58",
+      "label": "Brasil_12|capital|Brasília_12"
+    },
+    {
+      "key": "0xe7c568ec496b148f75ae7e6946541c6b",
+      "label": "São Paulo_12|é_um|estado_12"
+    },
+    {
+      "key": "0xf4ad71d914cec9f230f42da1833bdff1",
+      "label": "Rio de Janeiro_12|é_um|estado_12"
+    },
+    {
+      "key": "0x51cd83986bece01a709d95e4d8c206",
+      "label": "água_12|é|H2O_12"
+    },
+    {
+      "key": "0x58be072120cd06ce82295e8b0ca68a18",
+      "label": "sol_12|é_uma|estrela_12"
+    },
+    {
+      "key": "0xb2f61ca017e5f7de22c6f4e1a006d432",
+      "label": "Lua_12|orbita|Terra_12"
+    },
+    {
+      "key": "0x5792f9246ff0711d8284a5fc85dedf33",
+      "label": "Python_12|é_uma|linguagem_12"
+    },
+    {
+      "key": "0x1a4355233859a2df0a24f651fa8fcc15",
+      "label": "Rust_12|é_uma|linguagem_12"
+    },
+    {
+      "key": "0x3215a622edff5e4163f868440f98869f",
+      "label": "AETHER_12|usa|fase_12"
+    },
+    {
+      "key": "0x3601e1d31856dc0b8acaf7b460ae011d",
+      "label": "Ising_12|minimiza|energia_12"
+    },
+    {
+      "key": "0x4b05ab8ba7bb34535c259246d6bce970",
+      "label": "Brasil_13|capital|Brasília_13"
+    },
+    {
+      "key": "0x12b6510882a4137864012aa3475b7246",
+      "label": "São Paulo_13|é_um|estado_13"
+    },
+    {
+      "key": "0x75eb132dfd10a563b1c72e250f154458",
+      "label": "Rio de Janeiro_13|é_um|estado_13"
+    },
+    {
+      "key": "0xba89516f5f75126709dd8a6501bdba08",
+      "label": "água_13|é|H2O_13"
+    },
+    {
+      "key": "0xe4590dedc802922b4bf63f3857412e22",
+      "label": "sol_13|é_uma|estrela_13"
+    },
+    {
+      "key": "0xf4987244186f2d32b17784406ae5dbb8",
+      "label": "Lua_13|orbita|Terra_13"
+    },
+    {
+      "key": "0xee1c4601ff31ee752fbe0319d4310ccd",
+      "label": "Python_13|é_uma|linguagem_13"
+    },
+    {
+      "key": "0x2f75fc69048088faef38f5854b86ce5e",
+      "label": "Rust_13|é_uma|linguagem_13"
+    },
+    {
+      "key": "0xada780a70cbf9cbdc72959c7f1705883",
+      "label": "AETHER_13|usa|fase_13"
+    },
+    {
+      "key": "0xd5bea2e447d46b3a89b861117dc753a2",
+      "label": "Ising_13|minimiza|energia_13"
+    },
+    {
+      "key": "0x5395e13d2d26c7fdf88c3d5f0b022b64",
+      "label": "Brasil_14|capital|Brasília_14"
+    },
+    {
+      "key": "0xe834a00be20a21c9785f34f590ca0574",
+      "label": "São Paulo_14|é_um|estado_14"
+    },
+    {
+      "key": "0x6f3bf09f3ff27e80406c366b7d1ecc46",
+      "label": "Rio de Janeiro_14|é_um|estado_14"
+    },
+    {
+      "key": "0xb815a895a10dd54bcc99e5f870b390b2",
+      "label": "água_14|é|H2O_14"
+    },
+    {
+      "key": "0x21305aa3cb955486d804ead7f6e47894",
+      "label": "sol_14|é_uma|estrela_14"
+    },
+    {
+      "key": "0x9662373108a7a8b4946a22db7a0a1283",
+      "label": "Lua_14|orbita|Terra_14"
+    },
+    {
+      "key": "0x3ae9121eeb2e853ade466f261a9162cc",
+      "label": "Python_14|é_uma|linguagem_14"
+    },
+    {
+      "key": "0x9cb4809bd8659fcb3171ad8f2a0e91b7",
+      "label": "Rust_14|é_uma|linguagem_14"
+    },
+    {
+      "key": "0x97269bde2b40cdc08326f52e3fa6b69b",
+      "label": "AETHER_14|usa|fase_14"
+    },
+    {
+      "key": "0x586fb582ce2bd38279a39f576624d0a6",
+      "label": "AETHER_14|usa|NÃO_fase_14"
+    },
+    {
+      "key": "0xf19cba1095eae844f033b1c48225e945",
+      "label": "Ising_14|minimiza|energia_14"
+    },
+    {
+      "key": "0x8d79e2eda33387e959d69854b15028d2",
+      "label": "Brasil_15|capital|Brasília_15"
+    },
+    {
+      "key": "0xd90a720dc4478faa469d421914823e59",
+      "label": "São Paulo_15|é_um|estado_15"
+    },
+    {
+      "key": "0x82be9e02e053c7e5a86c8633d810b23b",
+      "label": "Rio de Janeiro_15|é_um|estado_15"
+    },
+    {
+      "key": "0xad767c68de329a59195f3e18c4ffec3b",
+      "label": "água_15|é|H2O_15"
+    },
+    {
+      "key": "0xdecb059ff2cd27954b2ab5f53c85a6a",
+      "label": "sol_15|é_uma|estrela_15"
+    },
+    {
+      "key": "0x8e95fb6fd4f164d4d84829e29bc778de",
+      "label": "Lua_15|orbita|Terra_15"
+    },
+    {
+      "key": "0x4904a41d4618b1f5faf90c7df4718b54",
+      "label": "Python_15|é_uma|linguagem_15"
+    },
+    {
+      "key": "0x23e361fe5e2aa7c6a15e638ee4b78e7d",
+      "label": "Rust_15|é_uma|linguagem_15"
+    },
+    {
+      "key": "0x37ac23c0de4920b7c9c066b2b4312a50",
+      "label": "AETHER_15|usa|fase_15"
+    },
+    {
+      "key": "0xb0dc39632e0dfddedf71367c55ce19b2",
+      "label": "Ising_15|minimiza|energia_15"
+    },
+    {
+      "key": "0xa93efa6609589a321a182d7d0d94c924",
+      "label": "Brasil_16|capital|Brasília_16"
+    },
+    {
+      "key": "0x9e9a5fabe4b51022b71e76ea76993aeb",
+      "label": "São Paulo_16|é_um|estado_16"
+    },
+    {
+      "key": "0x870d43907093878dc6201afdff540b80",
+      "label": "Rio de Janeiro_16|é_um|estado_16"
+    },
+    {
+      "key": "0x4dd1ebf464dc13c77327dff1533a51fe",
+      "label": "água_16|é|H2O_16"
+    },
+    {
+      "key": "0xfca2ce4e15578b52ea1d8d83b82aeedd",
+      "label": "sol_16|é_uma|estrela_16"
+    },
+    {
+      "key": "0xe505e743aad3ffb48f937366263edbff",
+      "label": "Lua_16|orbita|Terra_16"
+    },
+    {
+      "key": "0x501937d74533237d681eeabc6dd36519",
+      "label": "Python_16|é_uma|linguagem_16"
+    },
+    {
+      "key": "0x15136bff43e10712a9b2954ec18029ba",
+      "label": "Rust_16|é_uma|linguagem_16"
+    },
+    {
+      "key": "0x29fc58aca512a825d97ad59ffadac2a5",
+      "label": "AETHER_16|usa|fase_16"
+    },
+    {
+      "key": "0x76aa742cb863f24cbcaaf9fdc8ce53ce",
+      "label": "Ising_16|minimiza|energia_16"
+    },
+    {
+      "key": "0x1c6ce3a6b679538f2eb6dc671b9413e6",
+      "label": "Brasil_17|capital|Brasília_17"
+    },
+    {
+      "key": "0xe0fc9170a3bb0fbeabacbcadbe1b15ae",
+      "label": "São Paulo_17|é_um|estado_17"
+    },
+    {
+      "key": "0x7b87113d434bae1293856267a0c5228e",
+      "label": "Rio de Janeiro_17|é_um|estado_17"
+    },
+    {
+      "key": "0x2dcb49bc33e95ece88056f82219655d0",
+      "label": "água_17|é|H2O_17"
+    },
+    {
+      "key": "0x52ab53d2afba6e8e871edc37e53cfdcc",
+      "label": "sol_17|é_uma|estrela_17"
+    },
+    {
+      "key": "0x8c2bf494c1ec1c2c604169b1acf73989",
+      "label": "Lua_17|orbita|Terra_17"
+    },
+    {
+      "key": "0x549a7c8943b79c6c8a364e50c3c534cf",
+      "label": "Python_17|é_uma|linguagem_17"
+    },
+    {
+      "key": "0xbddb71bacc4508a6e08a80cb72976e8a",
+      "label": "Rust_17|é_uma|linguagem_17"
+    },
+    {
+      "key": "0x7fcd5de4b663eb4428a16de38f1738de",
+      "label": "AETHER_17|usa|fase_17"
+    },
+    {
+      "key": "0xa86bf32574d855a33efb55079a5f8e2e",
+      "label": "Ising_17|minimiza|energia_17"
+    },
+    {
+      "key": "0xf037814748d85c5fea806604a2bb870b",
+      "label": "Brasil_18|capital|Brasília_18"
+    },
+    {
+      "key": "0x13ec2c9f4f136337cd80ecbd7fa013b6",
+      "label": "São Paulo_18|é_um|estado_18"
+    },
+    {
+      "key": "0x41957f96230afbfd6eafd567da2b3165",
+      "label": "Rio de Janeiro_18|é_um|estado_18"
+    },
+    {
+      "key": "0xb1e6dd4e07c47994012c42afd77303af",
+      "label": "água_18|é|H2O_18"
+    },
+    {
+      "key": "0xb900fe84580d072e6c16dc126ccaada7",
+      "label": "sol_18|é_uma|estrela_18"
+    },
+    {
+      "key": "0x14794424bb8f91925944f1f2b7b6ec26",
+      "label": "Lua_18|orbita|Terra_18"
+    },
+    {
+      "key": "0x8354795ae0bcd7a4184cba4eb6585ed0",
+      "label": "Lua_18|orbita|NÃO_Terra_18"
+    },
+    {
+      "key": "0x79173769b3bc442f4d5d1318bcd63006",
+      "label": "Python_18|é_uma|linguagem_18"
+    },
+    {
+      "key": "0x5dad0592e8430cdd98f9ea3f77f5296c",
+      "label": "Rust_18|é_uma|linguagem_18"
+    },
+    {
+      "key": "0xf980ec4b9795dadd57ca2e30fd379fb2",
+      "label": "AETHER_18|usa|fase_18"
+    },
+    {
+      "key": "0x4e6357b161b2e58b3ceb37d8a47326f",
+      "label": "Ising_18|minimiza|energia_18"
+    },
+    {
+      "key": "0x13fbc586ee9bc8ad25a69850e22cec70",
+      "label": "Brasil_19|capital|Brasília_19"
+    },
+    {
+      "key": "0x6fd45ac8a5b594215853a06ea71c6856",
+      "label": "São Paulo_19|é_um|estado_19"
+    },
+    {
+      "key": "0x9a7ce2d4fe92d82cef425973d54b6b07",
+      "label": "Rio de Janeiro_19|é_um|estado_19"
+    },
+    {
+      "key": "0x72b63abefd8c76b188e7406895d6bdb7",
+      "label": "água_19|é|H2O_19"
+    },
+    {
+      "key": "0xceab25da34aba2cf76ac340dfa5f720f",
+      "label": "sol_19|é_uma|estrela_19"
+    },
+    {
+      "key": "0x644125c4ad3c3f937c679cf23aebed67",
+      "label": "Lua_19|orbita|Terra_19"
+    },
+    {
+      "key": "0x4ceebebe10835516e8474da004ec732b",
+      "label": "Python_19|é_uma|linguagem_19"
+    },
+    {
+      "key": "0x7ace91372bf330186f4efd6f2fef8d51",
+      "label": "Rust_19|é_uma|linguagem_19"
+    },
+    {
+      "key": "0x7fdbd58245ed8a73ddbf98e581377934",
+      "label": "AETHER_19|usa|fase_19"
+    },
+    {
+      "key": "0x48b7927ee23aa3071c4d99a00f68d2d7",
+      "label": "Ising_19|minimiza|energia_19"
+    },
+    {
+      "key": "0xd77395f0716cf432864974a3259f310e",
+      "label": "gato|é_um|felino"
+    },
+    {
+      "key": "0x434f8bcd493f7c8bd3fc294a8cb87a6e",
+      "label": "gata|é_um|felino"
+    },
+    {
+      "key": "0x527de13c3ab5a4d86d63c1fa9b26a3f9",
+      "label": "felino doméstico|é_um|gato"
+    },
+    {
+      "key": "0xdfc77eac94d682c833bcc4c39db3c064",
+      "label": "gat|é_um|prefixo"
+    }
+  ],
+  "facts": [
+    {
+      "subject": "Brasil",
+      "relation": "capital",
+      "object": "Brasília",
+      "confidence": 0.85,
+      "citation": "synth://doc/0",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000000
+    },
+    {
+      "subject": "São Paulo",
+      "relation": "é_um",
+      "object": "estado",
+      "confidence": 0.85,
+      "citation": "synth://doc/1",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000001
+    },
+    {
+      "subject": "Rio de Janeiro",
+      "relation": "é_um",
+      "object": "estado",
+      "confidence": 0.85,
+      "citation": "synth://doc/2",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000002
+    },
+    {
+      "subject": "água",
+      "relation": "é",
+      "object": "H2O",
+      "confidence": 0.85,
+      "citation": "synth://doc/3",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000003
+    },
+    {
+      "subject": "sol",
+      "relation": "é_uma",
+      "object": "estrela",
+      "confidence": 0.85,
+      "citation": "synth://doc/4",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000004
+    },
+    {
+      "subject": "Lua",
+      "relation": "orbita",
+      "object": "Terra",
+      "confidence": 0.85,
+      "citation": "synth://doc/5",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000005
+    },
+    {
+      "subject": "Python",
+      "relation": "é_uma",
+      "object": "linguagem",
+      "confidence": 0.85,
+      "citation": "synth://doc/6",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000006
+    },
+    {
+      "subject": "Rust",
+      "relation": "é_uma",
+      "object": "linguagem",
+      "confidence": 0.85,
+      "citation": "synth://doc/7",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000007
+    },
+    {
+      "subject": "AETHER",
+      "relation": "usa",
+      "object": "fase",
+      "confidence": 0.85,
+      "citation": "synth://doc/8",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000008
+    },
+    {
+      "subject": "Ising",
+      "relation": "minimiza",
+      "object": "energia",
+      "confidence": 0.85,
+      "citation": "synth://doc/9",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000009
+    },
+    {
+      "subject": "Brasil_1",
+      "relation": "capital",
+      "object": "Brasília_1",
+      "confidence": 0.85,
+      "citation": "synth://doc/10",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000010
+    },
+    {
+      "subject": "São Paulo_1",
+      "relation": "é_um",
+      "object": "estado_1",
+      "confidence": 0.85,
+      "citation": "synth://doc/11",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000011
+    },
+    {
+      "subject": "Rio de Janeiro_1",
+      "relation": "é_um",
+      "object": "estado_1",
+      "confidence": 0.85,
+      "citation": "synth://doc/12",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000012
+    },
+    {
+      "subject": "água_1",
+      "relation": "é",
+      "object": "H2O_1",
+      "confidence": 0.85,
+      "citation": "synth://doc/13",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000013
+    },
+    {
+      "subject": "sol_1",
+      "relation": "é_uma",
+      "object": "estrela_1",
+      "confidence": 0.85,
+      "citation": "synth://doc/14",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000014
+    },
+    {
+      "subject": "Lua_1",
+      "relation": "orbita",
+      "object": "Terra_1",
+      "confidence": 0.85,
+      "citation": "synth://doc/15",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000015
+    },
+    {
+      "subject": "Python_1",
+      "relation": "é_uma",
+      "object": "linguagem_1",
+      "confidence": 0.85,
+      "citation": "synth://doc/16",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000016
+    },
+    {
+      "subject": "Rust_1",
+      "relation": "é_uma",
+      "object": "linguagem_1",
+      "confidence": 0.85,
+      "citation": "synth://doc/17",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000017
+    },
+    {
+      "subject": "AETHER_1",
+      "relation": "usa",
+      "object": "fase_1",
+      "confidence": 0.85,
+      "citation": "synth://doc/18",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000018
+    },
+    {
+      "subject": "Ising_1",
+      "relation": "minimiza",
+      "object": "energia_1",
+      "confidence": 0.85,
+      "citation": "synth://doc/19",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000019
+    },
+    {
+      "subject": "Brasil_2",
+      "relation": "capital",
+      "object": "Brasília_2",
+      "confidence": 0.85,
+      "citation": "synth://doc/20",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000020
+    },
+    {
+      "subject": "São Paulo_2",
+      "relation": "é_um",
+      "object": "estado_2",
+      "confidence": 0.85,
+      "citation": "synth://doc/21",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000021
+    },
+    {
+      "subject": "Rio de Janeiro_2",
+      "relation": "é_um",
+      "object": "estado_2",
+      "confidence": 0.85,
+      "citation": "synth://doc/22",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000022
+    },
+    {
+      "subject": "água_2",
+      "relation": "é",
+      "object": "H2O_2",
+      "confidence": 0.85,
+      "citation": "synth://doc/23",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000023
+    },
+    {
+      "subject": "sol_2",
+      "relation": "é_uma",
+      "object": "estrela_2",
+      "confidence": 0.85,
+      "citation": "synth://doc/24",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000024
+    },
+    {
+      "subject": "Lua_2",
+      "relation": "orbita",
+      "object": "Terra_2",
+      "confidence": 0.85,
+      "citation": "synth://doc/25",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000025
+    },
+    {
+      "subject": "Python_2",
+      "relation": "é_uma",
+      "object": "linguagem_2",
+      "confidence": 0.85,
+      "citation": "synth://doc/26",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000026
+    },
+    {
+      "subject": "Rust_2",
+      "relation": "é_uma",
+      "object": "linguagem_2",
+      "confidence": 0.85,
+      "citation": "synth://doc/27",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000027
+    },
+    {
+      "subject": "AETHER_2",
+      "relation": "usa",
+      "object": "fase_2",
+      "confidence": 0.85,
+      "citation": "synth://doc/28",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000028
+    },
+    {
+      "subject": "Ising_2",
+      "relation": "minimiza",
+      "object": "energia_2",
+      "confidence": 0.85,
+      "citation": "synth://doc/29",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000029
+    },
+    {
+      "subject": "Brasil_3",
+      "relation": "capital",
+      "object": "Brasília_3",
+      "confidence": 0.85,
+      "citation": "synth://doc/30",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000030
+    },
+    {
+      "subject": "São Paulo_3",
+      "relation": "é_um",
+      "object": "estado_3",
+      "confidence": 0.85,
+      "citation": "synth://doc/31",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000031
+    },
+    {
+      "subject": "Rio de Janeiro_3",
+      "relation": "é_um",
+      "object": "estado_3",
+      "confidence": 0.85,
+      "citation": "synth://doc/32",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000032
+    },
+    {
+      "subject": "água_3",
+      "relation": "é",
+      "object": "H2O_3",
+      "confidence": 0.85,
+      "citation": "synth://doc/33",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000033
+    },
+    {
+      "subject": "sol_3",
+      "relation": "é_uma",
+      "object": "estrela_3",
+      "confidence": 0.85,
+      "citation": "synth://doc/34",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000034
+    },
+    {
+      "subject": "Lua_3",
+      "relation": "orbita",
+      "object": "Terra_3",
+      "confidence": 0.85,
+      "citation": "synth://doc/35",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000035
+    },
+    {
+      "subject": "Python_3",
+      "relation": "é_uma",
+      "object": "linguagem_3",
+      "confidence": 0.85,
+      "citation": "synth://doc/36",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000036
+    },
+    {
+      "subject": "Rust_3",
+      "relation": "é_uma",
+      "object": "linguagem_3",
+      "confidence": 0.85,
+      "citation": "synth://doc/37",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000037
+    },
+    {
+      "subject": "Rust_3",
+      "relation": "é_uma",
+      "object": "NÃO_linguagem_3",
+      "confidence": 0.5,
+      "citation": "synth://doc/37/conflict",
+      "authority": 80,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": true,
+      "wall_ms": 1700000000038
+    },
+    {
+      "subject": "AETHER_3",
+      "relation": "usa",
+      "object": "fase_3",
+      "confidence": 0.85,
+      "citation": "synth://doc/38",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000038
+    },
+    {
+      "subject": "Ising_3",
+      "relation": "minimiza",
+      "object": "energia_3",
+      "confidence": 0.85,
+      "citation": "synth://doc/39",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000039
+    },
+    {
+      "subject": "Brasil_4",
+      "relation": "capital",
+      "object": "Brasília_4",
+      "confidence": 0.85,
+      "citation": "synth://doc/40",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000040
+    },
+    {
+      "subject": "São Paulo_4",
+      "relation": "é_um",
+      "object": "estado_4",
+      "confidence": 0.85,
+      "citation": "synth://doc/41",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000041
+    },
+    {
+      "subject": "Rio de Janeiro_4",
+      "relation": "é_um",
+      "object": "estado_4",
+      "confidence": 0.85,
+      "citation": "synth://doc/42",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000042
+    },
+    {
+      "subject": "água_4",
+      "relation": "é",
+      "object": "H2O_4",
+      "confidence": 0.85,
+      "citation": "synth://doc/43",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000043
+    },
+    {
+      "subject": "sol_4",
+      "relation": "é_uma",
+      "object": "estrela_4",
+      "confidence": 0.85,
+      "citation": "synth://doc/44",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000044
+    },
+    {
+      "subject": "Lua_4",
+      "relation": "orbita",
+      "object": "Terra_4",
+      "confidence": 0.85,
+      "citation": "synth://doc/45",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000045
+    },
+    {
+      "subject": "Python_4",
+      "relation": "é_uma",
+      "object": "linguagem_4",
+      "confidence": 0.85,
+      "citation": "synth://doc/46",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000046
+    },
+    {
+      "subject": "Rust_4",
+      "relation": "é_uma",
+      "object": "linguagem_4",
+      "confidence": 0.85,
+      "citation": "synth://doc/47",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000047
+    },
+    {
+      "subject": "AETHER_4",
+      "relation": "usa",
+      "object": "fase_4",
+      "confidence": 0.85,
+      "citation": "synth://doc/48",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000048
+    },
+    {
+      "subject": "Ising_4",
+      "relation": "minimiza",
+      "object": "energia_4",
+      "confidence": 0.85,
+      "citation": "synth://doc/49",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000049
+    },
+    {
+      "subject": "Brasil_5",
+      "relation": "capital",
+      "object": "Brasília_5",
+      "confidence": 0.85,
+      "citation": "synth://doc/50",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000050
+    },
+    {
+      "subject": "São Paulo_5",
+      "relation": "é_um",
+      "object": "estado_5",
+      "confidence": 0.85,
+      "citation": "synth://doc/51",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000051
+    },
+    {
+      "subject": "Rio de Janeiro_5",
+      "relation": "é_um",
+      "object": "estado_5",
+      "confidence": 0.85,
+      "citation": "synth://doc/52",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000052
+    },
+    {
+      "subject": "água_5",
+      "relation": "é",
+      "object": "H2O_5",
+      "confidence": 0.85,
+      "citation": "synth://doc/53",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000053
+    },
+    {
+      "subject": "sol_5",
+      "relation": "é_uma",
+      "object": "estrela_5",
+      "confidence": 0.85,
+      "citation": "synth://doc/54",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000054
+    },
+    {
+      "subject": "Lua_5",
+      "relation": "orbita",
+      "object": "Terra_5",
+      "confidence": 0.85,
+      "citation": "synth://doc/55",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000055
+    },
+    {
+      "subject": "Python_5",
+      "relation": "é_uma",
+      "object": "linguagem_5",
+      "confidence": 0.85,
+      "citation": "synth://doc/56",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000056
+    },
+    {
+      "subject": "Rust_5",
+      "relation": "é_uma",
+      "object": "linguagem_5",
+      "confidence": 0.85,
+      "citation": "synth://doc/57",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000057
+    },
+    {
+      "subject": "AETHER_5",
+      "relation": "usa",
+      "object": "fase_5",
+      "confidence": 0.85,
+      "citation": "synth://doc/58",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000058
+    },
+    {
+      "subject": "Ising_5",
+      "relation": "minimiza",
+      "object": "energia_5",
+      "confidence": 0.85,
+      "citation": "synth://doc/59",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000059
+    },
+    {
+      "subject": "Brasil_6",
+      "relation": "capital",
+      "object": "Brasília_6",
+      "confidence": 0.85,
+      "citation": "synth://doc/60",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000060
+    },
+    {
+      "subject": "São Paulo_6",
+      "relation": "é_um",
+      "object": "estado_6",
+      "confidence": 0.85,
+      "citation": "synth://doc/61",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000061
+    },
+    {
+      "subject": "Rio de Janeiro_6",
+      "relation": "é_um",
+      "object": "estado_6",
+      "confidence": 0.85,
+      "citation": "synth://doc/62",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000062
+    },
+    {
+      "subject": "água_6",
+      "relation": "é",
+      "object": "H2O_6",
+      "confidence": 0.85,
+      "citation": "synth://doc/63",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000063
+    },
+    {
+      "subject": "sol_6",
+      "relation": "é_uma",
+      "object": "estrela_6",
+      "confidence": 0.85,
+      "citation": "synth://doc/64",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000064
+    },
+    {
+      "subject": "Lua_6",
+      "relation": "orbita",
+      "object": "Terra_6",
+      "confidence": 0.85,
+      "citation": "synth://doc/65",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000065
+    },
+    {
+      "subject": "Python_6",
+      "relation": "é_uma",
+      "object": "linguagem_6",
+      "confidence": 0.85,
+      "citation": "synth://doc/66",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000066
+    },
+    {
+      "subject": "Rust_6",
+      "relation": "é_uma",
+      "object": "linguagem_6",
+      "confidence": 0.85,
+      "citation": "synth://doc/67",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000067
+    },
+    {
+      "subject": "AETHER_6",
+      "relation": "usa",
+      "object": "fase_6",
+      "confidence": 0.85,
+      "citation": "synth://doc/68",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000068
+    },
+    {
+      "subject": "Ising_6",
+      "relation": "minimiza",
+      "object": "energia_6",
+      "confidence": 0.85,
+      "citation": "synth://doc/69",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000069
+    },
+    {
+      "subject": "Brasil_7",
+      "relation": "capital",
+      "object": "Brasília_7",
+      "confidence": 0.85,
+      "citation": "synth://doc/70",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000070
+    },
+    {
+      "subject": "São Paulo_7",
+      "relation": "é_um",
+      "object": "estado_7",
+      "confidence": 0.85,
+      "citation": "synth://doc/71",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000071
+    },
+    {
+      "subject": "Rio de Janeiro_7",
+      "relation": "é_um",
+      "object": "estado_7",
+      "confidence": 0.85,
+      "citation": "synth://doc/72",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000072
+    },
+    {
+      "subject": "água_7",
+      "relation": "é",
+      "object": "H2O_7",
+      "confidence": 0.85,
+      "citation": "synth://doc/73",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000073
+    },
+    {
+      "subject": "sol_7",
+      "relation": "é_uma",
+      "object": "estrela_7",
+      "confidence": 0.85,
+      "citation": "synth://doc/74",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000074
+    },
+    {
+      "subject": "sol_7",
+      "relation": "é_uma",
+      "object": "NÃO_estrela_7",
+      "confidence": 0.5,
+      "citation": "synth://doc/74/conflict",
+      "authority": 80,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": true,
+      "wall_ms": 1700000000075
+    },
+    {
+      "subject": "Lua_7",
+      "relation": "orbita",
+      "object": "Terra_7",
+      "confidence": 0.85,
+      "citation": "synth://doc/75",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000075
+    },
+    {
+      "subject": "Python_7",
+      "relation": "é_uma",
+      "object": "linguagem_7",
+      "confidence": 0.85,
+      "citation": "synth://doc/76",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000076
+    },
+    {
+      "subject": "Rust_7",
+      "relation": "é_uma",
+      "object": "linguagem_7",
+      "confidence": 0.85,
+      "citation": "synth://doc/77",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000077
+    },
+    {
+      "subject": "AETHER_7",
+      "relation": "usa",
+      "object": "fase_7",
+      "confidence": 0.85,
+      "citation": "synth://doc/78",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000078
+    },
+    {
+      "subject": "Ising_7",
+      "relation": "minimiza",
+      "object": "energia_7",
+      "confidence": 0.85,
+      "citation": "synth://doc/79",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000079
+    },
+    {
+      "subject": "Brasil_8",
+      "relation": "capital",
+      "object": "Brasília_8",
+      "confidence": 0.85,
+      "citation": "synth://doc/80",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000080
+    },
+    {
+      "subject": "São Paulo_8",
+      "relation": "é_um",
+      "object": "estado_8",
+      "confidence": 0.85,
+      "citation": "synth://doc/81",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000081
+    },
+    {
+      "subject": "Rio de Janeiro_8",
+      "relation": "é_um",
+      "object": "estado_8",
+      "confidence": 0.85,
+      "citation": "synth://doc/82",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000082
+    },
+    {
+      "subject": "água_8",
+      "relation": "é",
+      "object": "H2O_8",
+      "confidence": 0.85,
+      "citation": "synth://doc/83",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000083
+    },
+    {
+      "subject": "sol_8",
+      "relation": "é_uma",
+      "object": "estrela_8",
+      "confidence": 0.85,
+      "citation": "synth://doc/84",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000084
+    },
+    {
+      "subject": "Lua_8",
+      "relation": "orbita",
+      "object": "Terra_8",
+      "confidence": 0.85,
+      "citation": "synth://doc/85",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000085
+    },
+    {
+      "subject": "Python_8",
+      "relation": "é_uma",
+      "object": "linguagem_8",
+      "confidence": 0.85,
+      "citation": "synth://doc/86",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000086
+    },
+    {
+      "subject": "Rust_8",
+      "relation": "é_uma",
+      "object": "linguagem_8",
+      "confidence": 0.85,
+      "citation": "synth://doc/87",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000087
+    },
+    {
+      "subject": "AETHER_8",
+      "relation": "usa",
+      "object": "fase_8",
+      "confidence": 0.85,
+      "citation": "synth://doc/88",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000088
+    },
+    {
+      "subject": "Ising_8",
+      "relation": "minimiza",
+      "object": "energia_8",
+      "confidence": 0.85,
+      "citation": "synth://doc/89",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000089
+    },
+    {
+      "subject": "Brasil_9",
+      "relation": "capital",
+      "object": "Brasília_9",
+      "confidence": 0.85,
+      "citation": "synth://doc/90",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000090
+    },
+    {
+      "subject": "São Paulo_9",
+      "relation": "é_um",
+      "object": "estado_9",
+      "confidence": 0.85,
+      "citation": "synth://doc/91",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000091
+    },
+    {
+      "subject": "Rio de Janeiro_9",
+      "relation": "é_um",
+      "object": "estado_9",
+      "confidence": 0.85,
+      "citation": "synth://doc/92",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000092
+    },
+    {
+      "subject": "água_9",
+      "relation": "é",
+      "object": "H2O_9",
+      "confidence": 0.85,
+      "citation": "synth://doc/93",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000093
+    },
+    {
+      "subject": "sol_9",
+      "relation": "é_uma",
+      "object": "estrela_9",
+      "confidence": 0.85,
+      "citation": "synth://doc/94",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000094
+    },
+    {
+      "subject": "Lua_9",
+      "relation": "orbita",
+      "object": "Terra_9",
+      "confidence": 0.85,
+      "citation": "synth://doc/95",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000095
+    },
+    {
+      "subject": "Python_9",
+      "relation": "é_uma",
+      "object": "linguagem_9",
+      "confidence": 0.85,
+      "citation": "synth://doc/96",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000096
+    },
+    {
+      "subject": "Rust_9",
+      "relation": "é_uma",
+      "object": "linguagem_9",
+      "confidence": 0.85,
+      "citation": "synth://doc/97",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000097
+    },
+    {
+      "subject": "AETHER_9",
+      "relation": "usa",
+      "object": "fase_9",
+      "confidence": 0.85,
+      "citation": "synth://doc/98",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000098
+    },
+    {
+      "subject": "Ising_9",
+      "relation": "minimiza",
+      "object": "energia_9",
+      "confidence": 0.85,
+      "citation": "synth://doc/99",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000099
+    },
+    {
+      "subject": "Brasil_10",
+      "relation": "capital",
+      "object": "Brasília_10",
+      "confidence": 0.85,
+      "citation": "synth://doc/100",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000100
+    },
+    {
+      "subject": "São Paulo_10",
+      "relation": "é_um",
+      "object": "estado_10",
+      "confidence": 0.85,
+      "citation": "synth://doc/101",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000101
+    },
+    {
+      "subject": "Rio de Janeiro_10",
+      "relation": "é_um",
+      "object": "estado_10",
+      "confidence": 0.85,
+      "citation": "synth://doc/102",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000102
+    },
+    {
+      "subject": "água_10",
+      "relation": "é",
+      "object": "H2O_10",
+      "confidence": 0.85,
+      "citation": "synth://doc/103",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000103
+    },
+    {
+      "subject": "sol_10",
+      "relation": "é_uma",
+      "object": "estrela_10",
+      "confidence": 0.85,
+      "citation": "synth://doc/104",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000104
+    },
+    {
+      "subject": "Lua_10",
+      "relation": "orbita",
+      "object": "Terra_10",
+      "confidence": 0.85,
+      "citation": "synth://doc/105",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000105
+    },
+    {
+      "subject": "Python_10",
+      "relation": "é_uma",
+      "object": "linguagem_10",
+      "confidence": 0.85,
+      "citation": "synth://doc/106",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000106
+    },
+    {
+      "subject": "Rust_10",
+      "relation": "é_uma",
+      "object": "linguagem_10",
+      "confidence": 0.85,
+      "citation": "synth://doc/107",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000107
+    },
+    {
+      "subject": "AETHER_10",
+      "relation": "usa",
+      "object": "fase_10",
+      "confidence": 0.85,
+      "citation": "synth://doc/108",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000108
+    },
+    {
+      "subject": "Ising_10",
+      "relation": "minimiza",
+      "object": "energia_10",
+      "confidence": 0.85,
+      "citation": "synth://doc/109",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000109
+    },
+    {
+      "subject": "Brasil_11",
+      "relation": "capital",
+      "object": "Brasília_11",
+      "confidence": 0.85,
+      "citation": "synth://doc/110",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000110
+    },
+    {
+      "subject": "São Paulo_11",
+      "relation": "é_um",
+      "object": "estado_11",
+      "confidence": 0.85,
+      "citation": "synth://doc/111",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000111
+    },
+    {
+      "subject": "São Paulo_11",
+      "relation": "é_um",
+      "object": "NÃO_estado_11",
+      "confidence": 0.5,
+      "citation": "synth://doc/111/conflict",
+      "authority": 80,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": true,
+      "wall_ms": 1700000000112
+    },
+    {
+      "subject": "Rio de Janeiro_11",
+      "relation": "é_um",
+      "object": "estado_11",
+      "confidence": 0.85,
+      "citation": "synth://doc/112",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000112
+    },
+    {
+      "subject": "água_11",
+      "relation": "é",
+      "object": "H2O_11",
+      "confidence": 0.85,
+      "citation": "synth://doc/113",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000113
+    },
+    {
+      "subject": "sol_11",
+      "relation": "é_uma",
+      "object": "estrela_11",
+      "confidence": 0.85,
+      "citation": "synth://doc/114",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000114
+    },
+    {
+      "subject": "Lua_11",
+      "relation": "orbita",
+      "object": "Terra_11",
+      "confidence": 0.85,
+      "citation": "synth://doc/115",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000115
+    },
+    {
+      "subject": "Python_11",
+      "relation": "é_uma",
+      "object": "linguagem_11",
+      "confidence": 0.85,
+      "citation": "synth://doc/116",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000116
+    },
+    {
+      "subject": "Rust_11",
+      "relation": "é_uma",
+      "object": "linguagem_11",
+      "confidence": 0.85,
+      "citation": "synth://doc/117",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000117
+    },
+    {
+      "subject": "AETHER_11",
+      "relation": "usa",
+      "object": "fase_11",
+      "confidence": 0.85,
+      "citation": "synth://doc/118",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000118
+    },
+    {
+      "subject": "Ising_11",
+      "relation": "minimiza",
+      "object": "energia_11",
+      "confidence": 0.85,
+      "citation": "synth://doc/119",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000119
+    },
+    {
+      "subject": "Brasil_12",
+      "relation": "capital",
+      "object": "Brasília_12",
+      "confidence": 0.85,
+      "citation": "synth://doc/120",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000120
+    },
+    {
+      "subject": "São Paulo_12",
+      "relation": "é_um",
+      "object": "estado_12",
+      "confidence": 0.85,
+      "citation": "synth://doc/121",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000121
+    },
+    {
+      "subject": "Rio de Janeiro_12",
+      "relation": "é_um",
+      "object": "estado_12",
+      "confidence": 0.85,
+      "citation": "synth://doc/122",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000122
+    },
+    {
+      "subject": "água_12",
+      "relation": "é",
+      "object": "H2O_12",
+      "confidence": 0.85,
+      "citation": "synth://doc/123",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000123
+    },
+    {
+      "subject": "sol_12",
+      "relation": "é_uma",
+      "object": "estrela_12",
+      "confidence": 0.85,
+      "citation": "synth://doc/124",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000124
+    },
+    {
+      "subject": "Lua_12",
+      "relation": "orbita",
+      "object": "Terra_12",
+      "confidence": 0.85,
+      "citation": "synth://doc/125",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000125
+    },
+    {
+      "subject": "Python_12",
+      "relation": "é_uma",
+      "object": "linguagem_12",
+      "confidence": 0.85,
+      "citation": "synth://doc/126",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000126
+    },
+    {
+      "subject": "Rust_12",
+      "relation": "é_uma",
+      "object": "linguagem_12",
+      "confidence": 0.85,
+      "citation": "synth://doc/127",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000127
+    },
+    {
+      "subject": "AETHER_12",
+      "relation": "usa",
+      "object": "fase_12",
+      "confidence": 0.85,
+      "citation": "synth://doc/128",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000128
+    },
+    {
+      "subject": "Ising_12",
+      "relation": "minimiza",
+      "object": "energia_12",
+      "confidence": 0.85,
+      "citation": "synth://doc/129",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000129
+    },
+    {
+      "subject": "Brasil_13",
+      "relation": "capital",
+      "object": "Brasília_13",
+      "confidence": 0.85,
+      "citation": "synth://doc/130",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000130
+    },
+    {
+      "subject": "São Paulo_13",
+      "relation": "é_um",
+      "object": "estado_13",
+      "confidence": 0.85,
+      "citation": "synth://doc/131",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000131
+    },
+    {
+      "subject": "Rio de Janeiro_13",
+      "relation": "é_um",
+      "object": "estado_13",
+      "confidence": 0.85,
+      "citation": "synth://doc/132",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000132
+    },
+    {
+      "subject": "água_13",
+      "relation": "é",
+      "object": "H2O_13",
+      "confidence": 0.85,
+      "citation": "synth://doc/133",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000133
+    },
+    {
+      "subject": "sol_13",
+      "relation": "é_uma",
+      "object": "estrela_13",
+      "confidence": 0.85,
+      "citation": "synth://doc/134",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000134
+    },
+    {
+      "subject": "Lua_13",
+      "relation": "orbita",
+      "object": "Terra_13",
+      "confidence": 0.85,
+      "citation": "synth://doc/135",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000135
+    },
+    {
+      "subject": "Python_13",
+      "relation": "é_uma",
+      "object": "linguagem_13",
+      "confidence": 0.85,
+      "citation": "synth://doc/136",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000136
+    },
+    {
+      "subject": "Rust_13",
+      "relation": "é_uma",
+      "object": "linguagem_13",
+      "confidence": 0.85,
+      "citation": "synth://doc/137",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000137
+    },
+    {
+      "subject": "AETHER_13",
+      "relation": "usa",
+      "object": "fase_13",
+      "confidence": 0.85,
+      "citation": "synth://doc/138",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000138
+    },
+    {
+      "subject": "Ising_13",
+      "relation": "minimiza",
+      "object": "energia_13",
+      "confidence": 0.85,
+      "citation": "synth://doc/139",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000139
+    },
+    {
+      "subject": "Brasil_14",
+      "relation": "capital",
+      "object": "Brasília_14",
+      "confidence": 0.85,
+      "citation": "synth://doc/140",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000140
+    },
+    {
+      "subject": "São Paulo_14",
+      "relation": "é_um",
+      "object": "estado_14",
+      "confidence": 0.85,
+      "citation": "synth://doc/141",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000141
+    },
+    {
+      "subject": "Rio de Janeiro_14",
+      "relation": "é_um",
+      "object": "estado_14",
+      "confidence": 0.85,
+      "citation": "synth://doc/142",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000142
+    },
+    {
+      "subject": "água_14",
+      "relation": "é",
+      "object": "H2O_14",
+      "confidence": 0.85,
+      "citation": "synth://doc/143",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000143
+    },
+    {
+      "subject": "sol_14",
+      "relation": "é_uma",
+      "object": "estrela_14",
+      "confidence": 0.85,
+      "citation": "synth://doc/144",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000144
+    },
+    {
+      "subject": "Lua_14",
+      "relation": "orbita",
+      "object": "Terra_14",
+      "confidence": 0.85,
+      "citation": "synth://doc/145",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000145
+    },
+    {
+      "subject": "Python_14",
+      "relation": "é_uma",
+      "object": "linguagem_14",
+      "confidence": 0.85,
+      "citation": "synth://doc/146",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000146
+    },
+    {
+      "subject": "Rust_14",
+      "relation": "é_uma",
+      "object": "linguagem_14",
+      "confidence": 0.85,
+      "citation": "synth://doc/147",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000147
+    },
+    {
+      "subject": "AETHER_14",
+      "relation": "usa",
+      "object": "fase_14",
+      "confidence": 0.85,
+      "citation": "synth://doc/148",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000148
+    },
+    {
+      "subject": "AETHER_14",
+      "relation": "usa",
+      "object": "NÃO_fase_14",
+      "confidence": 0.5,
+      "citation": "synth://doc/148/conflict",
+      "authority": 80,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": true,
+      "wall_ms": 1700000000149
+    },
+    {
+      "subject": "Ising_14",
+      "relation": "minimiza",
+      "object": "energia_14",
+      "confidence": 0.85,
+      "citation": "synth://doc/149",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000149
+    },
+    {
+      "subject": "Brasil_15",
+      "relation": "capital",
+      "object": "Brasília_15",
+      "confidence": 0.85,
+      "citation": "synth://doc/150",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000150
+    },
+    {
+      "subject": "São Paulo_15",
+      "relation": "é_um",
+      "object": "estado_15",
+      "confidence": 0.85,
+      "citation": "synth://doc/151",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000151
+    },
+    {
+      "subject": "Rio de Janeiro_15",
+      "relation": "é_um",
+      "object": "estado_15",
+      "confidence": 0.85,
+      "citation": "synth://doc/152",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000152
+    },
+    {
+      "subject": "água_15",
+      "relation": "é",
+      "object": "H2O_15",
+      "confidence": 0.85,
+      "citation": "synth://doc/153",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000153
+    },
+    {
+      "subject": "sol_15",
+      "relation": "é_uma",
+      "object": "estrela_15",
+      "confidence": 0.85,
+      "citation": "synth://doc/154",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000154
+    },
+    {
+      "subject": "Lua_15",
+      "relation": "orbita",
+      "object": "Terra_15",
+      "confidence": 0.85,
+      "citation": "synth://doc/155",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000155
+    },
+    {
+      "subject": "Python_15",
+      "relation": "é_uma",
+      "object": "linguagem_15",
+      "confidence": 0.85,
+      "citation": "synth://doc/156",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000156
+    },
+    {
+      "subject": "Rust_15",
+      "relation": "é_uma",
+      "object": "linguagem_15",
+      "confidence": 0.85,
+      "citation": "synth://doc/157",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000157
+    },
+    {
+      "subject": "AETHER_15",
+      "relation": "usa",
+      "object": "fase_15",
+      "confidence": 0.85,
+      "citation": "synth://doc/158",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000158
+    },
+    {
+      "subject": "Ising_15",
+      "relation": "minimiza",
+      "object": "energia_15",
+      "confidence": 0.85,
+      "citation": "synth://doc/159",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000159
+    },
+    {
+      "subject": "Brasil_16",
+      "relation": "capital",
+      "object": "Brasília_16",
+      "confidence": 0.85,
+      "citation": "synth://doc/160",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000160
+    },
+    {
+      "subject": "São Paulo_16",
+      "relation": "é_um",
+      "object": "estado_16",
+      "confidence": 0.85,
+      "citation": "synth://doc/161",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000161
+    },
+    {
+      "subject": "Rio de Janeiro_16",
+      "relation": "é_um",
+      "object": "estado_16",
+      "confidence": 0.85,
+      "citation": "synth://doc/162",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000162
+    },
+    {
+      "subject": "água_16",
+      "relation": "é",
+      "object": "H2O_16",
+      "confidence": 0.85,
+      "citation": "synth://doc/163",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000163
+    },
+    {
+      "subject": "sol_16",
+      "relation": "é_uma",
+      "object": "estrela_16",
+      "confidence": 0.85,
+      "citation": "synth://doc/164",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000164
+    },
+    {
+      "subject": "Lua_16",
+      "relation": "orbita",
+      "object": "Terra_16",
+      "confidence": 0.85,
+      "citation": "synth://doc/165",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000165
+    },
+    {
+      "subject": "Python_16",
+      "relation": "é_uma",
+      "object": "linguagem_16",
+      "confidence": 0.85,
+      "citation": "synth://doc/166",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000166
+    },
+    {
+      "subject": "Rust_16",
+      "relation": "é_uma",
+      "object": "linguagem_16",
+      "confidence": 0.85,
+      "citation": "synth://doc/167",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000167
+    },
+    {
+      "subject": "AETHER_16",
+      "relation": "usa",
+      "object": "fase_16",
+      "confidence": 0.85,
+      "citation": "synth://doc/168",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000168
+    },
+    {
+      "subject": "Ising_16",
+      "relation": "minimiza",
+      "object": "energia_16",
+      "confidence": 0.85,
+      "citation": "synth://doc/169",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000169
+    },
+    {
+      "subject": "Brasil_17",
+      "relation": "capital",
+      "object": "Brasília_17",
+      "confidence": 0.85,
+      "citation": "synth://doc/170",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000170
+    },
+    {
+      "subject": "São Paulo_17",
+      "relation": "é_um",
+      "object": "estado_17",
+      "confidence": 0.85,
+      "citation": "synth://doc/171",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000171
+    },
+    {
+      "subject": "Rio de Janeiro_17",
+      "relation": "é_um",
+      "object": "estado_17",
+      "confidence": 0.85,
+      "citation": "synth://doc/172",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000172
+    },
+    {
+      "subject": "água_17",
+      "relation": "é",
+      "object": "H2O_17",
+      "confidence": 0.85,
+      "citation": "synth://doc/173",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000173
+    },
+    {
+      "subject": "sol_17",
+      "relation": "é_uma",
+      "object": "estrela_17",
+      "confidence": 0.85,
+      "citation": "synth://doc/174",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000174
+    },
+    {
+      "subject": "Lua_17",
+      "relation": "orbita",
+      "object": "Terra_17",
+      "confidence": 0.85,
+      "citation": "synth://doc/175",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000175
+    },
+    {
+      "subject": "Python_17",
+      "relation": "é_uma",
+      "object": "linguagem_17",
+      "confidence": 0.85,
+      "citation": "synth://doc/176",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000176
+    },
+    {
+      "subject": "Rust_17",
+      "relation": "é_uma",
+      "object": "linguagem_17",
+      "confidence": 0.85,
+      "citation": "synth://doc/177",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000177
+    },
+    {
+      "subject": "AETHER_17",
+      "relation": "usa",
+      "object": "fase_17",
+      "confidence": 0.85,
+      "citation": "synth://doc/178",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000178
+    },
+    {
+      "subject": "Ising_17",
+      "relation": "minimiza",
+      "object": "energia_17",
+      "confidence": 0.85,
+      "citation": "synth://doc/179",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000179
+    },
+    {
+      "subject": "Brasil_18",
+      "relation": "capital",
+      "object": "Brasília_18",
+      "confidence": 0.85,
+      "citation": "synth://doc/180",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000180
+    },
+    {
+      "subject": "São Paulo_18",
+      "relation": "é_um",
+      "object": "estado_18",
+      "confidence": 0.85,
+      "citation": "synth://doc/181",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000181
+    },
+    {
+      "subject": "Rio de Janeiro_18",
+      "relation": "é_um",
+      "object": "estado_18",
+      "confidence": 0.85,
+      "citation": "synth://doc/182",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000182
+    },
+    {
+      "subject": "água_18",
+      "relation": "é",
+      "object": "H2O_18",
+      "confidence": 0.85,
+      "citation": "synth://doc/183",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000183
+    },
+    {
+      "subject": "sol_18",
+      "relation": "é_uma",
+      "object": "estrela_18",
+      "confidence": 0.85,
+      "citation": "synth://doc/184",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000184
+    },
+    {
+      "subject": "Lua_18",
+      "relation": "orbita",
+      "object": "Terra_18",
+      "confidence": 0.85,
+      "citation": "synth://doc/185",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000185
+    },
+    {
+      "subject": "Lua_18",
+      "relation": "orbita",
+      "object": "NÃO_Terra_18",
+      "confidence": 0.5,
+      "citation": "synth://doc/185/conflict",
+      "authority": 80,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": true,
+      "wall_ms": 1700000000186
+    },
+    {
+      "subject": "Python_18",
+      "relation": "é_uma",
+      "object": "linguagem_18",
+      "confidence": 0.85,
+      "citation": "synth://doc/186",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000186
+    },
+    {
+      "subject": "Rust_18",
+      "relation": "é_uma",
+      "object": "linguagem_18",
+      "confidence": 0.85,
+      "citation": "synth://doc/187",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000187
+    },
+    {
+      "subject": "AETHER_18",
+      "relation": "usa",
+      "object": "fase_18",
+      "confidence": 0.85,
+      "citation": "synth://doc/188",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000188
+    },
+    {
+      "subject": "Ising_18",
+      "relation": "minimiza",
+      "object": "energia_18",
+      "confidence": 0.85,
+      "citation": "synth://doc/189",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000189
+    },
+    {
+      "subject": "Brasil_19",
+      "relation": "capital",
+      "object": "Brasília_19",
+      "confidence": 0.85,
+      "citation": "synth://doc/190",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000190
+    },
+    {
+      "subject": "São Paulo_19",
+      "relation": "é_um",
+      "object": "estado_19",
+      "confidence": 0.85,
+      "citation": "synth://doc/191",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000191
+    },
+    {
+      "subject": "Rio de Janeiro_19",
+      "relation": "é_um",
+      "object": "estado_19",
+      "confidence": 0.85,
+      "citation": "synth://doc/192",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000192
+    },
+    {
+      "subject": "água_19",
+      "relation": "é",
+      "object": "H2O_19",
+      "confidence": 0.85,
+      "citation": "synth://doc/193",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000193
+    },
+    {
+      "subject": "sol_19",
+      "relation": "é_uma",
+      "object": "estrela_19",
+      "confidence": 0.85,
+      "citation": "synth://doc/194",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000194
+    },
+    {
+      "subject": "Lua_19",
+      "relation": "orbita",
+      "object": "Terra_19",
+      "confidence": 0.85,
+      "citation": "synth://doc/195",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000195
+    },
+    {
+      "subject": "Python_19",
+      "relation": "é_uma",
+      "object": "linguagem_19",
+      "confidence": 0.85,
+      "citation": "synth://doc/196",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000196
+    },
+    {
+      "subject": "Rust_19",
+      "relation": "é_uma",
+      "object": "linguagem_19",
+      "confidence": 0.85,
+      "citation": "synth://doc/197",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000197
+    },
+    {
+      "subject": "AETHER_19",
+      "relation": "usa",
+      "object": "fase_19",
+      "confidence": 0.85,
+      "citation": "synth://doc/198",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000198
+    },
+    {
+      "subject": "Ising_19",
+      "relation": "minimiza",
+      "object": "energia_19",
+      "confidence": 0.85,
+      "citation": "synth://doc/199",
+      "authority": 100,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000000199
+    },
+    {
+      "subject": "gato",
+      "relation": "é_um",
+      "object": "felino",
+      "confidence": 0.9,
+      "citation": "probe://gato",
+      "authority": 96,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000100000
+    },
+    {
+      "subject": "gata",
+      "relation": "é_um",
+      "object": "felino",
+      "confidence": 0.9,
+      "citation": "probe://gata",
+      "authority": 96,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000100001
+    },
+    {
+      "subject": "felino doméstico",
+      "relation": "é_um",
+      "object": "gato",
+      "confidence": 0.9,
+      "citation": "probe://parafrase",
+      "authority": 96,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000100002
+    },
+    {
+      "subject": "gat",
+      "relation": "é_um",
+      "object": "prefixo",
+      "confidence": 0.9,
+      "citation": "probe://um-caractere",
+      "authority": 96,
+      "lang": "pt",
+      "kind": 1,
+      "conflict_seed": false,
+      "wall_ms": 1700000100003
+    }
+  ],
+  "shards": [
+    {
+      "relation": "capital",
+      "offset": 0,
+      "count": 20
+    },
+    {
+      "relation": "é_um",
+      "offset": 0,
+      "count": 45
+    },
+    {
+      "relation": "é",
+      "offset": 0,
+      "count": 20
+    },
+    {
+      "relation": "é_uma",
+      "offset": 0,
+      "count": 48
+    },
+    {
+      "relation": "é_uma",
+      "offset": 48,
+      "count": 14
+    },
+    {
+      "relation": "orbita",
+      "offset": 0,
+      "count": 21
+    },
+    {
+      "relation": "usa",
+      "offset": 0,
+      "count": 21
+    },
+    {
+      "relation": "minimiza",
+      "offset": 0,
+      "count": 20
+    }
+  ]
+}

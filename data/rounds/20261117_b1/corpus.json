@@ -1,0 +1,8 @@
+{
+  "path": "data\\rounds\\20261117_b1\\facts.jsonl",
+  "count": 10000,
+  "source": "google-research-datasets/paws-x",
+  "config": "en",
+  "license": "campo vazio no card carregado pelo datasets; o modelo do mapa é Apache-2.0",
+  "note": "frases reais do dataset, nao o template sintetico Brasil_n"
+}

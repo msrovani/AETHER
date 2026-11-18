@@ -21,3 +21,12 @@ desktop.ini
 *.log
 FORUM.txt
 FORUM.txt.lock
+
+# Sidecar de modelos / venv local (pesos fora do crate)
+/target/hf-cache/
+/target/py-embed/
+/tools/__pycache__/
+**/__pycache__/
+*.pyc
+sgdb_memory.db
+sgdb_memory.db-*

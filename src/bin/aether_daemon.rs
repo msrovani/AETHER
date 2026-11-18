@@ -41,6 +41,8 @@ use aether_engine::knowledge::sgdb::{SgdbConfig, T2Worker};
 use aether_engine::morphogenesis::{MorphogenesisConfig, MorphogeneticField};
 use aether_engine::phase_memory::{ComplexPhaseMemory, PhaseMemoryConfig};
 use aether_engine::thermodynamic_dreamer::{DreamEnsemble, DreamerConfig, ThermodynamicDreamer};
+#[cfg(windows)]
+use aether_engine::transducer_io::TransducerIo;
 
 /// Grupo multicast do enxame (mesma LAN).
 pub const MULTICAST_GROUP: Ipv4Addr = Ipv4Addr::new(239, 255, 42, 99);
@@ -80,6 +82,12 @@ pub struct DaemonConfig {
     pub sgdb_every: u64,
     /// Identidade durável da linhagem (`run` no escopo do SGDB).
     pub sgdb_run: u64,
+    /// Linha curta: CALMO / ALERTA / SONHANDO.
+    pub human: bool,
+    /// Log rotativo de floats (colunas fixas).
+    pub log: Option<std::path::PathBuf>,
+    /// Campo `u(t)` vem de `SystemTelemetryTransducer` (Windows).
+    pub host: bool,
 }
 
 impl Default for DaemonConfig {
@@ -100,6 +108,9 @@ impl Default for DaemonConfig {
             sgdb_token: None,
             sgdb_every: 60,
             sgdb_run: 0,
+            human: false,
+            log: None,
+            host: false,
         }
     }
 }
@@ -134,6 +145,9 @@ pub struct HardwareTransducer {
     last_jitter_ns: f64,
     last_net: u64,
     rng: TransducerRng,
+    host: bool,
+    #[cfg(windows)]
+    telemetry: Option<aether_engine::transducer_host::SystemTelemetryTransducer>,
 }
 
 /// Iterações da unidade fixa de trabalho — as mesmas na calibração e na
@@ -154,6 +168,9 @@ impl HardwareTransducer {
             last_jitter_ns: 0.0,
             last_net: 0,
             rng: TransducerRng(seed ^ 0x9E37_79B9_7F4A_7C15),
+            host: false,
+            #[cfg(windows)]
+            telemetry: None,
         };
         let mut acc = 0.0f64;
         for _ in 0..8 {
@@ -195,7 +212,28 @@ impl HardwareTransducer {
 
     /// Amostra um instante físico; `net_bytes` é o contador cumulativo de
     /// bytes de fase observados pelo enxame.
+    pub fn enable_host(&mut self) {
+        self.host = true;
+        #[cfg(windows)]
+        {
+            self.telemetry =
+                Some(aether_engine::transducer_host::SystemTelemetryTransducer::new(60.0));
+        }
+    }
+
     pub fn sample(&mut self, net_bytes: u64) -> f32 {
+        #[cfg(windows)]
+        if self.host {
+            if let Some(telemetry) = self.telemetry.as_mut() {
+                let mut buf = [0.0f32; aether_engine::transducer_io::FIELD_DIM];
+                if telemetry.sample_into(&mut buf).is_ok() {
+                    let wave = telemetry.cpu_load().clamp(0.0, 1.0);
+                    self.ring[self.pos] = wave;
+                    self.pos = (self.pos + 1) % self.window;
+                    return wave;
+                }
+            }
+        }
         let now = Instant::now();
         let jitter_ns = self.last_jitter_ns;
 
@@ -409,6 +447,9 @@ impl AetherDaemon {
             baseline_nmse: 0.0,
             dropped_frames: 0,
         };
+        if daemon.cfg.host {
+            daemon.transducer.enable_host();
+        }
         daemon.attach_sgdb()?;
         Ok(daemon)
     }
@@ -725,6 +766,11 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
                     "  --sgdb-every <n> emite um padrão a cada n ciclos (padrão 60; 0 desliga)"
                 );
                 println!("  --sgdb-run <id>  linhagem durável no escopo (padrão 0)");
+                println!("  --human          linha curta: CALMO / ALERTA / SONHANDO");
+                println!(
+                    "  --host           u(t) vem da telemetria do SO (Windows), sem busy-loop"
+                );
+                println!("  --log <arquivo>  log rotativo de floats, colunas fixas");
                 println!("  --help           esta ajuda");
                 println!();
                 println!(
@@ -833,6 +879,20 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
                 let v = args.get(i).ok_or("faltou valor para --sgdb-run")?;
                 cfg.sgdb_run = v.parse().map_err(|e| format!("--sgdb-run inválido: {e}"))?;
             }
+            "--human" => cfg.human = true,
+            "--host" => {
+                #[cfg(not(windows))]
+                return Err("--host só existe no Windows".into());
+                #[cfg(windows)]
+                {
+                    cfg.host = true;
+                }
+            }
+            "--log" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --log")?;
+                cfg.log = Some(std::path::PathBuf::from(v));
+            }
             other => return Err(format!("flag desconhecida: {other} (use --help)")),
         }
         i += 1;
@@ -876,6 +936,53 @@ fn env_sgdb_spec() -> Option<String> {
     None
 }
 
+fn append_float_log(path: &std::path::Path, cols: &[f32]) -> std::io::Result<()> {
+    const MAX: u64 = 1_048_576;
+    if let Ok(meta) = path.metadata() {
+        if meta.len() > MAX {
+            let rotated = path.with_extension("rot.csv");
+            let _ = std::fs::rename(path, rotated);
+        }
+    }
+    let mut line = String::with_capacity(cols.len() * 12);
+    for (i, v) in cols.iter().enumerate() {
+        if i > 0 {
+            line.push(',');
+        }
+        line.push_str(&format!("{v:.6}"));
+    }
+    line.push('\n');
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+    use std::io::Write;
+    file.write_all(line.as_bytes())
+}
+
+#[cfg(test)]
+mod log_gate {
+    use super::append_float_log;
+
+    #[test]
+    fn log_so_tem_numeros_e_rotaciona() {
+        let dir = std::env::temp_dir().join("aether-log-gate");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("t.csv");
+        let _ = std::fs::remove_file(&path);
+        append_float_log(&path, &[1.5, -0.25, 2.0, 0.1, 0.0]).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            text.chars()
+                .all(|c| c.is_ascii_digit() || matches!(c, '.' | ',' | '-' | '\n')),
+            "log com texto livre: {text}"
+        );
+        std::fs::write(&path, vec![b'1'; 1_048_577]).unwrap();
+        append_float_log(&path, &[3.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
+        assert!(path.with_extension("rot.csv").exists());
+    }
+}
+
 fn main() -> Result<()> {
     let cfg = match parse_cli() {
         Ok(c) => c,
@@ -884,23 +991,54 @@ fn main() -> Result<()> {
             std::process::exit(2);
         }
     };
+    let human = cfg.human;
+    let alert = cfg.alert_free_energy;
+    let log_path = cfg.log.clone();
     println!("AETHER daemon — organismo encarnado (multicast {MULTICAST_GROUP}:{MULTICAST_PORT})");
     let mut daemon = AetherDaemon::new(cfg)?;
     daemon.run(|t| {
-        println!(
-            "ciclo {:>6} | R(LAN)={:.3} peers={} | F={:.3} S={:.3} | E_mem={:+.3} | U={:.3} | topologia={:.1}% | {} | {}µs | drops={}",
-            t.cycles,
-            t.lan_coherence,
-            t.peers_heard,
-            t.free_energy,
-            t.surprise,
-            t.memory_energy,
-            t.epistemic_uncertainty,
-            t.topological_density * 100.0,
-            if t.dreaming { "SONHANDO" } else { "AÇÃO" },
-            t.frame_us,
-            t.dropped_frames
-        );
+        if human {
+            let state = if t.dreaming {
+                "SONHANDO"
+            } else if t.free_energy >= alert {
+                "ALERTA"
+            } else {
+                "CALMO"
+            };
+            let phrase = match state {
+                "SONHANDO" => "surpresa alta: o organismo está amostrando futuros",
+                "ALERTA" => "surpresa subindo: observe carga e rede",
+                _ => "host estável",
+            };
+            println!("{state} — {phrase} | F={:.3} R={:.3}", t.free_energy, t.lan_coherence);
+        } else {
+            println!(
+                "ciclo {:>6} | R(LAN)={:.3} peers={} | F={:.3} S={:.3} | E_mem={:+.3} | U={:.3} | topologia={:.1}% | {} | {}µs | drops={}",
+                t.cycles,
+                t.lan_coherence,
+                t.peers_heard,
+                t.free_energy,
+                t.surprise,
+                t.memory_energy,
+                t.epistemic_uncertainty,
+                t.topological_density * 100.0,
+                if t.dreaming { "SONHANDO" } else { "AÇÃO" },
+                t.frame_us,
+                t.dropped_frames
+            );
+        }
+        if let Some(path) = &log_path {
+            let _ = append_float_log(
+                path,
+                &[
+                    t.cycles as f32,
+                    t.lan_coherence as f32,
+                    t.peers_heard as f32,
+                    t.free_energy,
+                    t.surprise,
+                ],
+            );
+        }
     })?;
     println!("daemon encerrado.");
     Ok(())

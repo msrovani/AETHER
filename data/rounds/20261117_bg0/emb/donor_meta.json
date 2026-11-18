@@ -1,0 +1,9 @@
+{
+  "donor": "Qwen/Qwen3-Embedding-0.6B",
+  "dim": 768,
+  "count": 209,
+  "sha256_embeds": "afbf46f4a3f812184b0c152fb3510ba5aa037564ab711749923a2e41ca07d479",
+  "mrl": true,
+  "license": "Apache-2.0",
+  "note": "sidecar B0 — harvest --jl-only em seguida"
+}

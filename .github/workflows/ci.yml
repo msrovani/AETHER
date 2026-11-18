@@ -23,6 +23,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      gpu:
+        description: Rodar os gates --features gpu (exige runner self-hosted com adapter)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -138,3 +143,31 @@ jobs:
       #   R > 0.95 · redução de entropia < 0 · H(s*) < H(s0) estritamente.
       - name: definição de pronto (headless)
         run: bash scripts/check_organism.sh 10s
+
+  # Opt-in. O runner público não tem a RTX 3050. O job só dispara com
+  # workflow_dispatch e input gpu=true, num runner com a label `gpu`.
+  gate-gpu:
+    name: gate gpu (adapter)
+    if: github.event_name == 'workflow_dispatch' && inputs.gpu
+    runs-on: [self-hosted, gpu]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: JL
+        run: cargo test --release --features gpu --test gpu_jl_gate -- --nocapture
+
+      - name: JL tiled
+        run: cargo test --release --features gpu --test gpu_jl_tiled_gate -- --nocapture
+
+      - name: Ising sweep
+        run: cargo test --release --features gpu --test gpu_ising_sweep_gate -- --nocapture
+
+      - name: fronteira
+        run: cargo test --release --features gpu --test gpu_boundary_gate -- --nocapture
+
+      - name: FFT G2
+        run: cargo test --release --features gpu --test gpu_fft_gate -- --nocapture

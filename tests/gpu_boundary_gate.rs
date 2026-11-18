@@ -14,6 +14,10 @@ const HOT: &[(&str, &str)] = &[
         "simulation/closed_loop_organism.rs",
         include_str!("../src/simulation/closed_loop_organism.rs"),
     ),
+    (
+        "core/wave_interference.rs",
+        include_str!("../src/core/wave_interference.rs"),
+    ),
     ("phase_memory.rs", include_str!("../src/phase_memory.rs")),
     (
         "core/knowledge_bridge_f1.rs",
