@@ -152,7 +152,7 @@ MMLU/Arena.
 |---|---|---|
 | **V0.1-A** | Este doc + crosslinks + fórum | Plano aprovável |
 | **V0.1-B** | Smoke F7, README IA, `/props` frontier, corpus | PR usabilidade |
-| **V0.1-C** | F1–F7 verdes + [`CYCLE_CLOSE_V01_FREEZE.md`](CYCLE_CLOSE_V01_FREEZE.md) | Checklist verde |
+| **V0.1-C** | F1–F7 verdes + [`CYCLE_CLOSE_V01_FREEZE.md`](CYCLE_CLOSE_V01_FREEZE.md) | Checklist verde (**feito** 2026-11-18 / `0.0.177`) |
 | **V0.1-D** | Bump `0.1.0` + CHANGELOG + tag git | **Só com pedido explícito humano** |
 
 ---
@@ -161,7 +161,7 @@ MMLU/Arena.
 
 - [x] F1–F7 verdes no host de release (artefatos em `target/v01_freeze/`; ver [`CYCLE_CLOSE_V01_FREEZE.md`](CYCLE_CLOSE_V01_FREEZE.md))  
 - [x] `CYCLE_CLOSE_V01_FREEZE.md` preenchido com números  
-- [ ] README + EXTERNAL_API + este doc alinhados à versão  
+- [x] README + EXTERNAL_API + USER_GUIDE + este doc alinhados à promessa  
 - [ ] Pedido humano explícito: bump `Cargo.toml` + tag `v0.1.0`  
 - [ ] Commit/changelog Conventional Commits  
 
