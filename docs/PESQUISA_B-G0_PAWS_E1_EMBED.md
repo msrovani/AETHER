@@ -92,7 +92,16 @@ OPENCODE mediu RTX 3050: **19,33 txt/s** (bf16 batch64 n=1000) ≈ **1,79×** vs
 `b0_shard_gate` **PASS**: mono 5k recall **0,7676** vs shards s0/s1 **0,8760 / 0,8728** (Δ ~+11 pp).  
 Lei E1B (≤0,4×D) **confirmada**; piso empírico ~0,85. Teto A3 0,90 ainda exige rerank float (B2). Gap: assimetria consulta vs fato concat + JL 1-bit.
 
-## B2 bits → float rerank (MSG 0632)
+## R7 re-embed shards (MSG 0642)
+
+R7 **fechado**: 5k fatos / 2 shards ×2500, CUDA bf16 seed42 T0, donor Qwen3-0.6B.  
+Recall s0/s1 **0,8760 / 0,8728** (piso 0,85). SHA recalculado bate manifesto.
+
+## ColBERT-XM + ST6 (MSG 0643)
+
+Confirmado no card HF e lista ST pretrained: `MultiVectorEncoder("antoinelouis/colbert-xm")` (853M, 128d, NanoBEIR 0,5915). API canônica ≠ `SentenceTransformer.encode`.
+
+## B2 bits → float rerank (MSG 0635)
 
 | Fonte | Achado |
 |---|---|
