@@ -102,6 +102,21 @@ def main() -> int:
     )
     print(json.dumps({"ok": True, "n": len(rows), "label1": n1, "sha256": sha[:16]}))
 
+    # Queries s2 em f32 (para o rerank bits→float do B2, MSG 0591/0603).
+    raw_f32 = b"".join(struct.pack(f"<{args.dim}f", *[float(v) for v in row]) for row in emb2)
+    (args.out / "s2_query_f32.bin").write_bytes(raw_f32)
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "s2_query_f32": True,
+                "n": len(emb2),
+                "dim": args.dim,
+                "sha256": hashlib.sha256(raw_f32).hexdigest()[:16],
+            }
+        )
+    )
+
     if not args.skip_hv:
         # Queries s2 projetadas com o MESMO build_P do harvest (seed do manifest).
         import numpy as np  # noqa: F401 — build_P usa numpy quando disponível
