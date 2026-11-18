@@ -1,0 +1,19 @@
+{
+  "round": "bg0_paws",
+  "source": "google-research-datasets/paws-x",
+  "config": "en",
+  "split": "train",
+  "pairs": 5000,
+  "label_1_parafraseia": 2234,
+  "label_0_nao_parafraseia": 2766,
+  "authority_max_transplant": 120,
+  "note": "MSG 0458/0461 — labels upstream gravados; embed/JL fora deste script",
+  "gate": {
+    "recall_at_1_pair": ">=0.90",
+    "reject_non_pair": ">=0.90"
+  },
+  "b1_sentence1_overlap": {
+    "hit": 4948,
+    "total": 5000
+  }
+}

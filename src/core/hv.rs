@@ -18,7 +18,7 @@ pub struct HvBank {
     pub seed: u64,
     pub bits: Vec<u64>,
     pub keys: Vec<u128>,
-    /// LSH: 4 tabelas × 16 bits → buckets (preenchido se count > 10_000).
+    /// LSH: 4 tabelas × 16 bits → buckets (preenchido se count ≥ 10_000).
     pub lsh_tables: Vec<Vec<Vec<u32>>>,
 }
 
@@ -67,7 +67,9 @@ impl HvBank {
             keys,
             lsh_tables: Vec::new(),
         };
-        if bank.count() > 10_000 {
+        // P1.2 / MSG 0440: o gate B1 usa exatamente 10k; `>` deixava brute-force
+        // verde sem exercitar LSH. Limiar inclusivo ≥10_000.
+        if bank.count() >= 10_000 {
             bank.build_lsh(4, 16);
         }
         Ok(bank)

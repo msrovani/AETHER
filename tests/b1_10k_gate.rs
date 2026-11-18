@@ -16,6 +16,12 @@ fn b1_recall_p99_rss() {
     }
     let bank = HvBank::load(Path::new(BANK), Path::new(IDX)).expect("bank");
     assert!(bank.count() >= 10_000, "count {}", bank.count());
+    // MSG 0440 ACHADO_1: em n≥10k o caminho tem de ser LSH, não varredura exata.
+    assert!(
+        !bank.lsh_tables.is_empty(),
+        "B1 n={} sem LSH — limiar deve ser ≥10k",
+        bank.count()
+    );
     let n = bank.count();
     let mut hits = 0usize;
     let sample = 200.min(n);
@@ -34,7 +40,10 @@ fn b1_recall_p99_rss() {
     let p99 = us[(us.len() * 99 / 100).min(us.len() - 1)];
     let recall = hits as f64 / sample as f64;
     let rss = working_set();
-    eprintln!("B1 n={n} recall@10={recall:.3} p99_us={p99} rss={rss}");
+    eprintln!(
+        "B1 n={n} lsh_tables={} recall@10={recall:.3} p99_us={p99} rss={rss}",
+        bank.lsh_tables.len()
+    );
     assert!(recall >= 0.95, "recall {recall}");
     assert!(p99 <= 5_000, "p99 {p99}us");
     assert!(rss <= 256 * 1024 * 1024, "rss {rss}");

@@ -5,6 +5,33 @@ Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto
 
 ## [Unreleased]
 
+## [0.0.170] - 2026-11-17
+
+### Added
+
+- Hub **Testes IA** (aba Lab | Testes IA): USO U1–U6, ApiEval, AgentDrive,
+  contrato U1–U13 vs LLM (MSG 0449/0452); `src/dashboard/ai_view.rs`.
+- P1.2: LSH com limiar **≥10k** + assert no `b1_10k_gate` (MSG 0440).
+- P1.3: D1 percentis por chamada (n=200, MSG 0428 OP1); artefato
+  `target/d1_budget.json`.
+- B-G0 labeled: `tools/reharvest_paws_bg0.py` → `data/rounds/bg0_paws/`
+  (5000 pares parafraseia/nao_parafraseia).
+- B2 scaffold: `tests/b2_100k_gate.rs` (LSH obrigatória, recall@10≥0,90).
+- `docs/FFT_V4.md` + `docs/CYCLE_CLOSE_2026-11-17_FASE3_DONOS.md`.
+- `scripts/embed_rate_1k.py` (taxa donor 1k → decide B2 CPU/GPU).
+
+### Changed
+
+- README e crate em **0.0.170**.
+- Cap `authority_max_transplant` 240→120 no harvest (doutrina 0254/0258;
+  já em `88a76a5`).
+- `docs/USABILITY_TESTS.md`: U12 alinhado a D1 per-call.
+
+### Fixed
+
+- Clippy: `div_ceil` no D1; `items_after_test_module` / FFT probe / gates
+  de aprendizado e redteam (onda 0.0.169→170).
+
 ## [0.0.169] - 2026-11-17
 
 ### Added

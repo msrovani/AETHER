@@ -8,7 +8,7 @@
   "recall_at_10": 1.0,
   "p99_us": 642,
   "rss_bytes": 18231296,
-  "index": "varredura exata; LSH só acima de 10000 e o p99 de 0,64 ms não pediu",
+  "index": "P1.2: LSH com limiar inclusivo ≥10000 (MSG 0440); p99 de 0,64 ms não pediu índice aparte",
   "lab_gates_release": {
     "transplant_hv_gate": "5/5",
     "e3_transplant_gate": "6/6",

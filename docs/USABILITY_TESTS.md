@@ -55,7 +55,7 @@ aconteceu**:
 | U9 | `tests/api_agent.rs` (forget ≥255 sem store → 500; tombstone antes do delete) |
 | U10 | `tests/agent_redteam_gate.rs` (injeção, quarentena, escopo, orçamento) |
 | U11 | regra `contradicts_sem_overwrite` + `agent_undo_sgdb_gate` (CAS, não apaga de terceiro) |
-| U12 | `tests/agent_budget_gate.rs` (D1: p50/p99/allocs/RSS com tetos) |
+| U12 | `tests/agent_budget_gate.rs` (D1: p50/p99 **por chamada** n=200, MSG 0428 OP1; teto p99=5µs) |
 | U13 | `tests/language_port_gate.rs` (C-G0: ≥95%, OOV ≤5%, confiança calibrada C1) |
 
 **Falta de fato para fechar US0**: U1 (roteiro de onboarding medido),
