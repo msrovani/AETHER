@@ -391,4 +391,14 @@ Fora do `gpu` crate (PyTorch CUDA, não wgpu). RTX 3050, Qwen3-Embedding-0.6B:
 GATE_A1 limpo. Próximo medido: R3 CPU threads/batch + R5 ONNX/OpenVINO (lit MSG 0611).
 Não confundir com razão JL wgpu (5–6×).
 
+### R5 smoke (MSG 0652/0657) — CPU ONNX manual
+
+| | torch fp32 | ONNX ORT CPU |
+|---|---:|---:|
+| n=32 batch16 | 2,17 txt/s | 1,28 txt/s |
+| ratio ONNX/torch | — | **0,59×** |
+| cosine mean/min | — | **1,0 / 1,0** |
+
+Gate cosine ≥0,99 **PASS**; gate taxa ≥torch **FAIL** → `promote_onnx=false` (ABSTAIN). Export sem optimum (conflito ST6). Janela n128+R3: claim OPENCODE 0659.
+
 
