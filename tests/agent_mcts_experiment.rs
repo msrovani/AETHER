@@ -2,9 +2,8 @@
 //! número medido (MSG 0419 condições: depth>3, branching>5, delta≥10pp,
 //! p95≤100ms). Três famílias × 8 tarefas:
 //!
-//! * **dependencia**: só a ordem [raw → final] satisfaz; o greedy marca a
-//!   tool como `used` ANTES de executar (`run_goal`, tool_agent.rs:290) e
-//!   dead-enda — mede quanto um lookahead valeria neste regime;
+//! * **dependencia**: só a ordem [raw → final] satisfaz; A5 poda `final`
+//!   até existir claim `raw=24` no blackboard — greedy resolve sem MCTS;
 //! * **linear**: uma tool só — greedy já resolve (delta 0);
 //! * **ood**: nenhum candidato — ambos abstêm (delta 0 e **invariante de
 //!   segurança**: lookahead não pode resgatar o que deve abstem).
@@ -95,7 +94,8 @@ impl Tool for FinalTool {
         }
     }
     fn preconditions(&self, goal: &Goal, state: &WorldState) -> bool {
-        self.affordance(goal, state) > 0.0
+        // A5: poda no rank — sem raw=24 no blackboard, final é impossível.
+        self.affordance(goal, state) > 0.0 && state.has_claim("raw", "24")
     }
     fn call(&mut self, goal: &Goal, ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
         if !ctx.claims.iter().any(|c| c.value == "24") {
@@ -237,9 +237,8 @@ fn agent_with(tools: Vec<Box<dyn Tool>>) -> ToolAgent {
     ToolAgent::with_registry(registry, SelfModel::new(None), ScopeId::new(1, 0, 1))
 }
 
-/// Validacão do fix do `used` (MSG 0466): com orçamento ≥3 o greedy resgata
-/// o dead-end [raw → final] porque a tool que falhou por erro voltou a estar
-/// disponível. Com orçamento 2 continua falhando (sem MCTS não há milagre).
+/// A5 + fix used: com poda de pré-condição, budget 2 já resolve [raw→final]
+/// (final só entra no rank após raw=24). Budget 3 continua 8/8 (regressão).
 #[test]
 fn mcts_fix_used_resgata_dead_end_com_budget_3() {
     for i in 0..8usize {
@@ -253,7 +252,7 @@ fn mcts_fix_used_resgata_dead_end_com_budget_3() {
         let outcome = agent.solve(&g);
         assert!(
             outcome.success,
-            "budget 3 + fix used: greedy deve resgatar [raw→final]; action={:?} rationale={}",
+            "budget 3: [raw→final] via A5; action={:?} rationale={}",
             outcome.action, outcome.rationale
         );
         assert_eq!(outcome.action, Action::Act);
@@ -261,11 +260,37 @@ fn mcts_fix_used_resgata_dead_end_com_budget_3() {
 }
 
 #[test]
+fn a5_poda_precond_resolve_dependencia_budget_2() {
+    for i in 0..8usize {
+        let mut g = goal_steps(format!("x{i}"), "final", 2);
+        g.success = SuccessCriteria::Claim {
+            subject: format!("x{i}"),
+            relation: "final".into(),
+            value: Some("42".into()),
+        };
+        let mut agent = agent_with(vec![Box::new(FinalTool), Box::new(RawTool)]);
+        let outcome = agent.solve(&g);
+        assert!(
+            outcome.success,
+            "A5 budget 2: final podado até raw; action={:?} rationale={}",
+            outcome.action, outcome.rationale
+        );
+        assert_eq!(outcome.action, Action::Act);
+        assert!(
+            outcome.steps.len() <= 2,
+            "esperava ≤2 passos, got {}",
+            outcome.steps.len()
+        );
+    }
+}
+
+#[test]
 fn mcts_delta_e_condicoes_medidos() {
     let mut relatorio: Vec<String> = Vec::new();
 
-    // Família 1 — dependencia (8 tarefas): greedy dead-enda, oracle resgata.
+    // Família 1 — dependencia (8 tarefas): A5 poda → greedy = oracle (delta 0).
     let mut greedy_ok = 0usize;
+    let mut steps_sum = 0usize;
     for i in 0..8usize {
         let mut g = goal(format!("x{i}"), "final");
         g.success = SuccessCriteria::Claim {
@@ -277,12 +302,16 @@ fn mcts_delta_e_condicoes_medidos() {
         let outcome = agent.solve(&g);
         if outcome.success {
             greedy_ok += 1;
+            steps_sum += outcome.steps.len();
         }
     }
     let oracle_dep = oracle_success(&["raw", "final"]);
-    assert_eq!(greedy_ok, 0, "greedy dead-enda toda a família dependencia");
+    assert_eq!(greedy_ok, 8, "A5: greedy resolve dependencia 8/8");
     assert!(oracle_dep, "oracle deve resgatar a família dependencia");
-    relatorio.push("dependencia: greedy=0/8 oracle=1 (delta_disponivel=100pp)".to_string());
+    let mean_steps = steps_sum as f64 / 8.0;
+    relatorio.push(format!(
+        "dependencia: greedy=8/8 oracle=1 mean_steps={mean_steps:.2} (delta=0 via A5)"
+    ));
 
     // Família 2 — linear (8 tarefas): ambos resolvem (delta 0).
     for i in 0..8usize {
@@ -325,22 +354,21 @@ fn mcts_delta_e_condicoes_medidos() {
     ns.sort_unstable();
     let p95 = ns[(ns.len() * 95 / 100).min(ns.len() - 1)];
 
-    // Condições do MSG 0419 com números medidos.
-    let depth = 2usize; // profundidade máxima da suíte (raw→final)
-    let branching = 2usize; // candidatos por tarefa de dependencia
-    let delta_pp = 100.0f64; // dependencia (a única família com valor possível)
+    // Condições do MSG 0419: A5 zera o delta — MCTS continua abstain.
+    let depth = 2usize;
+    let branching = 2usize;
+    let delta_pp = 0.0f64; // A5: greedy=oracle na dependencia
     let build = depth > 3 && branching > 5 && delta_pp >= 10.0 && p95 <= 100_000;
     relatorio.push(format!(
         "condicoes: depth={depth} branching={branching} delta_pp={delta_pp} p95_ns={p95} build={build}"
     ));
     assert!(
         !build,
-        "MCTS continua abstain: depth<=3 e branching<=5 — o ganho vem de não \
-         marcar como `used` a tool que falhou por erro, não de busca em árvore"
+        "MCTS continua abstain: A5 removeu o delta; ganho = poda de pré-condição, não árvore"
     );
 
     let json = format!(
-        "{{\"version\":{:?},\"suite\":\"sintetica_3_familias\",\"greedy_dependencia\":\"0/8\",\"oracle_dependencia\":1,\"delta_pp\":{delta_pp},\"depth\":{depth},\"branching\":{branching},\"p95_select_ns\":{p95},\"build\":{build},\"root_cause\":\"used_marcado_antes_da_execucao_tool_agent_290\",\"created\":\"2026-11-17\"}}\n",
+        "{{\"version\":{:?},\"suite\":\"sintetica_3_familias\",\"greedy_dependencia\":\"8/8\",\"oracle_dependencia\":1,\"delta_pp\":{delta_pp},\"depth\":{depth},\"branching\":{branching},\"p95_select_ns\":{p95},\"build\":{build},\"a5_poda_precond\":true,\"mean_steps_dependencia\":{mean_steps},\"created\":\"2026-11-17\"}}\n",
         env!("CARGO_PKG_VERSION")
     );
     let _ = std::fs::create_dir_all("target");

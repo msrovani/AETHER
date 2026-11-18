@@ -5,6 +5,29 @@ Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto
 
 ## [Unreleased]
 
+## [0.0.171] - 2026-11-18
+
+### Added
+
+- `tools/embed_runtime.py` — runtime compartilhado CPU/GPU (L1/L2) + backend ONNX opt-in (L3).
+- `docs/EMBED_THROUGHPUT_ANALYSIS.md` — root cause bf16@CPU e alavancas.
+- `docs/PLAN_2026-11-17_OTIMIZACAO_ARXIV.md` — plano TRAVADO pós-votação 0471/0474/0476.
+- `docs/CYCLE_CLOSE_2026-11-18_PERF_ONDA_A.md`.
+- A4: multi-probe LSH (`lsh_probes=8`) + path shard ≥10k no `b2_100k_gate`.
+- A5: `WorldState.claims` + poda de pré-condição no planner (dependencia 8/8 @ budget 2).
+- Round `data/rounds/20261117_b0_paws/facts.jsonl` + `tools/b0_paws_harvest.py`.
+
+### Changed
+
+- `scripts/embed_rate_1k.py` / `tools/donor_map_embed.py`: fp32@CPU batch16 + warmup;
+  bf16@CUDA batch64 + FA2 se disponível; seed/T0 no artefato.
+- A1 limpo: **1,56 → 10,82 txt/s** (~6,9×); ETA 100k **2,57 h** (teto 4 h OK).
+- README e crate em **0.0.171**.
+
+### Fixed
+
+- Experimento MCTS: expectativa alinhada à poda A5 (delta_pp=0; MCTS continua abstain).
+
 ## [0.0.170] - 2026-11-17
 
 ### Added

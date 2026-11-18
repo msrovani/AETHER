@@ -337,6 +337,17 @@ pub struct WorldState {
     pub facts_loaded: usize,
     /// Hits de memória.
     pub memory_hits: usize,
+    /// Snapshot do blackboard para poda de pré-condição (A5 / P6).
+    pub claims: Vec<Claim>,
+}
+
+impl WorldState {
+    /// `true` se existe claim com relação/valor (poda de candidatos).
+    pub fn has_claim(&self, relation: &str, value: &str) -> bool {
+        self.claims
+            .iter()
+            .any(|c| c.relation == relation && c.value == value)
+    }
 }
 
 /// Fato inferido (quarentena): entra sem confiança humana nem corroboração.

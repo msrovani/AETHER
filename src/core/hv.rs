@@ -2,12 +2,15 @@
 //!
 //! Formato AETHV1 (`docs/INTAKE_PLAN.md`). Não entra no hot path T0.
 //! CLAIM fórum MSG 0229 / 0244. Feature `m1`.
+//! A4: multi-probe LSH (arxiv 1809.07471 / 1310.4136) — buckets vizinhos.
 
 use std::fs;
 use std::path::Path;
 
 const MAGIC: &[u8; 8] = b"AETHV1\0\0";
 const HEADER_SIZE: usize = 128;
+/// Probes extras por tabela (além do bucket exato). 0 = LSH clássico.
+const DEFAULT_LSH_PROBES: usize = 8;
 
 /// Banco de hipervetores binários (1,28 KB/átomo @ 10.240 bits).
 #[derive(Debug, Clone)]
@@ -20,6 +23,8 @@ pub struct HvBank {
     pub keys: Vec<u128>,
     /// LSH: 4 tabelas × 16 bits → buckets (preenchido se count ≥ 10_000).
     pub lsh_tables: Vec<Vec<Vec<u32>>>,
+    /// Multi-probe: nº de buckets vizinhos (Hamming-1) por tabela.
+    pub lsh_probes: usize,
 }
 
 impl HvBank {
@@ -66,6 +71,7 @@ impl HvBank {
             bits,
             keys,
             lsh_tables: Vec::new(),
+            lsh_probes: 0,
         };
         // P1.2 / MSG 0440: o gate B1 usa exatamente 10k; `>` deixava brute-force
         // verde sem exercitar LSH. Limiar inclusivo ≥10_000.
@@ -122,10 +128,17 @@ impl HvBank {
     }
 
     /// LSH: `n_tables` tabelas, cada uma usa `bits_per` bits do hipervetor como chave.
+    /// Ativa multi-probe com [`DEFAULT_LSH_PROBES`] vizinhos Hamming-1.
     pub fn build_lsh(&mut self, n_tables: usize, bits_per: usize) {
+        self.build_lsh_probes(n_tables, bits_per, DEFAULT_LSH_PROBES);
+    }
+
+    /// Como [`build_lsh`], com controle explícito de probes (0 = só bucket exato).
+    pub fn build_lsh_probes(&mut self, n_tables: usize, bits_per: usize, probes: usize) {
         let n_tables = n_tables.max(1);
         let bits_per = bits_per.clamp(1, 16);
         let buckets = 1usize << bits_per;
+        self.lsh_probes = probes;
         self.lsh_tables = Vec::with_capacity(n_tables);
         for t in 0..n_tables {
             let mut table = vec![Vec::new(); buckets];
@@ -141,19 +154,35 @@ impl HvBank {
         }
     }
 
+    /// Códigos a sondar: bucket exato + até `probes` flips de 1 bit (multi-probe).
+    fn multiprobe_codes(code: usize, bits_per: usize, probes: usize) -> Vec<usize> {
+        let mut out = Vec::with_capacity(1 + probes.min(bits_per));
+        out.push(code);
+        let limit = probes.min(bits_per);
+        for b in 0..limit {
+            out.push(code ^ (1usize << b));
+        }
+        out
+    }
+
     fn top_k_lsh(&self, q: &[u64], k: usize, out: &mut [(u32, u128)]) -> usize {
         let bits_per = {
             let buckets = self.lsh_tables[0].len();
             (buckets.trailing_zeros()) as usize
         };
         let mask = (1u64 << bits_per) - 1;
-        let mut cand = Vec::with_capacity(256);
+        let mut cand = Vec::with_capacity(512);
         for (t, table) in self.lsh_tables.iter().enumerate() {
             let word = (t * 3) % self.words;
             let shift = (t * 5) % (64usize.saturating_sub(bits_per).max(1));
             let code = ((q[word] >> shift) & mask) as usize;
-            for &idx in &table[code] {
-                cand.push(idx);
+            for probe in Self::multiprobe_codes(code, bits_per, self.lsh_probes) {
+                if probe >= table.len() {
+                    continue;
+                }
+                for &idx in &table[probe] {
+                    cand.push(idx);
+                }
             }
         }
         cand.sort_unstable();
@@ -203,5 +232,15 @@ mod tests {
     fn hamming_zero() {
         let a = [0u64; 160];
         assert_eq!(HvBank::hamming(&a, &a), 0);
+    }
+
+    #[test]
+    fn multiprobe_includes_exact_and_neighbors() {
+        let codes = HvBank::multiprobe_codes(0b1010, 4, 3);
+        assert_eq!(codes[0], 0b1010);
+        assert_eq!(codes.len(), 4); // exact + 3 flips
+        assert!(codes.contains(&0b1011));
+        assert!(codes.contains(&0b1000));
+        assert!(codes.contains(&0b1110));
     }
 }

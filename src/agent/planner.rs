@@ -2,6 +2,9 @@
 //!
 //! P1 do roadmap: escolhe **uma** tool por passo. A versão multi-passo (P2)
 //! reutiliza a mesma função de score dentro de uma busca.
+//!
+//! A5/P6: candidatos com pré-condição falsa dados `WorldState.claims` já saem
+//! em `ToolRegistry::candidates` (poda barata; sem MCTS).
 
 use super::registry::ToolRegistry;
 use super::self_model::SelfModel;

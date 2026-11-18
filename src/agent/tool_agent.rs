@@ -152,8 +152,7 @@ impl ToolAgent {
     pub fn plan(&self, goal: &Goal) -> Vec<PlanStep> {
         let state = WorldState {
             scope: self.scope,
-            facts_loaded: 0,
-            memory_hits: 0,
+            ..WorldState::default()
         };
         self.planner
             .rank(goal, &state, &self.registry, &self.self_model, &[])
@@ -171,8 +170,7 @@ impl ToolAgent {
         let started = std::time::Instant::now();
         let state = WorldState {
             scope: self.scope,
-            facts_loaded: 0,
-            memory_hits: 0,
+            ..WorldState::default()
         };
         let mut ctx = self.context(
             Budget {
@@ -198,8 +196,7 @@ impl ToolAgent {
         let started = std::time::Instant::now();
         let state = WorldState {
             scope: self.scope,
-            facts_loaded: 0,
-            memory_hits: 0,
+            ..WorldState::default()
         };
         let total_steps: usize = workflow
             .pipeline
@@ -279,17 +276,20 @@ impl ToolAgent {
         let mut rationale = "sem tool candidata".to_string();
         let mut action = Action::Abstain;
         let mut success = false;
+        // A5: estado mutável com claims do blackboard para poda no rank.
+        let mut state = state.clone();
 
         for _ in 0..budget {
             if ctx.spent_steps >= ctx.budget.max_steps {
                 rationale = "orçamento de passos esgotado".to_string();
                 break;
             }
+            state.claims = ctx.claims.clone();
             let mut blocked = used.clone();
             blocked.extend_from_slice(&cooled);
             let Some(step) =
                 self.planner
-                    .select(goal, state, &self.registry, &self.self_model, &blocked)
+                    .select(goal, &state, &self.registry, &self.self_model, &blocked)
             else {
                 break;
             };
