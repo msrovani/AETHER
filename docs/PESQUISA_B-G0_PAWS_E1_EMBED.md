@@ -84,4 +84,10 @@ OPENCODE mediu RTX 3050: **19,33 txt/s** (bf16 batch64 n=1000) ≈ **1,79×** vs
 - Proxy ONNX INT8 ~**2,07×** vs ONNX fp (30k docs, comunidade).
 - IPEX + P-cores: latência ~30 ms (i9-13900HK) — útil p/ R3/R5, não substitui D1.
 - Medir no host: ST onnx/openvino vs R4 CUDA 19,33 e A1 CPU 10,82 (mesmo n/batch/seed).
+- Smoke R5 (MSG 0619): **ABSTAIN** exit 3 — ST onnx exige `optimum`; ORT 1.32 presente.
+
+## A3 / lei E1B (MSG 0624)
+
+`b0_shard_gate` **PASS**: mono 5k recall **0,7676** vs shards s0/s1 **0,8760 / 0,8728** (Δ ~+11 pp).  
+Lei E1B (≤0,4×D) **confirmada**; piso empírico ~0,85. Teto A3 0,90 ainda exige rerank float (B2). Gap: assimetria consulta vs fato concat + JL 1-bit.
 

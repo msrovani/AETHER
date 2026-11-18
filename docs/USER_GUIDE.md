@@ -2,6 +2,9 @@
 
 Hub Windows: métricas cognitivas, vazão, hardware, demos e gráficos ao vivo — sem ler a arquitetura interna.
 
+**Frase de fronteira (v0.1):** LLM gera; AETHER cita, certifica ou abstem.  
+O hub **observa** (ACQ/jobs). A IA usável responde via `aether-api` / `aether-agent` — ver [V01_DELIVERY_PLAN.md](V01_DELIVERY_PLAN.md).
+
 Detalhe técnico do hub: [HUB_DASHBOARD.md](HUB_DASHBOARD.md).
 
 ## Pré-requisitos
@@ -73,7 +76,24 @@ Artefatos: `target/aether_transplant_uso.json`, `target/aether_api_eval.json`, `
 
 **Recarregar** relê scorecard + host + doação + artefatos da aba Testes IA.
 
+## 8) 5 minutos IA (fora do hub — coprocessador)
+
+```powershell
+# Gates F1–F6 (lab)
+.\scripts\v01_freeze_gates.ps1
+
+# Smoke F7 (API: conhecido → cite/hit; OOD → abstain)
+.\scripts\v01_freeze_smoke.ps1
+
+# CLI
+.\scripts\cargo.ps1 run --release --bin aether-agent -- ask `
+  --facts data/agent_facts.jsonl --subject AETHER --relation proibe --json
+```
+
+Na aba **Testes IA**, use **Usabilidade API** e **Test drive agente** para ver o mesmo contrato na UI.
+
 ## Fora deste hub (nesta fase)
 
-Chat LLM / MMLU / Qwen 7B no hub, macOS/Linux GUI, MSI, auth/cloud — ver [USER_DELIVERY_PLAN.md](USER_DELIVERY_PLAN.md).
+Chat LLM / MMLU / Qwen 7B no hub, macOS/Linux GUI, MSI, auth/cloud — ver [USER_DELIVERY_PLAN.md](USER_DELIVERY_PLAN.md).  
+**Trilha R** (não bloqueia tag 0.1): B-G0 / D1 ColBERT / embed 100k / NysHD.  
 US1 (medição com usuário real) fica para o tier T2; US0 é wiring dos gates já existentes.

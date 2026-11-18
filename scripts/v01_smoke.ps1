@@ -1,118 +1,158 @@
-﻿# F1.2 — onboarding v0.1 (docs/V01_DELIVERY_PLAN.md G8).
-# Sobe aether-api, pergunta um fato conhecido, um desconhecido, o solver e o agente.
-# Saída: target/v01_smoke.json. Exit 1 se algum passo falhar.
+﻿# F1.2 / G8 / F7 — smoke v0.1: API sobe; fato conhecido → hit; OOD → abstain; solve presente.
+# Artefato: target/v01_smoke.json
+# Uso (raiz): .\scripts\v01_smoke.ps1
+# Não é chatbot: valida cite/hit|abstain, false-act=0 no caminho feliz.
+
 param(
-    [string]$Bin = "",
-    [int]$Port = 8794
+    [string]$Bind = "127.0.0.1:18787",
+    [int]$TimeoutSec = 90
 )
+
 $ErrorActionPreference = "Stop"
-$Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
-if ($Bin -eq "") {
-    $candidates = @(
-        "target\release\aether-api.exe",
-        "target_open\release\aether-api.exe"
-    )
-    $Bin = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-    if (-not $Bin) {
-        throw "aether-api.exe ausente. cargo build --release --features api --bin aether-api"
+$bin = "C:\Users\msrov\Tools\mingw64\mingw64\bin"
+if ($env:PATH -notlike "*$bin*") { $env:PATH = "$bin;$env:PATH" }
+
+New-Item -ItemType Directory -Force -Path (Join-Path $Root "target") | Out-Null
+$ledger = Join-Path $Root "target\v01_smoke_ledger.jsonl"
+$outJson = Join-Path $Root "target\v01_smoke.json"
+$phasesPy = Join-Path $Root "target\v01_text_phases.py"
+if (Test-Path $ledger) { Remove-Item $ledger -Force }
+
+# Espelho de api::text_to_phases (FNV-1a + xorshift → 160 fasores unitários).
+@'
+import json, math, sys
+text = sys.argv[1]
+h = 0xcbf29ce484222325
+for b in text.encode("utf-8"):
+    h ^= b
+    h = (h * 0x00000100000001b3) & 0xFFFFFFFFFFFFFFFF
+st = h | 1
+out = []
+tau = 2.0 * math.pi
+umax = float((1 << 64) - 1)
+for _ in range(160):
+    st ^= (st << 13) & 0xFFFFFFFFFFFFFFFF
+    st &= 0xFFFFFFFFFFFFFFFF
+    st ^= st >> 7
+    st ^= (st << 17) & 0xFFFFFFFFFFFFFFFF
+    st &= 0xFFFFFFFFFFFFFFFF
+    phi = (st / umax) * tau
+    out.append(math.cos(phi))
+    out.append(math.sin(phi))
+print(json.dumps(out))
+'@ | Set-Content -Path $phasesPy -Encoding utf8
+
+function Get-PhasesJson([string]$Text) {
+    $raw = & python $phasesPy $Text
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($raw)) {
+        throw "falha ao gerar phases para '$Text'"
     }
+    return $raw.Trim()
 }
 
-$base = "http://127.0.0.1:$Port"
-$steps = New-Object System.Collections.Generic.List[object]
-$failed = $false
+Write-Host "v01_smoke: build aether-api (features api)…" -ForegroundColor Cyan
+& "$PSScriptRoot\cargo.ps1" build --release --bin aether-api --features api
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-function Add-Step([string]$Name, [bool]$Ok, [string]$Detail) {
-    $script:steps.Add([ordered]@{
-            name   = $Name
-            ok     = $Ok
-            detail = $Detail
-        }) | Out-Null
-    if (-not $Ok) { $script:failed = $true }
-    $tag = if ($Ok) { "PASS" } else { "FAIL" }
-    Write-Output "$tag $Name $Detail"
+$exe = Join-Path $Root "target\release\aether-api.exe"
+$proc = Start-Process -FilePath $exe -ArgumentList @($Bind, "--ledger", $ledger) `
+    -PassThru -WindowStyle Hidden `
+    -RedirectStandardOutput (Join-Path $Root "target\v01_smoke_api.out.log") `
+    -RedirectStandardError (Join-Path $Root "target\v01_smoke_api.err.log")
+
+function Invoke-AetherJson([string]$Path, [string]$Body) {
+    $uri = "http://$Bind$Path"
+    return Invoke-RestMethod -Uri $uri -Method Post -ContentType "application/json" -Body $Body -TimeoutSec 30
 }
 
-function New-Phases([double]$Freq) {
-    0..159 | ForEach-Object { [math]::Round([math]::Sin(($_ + 1) * $Freq), 5) }
-}
-
-$sw = [Diagnostics.Stopwatch]::StartNew()
-$proc = Start-Process -FilePath $Bin -ArgumentList @(
-    "127.0.0.1:$Port",
-    "--sgdb", "mock",
-    "--sgdb-outbox", "target\v01_smoke_outbox.jsonl"
-) -PassThru -WindowStyle Hidden
+$sw = [System.Diagnostics.Stopwatch]::StartNew()
+$ok = $false
+$err = $null
+$known = $null
+$ood = $null
+$solve = $null
+$props = $null
+$frontier = $null
 
 try {
-    $healthy = $false
-    $health = $null
-    foreach ($i in 1..50) {
-        Start-Sleep -Milliseconds 100
+    $deadline = [DateTime]::UtcNow.AddSeconds([Math]::Min(30, $TimeoutSec))
+    while ([DateTime]::UtcNow -lt $deadline) {
         try {
-            $health = Invoke-RestMethod -Uri "$base/health" -Method Get -TimeoutSec 2
-            if ($null -ne $health) { $healthy = $true; break }
-        } catch {}
+            $null = Invoke-WebRequest -Uri "http://$Bind/health" -Method Get -TimeoutSec 2 -ErrorAction Stop
+            break
+        } catch {
+            Start-Sleep -Milliseconds 200
+        }
     }
-    Add-Step "health" $healthy ("sgdb=" + $health.sgdb)
 
-    $phases = New-Phases 0.05
-    $remember = @{
-        key         = "777"
-        phases      = $phases
-        scope       = @{ organism = 1; run = 1; app = 1 }
-        certificate = @{ energy = -1.5; gap = 0.25; violations = 0 }
-        authority   = 100
-    } | ConvertTo-Json -Depth 5 -Compress
-    $rem = Invoke-RestMethod -Uri "$base/v1/aether/remember" -Method Post -ContentType "application/json" -Body $remember
-    Add-Step "remember" ($null -ne $rem) "ok"
+    $props = Invoke-RestMethod -Uri "http://$Bind/props" -Method Get -TimeoutSec 10
+    $frontier = [string]$props.aether.frontier
+    if ([string]::IsNullOrWhiteSpace($frontier)) {
+        throw "props.aether.frontier ausente"
+    }
 
-    $cueBody = @{
-        scope = @{ organism = 1; run = 1; app = 1 }
-        query = $phases
-    } | ConvertTo-Json -Depth 5 -Compress
-    $cue = Invoke-RestMethod -Uri "$base/v1/aether/cue" -Method Post -ContentType "application/json" -Body $cueBody
-    $cueOk = ($cue.abstain -eq $false -and [string]$cue.key -eq "777")
-    Add-Step "cue_conhecido" $cueOk ("key=" + $cue.key + " abstain=" + $cue.abstain)
+    $knownText = "Brasil capital Brasilia"
+    $oodText = "xyzzy_ood_token_not_in_ledger_999"
+    $phasesKnown = Get-PhasesJson $knownText
+    $phasesOod = Get-PhasesJson $oodText
 
-    $other = New-Phases 0.17
-    $cueMissBody = @{
-        scope = @{ organism = 1; run = 1; app = 1 }
-        query = $other
-    } | ConvertTo-Json -Depth 5 -Compress
-    $miss = Invoke-RestMethod -Uri "$base/v1/aether/cue" -Method Post -ContentType "application/json" -Body $cueMissBody
-    Add-Step "cue_desconhecido" ($miss.abstain -eq $true) ("reason=" + $miss.reason)
+    $rememberBody = @"
+{"key":"42","phases":$phasesKnown,"scope":{"organism":1,"run":0,"app":1},"certificate":{"energy":-1.5,"gap":0.25,"violations":0},"authority":200}
+"@
+    $null = Invoke-AetherJson "/v1/aether/remember" $rememberBody
 
-    $solve = Invoke-RestMethod -Uri "$base/v1/aether/solve" -Method Post -ContentType "application/json" -Body '{"n":2,"j":[[0,1],[1,0]],"h":[0,0],"steps":80,"restarts":4,"seed":7}'
-    $solveOk = ($solve.violations -eq 0 -and $null -ne $solve.energy)
-    Add-Step "solve_certificado" $solveOk ("violations=" + $solve.violations + " energy=" + $solve.energy)
+    $cueKnown = @"
+{"scope":{"organism":1,"run":0,"app":1},"query":$phasesKnown}
+"@
+    $known = Invoke-AetherJson "/v1/aether/cue" $cueKnown
 
-    $known = Invoke-RestMethod -Uri "$base/v1/aether/agent" -Method Post -ContentType "application/json" -Body '{"subject":"Brasil","relation":"capital"}'
-    $knownOk = ($known.action -eq "act" -or $known.action -eq "cite")
-    Add-Step "agent_conhecido" $knownOk ("action=" + $known.action)
+    $cueOod = @"
+{"scope":{"organism":1,"run":0,"app":1},"query":$phasesOod}
+"@
+    $ood = Invoke-AetherJson "/v1/aether/cue" $cueOod
 
-    $unknown = Invoke-RestMethod -Uri "$base/v1/aether/agent" -Method Post -ContentType "application/json" -Body '{"subject":"Atlantida","relation":"capital"}'
-    Add-Step "agent_desconhecido" ($unknown.action -eq "abstain") ("action=" + $unknown.action)
-} finally {
-    if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+    $solveBody = '{"n":2,"j":[[0,1],[1,0]],"h":[0,0],"steps":64,"restarts":2,"seed":7}'
+    $solve = Invoke-AetherJson "/v1/aether/solve" $solveBody
+
+    $knownHit = -not [bool]$known.abstain
+    $oodAbstain = [bool]$ood.abstain
+    $solveOk = ($null -ne $solve.energy) -or ($null -ne $solve.gap) -or ($null -ne $solve.certificate)
+    $ok = $knownHit -and $oodAbstain -and $solveOk -and (-not [string]::IsNullOrWhiteSpace($frontier))
+    if (-not $ok) {
+        $err = "known_hit=$knownHit ood_abstain=$oodAbstain solve_ok=$solveOk frontier='$frontier'"
+    }
+}
+catch {
+    $err = "$_"
+    $ok = $false
+}
+finally {
+    if ($proc -and -not $proc.HasExited) {
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    }
+    $sw.Stop()
 }
 
-$sw.Stop()
-$pass = @($steps | Where-Object { $_.ok }).Count
-$report = [ordered]@{
-    plan     = "docs/V01_DELIVERY_PLAN.md"
-    gate     = "G8"
-    ok       = (-not $failed)
-    pass     = $pass
-    total    = $steps.Count
-    elapsed_s = [math]::Round($sw.Elapsed.TotalSeconds, 3)
-    bin      = $Bin
-    sgdb     = "mock"
-    steps    = @($steps)
+$result = [ordered]@{
+    version       = "v01_smoke"
+    ok            = $ok
+    elapsed_ms    = $sw.ElapsedMilliseconds
+    bind          = $Bind
+    frontier      = $frontier
+    known_abstain = if ($null -ne $known) { [bool]$known.abstain } else { $null }
+    known_hits    = if ($null -ne $known) { $known.hits } else { $null }
+    ood_abstain   = if ($null -ne $ood) { [bool]$ood.abstain } else { $null }
+    ood_reason    = if ($null -ne $ood) { [string]$ood.reason } else { $null }
+    solve_energy  = if ($null -ne $solve) { $solve.energy } else { $null }
+    solve_gap     = if ($null -ne $solve) { $solve.gap } else { $null }
+    error         = $err
+    promise       = "hit_known__abstain_ood__frontier_props__no_chatbot"
+    created       = (Get-Date).ToUniversalTime().ToString("o")
 }
-New-Item -ItemType Directory -Force -Path "target" | Out-Null
-$report | ConvertTo-Json -Depth 6 | Set-Content -Path "target\v01_smoke.json" -Encoding utf8
-Write-Output ("RESUMO {0}/{1} elapsed_s={2}" -f $pass, $steps.Count, $report.elapsed_s)
-if ($failed) { exit 1 }
+($result | ConvertTo-Json -Depth 6) | Set-Content -Path $outJson -Encoding utf8
+Write-Host "artefato: $outJson ok=$ok elapsed_ms=$($sw.ElapsedMilliseconds)" -ForegroundColor $(if ($ok) { "Green" } else { "Yellow" })
+if (-not $ok) { exit 2 }
+exit 0

@@ -33,19 +33,48 @@ Sem dependência nova: HTTP/1.1 mínimo sobre `std::net`, `Connection: close`.
 Rotas de liveness (`/health`, `/props`, `/v1/models`) são **públicas**; as demais
 exigem token quando `--token` é usado.
 
+### Contrato freeze v0.1 (não-chatbot)
+
+Plano: [`V01_DELIVERY_PLAN.md`](V01_DELIVERY_PLAN.md). Frase em
+`GET /props` → `aether.frontier`: *LLM gera; AETHER cita, certifica ou abstem.*
+
+| Campo estável | Valores / regra |
+|---|---|
+| `action` / `verdict` | `act` · `cite` · `propose` · `abstain` |
+| `answer` | só quando a ação autoriza; **nunca** inventar em `abstain` |
+| `authority` | 96→128→200→255; ≥200 exige certificado ou HITL |
+| `reason` (abstain) | `empty_scope`, `low_similarity`, `contradiction`, `ood`, … |
+
+Smoke F7: `.\scripts\v01_freeze_smoke.ps1` → `target/v01_smoke.json`
+(conhecido→hit; OOD→abstain; `frontier` presente).
+
 ## 2. Rotas
 
 | Método | Rota | Para quê |
 |---|---|---|
 | `GET` | `/health` | prontidão + invariantes (`tokens=0`, `backprop=0`, `t0_ledger_calls=0`) |
-| `GET` | `/props` | metadados estilo llama.cpp |
+| `GET` | `/props` | metadados + **`aether.frontier`** / `actions` (freeze v0.1) |
 | `GET` | `/v1/models` | catálogo OpenAI |
 | `POST` | `/v1/aether/remember` | grava um fato de fase no ledger (T2) |
 | `POST` | `/v1/aether/cue` | recall por fase, **dentro de um escopo** |
 | `POST` | `/v1/aether/forget` | apaga um fato (exige `authority ≥ 128`) e grava túmulo |
 | `POST` | `/v1/aether/solve` | QUBO/Ising → estado + certificado (`energy`, `gap`, `violations`) |
+| `POST` | `/v1/aether/agent` | Goal estruturado → `action` + `answer` + autoridade/certificado |
 | `POST` | `/v1/chat/completions` | dialeto OpenAI; devolve evidência certificada ou abstenção |
 | `POST` | `/completion` | dialeto llama.cpp; mesmo motor |
+
+### 2.1 O que cada resposta **garante** (v0.1)
+
+| Rota | Garantia | Não garante |
+|---|---|---|
+| `/props` | `frontier` = “LLM gera; AETHER cita, certifica ou abstem”; `actions` = `act\|cite\|propose\|abstain` | prosa livre |
+| `/v1/aether/cue` | hit com `key`+`authority`+escopo **ou** `abstain` + `reason` tipada; escopo alheio → `empty_scope` | paráfrase semântica (hash/fase) |
+| `/v1/aether/solve` | `energy`/`gap`/`violations` + decisão tipada | otimalidade global sem bound |
+| `/v1/aether/agent` | `action` ∈ {act,cite,propose,abstain}; OOD → abstain; false-act = 0 nos gates | NL open-domain |
+| `/v1/chat/completions` | evidência em `x_aether` **ou** abstain (`content_filter`) | chatbot / geração fluente |
+| `/v1/aether/forget` | authority gate + túmulo; 255 sem store → erro | purge cego |
+
+Contrato completo e gates: [`V01_DELIVERY_PLAN.md`](V01_DELIVERY_PLAN.md). Smoke: `scripts/v01_smoke.ps1`.
 
 ## 3. Exemplos
 

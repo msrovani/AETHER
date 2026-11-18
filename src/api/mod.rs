@@ -775,10 +775,7 @@ fn props(state: &ApiState) -> Json {
                     "frontier",
                     Json::str("LLM gera; AETHER cita, certifica ou abstem"),
                 ),
-                (
-                    "actions",
-                    Json::str("act|cite|propose|abstain"),
-                ),
+                ("actions", Json::str("act|cite|propose|abstain")),
             ]),
         ),
     ])

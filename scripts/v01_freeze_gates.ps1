@@ -1,62 +1,92 @@
-﻿# Subconjunto G0 lab do freeze v0.1 (docs/V01_DELIVERY_PLAN.md).
-# Não substitui a suite completa; gera target/v01_freeze_gates.json.
+﻿# Gates F1–F6 do freeze v0.1 (docs/V01_DELIVERY_PLAN.md).
+# F7 = scripts/v01_freeze_smoke.ps1 (binário API).
+# Artefatos: target/v01_freeze/
+# Uso: powershell -NoProfile -File scripts/v01_freeze_gates.ps1
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
 $bin = "C:\Users\msrov\Tools\mingw64\mingw64\bin"
-if ($env:PATH -notlike "*$bin*") { $env:PATH = "$bin;$env:PATH" }
+if (Test-Path $bin) {
+    if ($env:PATH -notlike "*$bin*") { $env:PATH = "$bin;$env:PATH" }
+}
 
-New-Item -ItemType Directory -Force -Path (Join-Path $Root "target") | Out-Null
-$out = Join-Path $Root "target\v01_freeze_gates.json"
-$sw = [System.Diagnostics.Stopwatch]::StartNew()
-$steps = @()
+$OutDir = Join-Path $Root "target\v01_freeze"
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+$report = Join-Path $OutDir "gates_f1_f6.txt"
+$lines = New-Object System.Collections.Generic.List[string]
+$fail = 0
+$cargo = Join-Path $PSScriptRoot "cargo.ps1"
 
-function Step([string]$Name, [scriptblock]$Body) {
-    $t0 = [System.Diagnostics.Stopwatch]::StartNew()
-    & $Body
+function Invoke-Cargo {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
+    if (Test-Path $cargo) {
+        & $cargo @Args
+    } else {
+        & cargo @Args
+    }
+}
+
+function Run-Gate([string]$Id, [string[]]$CargoArgs) {
+    Write-Host "=== $Id ==="
+    $logPath = Join-Path $OutDir "$Id.log"
+    $out = & { Invoke-Cargo @CargoArgs 2>&1 | Out-String }
     $code = $LASTEXITCODE
-    $t0.Stop()
-    $script:steps += [ordered]@{
-        name       = $Name
-        ok         = ($code -eq 0)
-        exit       = $code
-        elapsed_ms = $t0.ElapsedMilliseconds
+    $out | Set-Content $logPath -Encoding utf8
+    $tail = ($out -split "`n" | Where-Object { $_ -match 'test result:|ACQ|false_act|FAIL|error:' } | Select-Object -Last 5) -join " | "
+    if ($code -eq 0) {
+        $status = "PASS"
+    } else {
+        $status = "FAIL"
+        $script:fail++
     }
-    if ($code -ne 0) { throw "falhou: $Name exit=$code" }
+    $line = "$status $Id exit=$code $tail"
+    $lines.Add($line) | Out-Null
+    Write-Host $line
 }
 
-try {
-    Step "fmt_check" { & "$PSScriptRoot\cargo.ps1" fmt -- --check; exit $LASTEXITCODE }
-    Step "check_lib" { & "$PSScriptRoot\cargo.ps1" check --lib; exit $LASTEXITCODE }
-    Step "usability_gate" {
-        & "$PSScriptRoot\cargo.ps1" test --release --features agent --test usability_gate
-        exit $LASTEXITCODE
-    }
-    Step "language_port_gate" {
-        & "$PSScriptRoot\cargo.ps1" test --release --features agent --test language_port_gate
-        exit $LASTEXITCODE
-    }
-    $ok = $true
-    $err = $null
-}
-catch {
-    $ok = $false
-    $err = "$_"
-}
-$sw.Stop()
+Write-Host "=== F6 fmt ==="
+Invoke-Cargo fmt -- --check 2>&1 | Out-Null
+$fmt = $LASTEXITCODE
+if ($fmt -ne 0) { $fail++ }
+$lines.Add("$(if ($fmt -eq 0) {'PASS'} else {'FAIL'}) F6_fmt exit=$fmt") | Out-Null
 
-$result = [ordered]@{
+Write-Host "=== F6 clippy ==="
+Invoke-Cargo clippy --release --all-targets -- -D warnings 2>&1 |
+    Tee-Object (Join-Path $OutDir "F6_clippy.log") | Out-Null
+$cl = $LASTEXITCODE
+if ($cl -ne 0) { $fail++ }
+$lines.Add("$(if ($cl -eq 0) {'PASS'} else {'FAIL'}) F6_clippy exit=$cl") | Out-Null
+
+Run-Gate "F6_lib" @("test", "--release", "--lib")
+Run-Gate "F1_agent_eval" @("test", "--release", "--test", "agent_eval_suite", "--", "--nocapture")
+Run-Gate "F2_cic" @("test", "--release", "--test", "cic_abstain_gate", "--", "--nocapture")
+Run-Gate "F3_api_agent" @("test", "--release", "--features", "api", "--test", "api_agent", "--", "--nocapture")
+Run-Gate "F3_api_eval" @("test", "--release", "--features", "api", "--test", "api_eval", "--", "--nocapture")
+Run-Gate "F4_usability" @("test", "--release", "--features", "agent", "--test", "usability_gate", "--", "--nocapture")
+Run-Gate "F4_redteam" @("test", "--release", "--test", "agent_redteam_gate", "--", "--nocapture")
+Run-Gate "F5_cognitive" @("test", "--release", "--test", "cognitive_audit", "--", "--nocapture")
+
+foreach ($f in @("target/aether_scorecard.json", "target/cic_abstain.json", "target/usability_gate.json")) {
+    if (Test-Path $f) {
+        Copy-Item $f (Join-Path $OutDir (Split-Path $f -Leaf)) -Force
+    }
+}
+
+$summary = "SUMMARY fail_count=$fail"
+$lines.Add($summary) | Out-Null
+$lines | Set-Content $report -Encoding utf8
+
+$json = [ordered]@{
     version    = "v01_freeze_gates"
-    ok         = $ok
-    elapsed_ms = $sw.ElapsedMilliseconds
-    steps      = $steps
-    error      = $err
-    note       = "subset_G0_lab_not_full_G0-G9"
+    ok         = ($fail -eq 0)
+    fail_count = $fail
+    lines      = @($lines)
     created    = (Get-Date).ToUniversalTime().ToString("o")
 }
-($result | ConvertTo-Json -Depth 6) | Set-Content -Path $out -Encoding utf8
-Write-Host "artefato: $out ok=$ok" -ForegroundColor $(if ($ok) { "Green" } else { "Yellow" })
-if (-not $ok) { exit 2 }
-exit 0
+($json | ConvertTo-Json -Depth 5) | Set-Content (Join-Path $OutDir "gates_f1_f6.json") -Encoding utf8
+
+Write-Host "=== RESUMO ==="
+Get-Content $report
+if ($fail -gt 0) { exit 1 } else { exit 0 }

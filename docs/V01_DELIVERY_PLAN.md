@@ -103,6 +103,8 @@ semântica tipo BERT sem transdutor/borda; ACQ 100 como “empata com GPT”.
 
 ## 5. Gates de freeze (F1–F7)
 
+Os IDs **G0–G9** da conversa (build, ACQ, API, agente, integridade, HITL, undo, US, smoke, tag) estão na ordem de execução de [`V01_G0_G9_IMPL.md`](V01_G0_G9_IMPL.md). F1–F7 abaixo são o subconjunto que os scripts já chamam. G9 (tag `0.1.0`) continua fora até pedido humano.
+
 Rodar em `--release`, host preferencialmente `contended_false`.
 
 | ID | Gate | Critério |
@@ -113,9 +115,9 @@ Rodar em `--release`, host preferencialmente `contended_false`.
 | F4 | `usability_gate` + `agent_redteam_gate` | parser/OOD não vira `act` |
 | F5 | `cognitive_audit` | ACQ=100; 12/12 MEASURED; `hot_path_bytes=0` |
 | F6 | `fmt --check` + `clippy -D warnings` + `test --release --lib` | limpo |
-| F7 | [`scripts/v01_freeze_smoke.ps1`](../scripts/v01_freeze_smoke.ps1) | API sobe → cue/agent conhecidos → OOD abstain → scorecard legível |
+| F7 | [`scripts/v01_freeze_smoke.ps1`](../scripts/v01_freeze_smoke.ps1) | encadeia `v01_smoke.ps1` + `/props.frontier` → artefatos em `target/v01_freeze/` |
 
-Script agregador (lab): `scripts/v01_freeze_gates.ps1`.
+Scripts: `scripts/v01_freeze_gates.ps1` (F1–F6) · `scripts/v01_smoke.ps1` · `scripts/v01_freeze_smoke.ps1` (F7).
 
 ---
 
@@ -123,10 +125,12 @@ Script agregador (lab): `scripts/v01_freeze_gates.ps1`.
 
 - [x] Doc V01 (este arquivo) + links no README / USER_DELIVERY  
 - [x] Seção **“5 minutos IA”** no README  
-- [x] Frase de fronteira em `/props` (campo `frontier`)  
+- [x] Frase de fronteira em `/props` (campo `aether.frontier`)  
 - [x] Corpus seed `data/agent_facts.jsonl` (≥1 fato conhecido; contraste/OOD no smoke)  
 - [x] Hub: validar freeze via Auditoria → ACQ (não fingir chat)  
 - [x] Errata de marketing: ACQ ≠ MMLU; donor PAWS ~0,69 ≠ chatbot; E1 PAWS 0,5983 = achado negativo  
+- [x] F1.1 mapa US→gates: [`USABILITY_TESTS.md`](USABILITY_TESTS.md) + agregador `tests/usability_gate.rs`  
+- [x] F1.2 smoke: [`scripts/v01_smoke.ps1`](../scripts/v01_smoke.ps1) (+ alias `v01_freeze_smoke.ps1`)  
 
 ---
 
