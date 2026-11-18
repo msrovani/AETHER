@@ -93,10 +93,23 @@ def export_encoder(st_model, out_path: Path) -> None:
     )
 
 
-def make_onnx_embedder(onnx_path: Path, tokenizer, dim: int, batch: int):
-    """Fecha uma funcao texts -> embeddings L2-normalizadas (truncate_dim)."""
+def make_onnx_embedder(onnx_path: Path, st_model, dim: int, batch: int):
+    """Fecha uma funcao texts -> embeddings L2-normalizadas (truncate_dim).
+
+    O pooling NAO e reimplementado: usamos o modulo Pooling do proprio
+    SentenceTransformer (Qwen3-Embedding = last-token, ver 1_Pooling/config.json),
+    senao o cosine vs torch cai para ~0.70 (smoke 2026-11-18).
+    """
     import numpy as np
     import onnxruntime as ort
+    import torch
+
+    tokenizer = st_model[0].tokenizer
+    pooling = next(
+        (m for m in st_model if m.__class__.__name__ == "Pooling"), None
+    )
+    if pooling is None:
+        raise RuntimeError("SentenceTransformer sem modulo Pooling — ABSTAIN")
 
     sess = ort.InferenceSession(
         str(onnx_path), providers=["CPUExecutionProvider"]
@@ -119,10 +132,14 @@ def make_onnx_embedder(onnx_path: Path, tokenizer, dim: int, batch: int):
                     "attention_mask": tok["attention_mask"].astype("int64"),
                 },
             )[0]
-            mask = tok["attention_mask"].astype("float32")[:, :, None]
-            summed = (hs * mask).sum(axis=1)
-            counts = np.maximum(mask.sum(axis=1), 1e-9)
-            pooled = (summed / counts)[:, :dim]
+            feats = {
+                "token_embeddings": torch.from_numpy(hs),
+                "attention_mask": torch.from_numpy(
+                    tok["attention_mask"].astype("int64")
+                ),
+            }
+            pooled = pooling(feats)["sentence_embedding"].numpy()
+            pooled = pooled[:, :dim]  # truncate_dim (MRL), igual ao caminho ST
             norms = np.linalg.norm(pooled, axis=1, keepdims=True)
             outs.append(pooled / np.maximum(norms, 1e-12))
         return np.concatenate(outs, axis=0)

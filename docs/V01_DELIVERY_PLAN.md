@@ -159,8 +159,8 @@ MMLU/Arena.
 
 ## 9. Checklist de tag 0.1.0
 
-- [ ] F1–F7 verdes no host de release (artefatos em `target/v01_freeze/`)  
-- [ ] `CYCLE_CLOSE_V01_FREEZE.md` preenchido com números  
+- [x] F1–F7 verdes no host de release (artefatos em `target/v01_freeze/`; ver [`CYCLE_CLOSE_V01_FREEZE.md`](CYCLE_CLOSE_V01_FREEZE.md))  
+- [x] `CYCLE_CLOSE_V01_FREEZE.md` preenchido com números  
 - [ ] README + EXTERNAL_API + este doc alinhados à versão  
 - [ ] Pedido humano explícito: bump `Cargo.toml` + tag `v0.1.0`  
 - [ ] Commit/changelog Conventional Commits  

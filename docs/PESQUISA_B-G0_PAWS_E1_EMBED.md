@@ -111,3 +111,8 @@ Confirmado no card HF e lista ST pretrained: `MultiVectorEncoder("antoinelouis/c
 
 Alinha `tools/b0_bits_f32_rerank.py`: top-k Hamming → rescore f32; gate sugerido recall@1 ≥ 0,90 ou ABSTAIN.
 
+## Identidade ≠ geometria (MSG 0649, arXiv:2609.28290)
+
+Em PAWS-X overlap-matched: bi-encoders densos AUC **0,55–0,70** (pico ~0,70); MaxSim/late fusion **não** saem dessa banda. Probe em forward **conjunto** chega **0,90–0,96**.  
+Implicação D1: falhar em passar 0,6909 com MaxSim pode ser **achado negativo honesto** — não baixar teto; cross-encoder/joint fica opt-in.
+
