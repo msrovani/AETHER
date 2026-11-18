@@ -166,6 +166,12 @@ fn outcome_claim(subject: &str, relation: &str, value: &str) -> ToolOutcome {
 }
 
 fn goal(subject: String, relation: &str) -> Goal {
+    goal_steps(subject, relation, 2)
+}
+
+/// `steps` parametriza o orçamento: o caso budget≥3 valida o fix do `used`
+/// (tool falha por erro não é queimada; greedy resgata o dead-end sem MCTS).
+fn goal_steps(subject: String, relation: &str, steps: usize) -> Goal {
     let mut g = Goal::fact(subject.clone(), relation);
     g.kind = GoalKind::Answer;
     g.success = SuccessCriteria::Claim {
@@ -175,7 +181,7 @@ fn goal(subject: String, relation: &str) -> Goal {
     };
     g.with_budget(
         Budget {
-            max_steps: 2,
+            max_steps: steps,
             max_ms: 1_000,
             max_tokens: 0,
         },
@@ -229,6 +235,29 @@ fn agent_with(tools: Vec<Box<dyn Tool>>) -> ToolAgent {
         registry.register(tool).expect("registro");
     }
     ToolAgent::with_registry(registry, SelfModel::new(None), ScopeId::new(1, 0, 1))
+}
+
+/// Validacão do fix do `used` (MSG 0466): com orçamento ≥3 o greedy resgata
+/// o dead-end [raw → final] porque a tool que falhou por erro voltou a estar
+/// disponível. Com orçamento 2 continua falhando (sem MCTS não há milagre).
+#[test]
+fn mcts_fix_used_resgata_dead_end_com_budget_3() {
+    for i in 0..8usize {
+        let mut g = goal_steps(format!("x{i}"), "final", 3);
+        g.success = SuccessCriteria::Claim {
+            subject: format!("x{i}"),
+            relation: "final".into(),
+            value: Some("42".into()),
+        };
+        let mut agent = agent_with(vec![Box::new(FinalTool), Box::new(RawTool)]);
+        let outcome = agent.solve(&g);
+        assert!(
+            outcome.success,
+            "budget 3 + fix used: greedy deve resgatar [raw→final]; action={:?} rationale={}",
+            outcome.action, outcome.rationale
+        );
+        assert_eq!(outcome.action, Action::Act);
+    }
 }
 
 #[test]
