@@ -38,7 +38,7 @@ Nada disso está preenchido em [`CYCLE_CLOSE_V01_FREEZE.md`](CYCLE_CLOSE_V01_FRE
 | G5 | (dentro de F3/F4) | filtros `forget` em `api_agent` / `api_lifecycle` e `agent_certificate_authority` |
 | G6 | (não está em F1–F7) | `cargo test --release --features agent --test agent_undo_sgdb_gate` |
 | G8 | F7 | `powershell -NoProfile -File scripts/v01_freeze_smoke.ps1` |
-| G9 | onda V0.1-D | bump + tag, fora desta execução |
+| G9 | onda V0.1-D | **FEITO** bump + tag `v0.1.0` · MSG 0666 · `c8621d2` |
 
 `scripts/v01_freeze_gates.ps1` **não** é G0–G9. Ele só cobre fmt, `check --lib`,
 `usability_gate`, `language_port_gate` e o smoke. Não substitui a tabela acima.
@@ -67,5 +67,6 @@ Sem esse arquivo completo, o freeze não está medido — mesmo que um teste ten
 
 ## Fora deste plano
 
-D1 ColBERT, BGE-M3, NysHD, embed de produção, FFT-G2, MSI, MCTS e a tag `v0.1.0`.
+D1 ColBERT, BGE-M3, NysHD, embed de produção, FFT-G2, MSI, MCTS (pesquisa).
+Tag `v0.1.0` **já publicada** (MSG 0666 / `c8621d2`) — fora deste plano de G0–G8, não do repo.
 O piso de abstenção 0,60 e o teto de AUC do mapa não se mexem para “passar” E1.

@@ -103,7 +103,7 @@ semântica tipo BERT sem transdutor/borda; ACQ 100 como “empata com GPT”.
 
 ## 5. Gates de freeze (F1–F7)
 
-Os IDs **G0–G9** da conversa (build, ACQ, API, agente, integridade, HITL, undo, US, smoke, tag) estão na ordem de execução de [`V01_G0_G9_IMPL.md`](V01_G0_G9_IMPL.md). F1–F7 abaixo são o subconjunto que os scripts já chamam. G9 (tag `0.1.0`) continua fora até pedido humano.
+Os IDs **G0–G9** da conversa (build, ACQ, API, agente, integridade, HITL, undo, US, smoke, tag) estão na ordem de execução de [`V01_G0_G9_IMPL.md`](V01_G0_G9_IMPL.md). F1–F7 abaixo são o subconjunto que os scripts já chamam. G9 (tag `0.1.0`) **fechada** — MSG 0666 / `c8621d2`.
 
 Rodar em `--release`, host preferencialmente `contended_false`.
 
@@ -153,7 +153,7 @@ MMLU/Arena.
 | **V0.1-A** | Este doc + crosslinks + fórum | Plano aprovável |
 | **V0.1-B** | Smoke F7, README IA, `/props` frontier, corpus | PR usabilidade |
 | **V0.1-C** | F1–F7 verdes + [`CYCLE_CLOSE_V01_FREEZE.md`](CYCLE_CLOSE_V01_FREEZE.md) | Checklist verde (**feito** 2026-11-18 / `0.0.177`) |
-| **V0.1-D** | Bump `0.1.0` + CHANGELOG + tag git | **Só com pedido explícito humano** |
+| **V0.1-D** | Bump `0.1.0` + CHANGELOG + tag git | **FEITO** MSG 0666 · `c8621d2` · tag `v0.1.0` |
 
 ---
 
@@ -162,8 +162,8 @@ MMLU/Arena.
 - [x] F1–F7 verdes no host de release (artefatos em `target/v01_freeze/`; ver [`CYCLE_CLOSE_V01_FREEZE.md`](CYCLE_CLOSE_V01_FREEZE.md))  
 - [x] `CYCLE_CLOSE_V01_FREEZE.md` preenchido com números  
 - [x] README + EXTERNAL_API + USER_GUIDE + este doc alinhados à promessa  
-- [ ] Pedido humano explícito: bump `Cargo.toml` + tag `v0.1.0`  
-- [ ] Commit/changelog Conventional Commits  
+- [x] Pedido humano + bump `Cargo.toml` + tag `v0.1.0` (MSG 0666)  
+- [x] Commit/changelog Conventional Commits (`c8621d2`)  
 
 ---
 

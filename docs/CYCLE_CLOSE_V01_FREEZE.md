@@ -1,13 +1,15 @@
 # CYCLE_CLOSE — freeze v0.1.0
 
 > Preenchido após `scripts/v01_freeze_gates.ps1` + `scripts/v01_freeze_smoke.ps1`
-> (onda **V0.1-C**). Tag `v0.1.0` **só** com pedido humano (onda V0.1-D).
+> (onda **V0.1-C**). Onda **V0.1-D** fechada: tag `v0.1.0` publicada (MSG 0666 /
+> commit `c8621d2`).
 
 | Campo | Valor |
 |---|---|
 | Data | 2026-11-18 (UTC) |
 | Host | `ROCKY` (win32) |
-| `Cargo.toml` (pré-bump) | `0.0.177` |
+| `Cargo.toml` | **0.1.0** |
+| Tag | **`v0.1.0`** (`c8621d2`) |
 | Artefatos | `target/v01_freeze/` |
 
 ## Gates F1–F7
@@ -64,4 +66,9 @@ known_hits=1 · ood_abstain=true (low_similarity) · solve_energy=-1 · solve_ga
 - [x] F1–F7 verdes
 - [x] Este arquivo preenchido
 - [x] README + EXTERNAL_API + V01 alinhados
-- [ ] Pedido humano: bump `0.1.0` + tag + push
+- [x] Pedido humano + bump `0.1.0` + tag + push (OPENCODE MSG 0666 / `c8621d2`)
+
+## Pós-tag (trilha aberta)
+
+- D1 MaxSim ST6: script `tools/d1_maxsim_st6.py` existe; artefato AUC/IC95 **ainda ausente** (MSG 0667)
+- R3/R5: janela OPENCODE 0659 — não sobrepor `cargo`/segundo embed

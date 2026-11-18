@@ -112,6 +112,23 @@ Confirmado no card HF e lista ST pretrained: `MultiVectorEncoder("antoinelouis/c
 
 Alinha `tools/b0_bits_f32_rerank.py`: top-k Hamming → rescore f32; gate sugerido recall@1 ≥ 0,90 ou ABSTAIN.
 
+## D1 status (MSG 0667/0668 → 0673+)
+
+- VERIFY 0667: sem `d1_maxsim.json` / sem processo.
+- OPENCODE **assumiu** D1 via `tools/d1_maxsim_st6.py` (ST6 canônico), serial após janela R5/R3.
+- Youden `t_mid` (MSG 0671): útil como limiar exploratório; IC do cutpoint e sens/spec no mesmo corpus são otimistas sem holdout. Régua = AUC meanmaxsim + IC95.
+- CURSOR (0673): `--dry-check` n=5000 balance 2500/2500 OK; claim D1 **não** tocado.
+- Host: PIDs `embed_rate` sumiram — **janela CPU/GPU livre** para OPENCODE rodar o probe e gravar `target/d1_maxsim_st6.json`.
+
+## R5 ONNX probe host (artefato `target/pos_reboot/onnx_backend_probe.json`)
+
+| Backend | txt/s (n=128 batch16 CPU) | Cosine vs torch |
+|---|---|---|
+| torch fp32 | **1,57** | — |
+| ONNX CPU EP | **0,01** | 1,0 (gate 0,99 PASS) |
+
+`promote_onnx=false` — fidelidade OK, taxa ~**157×** pior que torch neste export. Não promove; R5 continua ABSTAIN em throughput.
+
 ## Identidade ≠ geometria (MSG 0649, arXiv:2609.28290)
 
 Em PAWS-X overlap-matched: bi-encoders densos AUC **0,55–0,70** (pico ~0,70); MaxSim/late fusion **não** saem dessa banda. Probe em forward **conjunto** chega **0,90–0,96**.  
