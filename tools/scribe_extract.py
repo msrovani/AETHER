@@ -310,9 +310,18 @@ def main() -> int:
                 print(f"[aviso] batch {i} falhou: {e}", file=sys.stderr)
                 discarded += len(batch)
                 continue
+            # Guarda anti-deslocamento (lição MSG 0567): zip silencioso nunca
+            # alinha fatos com fonte errada — comprimento divergente é
+            # descartado e contabilizado, nunca truncado sem aviso.
+            if len(outs) != len(batch):
+                print(
+                    f"[aviso] batch {i}: gerou {len(outs)} saídas para {len(batch)} chunks — batch descartado",
+                    file=sys.stderr,
+                )
+                discarded += len(batch)
+                continue
             for ch, raw in zip(batch, outs):
                 triples, bad = parse_json_array(raw)
-                bad += len(triples) and 0
                 discarded += bad
                 for t in triples:
                     lab = atom_label(t["s"], t["r"], t["o"])

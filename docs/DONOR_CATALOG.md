@@ -16,7 +16,7 @@ Atualizado: **2026-11-18** · mediado CURSOR (pesquisa HF + fórum A3).
 | Auth | Geração ETL **60–120** (quarentena); teto duro ≤**240**; **255** = HITL |
 | Dim mapa | Operacional **768** (MRL / truncate); HV **10240** bits |
 | Capacidade | Lei E1B ≈ **0,4 × D** → **4096** átomos/shard (`HvBank::e1b_capacity`) |
-| B-G0 / B-G0′ | Cosine AUC≈0,49; E1 ordem scaffold **PASS** AUC≈0,61 (`b0_e1_order_gate`) |
+| B-G0 / B-G0′ | **Errata 0567:** cosine donor real **AUC≈0,6909** (0,4945 era bug de parser). E1 ordem ~0,60 **abaixo** do donor; régua mecanismo ≥0,69→0,73 |
 | Non-goal | Tokenizer / pesos / BAM / JIT no CLI de produto ou no T0 |
 
 Arquitetura alvo:
@@ -93,11 +93,11 @@ Artefato: `target/b0_parafra_gate.json`
 
 | Métrica | Valor | Leitura |
 |---------|-------|---------|
-| AUC cos(s1,s2) donor | **0,4945** | ≈ acaso — mapa cego à ordem |
+| AUC cos(s1,s2) donor | **0,6909** | errata 0567: 0,4945 era parser. Mapa separa parcial |
 | recall@1 stack HV @5k | **0,7676** | Degradação **prevista** (over capacity) |
 | Capacidade E1B | **4096** | Shard ≤4k obrigatório (B2) |
 
-**B-G0′ (2026-11-18):** scaffold E1+PAWS PASS (AUC_ord=0,6054 vs bag=0,5102). Subir com LanguagePort/roles melhores; teto cosine A3 **não** relaxado; T0 intocado.
+**B-G0 (errata 0567/0577):** donor alinhado AUC **0,6909** — “mapa no acaso” era falso. E1 n=5k **0,5983** (abaixo do donor e do piso 0,60). MaxSim-hash ≈acaso. Próximo: **D1** per-token real (OPENCODE 0581). Teto **não** baixar; T0 intocado.
 
 ---
 
@@ -106,9 +106,9 @@ Artefato: `target/b0_parafra_gate.json`
 | Fase | Entrega | Gate |
 |------|---------|------|
 | Lab (feito) | dry-run + hub + sidecar `--jl-only` | 8 gates HV / U1–U6 |
-| A3 (feito) | B-G0 honesto FAIL + lei capacidade | MSG 0519–0521 |
+| A3 (feito) | B-G0 donor AUC 0,6909 (errata do 0,4945) + lei capacidade | MSG 0567–0578 |
 | **Agora** | B2 shards ≤4k + LSH união | recall@1≥0,90 *dentro* capacidade |
-| B-G0′ | E1 ordem + PAWS | **scaffold PASS** AUC_ord=0,6054 Δbag=+0,095 (`target/b0_e1_order_gate.json`); subir com LanguagePort |
+| B-G0′ / E1 | E1 ordem + PAWS | n=5k AUC_E1≈0,5983 **abaixo** donor 0,69 (MSG 0579); alvo D1 MaxSim real ≥0,69 (claim 0581) |
 | Escriba-0 | GLiNER2.5 → facts.jsonl | schema F1 + auth≤240 |
 | B4 | rodada produção corpus+licença | 8 gates oficiais + revision HF |
 | SGDB | remember / audit / contradicts reais | URL/stdio estável |

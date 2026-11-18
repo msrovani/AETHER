@@ -770,6 +770,15 @@ fn props(state: &ApiState) -> Json {
                 ("persisted", Json::Bool(state.store.is_some())),
                 ("sgdb", Json::str(state.sgdb_status())),
                 ("edge", Json::str("text-phase-hash-lossy")),
+                // Freeze v0.1 — docs/V01_DELIVERY_PLAN.md
+                (
+                    "frontier",
+                    Json::str("LLM gera; AETHER cita, certifica ou abstem"),
+                ),
+                (
+                    "actions",
+                    Json::str("act|cite|propose|abstain"),
+                ),
             ]),
         ),
     ])

@@ -130,8 +130,12 @@ def main() -> int:
     for name in e1:
         cos = (e1[name] * e2[name]).sum(-1).tolist()
         a = auc(cos, lab)
-        m1 = sum(c for c, l in zip(cos, lab) if l) / max(1, sum(lab))
-        m0 = sum(c for c, l in zip(cos, lab) if not l) / max(1, len(lab) - sum(lab))
+        if len(cos) != len(lab):
+            raise SystemExit(f"order_probe zip: cos={len(cos)} lab={len(lab)}")
+        m1 = sum(c for c, l in zip(cos, lab, strict=True) if l) / max(1, sum(lab))
+        m0 = sum(c for c, l in zip(cos, lab, strict=True) if not l) / max(
+            1, len(lab) - sum(lab)
+        )
         res[name] = {
             "auc": round(a, 4),
             "cos_parafrase": round(m1, 4),

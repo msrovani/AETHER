@@ -67,8 +67,8 @@ Catálogo completo + ranking: [`DONOR_CATALOG.md`](DONOR_CATALOG.md).
 - Authority: ETL grava **60–120** (`authority_max_transplant=120` no harvest);
   teto duro ≤**240**; **255 = HITL exclusivo**. Docs antigos que dizem só “≤240”
   referem o teto, não o default de geração.
-- **B-G0 (2026-11-18):** cosine do mapa no PAWS = AUC≈0,49 (acaso). **B-G0′**
-  E1 composição+ordem: scaffold PASS AUC≈0,61 (`tests/b0_e1_order_gate.rs`).
+- **B-G0 (errata 0567):** cosine donor real AUC **≈0,6909** (0,4945 era bug de
+  parser). E1 n=5k ≈0,5983 **abaixo** do donor; D1 MaxSim real em curso (0581).
 
 ---
 
@@ -455,8 +455,8 @@ Doadoras: [`DONOR_CATALOG.md`](DONOR_CATALOG.md) · fórum MSG **0522**.
 | B0 sidecar / `--jl-only` | **fechado** | Qwen3-Emb-0.6B @768 |
 | B1 LSH ≥10k | **fechado** (lab) | round `20261117_b1` |
 | JL-V4 | **fechado** | tiled `act` |
-| B-G0 cosine PAWS | **abstain honesto** | AUC≈0,49 (A3); teto não baixado |
-| B-G0′ E1+ordem | **scaffold PASS** | `tests/b0_e1_order_gate.rs` AUC≈0,61; mapper hash→roles ainda tosco |
+| B-G0 cosine PAWS | **donor ~0,69** | errata parser 0567; não era acaso |
+| B-G0′ / E1 PAWS | **abaixo do donor** | n=5k AUC≈0,5983; alvo D1 ≥0,69 (claim 0581) |
 | B2 shards ≤4k | **em curso** | lei E1B 4096 (`hv.rs`) |
 | Escriba-0 | **aberto** | GLiNER2.5 → `facts.jsonl` (scaffold `tools/escriba_gliner.py`) |
 | SGDB-remember ETL | **aberto** | mock ≠ cartório real |

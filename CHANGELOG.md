@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.173] - 2026-11-18
+
+### Changed
+
+- Ciclo automatico: 20 arquivo(s) (.:2, docs:9, scripts:1, src:1, tests:1, tools:6).
+- Gate: ok (36s).
+
+- `Cargo.lock`
+- `README.md`
+- `docs/DOACAO_PLAYBOOK.md`
+- `docs/DONOR_CATALOG.md`
+- `docs/GATE_E1_PAWS_CONSISTENCY.md`
+- `docs/GPU_PLAN.md`
+- `docs/PESQUISA_B-G0_PAWS_E1_EMBED.md`
+- `docs/PLAN_2026-11-17_OTIMIZACAO_ARXIV.md`
+- `docs/RESEARCH_DOADORAS_2026.md`
+- `docs/USER_DELIVERY_PLAN.md`
+- `src/api/mod.rs`
+- `tests/b0_e1_order_gate.rs`
+
 ## [0.0.172] - 2026-11-18
 
 ### Changed

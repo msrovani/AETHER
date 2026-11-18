@@ -323,12 +323,17 @@ def pack_round(
     whiten_hash: str | None,
     claim: str = "MSG 0229 INTAKE_TRANSPLANT",
 ) -> dict:
+    # Guarda anti-deslocamento (MSG 0567/0599): labels/X/facts alinhados.
+    if not (len(labels) == len(X) == len(facts)):
+        raise SystemExit(
+            f"harvest len mismatch labels={len(labels)} X={len(X)} facts={len(facts)}"
+        )
     P = build_P(dim_in, DIM_BITS, seed)
     bits_rows: list[list[int]] = []
     keys: list[int] = []
     kinds: list[int] = []
     langs: list[int] = []
-    for lab, x, f in zip(labels, X, facts):
+    for lab, x, f in zip(labels, X, facts, strict=True):
         bits_rows.append(project_bits(P, x, DIM_BITS, dim_in))
         keys.append(key_u128(lab))
         kinds.append(int(f.get("kind", 1)))
@@ -348,7 +353,10 @@ def pack_round(
                 {"relation": rel, "offset": i, "count": min(48, len(rs) - i)}
             )
     ledger = {
-        "atoms": [{"key": hex(k), "label": lab} for k, lab in zip(keys, labels)],
+        "atoms": [
+            {"key": hex(k), "label": lab}
+            for k, lab in zip(keys, labels, strict=True)
+        ],
         "facts": facts,
         "shards": shard_meta,
     }
@@ -474,7 +482,11 @@ def main() -> None:
     seen: set[str] = set()
     uniq_facts: list[dict] = []
     uniq_labels: list[str] = []
-    for f, lab in zip(facts, atom_labels):
+    if len(facts) != len(atom_labels):
+        raise SystemExit(
+            f"facts={len(facts)} atom_labels={len(atom_labels)} antes do dedupe"
+        )
+    for f, lab in zip(facts, atom_labels, strict=True):
         if lab in seen:
             continue
         seen.add(lab)

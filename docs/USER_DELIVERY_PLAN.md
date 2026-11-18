@@ -2,10 +2,12 @@
 
 > Claim: **MSG 0089** · Documento vivo · Público: produto / PM / engenharia  
 > Estado do motor cognitivo (lab): **ACQ 100 · 12/12 MEASURED · 0 B hot-path**  
-> Estado do **produto** para usuário final: **embrião de demo** (não shippável).
+> Estado do **produto** para usuário final: **embrião de demo** (não shippável).  
+> **Freeze IA usável (v0.1):** ver [`V01_DELIVERY_PLAN.md`](V01_DELIVERY_PLAN.md) — coprocessador
+> act/cite/abstain (API/CLI); este doc continua o eixo demo/hub/Produto C–A/B.
 
 Este documento separa o que já foi conquistado no **laboratório** do que
-ainda falta para um humano não-agente usar o AETHER como produto.
+ainda falta para um humano não-agente usar o AETHER como produto físico/ops.
 
 ---
 

@@ -57,14 +57,25 @@ def main() -> int:
     emb1 = model.encode(s1, batch_size=batch, normalize_embeddings=True, show_progress_bar=True)
     emb2 = model.encode(s2, batch_size=batch, normalize_embeddings=True, show_progress_bar=True)
 
+    # Guarda anti-deslocamento (MSG 0567/0599, PEP 618): lengths divergentes
+    # nunca zip silenciosamente — fail-fast antes de gravar cosines.
+    if not (len(emb1) == len(emb2) == len(facts)):
+        raise SystemExit(
+            f"len mismatch emb1={len(emb1)} emb2={len(emb2)} facts={len(facts)}"
+        )
+
     rows = []
-    for a, b in zip(emb1, emb2):
+    for a, b in zip(emb1, emb2, strict=True):
+        if len(a) != len(b):
+            raise SystemExit(f"dim mismatch {len(a)} vs {len(b)}")
         acc = 0.0
-        for x, y in zip(a, b):
+        for x, y in zip(a, b, strict=True):
             acc += float(x) * float(y)
         rows.append(acc)
 
     labels = [f["relation"] for f in facts]
+    if len(rows) != len(labels):
+        raise SystemExit(f"cosines={len(rows)} labels={len(labels)}")
     n1 = sum(1 for r in labels if r == "parafraseia")
     sha = hashlib.sha256(
         b"".join(struct.pack("<f", c) for c in rows)

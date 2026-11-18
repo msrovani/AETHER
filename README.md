@@ -1,9 +1,13 @@
 # AETHER — motor cognitivo pós-token em Rust
 
-Versão crate: **0.0.171** (ver `Cargo.toml`). Suite recente: ~318 testes na auditoria cognitiva (`docs/COGNITIVE_AUDIT_RUN_2026-11-17.md`); `cargo test --release` reporta dezenas de alvos.
+Versão crate: ver `Cargo.toml` (freeze IA usável → **0.1.0** quando gates F1–F7
+verdes; plano: [`docs/V01_DELIVERY_PLAN.md`](docs/V01_DELIVERY_PLAN.md)).
+Suite cognitiva: `docs/COGNITIVE_AUDIT_RUN_2026-11-17.md` (ACQ 100 · 12/12).
 
 Protótipo experimental de computação baseada em física contínua: **zero tokens,
 zero transformers, zero protocolos semânticos de rede, zero backpropagation**.
+
+**Frase de fronteira:** LLM gera; AETHER cita, certifica ou abstem.
 
 ## Primeiros 5 minutos (Windows)
 
@@ -17,6 +21,24 @@ cd C:\Users\msrov\Documents\AETHER
 
 Guia do hub: [docs/USER_GUIDE.md](docs/USER_GUIDE.md) · doação/ETL: [docs/DOACAO_PLAYBOOK.md](docs/DOACAO_PLAYBOOK.md).
 
+## 5 minutos IA (coprocessador — não chatbot)
+
+```powershell
+# Gates de freeze (lab)
+.\scripts\v01_freeze_gates.ps1
+
+# Smoke F7 (sobe API, fato conhecido, OOD abstain)
+.\scripts\v01_freeze_smoke.ps1
+
+# CLI agente
+.\scripts\cargo.ps1 run --release --bin aether-agent -- ask `
+  --facts data/agent_facts.jsonl --subject AETHER --relation proibe --json
+```
+
+Contrato e checklist de tag: [docs/V01_DELIVERY_PLAN.md](docs/V01_DELIVERY_PLAN.md) ·
+API: [docs/EXTERNAL_API.md](docs/EXTERNAL_API.md). O hub **observa** (ACQ); a IA
+**responde** via `aether-api` / `aether-agent`.
+
 * **ARCHITECTURE.md** — Fase 1 (Módulos 1–4): organismo reflexivo.
 * **ARCHITECTURE_PHASE2.md** — Fase 2 (Módulos 5–8): memória, imaginação,
   morfogênese e encarnação em LAN.
@@ -25,6 +47,7 @@ Guia do hub: [docs/USER_GUIDE.md](docs/USER_GUIDE.md) · doação/ETL: [docs/DOA
 * **docs/HARDENING_REPORT.md** - auditoria, correcoes e medicoes finais (2026-11-15).
 * **docs/COGNITIVE_AUDIT_RUN_2026-11-17.md** — reexecução da auditoria cognitiva (12/12 `MEASURED`, ACQ 100, 318 testes).
 * **docs/USER_DELIVERY_PLAN.md** — mapa do entregável ao usuário + plano de ondas (demo → Produto C → A/B).
+* **docs/V01_DELIVERY_PLAN.md** — freeze v0.1: IA usável (coerência act/cite/abstain + gates F1–F7).
 * **docs/O_PROBLEMA_DOS_3_CORPOS_NAO.md** (+ `_VOL2`, `_VOL3`) — dossiê dos três "NÃO" (linguagem, lógica, self): tese, preço em hardware e gestão do conhecimento. Registro mestre no Vol. III §11.
 * **docs/SGDB_INTEGRATION.md** — encaixe operacional do `neural-sgdb` (`T2`): MCP, outbox, leitura de fase e gates F4.
 * **docs/AETHER_AGENT.md** — organismo agêntico: inferência, MoE, coerência e autoaprendizado (`aether-agent`).

@@ -1,33 +1,29 @@
-# Gate proposto — `e1_paws_consistency` (MSG 0539 / ACK 0546)
+# Gate `e1_paws_consistency` — resultado (MSG 0579)
 
-**Status:** proposta ACK’d pelo CURSOR; implementação só com ACK do dono E1
-(`phase_language`). Não editar T0.
-
-## Problema
-
-AUC cosine mapa = 0,4945 em PAWS (acaso). B4/NySHD por similaridade **não**
-fecha B-G0 label. O discriminador certo é **relação** `parafraseia` /
-`não_parafraseia` no corpus + consistência do bundle E1.
-
-## Contrato do gate (rascunho)
+**Status:** rodado · **PASS = false** (achado negativo honesto) · T0 intacto
 
 | Item | Valor |
 |---|---|
-| Entrada | `data/rounds/20261117_b0_paws/facts.jsonl`: n=5000, `parafraseia`=2500, `nao_parafraseia`=2500. Campos `subject`, `object`, `relation` |
-| Métrica | consistência do bundle E1 entre `subject` e `object`, contra o rótulo. Não é cosine do mapa |
-| Critério PASS | AUC ≥ 0,60 (mesmo teto do scaffold E1, que mediu 0,6054 em n=2000) |
-| Critério FAIL | AUC abaixo disso é achado negativo honesto. O teto cosine do mapa não desce |
-| Critério ABSTAIN | OOV / conflito / energia fora — false_act = 0 |
+| Arquivo | `tests/e1_paws_consistency_gate.rs` (OPENCODE) |
+| n | 5000 (2500/2500) |
+| AUC E1 | **0,5983** |
+| Piso abstain | 0,60 (floor; **não** afrouxado) |
+| Donor ref (errata 0567) | **0,6909** |
+| Δ vs donor | **−0,0926** |
 | Artefato | `target/e1_paws_consistency.json` |
-| Dono código | OPENCODE, arquivo novo. Não editar `phase_language` nem `encode_sentence` |
-| Fora desta métrica | MaxSim-lite do codebook (AUC 0,4996) hasheia o token em `N_ENT=64`. Não falsifica ColBERT nem BGE-M3 |
 
-## Fora de escopo
+## Leitura
 
-- Baixar teto AUC do mapa
-- Treinar NySHD para classificar label PAWS
-- Mexer em `phase_language` sem lease
+Scaffold n=2000 dava 0,6054; no corpus completo a E1 **cai abaixo do piso**.
+Régua real: donor 0,69 / bigram ~0,73. E1 precisa **ganhar do donor** antes de
+reivindicar vantagem de composição.
 
-## Referências fórum
+## Próximo (não este arquivo)
 
-MSG 0520, 0532, 0539, 0540, 0546, 0548, 0551.
+- OPENCODE: D1 per-token MaxSim real (`tools/b0_maxsim_colbert.py`, claim 0581)
+- CURSOR: mediação + doc + (opt-in) bits+f32 rerank alinhado MSG 0568/0576
+- Não editar `phase_language` / `encode_sentence` sem lease
+
+## Referências
+
+MSG 0539, 0546, 0562–0563, 0567, 0577–0581, 0585.

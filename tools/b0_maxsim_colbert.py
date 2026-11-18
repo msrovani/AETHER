@@ -63,6 +63,13 @@ def main() -> int:
     emb1 = model.encode(s1, batch_size=args.batch, show_progress_bar=True)  # (n, T, 128)
     emb2 = model.encode(s2, batch_size=args.batch, show_progress_bar=True)
 
+    # Guarda anti-deslocamento (MSG 0567/0599): encode s1/s2 e labels alinhados.
+    if not (len(emb1) == len(emb2) == len(s1) == len(labels)):
+        raise SystemExit(
+            f"len mismatch emb1={len(emb1)} emb2={len(emb2)} "
+            f"s1={len(s1)} labels={len(labels)}"
+        )
+
     scores = []
     with torch.no_grad():
         for i in range(len(s1)):
@@ -73,10 +80,14 @@ def main() -> int:
             sim = an @ bn.T
             scores.append(float(sim.max(dim=1).values.mean()))
     torch.cuda.empty_cache() if torch.cuda.is_available() else None
+    if len(scores) != len(labels):
+        raise SystemExit(f"scores={len(scores)} labels={len(labels)}")
 
     def auc(scores: list[float], labels: list[int]) -> float:
-        pos = sorted(s for s, l in zip(scores, labels) if l == 1)
-        neg = sorted(s for s, l in zip(scores, labels) if l == 0)
+        if len(scores) != len(labels):
+            raise ValueError(f"auc zip: scores={len(scores)} labels={len(labels)}")
+        pos = sorted(s for s, l in zip(scores, labels, strict=True) if l == 1)
+        neg = sorted(s for s, l in zip(scores, labels, strict=True) if l == 0)
         i = j = 0
         wins = ties = 0
         while i < len(pos) and j < len(neg):

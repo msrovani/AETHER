@@ -1,8 +1,9 @@
 //! B-G0′ — paráfrase PAWS com **composição E1** (phase language), não cosine.
 //!
-//! O B-G0 A3 (`b0_parafra_gate`) mediu cos(s1,s2) do donor → AUC≈acaso (MSG 0519–0521).
-//! Este gate usa `encode_sentence` + `bundle_sim` (não-comutativo via ρ^k).
-//! Controle: papéis derivados de tokens **ordenados por hash** (bag comutativo).
+//! Errata MSG 0567: cos(s1,s2) do donor alinhado é AUC≈0,6909 (0,4945 era bug
+//! de parser). Este gate mede composição E1 (`encode_sentence`+`bundle_sim`);
+//! n=2k scaffold ~0,60 — **abaixo** do donor; n=5k consistency ~0,5983 (0579).
+//! Controle: papéis bag (hash ordenado). MaxSim-hash ≈acaso (MSG 0550).
 //!
 //! Dados: `data/rounds/20261117_b0_paws/facts.jsonl` (mesmo round do A3).
 //! Artefato: `target/b0_e1_order_gate.json`.

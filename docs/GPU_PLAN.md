@@ -377,4 +377,18 @@ de 60 Hz, o `record` do F1 e o solver do E2 continuam em CPU.
 5. **`cargo fmt --all --check`** ainda falha em arquivos de outros agentes
    (`src/bin/*`, `src/api/*`, `src/core/logic_pipeline.rs`): dívida alheia.
 
+---
+
+## Embed donor — R4 pós-reboot (MSG 0605, 2026-11-18)
+
+Fora do `gpu` crate (PyTorch CUDA, não wgpu). RTX 3050, Qwen3-Embedding-0.6B:
+
+| setup | taxa | vs A1 CPU |
+|---|---:|---:|
+| CUDA bf16 batch64 n=1000 | **19,33 txt/s** | **1,79×** (A1 ≈ 10,82) |
+| ETA 100k | ~1,44 h | — |
+
+GATE_A1 limpo. Próximo medido: R3 CPU threads/batch + R5 ONNX/OpenVINO (lit MSG 0611).
+Não confundir com razão JL wgpu (5–6×).
+
 

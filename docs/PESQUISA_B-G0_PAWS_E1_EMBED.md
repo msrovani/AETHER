@@ -1,6 +1,8 @@
 ﻿# Pesquisa externa — B-G0 / PAWS / E1 / embed (2026-11-18)
 
-Questão no fórum: AUC paráfrase ~0,4945 (acaso) com mapa cosine; E1 ordem AUC 0,6054.
+Questão no fórum: AUC paráfrase — **ERRATA MSG 0567**: o 0,4945 era bug de
+parser (labels deslocados). Alinhado = **~0,6909**. E1 ordem AUC 0,6054 fica
+**abaixo** do donor puro.
 
 ## Literatura estabelecida
 | Fonte | Achado | Link |
@@ -31,12 +33,55 @@ Questão no fórum: AUC paráfrase ~0,4945 (acaso) com mapa cosine; E1 ordem AUC
 | BERT | PAWS-X (média) | AUC-PR | **88,2** |
 | LLMs zero/few-shot | PAWS-X (PARAPHRASUS 2024) | erro | perto do acaso; BERT fine-tune vence |
 
-Nosso mapa cosine AUC **0,4945** ≈ acaso é o comportamento esperado de bag/ordem-cego em PAWS — **não** é regressão do Qwen3. E1 ordem **0,6054** sobe na direção certa, ainda longe de encoder com estrutura.
+Nosso mapa cosine alinhado AUC **~0,69** (MSG 0567 / commit `f60f374`). O
+0,4945 era artefato de parse — **não** usar como motivo de redesenho. E1 ordem
+**0,6054** está ~0,09 **abaixo** do donor; a régua de mecanismo novo sobe para
+~0,73 (não 0,51).
 
 ## Implicação AETHER
-Não baixar teto AUC. Mapa cego à ordem **não** fecha B-G0 em PAWS (previsto pela literatura). Caminho alinhado: E1 roles + (opt-in) late-interaction / multi-vector / pair-encoder, shards ≤cap.
+Não baixar teto AUC. Premissa “mapa no acaso” **retirada**. B4/NySHD ainda
+não injeta ordem sintática (MSG 0539/0561), mas o motivo muda: gap até o donor
+e até cross-encoder, não “cosine=acaso”. Caminho: shards ≤cap + (opt-in)
+multivetor/cross no gate; E1 precisa **passar** o donor, não só o bag.
 
-## Consequência de design (OPENCODE 0539 · CURSOR ACK 0544)
-- **B4 NysHD** = recuperação (C-G0 recall), **não** label PAWS — similaridade herdaria AUC≈acaso.
-- **Label** = E1 + fato `parafraseia` + gate `e1_paws_consistency` (OPENCODE).
-- **Spike opt-in:** BGE-M3 multivetor primeiro (ACK 0542), depois ColBERT; critério AUC≥0,60 sem baixar teto; T0 intacto.
+## Consequência de design (0539 → errata 0567/0577 → 0579)
+- **B4 NysHD** = recuperação (C-G0 recall). Motivo “similaridade=acaso” **retirado** (era parser).
+- **Label:** E1 n=5000 AUC **0,5983** < piso 0,60 e < donor 0,6909 — achado negativo; composição só vale se **ganhar** do donor.
+- **Spike D1:** ColBERT-XM MaxSim + IC95 (OPENCODE 0581); régua 0,69 / 0,73; piso abstain 0,60 intacto.
+
+## Errata 2026-11-18 (MSG 0567/0577)
+
+- AUC 0,4945 era **bug de parser** (labels deslocados); donor real **AUC 0,6909**.
+- E1 n=5000: **0,5983** (abaixo do piso 0,60) — achado negativo honesto (MSG 0579).
+- Lei E1B shards imune ao bug (recall).
+- Proximo probe: D1 ColBERT-XM MaxSim + IC95 (claim OPENCODE 0581).
+
+## Guarda zip (MSG 0595/0599, tick 6)
+
+Classe do bug 0567: `zip` silencioso truncando/deslocando. Lit:
+
+| Fonte | Achado |
+|---|---|
+| [PEP 618](https://peps.python.org/pep-0618/) | `zip(..., strict=True)` → `ValueError` se lengths divergem (Py≥3.10) |
+| Defensive / offensive Python | preferir crash a resultado errado em batch alinhado |
+
+Aplicado: `scribe_extract` (fail-batch), `b0_pair_cosines`, `b0_maxsim_colbert` (fail-fast).
+
+## R4 GPU pós-reboot (MSG 0605)
+
+OPENCODE mediu RTX 3050: **19,33 txt/s** (bf16 batch64 n=1000) ≈ **1,79×** vs CPU A1; ETA 100k ≈ 1,44 h. GATE_A1 limpo. D1 MaxSim ainda sem artefato.
+
+## ColBERT-XM API (MSG 0608 / ALERTA 0617)
+
+- Paper COLING 2025: IR multilingual (mMARCO MRR@10), **não** AUC PAWS.
+- ST **v6**: `MultiVectorEncoder` obrigatório; `encode_query` / `encode_document` são **assimétricos** (prefixos, caps, skiplist).
+- MaxSim clássico = **soma** dos máx por token da query; `meanmaxsim` = média (bounded, melhor p/ AUC entre pares).
+- Risco D1: `SentenceTransformer.encode` simétrico pode invalidar o probe — gravar `api` + `shape` + `similarity_fn` no `d1_maxsim.json`.
+
+## R5 ONNX / TEI (MSG 0611)
+
+- TEI 1.8: Qwen3 0.6B/4B/8B em CPU + FlashQwen3 CUDA.
+- Proxy ONNX INT8 ~**2,07×** vs ONNX fp (30k docs, comunidade).
+- IPEX + P-cores: latência ~30 ms (i9-13900HK) — útil p/ R3/R5, não substitui D1.
+- Medir no host: ST onnx/openvino vs R4 CUDA 19,33 e A1 CPU 10,82 (mesmo n/batch/seed).
+

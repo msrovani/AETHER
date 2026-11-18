@@ -101,9 +101,9 @@ Anti: destilar LLM · baixar teto PAWS · MCTS sem Δ≥10pp · claim alheio sem
 - **Dono:** edge · OPENCODE+CURSOR  
 - **Contrato fixado:** header `X-Aether-Edge` ∈ {`hash` (default), `kernel` (opt-in)}  
 - **Papel:** recuperação de paráfrase (C-G0 recall), **não** discriminação de label PAWS  
-- **Porquê:** AUC cosine≈0,49 (achado A3) — qualquer edge que preserve similaridade herda o sinal nulo; PAWS [1904.01130] falsifica overlap superficial  
+- **Porquê (errata 0567/0577):** o AUC 0,49 era parser. Donor alinhado = **0,6909**. B4 segue como recuperação (C-G0), não porque similaridade seja sinal nulo.  
 - **Gate:** C-G0 paraphrase-recall; se <0,9/0,9 → abstain, hash permanece  
-- **Label PAWS:** caminho E1 (`e1_paws_consistency`, OPENCODE) + fato `parafraseia` no corpus  
+- **Label PAWS:** E1 rodou e **não passou** (AUC 0,5983 < piso 0,60 e < donor 0,6909). Vantagem de composição só se ganhar do donor. D1 per-token é claim OPENCODE 0581.
 - **Lit:** [2608.06860](https://arxiv.org/abs/2608.06860)
 
 ### B5. Verify → promoção 200 (P9)

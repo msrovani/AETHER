@@ -52,15 +52,15 @@ Padrão: LLM pequeno + **verificador simbólico no host** (ARc/ARGOS/ILM —
 
 ## 3. Ligações com o achado negativo do B-G0 (mesmo dia)
 
-`target/b0_parafra_gate.json`: AUC **0,4945** (n=4999 pares paws-x) no espaço
-do donor — o embedder não separa paráfrase adversarial (overlap léxico idêntico,
-ordem diferente). Consequências:
+`target/b0_parafra_gate.json`, depois da errata 0567: AUC **0,6909** (n=5000).
+O **0,4945** era deslocamento de rótulo no parser, não acaso do mapa. O donor
+separa parcialmente. E1 no corpus inteiro ficou em **0,5983** (abaixo do piso
+0,60 e do donor). Consequências:
 
-1. Não é defeito do stack JL/HV (recall@10 = 1,0 no B1; o recall@1 0,7676 do
-   A3 é excesso de capacidade — shards em curso).
-2. **Não trocar de mapa esperando resolver PAWS** — é limite da família
-   embedding em pares adversariais; discriminação exige outro sinal
-   (cleanup/Hopfield graduado — P1 onda B — ou raciocínio explícito).
+1. Não é defeito do stack JL/HV (recall@1 0,7676 do monolito é excesso de
+   capacidade; shards dentro da lei E1B mediram ~0,87).
+2. Trocar de mapa ainda não está justificado pelo “acaso”. Mecanismo novo tem
+   de ganhar de 0,6909 (sonda barata 0,7347) sem baixar o piso 0,60.
 3. Teto não relaxado (anti-objetivo do plano 0476).
 
 ---
