@@ -3,6 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.174] - 2026-11-18
+
+### Changed
+
+- Ciclo automatico: 4 arquivo(s) (docs:1, scripts:2, tests:1).
+- Gate: ok (63s).
+
+- `docs/PESQUISA_B-G0_PAWS_E1_EMBED.md`
+- `scripts/onnx_backend_probe.py`
+- `scripts/v01_freeze_smoke.ps1`
+- `tests/us_aggregate_gate.rs`
+
 ## [0.0.173] - 2026-11-18
 
 ### Changed

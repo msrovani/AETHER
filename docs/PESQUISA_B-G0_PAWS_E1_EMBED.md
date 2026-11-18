@@ -85,9 +85,20 @@ OPENCODE mediu RTX 3050: **19,33 txt/s** (bf16 batch64 n=1000) ≈ **1,79×** vs
 - IPEX + P-cores: latência ~30 ms (i9-13900HK) — útil p/ R3/R5, não substitui D1.
 - Medir no host: ST onnx/openvino vs R4 CUDA 19,33 e A1 CPU 10,82 (mesmo n/batch/seed).
 - Smoke R5 (MSG 0619): **ABSTAIN** exit 3 — ST onnx exige `optimum`; ORT 1.32 presente.
+- Errata venv (MSG 0632): `pip install optimum` rebaixou transformers e quebrou ST 6.3; restaurado. Conflito residual optimum↔transformers≥5. R5 fica ABSTAIN até caminho sem quebrar ST6.
 
 ## A3 / lei E1B (MSG 0624)
 
 `b0_shard_gate` **PASS**: mono 5k recall **0,7676** vs shards s0/s1 **0,8760 / 0,8728** (Δ ~+11 pp).  
 Lei E1B (≤0,4×D) **confirmada**; piso empírico ~0,85. Teto A3 0,90 ainda exige rerank float (B2). Gap: assimetria consulta vs fato concat + JL 1-bit.
+
+## B2 bits → float rerank (MSG 0632)
+
+| Fonte | Achado |
+|---|---|
+| Qdrant BQ + oversample 3× + rescore | recall@100 ~0,98–0,9966 (OpenAI emb) |
+| Azure BQ + rerank | NDCG quase recupera perda do binário |
+| EMVB / PLAID | bit/centroid prefilter → late interaction |
+
+Alinha `tools/b0_bits_f32_rerank.py`: top-k Hamming → rescore f32; gate sugerido recall@1 ≥ 0,90 ou ABSTAIN.
 

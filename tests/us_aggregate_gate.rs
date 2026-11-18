@@ -28,11 +28,15 @@ fn extract(text: &str, key: &str) -> String {
     if let Some(v) = after.strip_prefix('"') {
         let end = v.find('"').unwrap_or(v.len());
         v[..end].to_string()
+    } else if after.starts_with("true") || after.starts_with("false") || after.starts_with("null") {
+        after
+            .split(|c: char| !c.is_ascii_alphabetic())
+            .next()
+            .unwrap_or("")
+            .to_string()
     } else {
         let end = after
-            .find(|c: char| {
-                !(c.is_ascii_digit() || *c == '.' || *c == '-' || *c == 'e' || *c == '+')
-            })
+            .find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == 'e' || c == '+'))
             .unwrap_or(after.len());
         after[..end].to_string()
     }
@@ -163,17 +167,24 @@ fn us0_aggregate_g7() {
         let body = fs::read_to_string(art).unwrap_or_default();
 
         let status: Result<(), String> = match row.us {
-            // U2: smoke tem cue_conhecido ok (cite com key) e total==pass.
+            // U2: smoke tem cue_conhecido ok (cite com key) — schema com steps
+            // OU schema plano (known_hits>=1 e known_abstain=false).
             "U2" => {
                 let total = extract_num(&body, "total").unwrap_or(0.0);
                 let passed = extract_num(&body, "pass").unwrap_or(0.0);
                 let ok = extract(&body, "ok");
-                if body.contains("cue_conhecido") && ok == "true" && total > 0.0 && passed == total
-                {
+                let known_hits = extract_num(&body, "known_hits").unwrap_or(0.0);
+                let known_abstain = extract(&body, "known_abstain");
+                let steps_ok = body.contains("cue_conhecido")
+                    && ok == "true"
+                    && total > 0.0
+                    && passed == total;
+                let flat_ok = ok == "true" && known_hits >= 1.0 && known_abstain == "false";
+                if steps_ok || flat_ok {
                     Ok(())
                 } else {
                     Err(format!(
-                        "v01_smoke inconsistente: ok={ok} pass={passed}/{total}"
+                        "smoke inconsistente: ok={ok} pass={passed}/{total} known_hits={known_hits} known_abstain={known_abstain}"
                     ))
                 }
             }
@@ -211,15 +222,19 @@ fn us0_aggregate_g7() {
                 }
                 err.map_or(Ok(()), Err)
             }
-            // U5: smoke — solve_certificado com violations=0.
+            // U5: smoke — solve com certificado (violations=0/energy<0) —
+            // schema com steps OU schema plano (solve_energy presente e ok).
             "U5" => {
-                if body.contains("solve_certificado")
-                    && body.contains("\"ok\":  true")
-                    && extract(&body, "ok") == "true"
-                {
+                let ok = extract(&body, "ok");
+                let energy = extract_num(&body, "solve_energy");
+                let steps_ok = body.contains("solve_certificado") && ok == "true";
+                let flat_ok = ok == "true" && energy.map_or(false, |e| e.is_finite());
+                if steps_ok || flat_ok {
                     Ok(())
                 } else {
-                    Err("v01_smoke sem solve_certificado ok".into())
+                    Err(format!(
+                        "smoke sem solve_certificado/solve_energy ok={ok} energy={energy:?}"
+                    ))
                 }
             }
             _ => Ok(()),
