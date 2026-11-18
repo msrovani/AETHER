@@ -270,6 +270,10 @@ impl ToolAgent {
         let certificates_before = ctx.certificates.len();
         let verified_before = ctx.verified.len();
         let mut used: Vec<&'static str> = Vec::new();
+        // MSG 0464: tools que falharam por Failed/Precondition saem da rodada
+        // (`cooled`) sem queimar `used` — após um Ok, `cooled` limpa e a
+        // dependência pode ser retentada (ex.: final após raw).
+        let mut cooled: Vec<&'static str> = Vec::new();
         let mut steps: Vec<StepTrace> = Vec::new();
         let mut last: Option<Execution> = None;
         let mut rationale = "sem tool candidata".to_string();
@@ -281,13 +285,15 @@ impl ToolAgent {
                 rationale = "orçamento de passos esgotado".to_string();
                 break;
             }
+            let mut blocked = used.clone();
+            blocked.extend_from_slice(&cooled);
             let Some(step) =
                 self.planner
-                    .select(goal, state, &self.registry, &self.self_model, &used)
+                    .select(goal, state, &self.registry, &self.self_model, &blocked)
             else {
                 break;
             };
-            used.push(step.tool);
+            // Não marcar `used` antes da execução (causa raiz MSG 0464).
             if !ctx.can_spend(step.cost) {
                 steps.push(StepTrace {
                     tool: step.tool.to_string(),
@@ -304,6 +310,8 @@ impl ToolAgent {
             let execution = self.executor.execute(&mut self.registry, &step, goal, ctx);
             match execution {
                 Ok(execution) => {
+                    used.push(step.tool);
+                    cooled.clear();
                     let met = execution.met;
                     steps.push(step_trace(
                         &step,
@@ -331,9 +339,18 @@ impl ToolAgent {
                         detail: e.to_string(),
                     });
                     if matches!(e, super::tool::ToolError::NeedsHuman(_)) {
+                        used.push(step.tool);
                         action = Action::Cite;
                         rationale = e.to_string();
                         break;
+                    }
+                    if matches!(
+                        e,
+                        super::tool::ToolError::Failed(_) | super::tool::ToolError::Precondition(_)
+                    ) {
+                        cooled.push(step.tool);
+                    } else {
+                        used.push(step.tool);
                     }
                     rationale = e.to_string();
                 }

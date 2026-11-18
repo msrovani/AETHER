@@ -128,31 +128,31 @@ impl ToolExecutor {
             ctx.push_effect(effect.clone());
         }
         let met = goal.success.met(&outcome);
-        if met {
-            // Blackboard: o próximo passo pode consumir estas claims.
-            ctx.claims.extend(outcome.claims.iter().cloned());
-            if let Some(cert) = &outcome.certificate {
-                ctx.certificates.push(*cert);
-            }
-        } else {
-            // Rewind LIFO (memória) e truncamento do blackboard — o truncamento
-            // só é seguro quando a compensação realmente aconteceu.
+        // Blackboard: claims de uma tool Ok ficam disponíveis ao próximo passo
+        // mesmo quando ainda não satisfazem o goal (ex.: raw→final, MSG 0464/0466).
+        ctx.claims.extend(outcome.claims.iter().cloned());
+        if let Some(cert) = &outcome.certificate {
+            ctx.certificates.push(*cert);
+        }
+        if !met {
+            // Rebobina só efeitos de memória (undo); não apaga claims Ok.
             let report = ctx.rewind_report(undo_before);
-            if report.is_ok() {
+            if !report.is_ok() {
+                // Compensação falhou: remove o que esta tool acabou de publicar.
                 ctx.rollback_to(
                     effects_before,
                     claims_before,
                     certificates_before,
                     verified_before,
                 );
-            }
-            if !report.is_ok() {
                 return Err(ToolError::Failed(format!(
                     "{}: {}",
                     report.summary(),
                     report.failed.join("; ")
                 )));
             }
+            let _ = effects_before;
+            let _ = verified_before;
         }
         Ok(Execution {
             outcome,
