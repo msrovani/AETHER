@@ -12,7 +12,8 @@
 **Doação** = importar um **mapa** (geometria) e, opcionalmente, um **escriba**
 (triplas), **nunca** uma mente (pesos/tokenizer). O resultado é um banco HV de
 **10.240 bits/átomo** + fatos no SGDB, com `provenance=Transplanted` e
-`authority ≤ 240`. O organismo a 146 µs **não** muda.
+`authority` em quarentena **60–120** (teto duro ≤240; 255=HITL).
+O organismo a 146 µs **não** muda.
 
 ```text
 corpus ──► ETL (offline) ──► data/ (HV + manifest + facts)
@@ -49,16 +50,25 @@ corpus ──► ETL (offline) ──► data/ (HV + manifest + facts)
 | Papel | Modelo padrão | Licença | Uso |
 |-------|---------------|---------|-----|
 | Mapa | `Qwen/Qwen3-Embedding-0.6B` | Apache-2.0 | **Produto** |
+| Mapa (alt.) | `nomic-ai/modernbert-embed-base` / Arctic-Embed-M-v1.5 | Apache-2.0 | Retrieval EN; não “conserta” PAWS |
 | Mapa (PT-BR lab) | `tardellirs/colibri-embed-ptbr` | Gemma | Só se produto permitir |
-| Escriba | `Qwen/Qwen2.5-7B-Instruct` | Apache-2.0 | Batch offline |
-| Escriba barato | `mohar07/qwen3-0.6b-kg-triplets` | MIT | Opcional |
-| — | `victorlxh/ICKG-v3.2` | non-commercial | **Proibido** |
+| Extrator | `fastino/gliner2.5-base-v1` (JointIE) | Apache-2.0 | **Preferido** para triplas tipadas |
+| Escriba | `Qwen/Qwen2.5-7B-Instruct` | Apache-2.0 | Batch offline (relações livres) |
+| Escriba barato | `mohar07/qwen3-0.6b-kg-triplets` | MIT | Ontologia 20 rel.; quarentena |
+| — | REBEL (código NC) / `victorlxh/ICKG-v3.2` | NC | **Proibido** |
+
+Catálogo completo + ranking: [`DONOR_CATALOG.md`](DONOR_CATALOG.md).
 
 - Dimensão operacional do mapa: **`dim_in = 768`**.
   Qwen3-Embedding-0.6B é **nativo 1024** com MRL (32…1024); em produção pedir
   `dimensions=768` / `truncate_dim=768` (ou truncar primeiros 768 + L2). Apache-2.0.
 - HV: **`dim_hv = 10240`** → **160 × u64** = **1,28 KB/átomo**.
-- Authority: transplantado **≤ 240**; **255 = HITL exclusivo**.
+- Capacidade E1B: **≤ 4096** átomos/shard (`0,4 × D`); 100k ⇒ ~25 shards.
+- Authority: ETL grava **60–120** (`authority_max_transplant=120` no harvest);
+  teto duro ≤**240**; **255 = HITL exclusivo**. Docs antigos que dizem só “≤240”
+  referem o teto, não o default de geração.
+- **B-G0 (2026-11-18):** cosine do mapa no PAWS = AUC≈0,49 (acaso). **B-G0′**
+  E1 composição+ordem: scaffold PASS AUC≈0,61 (`tests/b0_e1_order_gate.rs`).
 
 ---
 
@@ -430,10 +440,21 @@ Job **Probe doação HV** regenera gates; `Recarregar` relê JSONs.
 
 ---
 
-## 15. Fechamento de ciclo lab (2026-11-17)
+## 15. Fechamento de ciclo lab (2026-11-17 → 2026-11-18)
 
 Lab dry-run + hub + Onda 0 + B0 mínimo (`--jl-only` + sidecar) **fechados**.
 Documento canônico: [`CYCLE_CLOSE_2026-11-17_DOACAO_ONDA0.md`](CYCLE_CLOSE_2026-11-17_DOACAO_ONDA0.md).
+Doadoras: [`DONOR_CATALOG.md`](DONOR_CATALOG.md) · fórum MSG **0522**.
 
-**Ainda aberto (não bloqueia aceite lab):** B-G0 · B1 (≥10k+LSH) · B4 produção ·
-SGDB-remember real · escriba 7B · FFT-G2 · JL-V4 · MCTS_gate (após B0).
+| ID | Status | Nota |
+|----|--------|------|
+| B0 sidecar / `--jl-only` | **fechado** | Qwen3-Emb-0.6B @768 |
+| B1 LSH ≥10k | **fechado** (lab) | round `20261117_b1` |
+| JL-V4 | **fechado** | tiled `act` |
+| B-G0 cosine PAWS | **abstain honesto** | AUC≈0,49 (A3); teto não baixado |
+| B-G0′ E1+ordem | **scaffold PASS** | `tests/b0_e1_order_gate.rs` AUC≈0,61; mapper hash→roles ainda tosco |
+| B2 shards ≤4k | **em curso** | lei E1B 4096 (`hv.rs`) |
+| Escriba-0 | **aberto** | GLiNER2.5 → `facts.jsonl` (scaffold `tools/escriba_gliner.py`) |
+| SGDB-remember ETL | **aberto** | mock ≠ cartório real |
+| B4 produção (doação) | **aberto** | ≠ B4-NysHD do plano arxiv |
+| FFT-G2 / MCTS | board ortogonal | não bloqueia doação |
