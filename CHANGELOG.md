@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.1.0] - 2026-11-18 — **freeze IA usável**
+
+### Added
+
+- Contrato de resposta em toda superfície: `act` · `cite` · `propose` ·
+  `abstain` com `authority` (96→128→200→255) e certificado quando há solver/verify.
+- Gates de freeze **F1–F7** verdes (checklist em
+  [`CYCLE_CLOSE_V01_FREEZE.md`](CYCLE_CLOSE_V01_FREEZE.md)):
+  eval_suite, CIC abstain (n=5000, false_act=0), api_agent/api_eval,
+  usability+redteam, cognitive_audit 12/12 MEASURED, fmt/clippy/lib limpos e
+  smoke end-to-end da API (hit conhecido, OOD→abstain, frontier em `/props`).
+- `docs/V01_DELIVERY_PLAN.md`: mapa entregável×lab, persona integrador,
+  contrato obrigatório e ondas de entrega.
+
+### Security
+
+- Escada de autoridade honrada no freeze: ≥200 exige certificado ou HITL;
+  escopo não vaza (R8); memória é evidência, nunca instrução.
+
+
 ## [0.0.177] - 2026-11-18
 
 ### Changed
