@@ -38,27 +38,24 @@ def main() -> int:
 
     from sentence_transformers import SentenceTransformer
 
-    # Determinismo idêntico ao A1/A2 (seed + temperatura=0).
-    import os
-    import random
-    os.environ.setdefault("PYTHONHASHSEED", str(args.seed))
-    random.seed(args.seed)
-    try:
-        import numpy as np
-        np.random.seed(args.seed % (2**32 - 1))
-    except ImportError:
-        np = None
-    try:
-        import torch
-        torch.manual_seed(args.seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(args.seed)
-    except ImportError:
-        torch = None
+    # Runtime L1 compartilhado (MSG 0494: fp32/batch16/threads — 6.9x).
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from embed_runtime import (
+        default_batch,
+        resolve_device,
+        set_determinism,
+        tune_cpu_threads,
+    )
 
-    model = SentenceTransformer(args.donor, truncate_dim=args.dim, device=args.device)
-    emb1 = model.encode(s1, batch_size=32, normalize_embeddings=True, show_progress_bar=True)
-    emb2 = model.encode(s2, batch_size=32, normalize_embeddings=True, show_progress_bar=True)
+    set_determinism(args.seed)
+    device = resolve_device(args.device) or "cpu"
+    batch = default_batch(device)
+    threads = tune_cpu_threads() if device == "cpu" else 0
+
+    model = SentenceTransformer(args.donor, truncate_dim=args.dim, device=device)
+    emb1 = model.encode(s1, batch_size=batch, normalize_embeddings=True, show_progress_bar=True)
+    emb2 = model.encode(s2, batch_size=batch, normalize_embeddings=True, show_progress_bar=True)
 
     rows = []
     for a, b in zip(emb1, emb2):
