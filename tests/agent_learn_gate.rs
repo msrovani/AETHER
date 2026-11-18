@@ -60,8 +60,8 @@ fn exp3_draw(w: &[f64; ARMS], rng: u64) -> usize {
     let gamma = 0.2;
     let sum: f64 = w.iter().sum();
     let mut u = (rng as f64 / u64::MAX as f64).clamp(0.0, 0.999);
-    for i in 0..ARMS {
-        let p = (1.0 - gamma) * (w[i] / sum) + gamma / ARMS as f64;
+    for (i, weight) in w.iter().enumerate() {
+        let p = (1.0 - gamma) * (weight / sum) + gamma / ARMS as f64;
         if u < p {
             return i;
         }
@@ -169,9 +169,11 @@ fn replay_de_episodio_no_sgdb() {
     let db = Path::new("target").join("sgdb-learn-replay.db");
     let _ = std::fs::create_dir_all("target");
     std::env::set_var("NEURAL_SGDB_DB", &db);
-    let mut cfg = SgdbConfig::default();
-    cfg.if_exists = "add".into();
-    cfg.retries = 0;
+    let cfg = SgdbConfig {
+        if_exists: "add".into(),
+        retries: 0,
+        ..SgdbConfig::default()
+    };
     let mut client = open(&format!("stdio:{SERVER}"), cfg).expect("stdio");
     let scope = ScopeId::new(1, 0, 1);
     let text = "aether episodio linucb braco=0 recompensa=1";

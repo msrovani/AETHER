@@ -32,10 +32,12 @@ fn stdio_remember_recall_audit_contradicts() {
     let text_a = format!("aether fato probe {stamp} gato");
     let text_b = format!("aether fato probe {stamp} gato ausente");
 
-    let mut cfg = SgdbConfig::default();
-    cfg.if_exists = "add".into();
-    cfg.retries = 0;
-    cfg.retry_backoff_ms = 0;
+    let cfg = SgdbConfig {
+        if_exists: "add".into(),
+        retries: 0,
+        retry_backoff_ms: 0,
+        ..SgdbConfig::default()
+    };
     let mut client = open(&format!("stdio:{SERVER}"), cfg).expect("stdio");
     let scope = ScopeId::new(1, 0, 1);
 

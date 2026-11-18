@@ -26,6 +26,7 @@ fn signal(n: usize, batch: usize, seed: u64) -> Vec<Complex<f32>> {
     v
 }
 
+#[cfg(feature = "gpu")]
 fn rel_l2(gpu: &[Complex<f32>], cpu: &[Complex<f32>]) -> f32 {
     let mut num = 0.0f32;
     let mut den = 0.0f32;

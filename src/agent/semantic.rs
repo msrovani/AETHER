@@ -32,6 +32,16 @@ pub fn semantic_match<'a>(query: &str, labels: &'a [&str]) -> Option<SemanticHit
         .map(|label| SemanticHit { label })
 }
 
+fn normalize(text: &str) -> String {
+    text.chars()
+        .flat_map(|c| c.to_lowercase())
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::semantic_match;
@@ -59,14 +69,4 @@ mod tests {
         let labels = ["gato"];
         assert!(semantic_match("gata", &labels).is_none());
     }
-}
-
-fn normalize(text: &str) -> String {
-    text.chars()
-        .flat_map(|c| c.to_lowercase())
-        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
 }

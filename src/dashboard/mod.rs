@@ -6,6 +6,7 @@
 
 #![allow(clippy::needless_range_loop)]
 
+mod ai_view;
 mod catalog;
 mod demo_trace;
 mod fmt;
@@ -15,6 +16,10 @@ mod jobs;
 mod model;
 mod transplant_view;
 
+pub use ai_view::{
+    agent_ask_detail, api_case_detail, collect_wave_gaps, load_agent_drive, load_api_eval,
+    AgentAskRow, AgentDriveReport, ApiEvalCase, ApiEvalReport,
+};
 pub use catalog::{
     dimension_ficha, dimension_tooltip, global_tooltip, glossary_entries, throughput_tooltip,
     DimFicha,

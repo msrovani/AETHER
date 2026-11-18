@@ -26,11 +26,36 @@ mod aether_dashboard_win {
     use eframe::App;
 
     use aether_engine::dashboard::{
-        dest_detail, dimension_ficha, dimension_tooltip, fmt_compact, gates_detail, global_tooltip,
-        glossary_entries, load_host_report, load_scorecard, load_transplant_view, origin_detail,
-        throughput_tooltip, DimFicha, HostReport, JobKind, JobPhase, JobRunner, ScorecardView,
-        TransplantView,
+        agent_ask_detail, api_case_detail, collect_wave_gaps, dest_detail, dimension_ficha,
+        dimension_tooltip, fmt_compact, gates_detail, global_tooltip, glossary_entries,
+        load_agent_drive, load_api_eval, load_host_report, load_scorecard, load_transplant_view,
+        origin_detail, throughput_tooltip, AgentDriveReport, ApiEvalReport, DimFicha, Gap,
+        GapSeverity, HostReport, JobKind, JobPhase, JobRunner, ScorecardView, TransplantView,
     };
+
+    /// Aba superior do hub.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum HubTab {
+        Lab,
+        AiTests,
+    }
+
+    /// Contrato humano de usabilidade (MSG 0449): TESTE | AETHER | LLM.
+    const USABILITY_CONTRACT: &[(&str, &str, &str, &str)] = &[
+        ("U1", "Onboarding a frio", "tools/demo exit 0 <60s, sem ação sem verificação", "LLM: setup opaco / chat sem contrato"),
+        ("U2", "Fato conhecido", "cite com key+escopo+autoridade; 0 fabricado", "LLM: responde mesmo sem fonte"),
+        ("U3", "Fato OOD", "Abstain; false-act=0; abstain ≥90%", "LLM: alucina com confiança"),
+        ("U4", "Paráfrase/digitação", "Abstain se similaridade baixa; FP=0", "LLM: casa por semântica frouxa"),
+        ("U5", "Solver SAT/QUBO", "Certificado violations=0 no orçamento", "LLM: 'quase-resolve' em prosa"),
+        ("U6", "Transparência", "Replay idêntico; 0 ledger no T0", "LLM: amostragem estocástica"),
+        ("U7", "HITL / risco", "Cite/NeedsHuman antes do efeito", "LLM: age sem before-image"),
+        ("U8", "Reversibilidade", "Rollback LIFO → estado inicial", "LLM: efeito irreversível"),
+        ("U9", "Autoridade", "Purge ≥200 sem HITL → 403/tombstone", "LLM: sobrescreve sem gate"),
+        ("U10", "Entradas abusivas", "400/OOV; injeção não executa", "LLM: prompt injection funciona"),
+        ("U11", "Contradição", "contradicts tipado; sem overwrite", "LLM: funde relatos contraditórios"),
+        ("U12", "Latência", "p50/p99/RSS nos tetos D1", "LLM: latência opaca / variável"),
+        ("U13", "Idioma/parser", "≥95% schema; OOV→needs_human", "LLM: interpreta tudo como prosa"),
+    ];
 
     /// Paleta do hub (lab slate + teal — sem glow/roxo).
     mod theme {
@@ -82,6 +107,10 @@ mod aether_dashboard_win {
     pub struct DashboardApp {
         view: ScorecardView,
         transplant: TransplantView,
+        api_eval: ApiEvalReport,
+        agent_drive: AgentDriveReport,
+        wave_gaps: Vec<Gap>,
+        tab: HubTab,
         status: String,
         path_arg: Option<String>,
         jobs: JobRunner,
@@ -107,6 +136,9 @@ mod aether_dashboard_win {
                 }
             }
             self.transplant = load_transplant_view();
+            self.api_eval = load_api_eval();
+            self.agent_drive = load_agent_drive();
+            self.wave_gaps = collect_wave_gaps();
         }
 
         fn try_load_host(&mut self) {
@@ -164,7 +196,12 @@ mod aether_dashboard_win {
                 }
                 if matches!(
                     snap.kind,
-                    Some(JobKind::Audit) | Some(JobKind::Bench) | Some(JobKind::TransplantProbe)
+                    Some(JobKind::Audit)
+                        | Some(JobKind::Bench)
+                        | Some(JobKind::TransplantProbe)
+                        | Some(JobKind::UsoRegen)
+                        | Some(JobKind::ApiEval)
+                        | Some(JobKind::AgentDrive)
                 ) && snap.phase == JobPhase::Done
                 {
                     self.reload();
@@ -234,23 +271,44 @@ mod aether_dashboard_win {
                 )
                 .show(ctx, |ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        self.draw_globals(ui);
-                        ui.add_space(14.0);
-                        self.draw_dimensions(ui);
-                        ui.add_space(14.0);
-                        self.draw_throughput(ui);
-                        ui.add_space(14.0);
-                        self.draw_transplant(ui);
-                        ui.add_space(14.0);
-                        self.draw_host(ui);
-                        ui.add_space(10.0);
-                        ui.label(
-                            RichText::new(
-                                "Hover → Detalhe · clique T0x = ficha fixa · demos → gráficos · doação = ETL/HV.",
-                            )
-                            .small()
-                            .color(theme::MUTED),
-                        );
+                        match self.tab {
+                            HubTab::Lab => {
+                                self.draw_globals(ui);
+                                ui.add_space(14.0);
+                                self.draw_dimensions(ui);
+                                ui.add_space(14.0);
+                                self.draw_throughput(ui);
+                                ui.add_space(14.0);
+                                self.draw_transplant(ui);
+                                ui.add_space(14.0);
+                                self.draw_wave_gaps(ui);
+                                ui.add_space(14.0);
+                                self.draw_host(ui);
+                                ui.add_space(10.0);
+                                ui.label(
+                                    RichText::new(
+                                        "Lab · Hover → Detalhe · T0x = ficha · USO completo na aba Testes IA.",
+                                    )
+                                    .small()
+                                    .color(theme::MUTED),
+                                );
+                            }
+                            HubTab::AiTests => {
+                                self.draw_ai_uso(ui);
+                                ui.add_space(16.0);
+                                self.draw_ai_api(ui);
+                                ui.add_space(16.0);
+                                self.draw_ai_agent(ui);
+                                ui.add_space(10.0);
+                                ui.label(
+                                    RichText::new(
+                                        "Testes IA · U1–U6 + API_EVAL + AgentDrive · sem LLM/MMLU no T0.",
+                                    )
+                                    .small()
+                                    .color(theme::MUTED),
+                                );
+                            }
+                        }
                     });
                 });
 
@@ -481,6 +539,9 @@ mod aether_dashboard_win {
                         .color(theme::MUTED),
                     );
                 });
+                ui.add_space(16.0);
+                ui.selectable_value(&mut self.tab, HubTab::Lab, "Lab");
+                ui.selectable_value(&mut self.tab, HubTab::AiTests, "Testes IA");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("Recarregar").clicked() {
                         self.reload();
@@ -492,51 +553,81 @@ mod aether_dashboard_win {
                 });
             });
             ui.add_space(6.0);
-            ui.horizontal_wrapped(|ui| {
-                self.action_with_detail(
-                    ui,
-                    "Rodar auditoria cognitiva",
-                    "Regenera target/aether_scorecard.json (T01–T12 / ACQ).",
-                    !self.jobs.is_busy(),
-                    JobKind::Audit,
-                );
-                self.action_with_detail(
-                    ui,
-                    "Benchmark de vazão",
-                    "Basal/Vigilante/Crítico (~5 s/regime) via throughput_tps.",
-                    !self.jobs.is_busy(),
-                    JobKind::Bench,
-                );
-                self.action_with_detail(
-                    ui,
-                    "Sondar hardware",
-                    "CPU/RAM/features + gaps → target/aether_host_report.json.",
-                    !self.jobs.is_busy(),
-                    JobKind::HostProbe,
-                );
-                self.action_with_detail(
-                    ui,
-                    "Demo organismo",
-                    "Organismo in-process 15 s @ 30 Hz → gráficos R/H/S.",
-                    !self.jobs.is_busy(),
-                    JobKind::OrganismDemo,
-                );
-                let tip = "Lança aether-daemon curto (exige confirmação — multicast).";
-                let resp = ui.add_enabled(!self.jobs.is_busy(), egui::Button::new("Demo daemon"));
-                if resp.hovered() {
-                    self.note_hover("Demo daemon", tip);
+            match self.tab {
+                HubTab::Lab => {
+                    ui.horizontal_wrapped(|ui| {
+                        self.action_with_detail(
+                            ui,
+                            "Rodar auditoria cognitiva",
+                            "Regenera target/aether_scorecard.json (T01–T12 / ACQ).",
+                            !self.jobs.is_busy(),
+                            JobKind::Audit,
+                        );
+                        self.action_with_detail(
+                            ui,
+                            "Benchmark de vazão",
+                            "Basal/Vigilante/Crítico (~5 s/regime) via throughput_tps.",
+                            !self.jobs.is_busy(),
+                            JobKind::Bench,
+                        );
+                        self.action_with_detail(
+                            ui,
+                            "Sondar hardware",
+                            "CPU/RAM/features + gaps → target/aether_host_report.json.",
+                            !self.jobs.is_busy(),
+                            JobKind::HostProbe,
+                        );
+                        self.action_with_detail(
+                            ui,
+                            "Demo organismo",
+                            "Organismo in-process 15 s @ 30 Hz → gráficos R/H/S.",
+                            !self.jobs.is_busy(),
+                            JobKind::OrganismDemo,
+                        );
+                        let tip = "Lança aether-daemon curto (exige confirmação — multicast).";
+                        let resp =
+                            ui.add_enabled(!self.jobs.is_busy(), egui::Button::new("Demo daemon"));
+                        if resp.hovered() {
+                            self.note_hover("Demo daemon", tip);
+                        }
+                        if resp.clicked() {
+                            self.confirm_daemon = true;
+                        }
+                        self.action_with_detail(
+                            ui,
+                            "Probe doação HV",
+                            "ETL (se faltar bank) + transplant_hv_probe + gate → JSON doação/uso.",
+                            !self.jobs.is_busy(),
+                            JobKind::TransplantProbe,
+                        );
+                    });
                 }
-                if resp.clicked() {
-                    self.confirm_daemon = true;
+                HubTab::AiTests => {
+                    ui.horizontal_wrapped(|ui| {
+                        self.action_with_detail(
+                            ui,
+                            "Regenerar USO",
+                            "python tools/transplant_uso.py → target/aether_transplant_uso.json",
+                            !self.jobs.is_busy(),
+                            JobKind::UsoRegen,
+                        );
+                        self.action_with_detail(
+                            ui,
+                            "Usabilidade API",
+                            "cargo test --features api --test api_eval → aether_api_eval.json",
+                            !self.jobs.is_busy(),
+                            JobKind::ApiEval,
+                        );
+                        self.action_with_detail(
+                            ui,
+                            "Test drive agente",
+                            "aether-agent ask Brasil + Atlântida → aether_agent_drive.json",
+                            !self.jobs.is_busy(),
+                            JobKind::AgentDrive,
+                        );
+                    });
                 }
-                self.action_with_detail(
-                    ui,
-                    "Probe doação HV",
-                    "ETL (se faltar bank) + transplant_hv_probe + gate → JSON doação/uso.",
-                    !self.jobs.is_busy(),
-                    JobKind::TransplantProbe,
-                );
-            });
+            }
 
             let snap = self.jobs.snapshot();
             let phase_color = match snap.phase {
@@ -947,18 +1038,78 @@ mod aether_dashboard_win {
             }
 
             ui.add_space(8.0);
-            ui.label(
-                RichText::new("Usabilidade (U1–U6)")
-                    .strong()
-                    .color(theme::ACCENT),
-            );
-            ui.add_space(4.0);
+            let uso_label = if tv.uso.present {
+                if tv.uso.pass_all {
+                    "USO PASS · ver aba Testes IA"
+                } else {
+                    "USO FAIL · ver aba Testes IA"
+                }
+            } else {
+                "USO: ver aba Testes IA"
+            };
+            let uso_c = if tv.uso.present && tv.uso.pass_all {
+                theme::OK
+            } else if tv.uso.present {
+                theme::BAD
+            } else {
+                theme::MUTED
+            };
+            ui.horizontal(|ui| {
+                if meter_card(ui, "USO", uso_label.into(), uso_c) {
+                    self.note_hover(
+                        "Usabilidade (transplante)",
+                        "Grade U1–U6 completa na aba Testes IA.\n\
+                         Artefato: target/aether_transplant_uso.json",
+                    );
+                }
+            });
+        }
+
+        fn draw_wave_gaps(&mut self, ui: &mut egui::Ui) {
+            if self.wave_gaps.is_empty() {
+                return;
+            }
+            self.section_header(ui, "Gaps / info");
+            for g in self.wave_gaps.clone() {
+                let c = match g.severity {
+                    GapSeverity::Warn | GapSeverity::Crit => theme::WARN,
+                    GapSeverity::Info => theme::MUTED,
+                };
+                let resp = ui.add(
+                    egui::Label::new(
+                        RichText::new(format!("{} · {}", g.code, g.title))
+                            .small()
+                            .color(c),
+                    )
+                    .sense(Sense::hover()),
+                );
+                if resp.hovered() {
+                    self.note_hover(
+                        g.title.clone(),
+                        format!("{}\n→ {}", g.detail, g.remediation),
+                    );
+                }
+            }
+        }
+
+        fn draw_ai_uso(&mut self, ui: &mut egui::Ui) {
+            self.section_header(ui, "Transplante USO (U1–U6)");
+            let tv = self.transplant.clone();
             if tv.uso.present {
                 let all_c = if tv.uso.pass_all {
                     theme::OK
                 } else {
                     theme::BAD
                 };
+                ui.label(
+                    RichText::new(format!(
+                        "pass_all={} · target/aether_transplant_uso.json",
+                        tv.uso.pass_all
+                    ))
+                    .small()
+                    .color(theme::MUTED),
+                );
+                ui.add_space(4.0);
                 ui.horizontal_wrapped(|ui| {
                     for c in &tv.uso.cases {
                         let accent = if c.pass { theme::OK } else { theme::BAD };
@@ -986,19 +1137,138 @@ mod aether_dashboard_win {
                         all_c,
                     ) {
                         self.note_hover(
-                            "Usabilidade",
-                            "U1 auto-recup · U2 SGDB · U3 vizinhança · U4 conflitos · U5 Evidence · U6 latência Rust.\n\
-                             Artefato: target/aether_transplant_uso.json\n\
-                             Playbook: docs/DOACAO_PLAYBOOK.md",
+                            "Usabilidade transplante",
+                            "U1 auto-recup · U2 SGDB · U3 vizinhança · U4 conflitos · U5 Evidence · U6 latência Rust.",
                         );
                     }
                 });
             } else {
                 ui.label(
-                    RichText::new("Sem target/aether_transplant_uso.json")
+                    RichText::new("Sem USO — use Regenerar USO na barra.")
                         .small()
                         .color(theme::MUTED),
                 );
+            }
+        }
+
+        fn draw_ai_api(&mut self, ui: &mut egui::Ui) {
+            self.section_header(ui, "Usabilidade API (exact / paráfrase / escopo)");
+            let report = self.api_eval.clone();
+            if !report.present {
+                ui.label(
+                    RichText::new(
+                        "Sem aether_api_eval.json — rode Usabilidade API (feature api).",
+                    )
+                    .small()
+                    .color(theme::MUTED),
+                );
+                return;
+            }
+            ui.label(
+                RichText::new(format!(
+                    "{} · cue p50/p99 = {}/{} µs",
+                    report.path.display(),
+                    report.cue_p50_us,
+                    report.cue_p99_us
+                ))
+                .small()
+                .color(theme::MUTED),
+            );
+            ui.add_space(4.0);
+            egui::Grid::new("api_eval_grid")
+                .num_columns(4)
+                .spacing([12.0, 4.0])
+                .show(ui, |ui| {
+                    ui.label(RichText::new("condição").strong().small());
+                    ui.label(RichText::new("hits").strong().small());
+                    ui.label(RichText::new("expect").strong().small());
+                    ui.label(RichText::new("pass").strong().small());
+                    ui.end_row();
+                    for c in &report.cases {
+                        let accent = if c.pass { theme::OK } else { theme::BAD };
+                        let resp = ui.add(
+                            egui::Label::new(RichText::new(&c.title).color(theme::TEXT))
+                                .sense(Sense::click()),
+                        );
+                        if resp.hovered() {
+                            self.note_hover(format!("API {}", c.id), api_case_detail(c));
+                        }
+                        ui.label(format!("{}/{}", c.hits, c.total));
+                        ui.label(&c.expect);
+                        ui.colored_label(accent, if c.pass { "PASS" } else { "FAIL" });
+                        ui.end_row();
+                    }
+                });
+        }
+
+        fn draw_ai_agent(&mut self, ui: &mut egui::Ui) {
+            self.section_header(ui, "Test drive agente (cite / abstain)");
+            let drive = self.agent_drive.clone();
+            if !drive.present {
+                ui.label(
+                    RichText::new("Sem aether_agent_drive.json — rode Test drive agente.")
+                        .small()
+                        .color(theme::MUTED),
+                );
+                return;
+            }
+            ui.label(
+                RichText::new(format!(
+                    "{} · sgdb={}",
+                    drive.path.display(),
+                    drive.sgdb
+                ))
+                .small()
+                .color(theme::MUTED),
+            );
+            ui.add_space(4.0);
+            ui.horizontal_wrapped(|ui| {
+                for a in &drive.asks {
+                    let known = a.subject.eq_ignore_ascii_case("Brasil");
+                    let ok = if known {
+                        !a.action.eq_ignore_ascii_case("abstain")
+                    } else {
+                        a.action.eq_ignore_ascii_case("abstain")
+                    };
+                    let accent = if ok { theme::OK } else { theme::BAD };
+                    let label = format!("{}|{}", a.subject, a.relation);
+                    if meter_card(ui, &label, a.action.clone(), accent) {
+                        self.note_hover(
+                            format!("Ask {}", a.subject),
+                            agent_ask_detail(a),
+                        );
+                    }
+                }
+            });
+            ui.add_space(8.0);
+            self.draw_usability_contract(ui);
+        }
+
+        fn draw_usability_contract(&mut self, ui: &mut egui::Ui) {
+            self.section_header(ui, "Contrato usabilidade IA (U1–U13)");
+            ui.label(
+                RichText::new(
+                    "North star: saber o que foi dito, de onde veio e o que aconteceu — 0 false-act, abstain OOD ≥90%, 0 efeito sem HITL.",
+                )
+                .small()
+                .color(theme::MUTED),
+            );
+            ui.add_space(4.0);
+            for (id, title, aether, llm) in USABILITY_CONTRACT {
+                let resp = ui.add(
+                    egui::Label::new(
+                        RichText::new(format!("{id} · {title}"))
+                            .small()
+                            .color(theme::TEXT),
+                    )
+                    .sense(Sense::hover()),
+                );
+                if resp.hovered() {
+                    self.note_hover(
+                        format!("{id} — {title}"),
+                        format!("AETHER: {aether}\n{llm}"),
+                    );
+                }
             }
         }
 
@@ -1321,6 +1591,10 @@ mod aether_dashboard_win {
         let mut app = DashboardApp {
             view: ScorecardView::default(),
             transplant: TransplantView::default(),
+            api_eval: ApiEvalReport::default(),
+            agent_drive: AgentDriveReport::default(),
+            wave_gaps: Vec::new(),
+            tab: HubTab::Lab,
             status: String::new(),
             path_arg,
             jobs: JobRunner::new(),

@@ -20,11 +20,12 @@ fn injecao_nao_vira_comando() {
     assert!(matches!(err, LanguageError::Oov));
 }
 
+const _: () = assert!(AUTHORITY_QUARANTINE < 128);
+const _: () = assert!(AUTHORITY_QUARANTINE < AUTHORITY_HITL);
+
 #[test]
 fn quarentena_nao_e_hitl() {
-    assert!(AUTHORITY_QUARANTINE < 128);
     assert_eq!(AUTHORITY_HITL, 255);
-    assert!(AUTHORITY_QUARANTINE < AUTHORITY_HITL);
 }
 
 #[test]

@@ -186,29 +186,6 @@ fn tcp_segments() -> u64 {
     u64::from(tcp.in_segs).saturating_add(u64::from(tcp.out_segs))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::SystemTelemetryTransducer;
-    use crate::transducer_io::TransducerIo;
-
-    #[test]
-    fn amostra_cabe_em_menos_um_um() {
-        let mut t = SystemTelemetryTransducer::new(60.0);
-        let mut buf = [2.0f32; 64];
-        t.sample_into(&mut buf).unwrap();
-        assert!(buf.iter().all(|v| (-1.0..=1.0).contains(v)));
-        let quiet = t.cpu_load();
-        let start = std::time::Instant::now();
-        let mut x = 1u64;
-        while start.elapsed().as_millis() < 30 {
-            x = x.wrapping_mul(1664525).wrapping_add(1013904223);
-        }
-        let _ = x;
-        t.sample_into(&mut buf).unwrap();
-        assert!(t.cpu_load() + 0.05 >= quiet);
-    }
-}
-
 #[link(name = "kernel32")]
 extern "system" {
     fn QueryPerformanceCounter(lp: *mut u64) -> i32;
@@ -251,4 +228,27 @@ struct TcpStats {
     in_err: u32,
     out_rst: u32,
     num_conn: u32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SystemTelemetryTransducer;
+    use crate::transducer_io::TransducerIo;
+
+    #[test]
+    fn amostra_cabe_em_menos_um_um() {
+        let mut t = SystemTelemetryTransducer::new(60.0);
+        let mut buf = [2.0f32; 64];
+        t.sample_into(&mut buf).unwrap();
+        assert!(buf.iter().all(|v| (-1.0..=1.0).contains(v)));
+        let quiet = t.cpu_load();
+        let start = std::time::Instant::now();
+        let mut x = 1u64;
+        while start.elapsed().as_millis() < 30 {
+            x = x.wrapping_mul(1664525).wrapping_add(1013904223);
+        }
+        let _ = x;
+        t.sample_into(&mut buf).unwrap();
+        assert!(t.cpu_load() + 0.05 >= quiet);
+    }
 }

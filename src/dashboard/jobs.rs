@@ -24,6 +24,12 @@ pub enum JobKind {
     DaemonDemo,
     /// ETL dry-run (se faltar bank) + probe INTAKE + gate.
     TransplantProbe,
+    /// Só regenera U1–U6 (`tools/transplant_uso.py`).
+    UsoRegen,
+    /// Harness `api_eval` → `target/aether_api_eval.json`.
+    ApiEval,
+    /// Test drive `aether-agent ask` Brasil/Atlântida.
+    AgentDrive,
 }
 
 impl JobKind {
@@ -36,6 +42,9 @@ impl JobKind {
             Self::OrganismDemo => "Demo organismo",
             Self::DaemonDemo => "Demo daemon",
             Self::TransplantProbe => "Probe doação HV",
+            Self::UsoRegen => "Regenerar USO",
+            Self::ApiEval => "Usabilidade API",
+            Self::AgentDrive => "Test drive agente",
         }
     }
 }
@@ -200,6 +209,9 @@ impl JobRunner {
                 JobKind::OrganismDemo => run_organism_traced(&shared, &trace),
                 JobKind::DaemonDemo => run_daemon_traced(&shared, &trace),
                 JobKind::TransplantProbe => run_transplant_probe(&shared),
+                JobKind::UsoRegen => run_uso_regen(&shared),
+                JobKind::ApiEval => run_api_eval(&shared),
+                JobKind::AgentDrive => run_agent_drive(&shared),
             };
             if let Ok(mut t) = trace.lock() {
                 t.end();
@@ -415,6 +427,302 @@ fn run_daemon_traced(shared: &Shared, trace: &Arc<Mutex<DemoTrace>>) -> Result<S
                 let _ = reader.join();
                 return Err(format!("daemon wait: {e}"));
             }
+        }
+    }
+}
+
+fn run_uso_regen(shared: &Shared) -> Result<String, String> {
+    let root = workspace_root();
+    set_log(shared, "transplant_uso U1–U6…");
+    let status = Command::new("python")
+        .args([
+            "tools/transplant_uso.py",
+            "--data",
+            "data",
+            "--out",
+            "target/aether_transplant_uso.json",
+        ])
+        .current_dir(&root)
+        .status()
+        .map_err(|e| format!("python uso: {e}"))?;
+    if !status.success() {
+        return Err(format!(
+            "transplant_uso exit {}",
+            status.code().unwrap_or(-1)
+        ));
+    }
+    Ok("USO regenerado → target/aether_transplant_uso.json".into())
+}
+
+fn run_api_eval(shared: &Shared) -> Result<String, String> {
+    set_log(shared, "api_eval (feature api)…");
+    let out = run_cargo_capture(
+        &[
+            "test",
+            "--release",
+            "--features",
+            "api",
+            "--test",
+            "api_eval",
+            "--",
+            "--nocapture",
+        ],
+        Duration::from_secs(600),
+        shared,
+    )?;
+    let report = parse_api_eval_report(&out);
+    let path = workspace_root().join("target/aether_api_eval.json");
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(&path, &report).map_err(|e| format!("gravar api_eval: {e}"))?;
+    Ok(format!("API eval OK → {}", path.display()))
+}
+
+fn parse_api_eval_report(stdout: &str) -> String {
+    // Contrato do teste: n=60; exact/noise acertam; paráfrase/maiúsculas/1char/prefixo/escopo abstêm.
+    let n = 60u64;
+    let mut exact = n;
+    let mut noise = n;
+    let mut paraphrase = n;
+    let mut upper = n;
+    let mut one_char = n;
+    let mut prefix = n;
+    let mut cross = n;
+    let mut chat_ok = true;
+    let mut p50 = 0u64;
+    let mut p99 = 0u64;
+    for line in stdout.lines() {
+        if let Some(rest) = line.strip_prefix("memória exata (mesma string)") {
+            if let Some((ok, _)) = parse_frac(rest) {
+                exact = ok;
+            }
+        } else if line.contains("ruído 1e-3") {
+            if let Some((ok, _)) = parse_frac(line) {
+                noise = ok;
+            }
+        } else if line.starts_with("paráfrase") {
+            if let Some((ok, _)) = parse_frac(line) {
+                paraphrase = ok;
+            }
+        } else if line.starts_with("maiúsculas") {
+            if let Some((ok, _)) = parse_frac(line) {
+                upper = ok;
+            }
+        } else if line.starts_with("1 caractere") {
+            if let Some((ok, _)) = parse_frac(line) {
+                one_char = ok;
+            }
+        } else if line.starts_with("prefixo") {
+            if let Some((ok, _)) = parse_frac(line) {
+                prefix = ok;
+            }
+        } else if line.contains("escopo alheio") {
+            if let Some((ok, _)) = parse_frac(line) {
+                cross = ok;
+            }
+        } else if line.contains("chat OpenAI") {
+            chat_ok = line.contains("act");
+        } else if line.contains("latência cue p50/p99") {
+            if let Some((a, b)) = parse_two_us(line) {
+                p50 = a;
+                p99 = b;
+            }
+        }
+    }
+    format!(
+        r#"{{"cue_p50_us":{p50},"cue_p99_us":{p99},"cases":[
+{{"id":"exact","title":"mesma string","hits":{exact},"total":{n},"expect":"hit","pass":{},"note":"cue com fases idênticas"}},
+{{"id":"noise","title":"ruído 1e-3","hits":{noise},"total":{n},"expect":"hit","pass":{},"note":"fases + sin*1e-3"}},
+{{"id":"paraphrase","title":"paráfrase","hits":{paraphrase},"total":{n},"expect":"abstain","pass":{},"note":"hash de borda — deve abster"}},
+{{"id":"case","title":"maiúsculas","hits":{upper},"total":{n},"expect":"abstain","pass":{},"note":"UPPERCASE → abstain"}},
+{{"id":"one_char","title":"+1 caractere","hits":{one_char},"total":{n},"expect":"abstain","pass":{},"note":"sufixo x → abstain"}},
+{{"id":"prefix","title":"prefixo","hits":{prefix},"total":{n},"expect":"abstain","pass":{},"note":"2 primeiros tokens → abstain"}},
+{{"id":"scope","title":"outro organismo","hits":{cross},"total":{n},"expect":"abstain","pass":{},"note":"R8 escopo alheio"}},
+{{"id":"chat","title":"chat/completions exact","hits":{},"total":1,"expect":"hit","pass":{},"note":"dialeto OpenAI act+key"}}
+]}}"#,
+        exact == n,
+        noise == n,
+        paraphrase == n,
+        upper == n,
+        one_char == n,
+        prefix == n,
+        cross == n,
+        if chat_ok { 1 } else { 0 },
+        chat_ok
+    )
+}
+
+fn parse_frac(line: &str) -> Option<(u64, u64)> {
+    let digits: String = line
+        .chars()
+        .map(|c| if c.is_ascii_digit() || c == '/' { c } else { ' ' })
+        .collect();
+    let parts: Vec<&str> = digits.split_whitespace().collect();
+    for p in parts {
+        if let Some((a, b)) = p.split_once('/') {
+            let ok = a.parse().ok()?;
+            let total = b.parse().ok()?;
+            return Some((ok, total));
+        }
+    }
+    None
+}
+
+fn parse_two_us(line: &str) -> Option<(u64, u64)> {
+    let nums: Vec<u64> = line
+        .split(|c: char| !c.is_ascii_digit())
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    if nums.len() >= 2 {
+        Some((nums[0], nums[1]))
+    } else {
+        None
+    }
+}
+
+fn run_agent_drive(shared: &Shared) -> Result<String, String> {
+    set_log(shared, "aether-agent ask Brasil…");
+    let brasil = run_agent_ask(shared, "Brasil", "capital")?;
+    set_log(shared, "aether-agent ask Atlântida…");
+    let atl = run_agent_ask(shared, "Atlântida", "capital")?;
+    let sgdb = std::env::var("AETHER_SGDB_STDIO")
+        .or_else(|_| std::env::var("AETHER_SGDB_URL"))
+        .unwrap_or_else(|_| "(unset)".into());
+    let path = workspace_root().join("target/aether_agent_drive.json");
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let json = format!(
+        r#"{{"sgdb":{},"asks":[{},{}]}}"#,
+        serde_json::to_string(&sgdb).unwrap_or_else(|_| "\"\"".into()),
+        brasil,
+        atl
+    );
+    std::fs::write(&path, json).map_err(|e| format!("gravar agent_drive: {e}"))?;
+    Ok(format!("AgentDrive OK → {}", path.display()))
+}
+
+fn run_agent_ask(shared: &Shared, subject: &str, relation: &str) -> Result<String, String> {
+    let bin = release_bin("aether-agent");
+    let mut cmd = if bin.is_file() {
+        let mut c = Command::new(&bin);
+        c.args([
+            "ask",
+            "--subject",
+            subject,
+            "--relation",
+            relation,
+            "--json",
+        ]);
+        c
+    } else {
+        set_log(shared, "aether-agent release ausente — cargo run…");
+        let mut c = Command::new("cargo");
+        c.args([
+            "run",
+            "--release",
+            "--bin",
+            "aether-agent",
+            "--features",
+            "agent",
+            "--",
+            "ask",
+            "--subject",
+            subject,
+            "--relation",
+            relation,
+            "--json",
+        ]);
+        c
+    };
+    cmd.current_dir(workspace_root())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let combined = wait_cmd_full(cmd, Duration::from_secs(180), shared, "aether-agent")?;
+    let line = combined
+        .lines()
+        .rev()
+        .find(|l| l.trim().starts_with('{'))
+        .unwrap_or("{}");
+    let action = serde_json::from_str::<serde_json::Value>(line)
+        .ok()
+        .and_then(|v| {
+            v.get("action")
+                .and_then(|a| a.as_str())
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| "unknown".into());
+    let detail = line.chars().take(400).collect::<String>();
+    Ok(format!(
+        r#"{{"subject":{},"relation":{},"action":{},"exit":0,"detail":{}}}"#,
+        serde_json::to_string(subject).unwrap_or_else(|_| "\"\"".into()),
+        serde_json::to_string(relation).unwrap_or_else(|_| "\"\"".into()),
+        serde_json::to_string(&action).unwrap_or_else(|_| "\"\"".into()),
+        serde_json::to_string(&detail).unwrap_or_else(|_| "\"\"".into()),
+    ))
+}
+
+fn run_cargo_capture(args: &[&str], timeout: Duration, shared: &Shared) -> Result<String, String> {
+    set_log(shared, format!("cargo {}…", args.join(" ")));
+    let mut cmd = Command::new("cargo");
+    cmd.args(args)
+        .current_dir(workspace_root())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    wait_cmd_full(cmd, timeout, shared, "cargo")
+}
+
+fn wait_cmd_full(
+    mut cmd: Command,
+    timeout: Duration,
+    shared: &Shared,
+    label: &str,
+) -> Result<String, String> {
+    use std::io::Read;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("falha ao spawn {label}: {e}"))?;
+    let start = Instant::now();
+    loop {
+        if shared.cancel.load(Ordering::SeqCst) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(format!("{label} cancelado"));
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let mut out = String::new();
+                let mut err = String::new();
+                if let Some(ref mut s) = child.stdout {
+                    let _ = s.read_to_string(&mut out);
+                }
+                if let Some(ref mut s) = child.stderr {
+                    let _ = s.read_to_string(&mut err);
+                }
+                let combined = format!("{out}\n{err}");
+                if status.success() {
+                    return Ok(combined);
+                }
+                let tail = combined
+                    .lines()
+                    .rev()
+                    .find(|l| !l.trim().is_empty())
+                    .unwrap_or("erro");
+                return Err(format!(
+                    "{label} exit {} — {tail}",
+                    status.code().unwrap_or(-1)
+                ));
+            }
+            Ok(None) => {
+                if start.elapsed() > timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(format!("{label} timeout ({timeout:?})"));
+                }
+                thread::sleep(Duration::from_millis(200));
+            }
+            Err(e) => return Err(format!("{label} wait: {e}")),
         }
     }
 }

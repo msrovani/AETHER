@@ -960,29 +960,6 @@ fn append_float_log(path: &std::path::Path, cols: &[f32]) -> std::io::Result<()>
     file.write_all(line.as_bytes())
 }
 
-#[cfg(test)]
-mod log_gate {
-    use super::append_float_log;
-
-    #[test]
-    fn log_so_tem_numeros_e_rotaciona() {
-        let dir = std::env::temp_dir().join("aether-log-gate");
-        let _ = std::fs::create_dir_all(&dir);
-        let path = dir.join("t.csv");
-        let _ = std::fs::remove_file(&path);
-        append_float_log(&path, &[1.5, -0.25, 2.0, 0.1, 0.0]).unwrap();
-        let text = std::fs::read_to_string(&path).unwrap();
-        assert!(
-            text.chars()
-                .all(|c| c.is_ascii_digit() || matches!(c, '.' | ',' | '-' | '\n')),
-            "log com texto livre: {text}"
-        );
-        std::fs::write(&path, vec![b'1'; 1_048_577]).unwrap();
-        append_float_log(&path, &[3.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
-        assert!(path.with_extension("rot.csv").exists());
-    }
-}
-
 fn main() -> Result<()> {
     let cfg = match parse_cli() {
         Ok(c) => c,
@@ -1042,4 +1019,27 @@ fn main() -> Result<()> {
     })?;
     println!("daemon encerrado.");
     Ok(())
+}
+
+#[cfg(test)]
+mod log_gate {
+    use super::append_float_log;
+
+    #[test]
+    fn log_so_tem_numeros_e_rotaciona() {
+        let dir = std::env::temp_dir().join("aether-log-gate");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("t.csv");
+        let _ = std::fs::remove_file(&path);
+        append_float_log(&path, &[1.5, -0.25, 2.0, 0.1, 0.0]).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            text.chars()
+                .all(|c| c.is_ascii_digit() || matches!(c, '.' | ',' | '-' | '\n')),
+            "log com texto livre: {text}"
+        );
+        std::fs::write(&path, vec![b'1'; 1_048_577]).unwrap();
+        append_float_log(&path, &[3.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
+        assert!(path.with_extension("rot.csv").exists());
+    }
 }

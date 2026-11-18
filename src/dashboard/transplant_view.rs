@@ -231,11 +231,36 @@ fn workspace_root() -> PathBuf {
 pub fn transplant_paths() -> (PathBuf, PathBuf, PathBuf, PathBuf) {
     let root = workspace_root();
     (
-        root.join("data/manifest.json"),
-        root.join("target/aether_transplant_hv.json"),
-        root.join("target/aether_e3.json"),
-        root.join("target/aether_transplant_uso.json"),
+        prefer_round_manifest(&root),
+        prefer_round_file(&root, "aether_transplant_hv.json", "target/aether_transplant_hv.json"),
+        prefer_round_file(&root, "aether_e3.json", "target/aether_e3.json"),
+        prefer_round_file(
+            &root,
+            "aether_transplant_uso.json",
+            "target/aether_transplant_uso.json",
+        ),
     )
+}
+
+/// Prefere `data/rounds/20261117_b1`, depois `bg0`, senão `data/manifest.json`.
+fn prefer_round_manifest(root: &Path) -> PathBuf {
+    for round in ["20261117_b1", "20261117_bg0"] {
+        let p = root.join("data/rounds").join(round).join("manifest.json");
+        if p.exists() {
+            return p;
+        }
+    }
+    root.join("data/manifest.json")
+}
+
+fn prefer_round_file(root: &Path, name: &str, fallback: &str) -> PathBuf {
+    for round in ["20261117_b1", "20261117_bg0"] {
+        let p = root.join("data/rounds").join(round).join(name);
+        if p.exists() {
+            return p;
+        }
+    }
+    root.join(fallback)
 }
 
 /// Carrega a visão de doação/transplante (faltas viram notas, sem panic).
@@ -245,6 +270,8 @@ pub fn load_transplant_view() -> TransplantView {
         dest: TransplantDest::default(),
         ..Default::default()
     };
+    view.load_notes
+        .push(format!("rodada: {}", manifest_p.display()));
 
     match load_manifest(&manifest_p) {
         Ok(o) => view.origin = Some(o),

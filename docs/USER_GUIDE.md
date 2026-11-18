@@ -16,7 +16,7 @@ cd C:\Users\msrov\Documents\AETHER
 .\scripts\cargo.ps1 run --release --bin aether-dashboard --features dashboard
 ```
 
-Layout: **centro** = medidores; **direita** = Detalhe (chip glossário/hover/ficha + gráficos). Ficha T0x fica fixa até **Limpar ficha** ou outro clique.
+Layout: abas **Lab** | **Testes IA**; **centro** = medidores da aba; **direita** = Detalhe (chip glossário/hover/ficha + gráficos). Ficha T0x fica fixa até **Limpar ficha** ou outro clique.
 
 ## 2) Rodar a auditoria cognitiva
 
@@ -50,21 +50,30 @@ Tabela canônica: [DASHBOARD_METRICS.md](DASHBOARD_METRICS.md).
 
 Um job por vez. **Cancelar job** interrompe.
 
-## 6) Doação · ETL · Transplante
+## 6) Doação · ETL · Transplante (aba Lab)
 
-Painel no centro (após vazão): **origem** (doador/átomos/dim/conflitos), **destino** (HvBank/T0/auth), **gates** (ρ, R@10, lat), **E3**, **U1–U6**.
+Painel no centro (após vazão): **origem**, **destino**, **gates**, **E3**, chip **USO → aba Testes IA**.
 
 1. Clique **Probe doação HV** (ETL dry-run se faltar bank + probe + gate + uso).
-2. Hover nos medidores → texto completo na coluna **Detalhe**.
-3. Playbook clonável: [DOACAO_PLAYBOOK.md](DOACAO_PLAYBOOK.md).
+2. Hover → texto completo na coluna **Detalhe**.
+3. Playbook: [DOACAO_PLAYBOOK.md](DOACAO_PLAYBOOK.md).
 
-Artefatos: `data/manifest.json`, `target/aether_transplant_hv.json`, `target/aether_transplant_uso.json`.
+## 7) Testes IA
+
+Na aba **Testes IA**:
+
+1. **Regenerar USO** — grade U1–U6 do transplante.
+2. **Usabilidade API** — exact / ruído / paráfrase / maiúsculas / +1 char / prefixo / escopo / chat (precisa feature `api` no job).
+3. **Test drive agente** — Brasil (não abstém) · Atlântida (abstém).
+4. Contrato U1–U13 (MSG 0449): *LLM gera; AETHER cita, certifica ou abstém.*
+
+Artefatos: `target/aether_transplant_uso.json`, `target/aether_api_eval.json`, `target/aether_agent_drive.json`.
 
 ## Recarregar
 
-**Recarregar** relê scorecard + host + visão de doação (manifest/gates/uso).
+**Recarregar** relê scorecard + host + doação + artefatos da aba Testes IA.
 
 ## Fora deste hub (nesta fase)
 
-macOS/Linux GUI, MSI, auth/cloud — ver [USER_DELIVERY_PLAN.md](USER_DELIVERY_PLAN.md).
-Caminho HF/produção (mapa real Qwen3 MRL 768) e SGDB remember em escala — ver playbook §5.3 / gaps P0.
+Chat LLM / MMLU / Qwen 7B no hub, macOS/Linux GUI, MSI, auth/cloud — ver [USER_DELIVERY_PLAN.md](USER_DELIVERY_PLAN.md).
+US1 (medição com usuário real) fica para o tier T2; US0 é wiring dos gates já existentes.

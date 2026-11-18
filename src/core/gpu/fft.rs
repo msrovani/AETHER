@@ -86,11 +86,11 @@ pub fn fft_batch_gpu(
     #[cfg(not(feature = "gpu"))]
     {
         let _ = (input, force_off);
-        return Err(FftGpuError::Off(if force_off {
+        Err(FftGpuError::Off(if force_off {
             GpuOff::Disabled
         } else {
             GpuOff::NoFeature
-        }));
+        }))
     }
     #[cfg(feature = "gpu")]
     {

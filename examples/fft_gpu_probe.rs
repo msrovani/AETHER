@@ -5,37 +5,48 @@
 //! `fft_batch_cpu` (rustfft) com `fft_batch_gpu` no mesmo host.
 //! Saída: target/fft_gpu_probe.json. Zero decisão — só números.
 
-#![cfg(feature = "gpu")]
-
-use num_complex::Complex;
-use std::time::Instant;
-
-use aether_engine::core::gpu::fft::{fft_batch_cpu, fft_batch_gpu};
-
-fn signal(len: usize, seed: u64) -> Vec<Complex<f32>> {
-    let mut x = 0x9E3779B97F4A7C15u64.wrapping_mul(seed | 1);
-    let mut v = Vec::with_capacity(len);
-    for _ in 0..len {
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        let re = (x as f64 / u64::MAX as f64 - 0.5) as f32;
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        let im = (x as f64 / u64::MAX as f64 - 0.5) as f32;
-        v.push(Complex::new(re, im));
-    }
-    v
-}
-
-fn timed<F: FnMut() -> T, T>(mut f: F) -> f64 {
-    let t0 = Instant::now();
-    let _ = f();
-    t0.elapsed().as_secs_f64() * 1e3
-}
-
+#[cfg(not(feature = "gpu"))]
 fn main() {
+    eprintln!("fft_gpu_probe: compile com --features gpu");
+    std::process::exit(2);
+}
+
+#[cfg(feature = "gpu")]
+fn main() {
+    use num_complex::Complex;
+    use std::time::Instant;
+
+    use aether_engine::core::gpu::fft::{fft_batch_cpu, fft_batch_gpu};
+
+    fn signal(len: usize, seed: u64) -> Vec<Complex<f32>> {
+        let mut x = 0x9E3779B97F4A7C15u64.wrapping_mul(seed | 1);
+        let mut v = Vec::with_capacity(len);
+        for _ in 0..len {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            let re = (x as f64 / u64::MAX as f64 - 0.5) as f32;
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            let im = (x as f64 / u64::MAX as f64 - 0.5) as f32;
+            v.push(Complex::new(re, im));
+        }
+        v
+    }
+
+    fn timed<F: FnMut() -> T, T>(mut f: F) -> f64 {
+        let t0 = Instant::now();
+        let _ = f();
+        t0.elapsed().as_secs_f64() * 1e3
+    }
+
+    fn serde_json_case(batch: usize, cpu: f64, gpu: f64, gpu_p50: f64, ratio: f64) -> String {
+        format!(
+            "{{\"batch\":{batch},\"cpu_min_ms\":{cpu:.4},\"gpu_min_ms\":{gpu:.4},\"gpu_p50_ms\":{gpu_p50:.4},\"ratio_min\":{ratio:.4}}}"
+        )
+    }
+
     let n = 8192usize;
     let host = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "host".into());
     eprintln!("fft_gpu_probe host={host} n={n}");
@@ -98,10 +109,4 @@ fn main() {
     let _ = std::fs::create_dir_all("target");
     std::fs::write("target/fft_gpu_probe.json", json).expect("artefato");
     eprintln!("artefato=target/fft_gpu_probe.json");
-}
-
-fn serde_json_case(batch: usize, cpu: f64, gpu: f64, gpu_p50: f64, ratio: f64) -> String {
-    format!(
-        "{{\"batch\":{batch},\"cpu_min_ms\":{cpu:.4},\"gpu_min_ms\":{gpu:.4},\"gpu_p50_ms\":{gpu_p50:.4},\"ratio_min\":{ratio:.4}}}"
-    )
 }

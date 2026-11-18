@@ -50,9 +50,12 @@ Fonte de verdade textual alinhada a `src/dashboard/catalog.rs`. UI e docs devem 
 | `data/manifest.json` | ETL doação (origem) |
 | `target/aether_transplant_hv.json` | probe INTAKE (gates ρ/R@10/lat) |
 | `target/aether_e3.json` | E3 geometria / analogia |
-| `target/aether_transplant_uso.json` | usabilidade U1–U6 |
+| `target/aether_transplant_uso.json` | usabilidade transplante U1–U6 |
+| `target/aether_api_eval.json` | usabilidade API (exact/ruído/paráfrase/caso/1char/prefixo/escopo/chat) |
+| `target/aether_agent_drive.json` | test drive ask Brasil/Atlântida (cite vs abstain) |
+| `data/rounds/20261117_b1/manifest.json` | rodada B1 preferida no loader do hub |
 
-## Doação / Transplante (painel do hub)
+## Doação / Transplante (painel Lab)
 
 | Medidor | Significado | Bom |
 |---|---|---|
@@ -63,4 +66,15 @@ Fonte de verdade textual alinhada a `src/dashboard/catalog.rs`. UI e docs devem 
 | **HvBank / T0 / Auth** | destino: bits T1/T2; organismo intacto; cap 240 | T0 intacto |
 | **Probe / ρ / R@10 / lat** | gates INTAKE | pass · ρ≥0,95 · R@10≥0,90 · ≤1,5 ms |
 | **E3 ρ / Analogia** | geometria JL + analogia FHRR | ρ≥0,95 · R@1 alto |
-| **U1…U6 / USO** | testes reais de usabilidade | todos PASS |
+| **Chip USO** | resume pass_all (grade na aba Testes IA) | PASS |
+
+## Testes IA (aba)
+
+| Bloco | Artefato / job | Resultado esperado |
+|---|---|---|
+| Transplante USO U1–U6 | `UsoRegen` → `aether_transplant_uso.json` | 6/6 PASS |
+| API usabilidade | `ApiEval` → `aether_api_eval.json` | exact+noise hit 100%; paráfrase/caso/1char/prefixo/escopo abstêm 100% |
+| AgentDrive | `AgentDrive` → `aether_agent_drive.json` | Brasil ≠ abstain; Atlântida = abstain |
+| Contrato U1–U13 | hover Detalhe (MSG 0449) | AETHER cita/certifica/abstém — não alucina |
+
+North star (MSG 0449): false-act=0; abstain OOD ≥90%; 0 efeito sem HITL; respostas citáveis quando age.
