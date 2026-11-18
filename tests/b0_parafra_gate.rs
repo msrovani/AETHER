@@ -124,11 +124,12 @@ fn b0_parafra_discriminacao_e_recall() {
     eprintln!(
         "B-G0 donor: AUC={auc_v:.4} t={t_mid:.4} banda=[{t_lo:.4},{t_hi:.4}] cobertura={coverage:.3} acuracia_coberta={acc_covered:.3}"
     );
-    // RESULTADO NEGATIVO DECLARADO (não baixar teto): cos(s1,s2) NÃO separa o
-    // PAWS — os pares não-paráfrase são trocas de palavras de alta sobreposição,
-    // e embedding é cego à ordem (lit. do plano: 2309.03747; o próprio PAWS
-    // 1904.01130 foi criado para expor isso). Quem deve discriminar é a
-    // COMPOSIÇÃO com ordem — E1 phase language (não-comutativo) — não o embedder.
+    // Leitura ALINHADA (errata BUFFY 0567): o parser antigo deslocava os
+    // labels em 1 (AUC 0.4945 era artefato). Alinhado, o donor DISCRIMINA
+    // PARCIALMENTE (AUC 0.6909) — "similaridade não separa" era FALSO.
+    // A régua para mecanismos novos é 0.69 (donor puro) e 0.7347 (bigram,
+    // teto barato da sonda da BUFFY); E1 roles 0.6054 está ABAIXO do donor.
+    // Com classes balanceadas, acc de qualquer limiar <= AUC (Youden).
     if auc_v < 0.60 {
         eprintln!(
             "B-G0 ACHADO_NEGATIVO=donor_nao_discrimina_PAWS_AUC_{auc_v:.4}|discriminador_esperado=COMPOSICAO_COM_ORDEM_E1_phase_language_nao_cosine"
