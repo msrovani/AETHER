@@ -19,6 +19,19 @@ if (Test-Path (Join-Path $Root "target\aether_scorecard.json")) {
     Copy-Item (Join-Path $Root "target\aether_scorecard.json") (Join-Path $OutDir "aether_scorecard.json") -Force
 }
 
+$smokeJson = Join-Path $OutDir "v01_smoke.json"
+$frontierPath = Join-Path $OutDir "smoke_f7_frontier.txt"
+if (Test-Path $smokeJson) {
+    try {
+        $doc = Get-Content $smokeJson -Raw | ConvertFrom-Json
+        $front = [string]$doc.frontier
+        if ([string]::IsNullOrWhiteSpace($front)) { $front = "(ausente)" }
+        $front | Set-Content $frontierPath -Encoding utf8
+    } catch {
+        "erro_lendo_v01_smoke.json" | Set-Content $frontierPath -Encoding utf8
+    }
+}
+
 $summary = if ($code -eq 0) { "PASS" } else { "FAIL" }
 "F7=$summary exit=$code" | Set-Content (Join-Path $OutDir "smoke_f7.txt") -Encoding utf8
 Write-Host "RESUMO F7=$summary"

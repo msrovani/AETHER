@@ -87,6 +87,9 @@ def export_encoder(st_model, out_path: Path) -> None:
         },
         opset_version=OPSET,
         do_constant_folding=True,
+        # torch>=2.9 defaulta no exporter dynamo, que exige `onnxscript` (dependência
+        # nova no venv compartilhado). O legado TorchScript exporta o mesmo grafo.
+        dynamo=False,
     )
 
 

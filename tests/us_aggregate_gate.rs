@@ -228,7 +228,7 @@ fn us0_aggregate_g7() {
                 let ok = extract(&body, "ok");
                 let energy = extract_num(&body, "solve_energy");
                 let steps_ok = body.contains("solve_certificado") && ok == "true";
-                let flat_ok = ok == "true" && energy.map_or(false, |e| e.is_finite());
+                let flat_ok = ok == "true" && energy.is_some_and(|e| e.is_finite());
                 if steps_ok || flat_ok {
                     Ok(())
                 } else {
@@ -257,7 +257,7 @@ fn us0_aggregate_g7() {
     // (fora do escopo G7; registrado para proveniência).
     if Path::new("target/e1_paws_consistency.json").exists() {
         let body = fs::read_to_string("target/e1_paws_consistency.json").unwrap_or_default();
-        let auc = extract_num(&body, "auc_e1").unwrap_or(f64::NAN);
+        let auc = extract_num(&body, "auc_e1_consistency").unwrap_or(f64::NAN);
         report.push(format!(
             "NOTA_R|e1_paws_consistency auc={auc:.4} achado_negativo_trilha_R_nao_bloqueia"
         ));

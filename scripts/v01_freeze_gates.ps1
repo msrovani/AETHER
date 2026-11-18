@@ -64,6 +64,7 @@ Run-Gate "F1_agent_eval" @("test", "--release", "--test", "agent_eval_suite", "-
 Run-Gate "F2_cic" @("test", "--release", "--test", "cic_abstain_gate", "--", "--nocapture")
 Run-Gate "F3_api_agent" @("test", "--release", "--features", "api", "--test", "api_agent", "--", "--nocapture")
 Run-Gate "F3_api_eval" @("test", "--release", "--features", "api", "--test", "api_eval", "--", "--nocapture")
+Run-Gate "F3_api_integrity" @("test", "--release", "--features", "api", "--test", "api_integrity", "--", "--nocapture")
 Run-Gate "F4_usability" @("test", "--release", "--features", "agent", "--test", "usability_gate", "--", "--nocapture")
 Run-Gate "F4_redteam" @("test", "--release", "--test", "agent_redteam_gate", "--", "--nocapture")
 Run-Gate "F5_cognitive" @("test", "--release", "--test", "cognitive_audit", "--", "--nocapture")
