@@ -1,0 +1,28 @@
+{
+  "experiment": "INTAKE_TRANSPLANT",
+  "claim": "MSG 0229",
+  "atoms": 205,
+  "dim_hv": 10240,
+  "dim_in": 768,
+  "spearman": 0.953850,
+  "jl_distortion": 0.008418,
+  "recall_at_10": 1.000000,
+  "latency_ms": 0.008215,
+  "allocs_query": 0,
+  "conflicts_detected": 5,
+  "conflicts_planted": 5,
+  "conflict_rate": 1.000000,
+  "determinism": true,
+  "rebuild_ok": true,
+  "gates": {
+    "spearman": true,
+    "recall10": true,
+    "jl": true,
+    "determinism": true,
+    "latency": true,
+    "alloc": true,
+    "conflicts": true,
+    "rebuild": true
+  },
+  "pass": true
+}

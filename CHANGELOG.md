@@ -3,7 +3,46 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.172] - 2026-11-18
+
+### Changed
+
+- Ciclo automatico: 38 arquivo(s) (.:1, .cursor:1, data:11, docs:9, scripts:2, src:4, tests:4, tools:6).
+- Gate: ok (16s).
+
+- `CHANGELOG.md`
+- `docs/CYCLE_CLOSE_2026-11-18_PERF_ONDA_A.md`
+- `docs/DOACAO_PLAYBOOK.md`
+- `docs/DONOR_CATALOG.md`
+- `docs/EMBED_THROUGHPUT_ANALYSIS.md`
+- `docs/PLAN_2026-11-17_OTIMIZACAO_ARXIV.md`
+- `scripts/embed_rate_1k.py`
+- `src/bin/aether_dashboard.rs`
+- `src/core/hv.rs`
+- `src/dashboard/jobs.rs`
+- `src/dashboard/transplant_view.rs`
+- `tests/b0_e1_order_gate.rs`
+
 ## [Unreleased]
+
+### Added
+
+- `tools/scribe_extract.py` — escriba de triplas LLM → facts.jsonl (Qwen3-8B
+  default, JSON estrito, T=0, NFKC, dedup, quarentena authority 60–120;
+  dry-run não finge extração).
+- `docs/RESEARCH_DOADORAS_2026.md` — pesquisa de doadoras 2026 (mapa manter
+  Qwen3-Embedding-0.6B; escriba → Qwen3-8B; proibidas CC BY-NC).
+- SGDB stdio real: `mcp_server 1.5.11` (neural-sgdb `abdf3c9`, feature
+  `file-storage`) em `neural-sgdb/target/mcp-release`; db `sgdb_memory.db`;
+  outbox `target/aether_sgdb.jsonl`.
+- A3-shard: completude do pipeline `20261117_b0_paws_s0/s1`
+  (embed → harvest `--jl-only` → `b0_pair_cosines`) para o gate da lei de
+  capacidade E1B (2×2500 < 4096).
+
+### Fixed
+
+- `docs/DOACAO_PLAYBOOK.md` — Estágio 2 passa a apontar a tool do escriba
+  própria; REBEL (CC BY-NC) removido da receita.
 
 ## [0.0.171] - 2026-11-18
 

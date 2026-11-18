@@ -1,0 +1,23 @@
+{
+  "donor": "Qwen/Qwen3-Embedding-0.6B",
+  "dim": 768,
+  "count": 5000,
+  "sha256_embeds": "09812748d380ac5d84d3cdd884dfaf4737ffe7c2a43136013c11daf0db241b47",
+  "mrl": true,
+  "license": "Apache-2.0",
+  "seed": 42,
+  "temperature": 0,
+  "device": "cuda",
+  "dtype": "bf16",
+  "backend": "torch",
+  "batch": 64,
+  "model_kwargs": {
+    "torch_dtype": "torch.bfloat16"
+  },
+  "torch_threads": 0,
+  "load_s": 19.715,
+  "encode_s": 490.116,
+  "texts_per_s": 10.2,
+  "opt": "L1_fp32_cpu_or_L2_bf16_gpu",
+  "note": "sidecar B0 — harvest --jl-only; seed+T0=0473; ver EMBED_THROUGHPUT_ANALYSIS"
+}

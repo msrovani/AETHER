@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "neural-sgdb": {
+      "type": "stdio",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "C:\\Users\\msrov\\Documents\\neural-sgdb\\scripts\\mcp-server.ps1"
+      ],
+      "env": {
+        "NEURAL_SGDB_DB": "C:\\Users\\msrov\\Documents\\neural-sgdb\\.nsgdb\\memory.db"
+      }
+    }
+  }
+}

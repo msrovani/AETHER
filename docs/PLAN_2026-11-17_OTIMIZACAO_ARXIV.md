@@ -61,11 +61,13 @@ Anti: destilar LLM · baixar teto PAWS · MCTS sem Δ≥10pp · claim alheio sem
 - **Aceite:** gate verde **ou** abstain honesto (não baixar teto)  
 - **Nota 0476:** gate fica de pé até o round embedado landar
 
-### A4. Multi-probe LSH + shards 10k/50k → B2
+### A4. Multi-probe LSH + shards ≤4k (E1B) → B2
 - **Dono:** CURSOR `HvBank` / `b2_100k_gate`  
 - **Lit:** [1809.07471](https://arxiv.org/abs/1809.07471), [1310.4136](https://arxiv.org/abs/1310.4136)  
-- **Gate:** n≥100k efetivo (união), LSH on, recall@10≥0,90, p99≤5ms, RSS≤256MiB  
-- **Aceite:** medida real shard ≥10k com LSH
+- **Lei E1B (OPENCODE 0520):** capacidade ≈ 0,4 × D → **4096** @ 10240 bits; 100k = **25×~4k**  
+- **Gate:** n≥100k efetivo (união de shards ≤cap), LSH on no monolito/latência, p99≤5ms, RSS≤256MiB  
+- **Piso recall@10≥0,90:** só dentro da capacidade; over-cap reporta sem inventar 0,90  
+- **Aceite intermediário:** shard ≤4096 medido (`data/rounds/b2_shards/4k/`)
 
 ### A5. Planner — poda por pré-condição (P6)
 - **Dono:** CURSOR se DEEPSEEK não claimar em 1 rodada (0473)  
@@ -95,10 +97,13 @@ Anti: destilar LLM · baixar teto PAWS · MCTS sem Δ≥10pp · claim alheio sem
 - **Gate:** e1b capacity + false-abstain  
 - **Lit:** [2606.24948](https://arxiv.org/abs/2606.24948)
 
-### B4. NysHD na borda (P2)
+### B4. NysHD na borda (P2) — redirecionado (OPENCODE 0539 / CURSOR ACK)
 - **Dono:** edge · OPENCODE+CURSOR  
 - **Contrato fixado:** header `X-Aether-Edge` ∈ {`hash` (default), `kernel` (opt-in)}  
-- **Gate:** **mesmo** B-G0; se <0,9/0,9 → abstain, hash permanece  
+- **Papel:** recuperação de paráfrase (C-G0 recall), **não** discriminação de label PAWS  
+- **Porquê:** AUC cosine≈0,49 (achado A3) — qualquer edge que preserve similaridade herda o sinal nulo; PAWS [1904.01130] falsifica overlap superficial  
+- **Gate:** C-G0 paraphrase-recall; se <0,9/0,9 → abstain, hash permanece  
+- **Label PAWS:** caminho E1 (`e1_paws_consistency`, OPENCODE) + fato `parafraseia` no corpus  
 - **Lit:** [2608.06860](https://arxiv.org/abs/2608.06860)
 
 ### B5. Verify → promoção 200 (P9)
@@ -154,8 +159,9 @@ Anti: destilar LLM · baixar teto PAWS · MCTS sem Δ≥10pp · claim alheio sem
 3. [x] ACK final OPENCODE 0476 (sem veto)  
 4. [x] ACK humano Onda A (`continue` 2026-11-17)  
 5. [x] OPENCODE B1 CIC (0478) · C1 FFT ABSTAIN (0481)  
-6. [x] CURSOR A1 limpo 1,56 txt/s · A2 path seed/T0 · A4 multiprobe shard10k · A5 poda  
-7. [ ] A2 GPU medida na 3050 (OPENCODE sequência 0487)  
-8. [ ] A3 B-G0 gate após embed 5k (OPENCODE em curso)
+6. [x] CURSOR A1 limpo · A2 path seed/T0 · A4 multiprobe + E1B shards≤4k · A5 poda  
+7. [x] OPENCODE 0520: A3 AUC~acaso → E1 ordem; capacidade 0,4×D → B2=25×4k (CURSOR ACK 0521 / REL 0524)  
+8. [ ] A2 GPU medida na 3050 (OPENCODE sequência 0487)  
+9. [ ] A3/E1 parafrase após embed ordenado (PAWS) — não baixar teto
 
 **Frase de fronteira:** LLM gera; AETHER cita, certifica ou abstém.

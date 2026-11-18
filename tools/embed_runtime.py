@@ -57,20 +57,31 @@ def default_batch(device: str) -> int:
     return 64 if device == "cuda" else 16
 
 
-def tune_cpu_threads() -> int:
-    """Usa núcleos físicos quando possível; evita oversubscribe."""
+def tune_cpu_threads(want: int | None = None) -> int:
+    """Ajusta torch.set_num_threads.
+
+    Default = n_lógicos//2 (proxy de P-cores). Em host híbrido P/E, todos os
+    lógicos pode empurrar trabalho para E-cores e *piorar* a taxa limpa
+    (remeasure 2026-11-18: 16 thr → 5,27 txt/s vs 8 thr → 10,82).
+    Override: `want` ou env `AETHER_EMBED_THREADS` (medir antes de promover).
+    """
     try:
         import torch
 
         n = os.cpu_count() or 4
-        # Heurística: metade dos lógicos ≈ físicos em HT; mín 2.
-        threads = max(2, n // 2)
+        env = os.environ.get("AETHER_EMBED_THREADS", "").strip()
+        if want is not None:
+            threads = max(1, int(want))
+        elif env:
+            threads = max(1, int(env))
+        else:
+            threads = max(2, n // 2)
         torch.set_num_threads(threads)
         try:
             torch.set_num_interop_threads(1)
         except Exception:
             pass
-        return threads
+        return torch.get_num_threads()
     except ImportError:
         return 0
 

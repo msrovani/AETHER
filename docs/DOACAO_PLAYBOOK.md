@@ -116,6 +116,9 @@ Cada fonte entra com: `authority`, `wall_ms`, `url/hash`, `lang`.
 
 - **Dry-run (CI/lab sem rede):** corpus sintético PT-BR + conflitos plantados.
 - **Produção:** GLiNER+REBEL (vazão) → Qwen2.5-7B JSON estrito (precisão).
+  **2026-11-18:** tool própria `tools/scribe_extract.py` (Qwen3-8B default,
+  IFStruct 79,75; JSON estrito, T=0, NFKC, dedup, quarentena 60–120). REBEL é
+  CC BY-NC — evitado (ver [`RESEARCH_DOADORAS_2026.md`](RESEARCH_DOADORAS_2026.md)).
 - Emite: triplas `(sujeito, relação, objeto, confiança, citação)` e, se houver
   regra verificável, cláusulas CNF (futuro Logos).
 
@@ -279,6 +282,7 @@ integrado ao loop; senão, só tools/API de lab.
 
 ```text
 tools/harvest_transplant.py          # ETL
+tools/scribe_extract.py              # escriba: triplas LLM → facts.jsonl (quarentena 60–120)
 tools/transplant_uso.py              # U1–U6 → target/aether_transplant_uso.json
 examples/transplant_hv_probe.rs      # medição + JSON
 tests/transplant_hv_gate.rs          # CI

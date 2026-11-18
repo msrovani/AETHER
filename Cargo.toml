@@ -1,9 +1,9 @@
-[package]
+﻿[package]
 name = "aether_engine"
-version = "0.0.171"
+version = "0.0.172"
 edition = "2021"
 rust-version = "1.78"
-description = "AETHER ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
+description = "AETHER ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
 license = "MIT OR Apache-2.0"
 publish = false
 
@@ -38,7 +38,7 @@ name = "aether-sgdb"
 path = "src/bin/aether_sgdb.rs"
 required-features = ["sgdb"]
 
-# Organismo agÃªntico: inferÃªncia + MoE + coerÃªncia + autoaprendizado.
+# Organismo agÃƒÂªntico: inferÃƒÂªncia + MoE + coerÃƒÂªncia + autoaprendizado.
 [[bin]]
 name = "aether-agent"
 path = "src/bin/aether_agent.rs"
@@ -63,9 +63,9 @@ m5 = []
 m6 = ["m1"]
 m7 = ["m1"]
 m8 = ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "sgdb"]
-# Borda externa HTTP/JSON (T2) para apps de IA â€” OpenAI-compat e llama.cpp.
-# Sem dependÃªncia nova: HTTP/1.1 mÃ­nimo sobre std::net.
-# Inclui o sink durÃ¡vel do neural-sgdb e o agente (rota /v1/aether/agent).
+# Borda externa HTTP/JSON (T2) para apps de IA Ã¢â‚¬â€ OpenAI-compat e llama.cpp.
+# Sem dependÃƒÂªncia nova: HTTP/1.1 mÃƒÂ­nimo sobre std::net.
+# Inclui o sink durÃƒÂ¡vel do neural-sgdb e o agente (rota /v1/aether/agent).
 api = ["m1", "sgdb", "agent"]
 # Dashboard Windows de metricas (egui). Opt-in; nao entra no default.
 dashboard = ["dep:eframe", "dep:egui", "dep:serde", "dep:serde_json", "m4"]
@@ -88,7 +88,7 @@ gpu = ["dep:wgpu", "dep:bytemuck"]
 # T2: encaixe operacional do neural-sgdb (MCP sobre stdio/HTTP + outbox).
 # Sem dependencia nova: JSON-RPC/HTTP/1.1 e JSON minimo vivem no crate.
 sgdb = ["m1"]
-# Agente: especialistas (FHRR, fase, lÃ³gica, solver, SGDB) + MoE + coerÃªncia.
+# Agente: especialistas (FHRR, fase, lÃƒÂ³gica, solver, SGDB) + MoE + coerÃƒÂªncia.
 agent = ["m1", "m5", "sgdb"]
 
 [dependencies]

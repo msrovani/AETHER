@@ -14,7 +14,10 @@
 | Sem CUDA neste host CURSOR | `torch.cuda.is_available()=False` |
 | Threads | `torch.get_num_threads()=10` |
 
-**Causa raiz #1 (medida):** bf16 em CPU é emulado e **~6× mais lento** que fp32 no mesmo host.
+**Causa raiz #1 (medida):** bf16 em CPU é emulado e **muito mais lento** que fp32.  
+- Probe CURSOR (n=128): ~6–9×  
+- OPENCODE 0513 (ST default sem `model_kwargs`): **0,37 vs 10,82 txt/s ≈ 29×**  
+- **Armadilha:** `SentenceTransformer(donor)` no CPU cai em bf16 no Qwen3 — sempre `tools/embed_runtime.py`.
 
 ### Probe dtype × batch (n=128, CPU)
 
@@ -101,7 +104,32 @@ Conclusão imediata: **só trocar para `torch_dtype=float32` no CPU** coloca ETA
 
 | Device | dtype | batch | extras |
 |---|---|---:|---|
-| CPU | fp32 | 16 | `torch.set_num_threads(n_físicos)` |
-| CUDA | bf16 | 64 | FA2 se disponível · cudnn.benchmark |  
+| CPU | fp32 | 16 | `torch.set_num_threads(n_lógicos)` ou `AETHER_EMBED_THREADS` |
+| CUDA | bf16 | 64 | FA2 se disponível · cudnn.benchmark |
+
+### L1b — threads×batch (MSG 0502/0505, 2026-11-18)
+
+**Lição:** sweep **contendido** mentiu. Limpo no mesmo host:
+
+| condição | threads | batch | txt/s |
+|---|---:|---:|---:|
+| contendido (0506) | 16 | 32 | 5,74 (falso “melhor”) |
+| **limpo** n=256 | **8** | **16** | **8,42** |
+| limpo n=256 | 10 | 16 | 2,67 |
+| limpo n=256 | 16 | 16 | 3,17 |
+| limpo A1 n=1000 @16 thr | 16 | 16 | 5,27 (pior que 10,82 @8) |
+
+**Default permanece `n_lógicos//2`** (proxy P-cores). Em híbrido P/E, mais threads → E-cores → piora.  
+Override só com medida: `AETHER_EMBED_THREADS`.
+
+### Discrepância CURSOR vs OPENCODE (0505) → fechamento parcial (0509)
+
+| lado | observação |
+|---|---|
+| CURSOR A1 | thr=8 B16 fp32: **10,82** (1ª) · recheck **8,97** txt/s · ETA 100k **3,1 h** |
+| OPENCODE CPU | batch 16 em 21–30 s sob contenção/P-E (explicado) |
+| OPENCODE **A2 GPU** | **23,42 txt/s** bf16 B64 na 3050 · razão **2,17×** ≥2× → **ADMITIDO** |
+| P/E real | lógicos 0–11 = P (+SMT) · 12–15 = E (0509) |
+| B-G0 | relaunch **CUDA** (~4 min @23 txt/s) → A3 hoje |  
 
 **Frase:** LLM gera; AETHER cita, certifica ou abstém — o donor é sidecar medido, não fé.

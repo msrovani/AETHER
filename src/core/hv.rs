@@ -11,6 +11,9 @@ const MAGIC: &[u8; 8] = b"AETHV1\0\0";
 const HEADER_SIZE: usize = 128;
 /// Probes extras por tabela (além do bucket exato). 0 = LSH clássico.
 const DEFAULT_LSH_PROBES: usize = 8;
+/// Lei E1B (MSG 0103/0196 / OPENCODE 0520): capacidade ≈ 0,4 × D_bits.
+/// D=10240 → 4096 átomos/shard. Acima disso recall degrada por lei.
+pub const E1B_CAPACITY_FRAC: f64 = 0.4;
 
 /// Banco de hipervetores binários (1,28 KB/átomo @ 10.240 bits).
 #[derive(Debug, Clone)]
@@ -21,7 +24,7 @@ pub struct HvBank {
     pub seed: u64,
     pub bits: Vec<u64>,
     pub keys: Vec<u128>,
-    /// LSH: 4 tabelas × 16 bits → buckets (preenchido se count ≥ 10_000).
+    /// LSH: 4 tabelas × 16 bits → buckets (auto se count ≥ 10_000; shards ≤4k usam varredura).
     pub lsh_tables: Vec<Vec<Vec<u32>>>,
     /// Multi-probe: nº de buckets vizinhos (Hamming-1) por tabela.
     pub lsh_probes: usize,
@@ -73,9 +76,10 @@ impl HvBank {
             lsh_tables: Vec::new(),
             lsh_probes: 0,
         };
-        // P1.2 / MSG 0440: o gate B1 usa exatamente 10k; `>` deixava brute-force
-        // verde sem exercitar LSH. Limiar inclusivo ≥10_000.
-        if bank.count() >= 10_000 {
+        // LSH auto: ≥ capacidade E1B (4096 @ 10240). B1/10k e shards 4k
+        // exercitam multi-probe; abaixo disso varredura cabe no teto 5 ms (release).
+        let lsh_floor = e1b_atom_capacity(bank.dim).max(1);
+        if bank.count() >= lsh_floor {
             bank.build_lsh(4, 16);
         }
         Ok(bank)
@@ -83,6 +87,16 @@ impl HvBank {
 
     pub fn count(&self) -> usize {
         self.keys.len()
+    }
+
+    /// Capacidade E1B para a geometria deste bank (`0,4 × dim`).
+    pub fn e1b_capacity(&self) -> usize {
+        e1b_atom_capacity(self.dim)
+    }
+
+    /// `true` se `count` excede a lei de capacidade (shard obrigatório).
+    pub fn over_capacity(&self) -> bool {
+        self.count() > self.e1b_capacity()
     }
 
     pub fn atom_words(&self, i: usize) -> &[u64] {
@@ -210,6 +224,27 @@ impl HvBank {
     }
 }
 
+/// Capacidade máxima de átomos sob a lei E1B (`0,4 × dim_bits`).
+pub fn e1b_atom_capacity(dim_bits: usize) -> usize {
+    (E1B_CAPACITY_FRAC * dim_bits as f64) as usize
+}
+
+/// Plano de shards B2: fatias ≤ capacidade E1B (default 4096 @ 10240 bits).
+///
+/// OPENCODE 0520: bank monolítico > capacidade degrada recall@1 por lei;
+/// 100k = ⌈n / cap⌉ shards (ex.: 25 × 4k).
+pub fn shard_plan_e1b(n_atoms: usize, dim_bits: usize) -> Vec<(usize, usize)> {
+    let cap = e1b_atom_capacity(dim_bits).max(1);
+    let mut out = Vec::new();
+    let mut off = 0usize;
+    while off < n_atoms {
+        let n = (n_atoms - off).min(cap);
+        out.push((off, n));
+        off += n;
+    }
+    out
+}
+
 /// Reconstrói plano de shards a partir de fatos (≤48/relação) — view materializada.
 pub fn shard_plan_from_relations(rel_counts: &[(String, usize)]) -> Vec<(String, usize, usize)> {
     let mut out = Vec::new();
@@ -242,5 +277,14 @@ mod tests {
         assert!(codes.contains(&0b1011));
         assert!(codes.contains(&0b1000));
         assert!(codes.contains(&0b1110));
+    }
+
+    #[test]
+    fn e1b_capacity_10240_is_4096() {
+        assert_eq!(e1b_atom_capacity(10_240), 4_096);
+        let plan = shard_plan_e1b(100_000, 10_240);
+        assert_eq!(plan.len(), 25); // 24×4096 + 1×1024? 100000/4096 = 24.41 → 25
+        assert!(plan.iter().all(|&(_, n)| n <= 4_096));
+        assert_eq!(plan.iter().map(|p| p.1).sum::<usize>(), 100_000);
     }
 }

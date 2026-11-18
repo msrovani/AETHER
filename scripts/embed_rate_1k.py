@@ -65,6 +65,12 @@ def main() -> int:
         choices=("auto", "torch", "onnx"),
         help="L3: onnx opt-in (medir vs torch antes de promover)",
     )
+    ap.add_argument(
+        "--threads",
+        type=int,
+        default=0,
+        help="0=auto (todos os lógicos ou AETHER_EMBED_THREADS)",
+    )
     ap.add_argument("--out", type=Path, default=Path("target/embed_rate_1k.json"))
     ap.add_argument(
         "--contended",
@@ -87,7 +93,11 @@ def main() -> int:
     dtype = resolve_dtype(device, args.dtype)
     backend = resolve_backend(args.backend)
     batch = args.batch if args.batch > 0 else default_batch(device)
-    threads = tune_cpu_threads() if device == "cpu" else 0
+    threads = (
+        tune_cpu_threads(args.threads if args.threads > 0 else None)
+        if device == "cpu"
+        else 0
+    )
     set_determinism(args.seed, throughput_gpu=(device == "cuda"))
 
     labels = []

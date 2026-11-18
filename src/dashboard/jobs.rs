@@ -556,7 +556,13 @@ fn parse_api_eval_report(stdout: &str) -> String {
 fn parse_frac(line: &str) -> Option<(u64, u64)> {
     let digits: String = line
         .chars()
-        .map(|c| if c.is_ascii_digit() || c == '/' { c } else { ' ' })
+        .map(|c| {
+            if c.is_ascii_digit() || c == '/' {
+                c
+            } else {
+                ' '
+            }
+        })
         .collect();
     let parts: Vec<&str> = digits.split_whitespace().collect();
     for p in parts {
@@ -647,11 +653,7 @@ fn run_agent_ask(shared: &Shared, subject: &str, relation: &str) -> Result<Strin
         .unwrap_or("{}");
     let action = serde_json::from_str::<serde_json::Value>(line)
         .ok()
-        .and_then(|v| {
-            v.get("action")
-                .and_then(|a| a.as_str())
-                .map(str::to_string)
-        })
+        .and_then(|v| v.get("action").and_then(|a| a.as_str()).map(str::to_string))
         .unwrap_or_else(|| "unknown".into());
     let detail = line.chars().take(400).collect::<String>();
     Ok(format!(

@@ -1,0 +1,15 @@
+{
+  "facts": 1000, "entities": 125, "relations": 8,
+  "d_in": 384, "bits": 10240, "bytes_per_atom": 1280,
+  "bam_bytes": 1280000, "jl_ms": 1374.541, "pairs": 499500,
+  "spearman": 0.952815,
+  "fhrr_dim": 160, "traces": 6, "shards": 21, "max_shard": 48,
+  "rel_recall_clean": 0.999000, "rel_recall_noise": 0.999000, "rel_recall_noise2": 0.999000,
+  "analogy_r1": 0.954861, "analogy_r5": 1.000000, "analogy_queries": 288,
+  "analogy_r1_atom_noise": 0.934028, "analogy_r1_atom_noise2": 0.222222,
+  "threshold": 0.638556, "evidence_cut": 0.803693, "accepted": 247, "false_confident": 0.000000,
+  "ood_abstained": 1.000000, "verifier_ms": 0.0042, "verifier_allocs": 0,
+  "verifier_conflicts": 0, "verifier_prov_violations": 0,
+  "bridge_emitted": 1000, "bridge_dropped": 0,
+  "gates": {"g1": true, "g2": true, "g3a": true, "g3b": true, "g3c": true}
+}

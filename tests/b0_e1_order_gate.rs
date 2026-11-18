@@ -17,7 +17,8 @@ use std::fs;
 use std::path::Path;
 
 use aether_engine::core::phase_language::{
-    encode_sentence, role_term, Anchors, Bundle, Codebooks, D, N_ENT, N_MOD, N_VERB, ROLE_S,
+    encode_sentence, role_term, tri_sim, Anchors, Bundle, Codebooks, D, N_ENT, N_MOD, N_VERB,
+    ROLE_S,
 };
 
 const ROUND: &str = "data/rounds/20261117_b0_paws/facts.jsonl";
@@ -85,6 +86,36 @@ fn roles_bag(toks: &[String]) -> [usize; 4] {
     }
     let m = (acc as usize) % N_MOD;
     [s, v, o, m]
+}
+
+/// MaxSim-lite (ColBERT-inspired, MSG 0532): média dos max-sim token→token
+/// no codebook E1 (não no donor). Opt-in métrica; não relaxa teto cosine.
+fn maxsim_lite(cb: &Codebooks, q: &[String], d: &[String]) -> f64 {
+    let q_ids: Vec<usize> = q
+        .iter()
+        .take(24)
+        .map(|t| (fnv1a(t) as usize) % N_ENT)
+        .collect();
+    let d_ids: Vec<usize> = d
+        .iter()
+        .take(24)
+        .map(|t| (fnv1a(t) as usize) % N_ENT)
+        .collect();
+    if q_ids.is_empty() || d_ids.is_empty() {
+        return 0.0;
+    }
+    let mut acc = 0.0f64;
+    for &qi in &q_ids {
+        let mut best = f32::NEG_INFINITY;
+        for &di in &d_ids {
+            let s = tri_sim(cb.ent.clean[qi].as_slice(), cb.ent.clean[di].as_slice());
+            if s > best {
+                best = s;
+            }
+        }
+        acc += best as f64;
+    }
+    acc / q_ids.len() as f64
 }
 
 fn bundle_sim(x: &Bundle, y: &Bundle) -> f64 {
@@ -168,6 +199,7 @@ fn b0_e1_order_paraphrase_auc() {
 
     let mut scores_ord: Vec<f64> = Vec::new();
     let mut scores_bag: Vec<f64> = Vec::new();
+    let mut scores_maxsim: Vec<f64> = Vec::new();
     let mut labels: Vec<bool> = Vec::new();
 
     for (i, line) in raw.lines().enumerate() {
@@ -192,6 +224,7 @@ fn b0_e1_order_paraphrase_auc() {
 
         scores_ord.push(bundle_sim(&psi1, &psi2));
         scores_bag.push(bundle_sim(&bag1, &bag2));
+        scores_maxsim.push(maxsim_lite(&cb, &t1, &t2));
         labels.push(is_pos);
     }
 
@@ -199,9 +232,12 @@ fn b0_e1_order_paraphrase_auc() {
     assert!(n >= 100, "poucos pares: {n}");
     let auc_ord = auc(&scores_ord, &labels);
     let auc_bag = auc(&scores_bag, &labels);
+    let auc_ms = auc(&scores_maxsim, &labels);
     let delta = auc_ord - auc_bag;
 
-    eprintln!("B-G0′ n={n} AUC_E1_ordem={auc_ord:.4} AUC_bag={auc_bag:.4} delta={delta:.4}");
+    eprintln!(
+        "B-G0′ n={n} AUC_E1_ordem={auc_ord:.4} AUC_bag={auc_bag:.4} delta={delta:.4} AUC_MaxSim_lite={auc_ms:.4}"
+    );
 
     // Não baixar teto do cosine A3. PASS de produto: ordem claramente acima do bag
     // e acima do acaso. Caso contrário: ACHADO/ABSTAIN honesto (mapper tosco
@@ -216,7 +252,7 @@ fn b0_e1_order_paraphrase_auc() {
     }
 
     let json = format!(
-        "{{\"version\":{:?},\"n\":{n},\"auc_e1_order\":{auc_ord:.4},\"auc_bag\":{auc_bag:.4},\"delta\":{delta:.4},\"pass\":{},\"seed\":{SEED},\"limit\":{LIMIT},\"cosine_teto_relaxed\":false,\"note\":\"B-G0_prime_E1; A3 cosine permanece achado negativo\",\"created\":\"2026-11-18\"}}\n",
+        "{{\"version\":{:?},\"n\":{n},\"auc_e1_order\":{auc_ord:.4},\"auc_bag\":{auc_bag:.4},\"delta\":{delta:.4},\"auc_maxsim_lite\":{auc_ms:.4},\"pass\":{},\"seed\":{SEED},\"limit\":{LIMIT},\"cosine_teto_relaxed\":false,\"note\":\"B-G0_prime_E1+MaxSim_lite; A3 cosine permanece achado negativo\",\"ref\":\"MSG_0532\",\"created\":\"2026-11-18\"}}\n",
         env!("CARGO_PKG_VERSION"),
         pass
     );

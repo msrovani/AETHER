@@ -42,19 +42,84 @@ mod aether_dashboard_win {
 
     /// Contrato humano de usabilidade (MSG 0449): TESTE | AETHER | LLM.
     const USABILITY_CONTRACT: &[(&str, &str, &str, &str)] = &[
-        ("U1", "Onboarding a frio", "tools/demo exit 0 <60s, sem ação sem verificação", "LLM: setup opaco / chat sem contrato"),
-        ("U2", "Fato conhecido", "cite com key+escopo+autoridade; 0 fabricado", "LLM: responde mesmo sem fonte"),
-        ("U3", "Fato OOD", "Abstain; false-act=0; abstain ≥90%", "LLM: alucina com confiança"),
-        ("U4", "Paráfrase/digitação", "Abstain se similaridade baixa; FP=0", "LLM: casa por semântica frouxa"),
-        ("U5", "Solver SAT/QUBO", "Certificado violations=0 no orçamento", "LLM: 'quase-resolve' em prosa"),
-        ("U6", "Transparência", "Replay idêntico; 0 ledger no T0", "LLM: amostragem estocástica"),
-        ("U7", "HITL / risco", "Cite/NeedsHuman antes do efeito", "LLM: age sem before-image"),
-        ("U8", "Reversibilidade", "Rollback LIFO → estado inicial", "LLM: efeito irreversível"),
-        ("U9", "Autoridade", "Purge ≥200 sem HITL → 403/tombstone", "LLM: sobrescreve sem gate"),
-        ("U10", "Entradas abusivas", "400/OOV; injeção não executa", "LLM: prompt injection funciona"),
-        ("U11", "Contradição", "contradicts tipado; sem overwrite", "LLM: funde relatos contraditórios"),
-        ("U12", "Latência", "p50/p99/RSS nos tetos D1", "LLM: latência opaca / variável"),
-        ("U13", "Idioma/parser", "≥95% schema; OOV→needs_human", "LLM: interpreta tudo como prosa"),
+        (
+            "U1",
+            "Onboarding a frio",
+            "tools/demo exit 0 <60s, sem ação sem verificação",
+            "LLM: setup opaco / chat sem contrato",
+        ),
+        (
+            "U2",
+            "Fato conhecido",
+            "cite com key+escopo+autoridade; 0 fabricado",
+            "LLM: responde mesmo sem fonte",
+        ),
+        (
+            "U3",
+            "Fato OOD",
+            "Abstain; false-act=0; abstain ≥90%",
+            "LLM: alucina com confiança",
+        ),
+        (
+            "U4",
+            "Paráfrase/digitação",
+            "Abstain se similaridade baixa; FP=0",
+            "LLM: casa por semântica frouxa",
+        ),
+        (
+            "U5",
+            "Solver SAT/QUBO",
+            "Certificado violations=0 no orçamento",
+            "LLM: 'quase-resolve' em prosa",
+        ),
+        (
+            "U6",
+            "Transparência",
+            "Replay idêntico; 0 ledger no T0",
+            "LLM: amostragem estocástica",
+        ),
+        (
+            "U7",
+            "HITL / risco",
+            "Cite/NeedsHuman antes do efeito",
+            "LLM: age sem before-image",
+        ),
+        (
+            "U8",
+            "Reversibilidade",
+            "Rollback LIFO → estado inicial",
+            "LLM: efeito irreversível",
+        ),
+        (
+            "U9",
+            "Autoridade",
+            "Purge ≥200 sem HITL → 403/tombstone",
+            "LLM: sobrescreve sem gate",
+        ),
+        (
+            "U10",
+            "Entradas abusivas",
+            "400/OOV; injeção não executa",
+            "LLM: prompt injection funciona",
+        ),
+        (
+            "U11",
+            "Contradição",
+            "contradicts tipado; sem overwrite",
+            "LLM: funde relatos contraditórios",
+        ),
+        (
+            "U12",
+            "Latência",
+            "p50/p99/RSS nos tetos D1",
+            "LLM: latência opaca / variável",
+        ),
+        (
+            "U13",
+            "Idioma/parser",
+            "≥95% schema; OOV→needs_human",
+            "LLM: interpreta tudo como prosa",
+        ),
     ];
 
     /// Paleta do hub (lab slate + teal — sem glow/roxo).
@@ -1156,11 +1221,9 @@ mod aether_dashboard_win {
             let report = self.api_eval.clone();
             if !report.present {
                 ui.label(
-                    RichText::new(
-                        "Sem aether_api_eval.json — rode Usabilidade API (feature api).",
-                    )
-                    .small()
-                    .color(theme::MUTED),
+                    RichText::new("Sem aether_api_eval.json — rode Usabilidade API (feature api).")
+                        .small()
+                        .color(theme::MUTED),
                 );
                 return;
             }
@@ -1213,13 +1276,9 @@ mod aether_dashboard_win {
                 return;
             }
             ui.label(
-                RichText::new(format!(
-                    "{} · sgdb={}",
-                    drive.path.display(),
-                    drive.sgdb
-                ))
-                .small()
-                .color(theme::MUTED),
+                RichText::new(format!("{} · sgdb={}", drive.path.display(), drive.sgdb))
+                    .small()
+                    .color(theme::MUTED),
             );
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {
@@ -1233,10 +1292,7 @@ mod aether_dashboard_win {
                     let accent = if ok { theme::OK } else { theme::BAD };
                     let label = format!("{}|{}", a.subject, a.relation);
                     if meter_card(ui, &label, a.action.clone(), accent) {
-                        self.note_hover(
-                            format!("Ask {}", a.subject),
-                            agent_ask_detail(a),
-                        );
+                        self.note_hover(format!("Ask {}", a.subject), agent_ask_detail(a));
                     }
                 }
             });

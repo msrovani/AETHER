@@ -232,7 +232,11 @@ pub fn transplant_paths() -> (PathBuf, PathBuf, PathBuf, PathBuf) {
     let root = workspace_root();
     (
         prefer_round_manifest(&root),
-        prefer_round_file(&root, "aether_transplant_hv.json", "target/aether_transplant_hv.json"),
+        prefer_round_file(
+            &root,
+            "aether_transplant_hv.json",
+            "target/aether_transplant_hv.json",
+        ),
         prefer_round_file(&root, "aether_e3.json", "target/aether_e3.json"),
         prefer_round_file(
             &root,

@@ -1,0 +1,552 @@
+{
+  "donor": "Qwen/Qwen3-Embedding-0.6B",
+  "revision": "jl-only",
+  "dim_in": 768,
+  "dim_hv": 10240,
+  "words": 160,
+  "seed": 3735928559,
+  "count": 5000,
+  "labels": 5000,
+  "facts": 5000,
+  "whitened": false,
+  "sha256_whitening": null,
+  "sha256_embeds": "09812748d380ac5d84d3cdd884dfaf4737ffe7c2a43136013c11daf0db241b47",
+  "sha256_bank": "20cd525e0a8da7e9c62fe601dca167f936de1ce1bd5b1ee056a04971abd48709",
+  "shards": [
+    {
+      "relation": "nao_parafraseia",
+      "offset": 0,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 48,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 96,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 144,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 192,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 240,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 288,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 336,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 384,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 432,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 480,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 528,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 576,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 624,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 672,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 720,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 768,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 816,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 864,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 912,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 960,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1008,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1056,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1104,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1152,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1200,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1248,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1296,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1344,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1392,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1440,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1488,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1536,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1584,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1632,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1680,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1728,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1776,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1824,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1872,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1920,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 1968,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 2016,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 2064,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 2112,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 2160,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 2208,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 2256,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 2304,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 2352,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 2400,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 2448,
+      "count": 48
+    },
+    {
+      "relation": "nao_parafraseia",
+      "offset": 2496,
+      "count": 4
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 0,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 48,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 96,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 144,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 192,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 240,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 288,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 336,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 384,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 432,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 480,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 528,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 576,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 624,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 672,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 720,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 768,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 816,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 864,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 912,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 960,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1008,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1056,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1104,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1152,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1200,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1248,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1296,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1344,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1392,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1440,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1488,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1536,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1584,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1632,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1680,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1728,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1776,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1824,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1872,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1920,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 1968,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 2016,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 2064,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 2112,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 2160,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 2208,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 2256,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 2304,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 2352,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 2400,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 2448,
+      "count": 48
+    },
+    {
+      "relation": "parafraseia",
+      "offset": 2496,
+      "count": 4
+    }
+  ],
+  "conflicts_planted": 0,
+  "conflicts_detected": 65,
+  "authority_max_transplant": 120,
+  "created": "2026-11-18",
+  "claim": "MSG 0229 INTAKE_TRANSPLANT"
+}

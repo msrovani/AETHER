@@ -127,4 +127,4 @@ python tools/harvest_transplant.py --jl-only --out data/rounds/<rodada> --no-whi
 # tools/b0_paws_harvest.py → donor_map_embed → b0_pair_cosines → cargo test --features m1 --test b0_parafra_gate
 ```
 
-Refs: [`DOACAO_PLAYBOOK.md`](DOACAO_PLAYBOOK.md) · [`CYCLE_CLOSE_2026-11-17_DOACAO_ONDA0.md`](CYCLE_CLOSE_2026-11-17_DOACAO_ONDA0.md) · [`LANGUAGE_PORT.md`](LANGUAGE_PORT.md) · [`PLAN_2026-11-17_OTIMIZACAO_ARXIV.md`](PLAN_2026-11-17_OTIMIZACAO_ARXIV.md).
+Refs: [`DOACAO_PLAYBOOK.md`](DOACAO_PLAYBOOK.md) · [`CYCLE_CLOSE_2026-11-17_DOACAO_ONDA0.md`](CYCLE_CLOSE_2026-11-17_DOACAO_ONDA0.md) · [`LANGUAGE_PORT.md`](LANGUAGE_PORT.md) · [`PLAN_2026-11-17_OTIMIZACAO_ARXIV.md`](PLAN_2026-11-17_OTIMIZACAO_ARXIV.md) · [`PESQUISA_B-G0_PAWS_E1_EMBED.md`](PESQUISA_B-G0_PAWS_E1_EMBED.md) · [`RESEARCH_DOADORAS_2026.md`](RESEARCH_DOADORAS_2026.md).
