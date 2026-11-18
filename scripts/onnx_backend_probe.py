@@ -230,15 +230,17 @@ def main() -> int:
         if args.reexport or not args.onnx_cache.exists():
             print(f"exportando ONNX -> {args.onnx_cache} (opset {OPSET})...", flush=True)
             export_encoder(torch_model, args.onnx_cache)
-        tokenizer = torch_model[0].tokenizer
         onnx_embed, sess = make_onnx_embedder(
-            args.onnx_cache, tokenizer, args.dim, args.batch
+            args.onnx_cache, torch_model, args.dim, args.batch
         )
         _ = onnx_embed(texts[: min(args.batch, n)])  # warmup
         t0 = time.perf_counter()
         emb_o = onnx_embed(texts)
         onnx_s = time.perf_counter() - t0
     except Exception as e:  # noqa: BLE001 — contrato: ABSTAIN, nunca derrubar o host
+        import traceback
+
+        traceback.print_exc()
         print(f"ABSTAIN: export/inferencia ONNX falhou: {type(e).__name__}: {e}", file=sys.stderr)
         return 3
     onnx_rate = n / onnx_s if onnx_s > 0 else 0.0

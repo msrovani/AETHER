@@ -429,7 +429,12 @@ impl JournalLock {
                     drop(file);
                     return Ok(Self { path });
                 }
-                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                // Windows: create_new pode devolver PermissionDenied (os 5) em
+                // corrida com remove_file do outro escritor — tratar como ocupado.
+                Err(error)
+                    if error.kind() == io::ErrorKind::AlreadyExists
+                        || error.kind() == io::ErrorKind::PermissionDenied =>
+                {
                     if std::time::Instant::now() >= deadline {
                         let stale = std::fs::metadata(&path)
                             .and_then(|meta| meta.modified())

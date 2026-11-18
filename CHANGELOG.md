@@ -3,6 +3,16 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.176] - 2026-11-18
+
+### Changed
+
+- Ciclo automatico: 2 arquivo(s) (scripts:1, src:1).
+- Gate: ok (13s).
+
+- `scripts/onnx_backend_probe.py`
+- `src/agent/undo_sgdb.rs`
+
 ## [0.0.175] - 2026-11-18
 
 ### Changed
