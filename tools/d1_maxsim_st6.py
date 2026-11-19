@@ -124,18 +124,24 @@ def main() -> int:
             raise ValueError(f"auc zip: scores={len(scores)} labels={len(labels)}")
         pos = sorted(s for s, l in zip(scores, labels, strict=True) if l == 1)
         neg = sorted(s for s, l in zip(scores, labels, strict=True) if l == 0)
-        i = j = wins = ties = 0
-        while i < len(pos) and j < len(neg):
-            if pos[i] > neg[j]:
-                wins += len(neg) - j
-                i += 1
-            elif pos[i] < neg[j]:
-                j += 1
-            else:
-                ties += 1
-                j += 1
         n1, n0 = len(pos), len(neg)
-        return (wins + ties / 2) / (n1 * n0) if n1 and n0 else 0.5
+        if not n1 or not n0:
+            return 0.5
+        # Mann-Whitney correto: para cada positivo, #neg < p (e empates /2).
+        # (ERRATA: o two-pointer antigo exauria j e abandonava os positivos
+        # restantes — com o menor positivo abaixo de todos os neg, o loop
+        # terminava em i=0 e devolvia 0.0 exato.)
+        wins = ties = 0
+        j = 0
+        for p in pos:
+            while j < n0 and neg[j] < p:
+                j += 1
+            wins += j
+            k = j
+            while k < n0 and neg[k] == p:
+                k += 1
+            ties += k - j
+        return (wins + ties / 2) / (n1 * n0)
 
     def bootstrap_ic95(scores: list[float], labels: list[int], b: int, seed: int) -> tuple[float, float]:
         rnd = random.Random(seed)
