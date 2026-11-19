@@ -1,0 +1,58 @@
+{
+  "experiment": "INTAKE_TRANSPLANT_USO",
+  "claim": "MSG 0229",
+  "bank_atoms": 205,
+  "pass_all": true,
+  "cases": [
+    {
+      "id": "U1",
+      "title": "Auto-recuperação top-1",
+      "detail": "5 queries canônicas → top-1=self. 5/5.",
+      "pass": true,
+      "score": "5/5"
+    },
+    {
+      "id": "U2",
+      "title": "Resolve SGDB",
+      "detail": "Hit HV → fato + citação + authority≤240.",
+      "pass": true,
+      "score": "9/9"
+    },
+    {
+      "id": "U3",
+      "title": "Vizinhança por relação",
+      "detail": "Rust|é_uma → same_rel=6 no top-10.",
+      "pass": true,
+      "score": "same_rel=6"
+    },
+    {
+      "id": "U4",
+      "title": "Conflitos → Abstain/Propose",
+      "detail": "plantados=5 detectados=5.",
+      "pass": true,
+      "score": "5/5"
+    },
+    {
+      "id": "U5",
+      "title": "Evidence Hypervector",
+      "detail": "score=1−2H/D, auth≤240, Act em auto-hit.",
+      "pass": true,
+      "score": "5/5"
+    },
+    {
+      "id": "U6",
+      "title": "Orçamento latência T1",
+      "detail": "Rust lat_ms=0.00582; Python ref=1.747ms (não-gate).",
+      "pass": true,
+      "score": "0.00582ms"
+    }
+  ],
+  "gates_ci": {
+    "note": "rodar cargo test --test transplant_hv_gate / e3_* / f1_* no job hub"
+  },
+  "etl": {
+    "tool": "tools/harvest_transplant.py",
+    "stages": 6
+  },
+  "playbook": "docs/DOACAO_PLAYBOOK.md"
+}
