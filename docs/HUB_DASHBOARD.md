@@ -14,17 +14,19 @@ Superfície única de lab/usuário nesta fase (egui/eframe, feature `dashboard` 
 |---|---|
 | **Lab** | Marca, jobs (auditoria/bench/HW/demos/probe doação), ACQ, T01–T12, vazão, Doação·ETL (chip USO → Testes IA), gaps, host, Detalhe/gráficos |
 | **Testes IA** | Transplante USO U1–U6 · usabilidade API · AgentDrive · contrato U1–U13 (MSG 0449) |
+| **Console IA** | Acionamento manual estilo chat → `POST /v1/chat/completions` (API local); bolhas com verdict cite/act/abstain + evidência. Não é LLM chatbot. |
 
-Single-flight global: um job por vez em qualquer aba.
+Single-flight global: um job por vez em Lab/Testes IA. Console IA usa HTTP próprio (single-flight interno).
 
 ## Layout
 
 | Região | Conteúdo |
 |---|---|
-| Barra superior | **AETHER** + versão + frase de fronteira (*LLM gera; AETHER cita, certifica ou abstem.*) + seletor Lab \| Testes IA + jobs da aba ativa + status |
+| Barra superior | **AETHER** + versão + frase de fronteira (*LLM gera; AETHER cita, certifica ou abstem.*) + seletor Lab \| Testes IA \| Console IA + jobs da aba ativa + status |
 | Centro (Lab e Testes IA) | Faixa **Situação**: cartão Programa (versão, fronteira, ACQ, API eval, agente) e cartão Online (job, demo, SGDB, última sonda de CPU/RAM) |
 | Centro (Lab) | ACQ, cobertura, hot-path, T01–T12, vazão, doação (origem/destino/gates/E3 + chip USO), gaps, host |
 | Centro (Testes IA) | Grade U1–U6, tabela API eval, painel ask/cite/abstain, contrato usabilidade |
+| Centro (Console IA) | Histórico chat + campo pergunta + escopo (org/run/app) + URL API (`AETHER_API_URL` ou `http://127.0.0.1:8787`) |
 | Coluna direita **Detalhe** | Chip glossário/hover/ficha; hover sem tooltip flutuante; ficha T0x fixa; textos longos; gráficos demo |
 
 Tema: slate + teal (lab). Host report é relido do JSON após o job (sem re-sonda) e no arranque/`Recarregar` se existir.
@@ -49,6 +51,14 @@ Tema: slate + teal (lab). Host report é relido do JSON após o job (sem re-sond
 | Regenerar USO | `python tools/transplant_uso.py` → `target/aether_transplant_uso.json` |
 | Usabilidade API | `cargo test --release --features api --test api_eval` → `target/aether_api_eval.json` |
 | Test drive agente | `aether-agent ask` Brasil/capital + Atlântida/capital → `target/aether_agent_drive.json` |
+
+### Console IA
+
+| Ação | Efeito |
+|---|---|
+| Enviar | Thread HTTP `POST {base}/v1/chat/completions` com `messages` + escopo org/run/app; parse `x_aether` → bolha com verdict |
+| Limpar | Zera histórico (mantém aviso de sistema) |
+| Pré-req | `aether-api` no ar (`cargo run --release --bin aether-api --features api`) |
 
 ## Contrato usabilidade (MSG 0449)
 

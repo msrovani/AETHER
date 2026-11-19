@@ -19,7 +19,7 @@ cd C:\Users\msrov\Documents\AETHER
 .\scripts\cargo.ps1 run --release --bin aether-dashboard --features dashboard
 ```
 
-Layout: abas **Lab** | **Testes IA**; **centro** = medidores da aba; **direita** = Detalhe (chip glossário/hover/ficha + gráficos). Ficha T0x fica fixa até **Limpar ficha** ou outro clique.
+Layout: abas **Lab** | **Testes IA** | **Console IA**; **centro** = medidores da aba (ou chat na Console); **direita** = Detalhe (chip glossário/hover/ficha + gráficos). Ficha T0x fica fixa até **Limpar ficha** ou outro clique.
 
 ## 2) Rodar a auditoria cognitiva
 
@@ -71,6 +71,12 @@ Na aba **Testes IA**:
 4. Contrato U1–U13 (MSG 0449): *LLM gera; AETHER cita, certifica ou abstém.*
 
 Artefatos: `target/aether_transplant_uso.json`, `target/aether_api_eval.json`, `target/aether_agent_drive.json`.
+
+## 7b) Console IA (chat manual)
+
+Na aba **Console IA**: digite uma pergunta e **Enviar**. O hub chama a API local (`POST /v1/chat/completions`) e mostra o verdict **cite / act / abstain** com evidência — não é chatbot LLM.
+
+Pré-requisito: `cargo run --release --bin aether-api --features api` (URL default `http://127.0.0.1:8787`, ou `AETHER_API_URL`).
 
 ## Recarregar
 

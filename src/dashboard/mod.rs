@@ -8,6 +8,7 @@
 
 mod ai_view;
 mod catalog;
+mod console;
 mod demo_trace;
 mod fmt;
 mod gaps;
@@ -20,6 +21,7 @@ pub use ai_view::{
     agent_ask_detail, api_case_detail, collect_wave_gaps, load_agent_drive, load_api_eval,
     AgentAskRow, AgentDriveReport, ApiEvalCase, ApiEvalReport,
 };
+pub use console::{draw_console, ConsolePane};
 pub use catalog::{
     dimension_ficha, dimension_tooltip, global_tooltip, glossary_entries, throughput_tooltip,
     DimFicha,

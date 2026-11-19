@@ -27,10 +27,11 @@ mod aether_dashboard_win {
 
     use aether_engine::dashboard::{
         agent_ask_detail, api_case_detail, collect_wave_gaps, dest_detail, dimension_ficha,
-        dimension_tooltip, fmt_compact, gates_detail, global_tooltip, glossary_entries,
-        load_agent_drive, load_api_eval, load_host_report, load_scorecard, load_transplant_view,
-        origin_detail, throughput_tooltip, AgentDriveReport, ApiEvalReport, DimFicha, Gap,
-        GapSeverity, HostReport, JobKind, JobPhase, JobRunner, ScorecardView, TransplantView,
+        dimension_tooltip, draw_console, fmt_compact, gates_detail, global_tooltip,
+        glossary_entries, load_agent_drive, load_api_eval, load_host_report, load_scorecard,
+        load_transplant_view, origin_detail, throughput_tooltip, AgentDriveReport, ApiEvalReport,
+        ConsolePane, DimFicha, Gap, GapSeverity, HostReport, JobKind, JobPhase, JobRunner,
+        ScorecardView, TransplantView,
     };
 
     /// Aba superior do hub.
@@ -38,6 +39,8 @@ mod aether_dashboard_win {
     enum HubTab {
         Lab,
         AiTests,
+        /// Acionamento manual estilo chat (cite/act/abstain via API local).
+        Console,
     }
 
     /// Contrato humano de usabilidade (MSG 0449): TESTE | AETHER | LLM.
@@ -185,6 +188,7 @@ mod aether_dashboard_win {
         confirm_daemon: bool,
         last_job_done: bool,
         theme_ready: bool,
+        console: ConsolePane,
     }
 
     impl DashboardApp {
@@ -374,6 +378,9 @@ mod aether_dashboard_win {
                                     .small()
                                     .color(theme::MUTED),
                                 );
+                            }
+                            HubTab::Console => {
+                                draw_console(ui, &mut self.console);
                             }
                         }
                     });
@@ -614,6 +621,7 @@ mod aether_dashboard_win {
                 ui.add_space(16.0);
                 ui.selectable_value(&mut self.tab, HubTab::Lab, "Lab");
                 ui.selectable_value(&mut self.tab, HubTab::AiTests, "Testes IA");
+                ui.selectable_value(&mut self.tab, HubTab::Console, "Console IA");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("Recarregar").clicked() {
                         self.reload();
@@ -698,6 +706,15 @@ mod aether_dashboard_win {
                             JobKind::AgentDrive,
                         );
                     });
+                }
+                HubTab::Console => {
+                    ui.label(
+                        RichText::new(
+                            "Console · POST /v1/chat/completions · cite/act/abstain · sem job de cargo",
+                        )
+                        .small()
+                        .color(theme::MUTED),
+                    );
                 }
             }
 
@@ -1839,6 +1856,7 @@ mod aether_dashboard_win {
             confirm_daemon: false,
             last_job_done: true,
             theme_ready: false,
+            console: ConsolePane::default(),
         };
         app.reload();
         app.try_load_host();
