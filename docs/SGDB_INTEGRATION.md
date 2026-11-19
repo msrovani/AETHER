@@ -18,6 +18,12 @@ cargo run --bin aether-sgdb -- \
 cargo run --bin aether-sgdb -- recall gate --k 5 --json
 
 # 4. servidor MCP HTTP real
+# Preferência local (Windows): copie `.env.example` → `.env` (stdio + outbox).
+# A CLI carrega `.env` sozinha; sem transporte, tenta o launcher neural-sgdb irmão
+# com DB dedicado em `.nsgdb/memory.db` (não o DB do Cursor MCP).
+cargo run --bin aether-sgdb -- doctor
+
+# Alternativa HTTP (se houver bridge MCP):
 AETHER_SGDB_URL=http://127.0.0.1:8090/mcp cargo run --bin aether-sgdb -- doctor
 ```
 
