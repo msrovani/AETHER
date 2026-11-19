@@ -636,11 +636,13 @@ impl<T: Transport> SgdbClient<T> {
         query: &str,
         k: usize,
     ) -> Result<Vec<TextHit>, SgdbError> {
+        // SEM `entities`: no mcp_server >= 1.5.x, `entities` desvia o recall
+        // para a rota de ativação 1-hop (mode=entities), que ignora a `query`
+        // e devolve os documentos da entidade em ordem de inserção com
+        // score 1.0 fixo — o ranking lexical (BM25) nunca roda. O filtro de
+        // escopo (`scope_app` + `scope_run`) já limita a busca; a entidade
+        // `aether/fact` fica na ESCRITA, não na leitura.
         let mut args = vec![
-            (
-                "entities".to_string(),
-                Json::Arr(vec![Json::str("aether/fact")]),
-            ),
             (
                 "scope_app".to_string(),
                 Json::str(self.cfg.scope_app.clone()),
