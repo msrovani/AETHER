@@ -120,7 +120,7 @@ impl SgdbError {
             Self::Rpc(_) => "o servidor recusou a chamada; veja a mensagem e o escopo",
             Self::Tool(_) => "os argumentos não batem com a ferramenta; use --help",
             Self::Config(_) => {
-                "corrija as flags/ambiente (aether-sgdb doctor mostra a configuração)"
+                "copie .env.example → .env (AETHER_SGDB_STDIO/URL + OUTBOX) ou passe --mock/--url/--stdio"
             }
             Self::NotSupported(_) => "use http:// (sem TLS) ou o transporte stdio",
         }

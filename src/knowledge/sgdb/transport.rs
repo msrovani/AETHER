@@ -397,9 +397,13 @@ impl MockTransport {
                 continue;
             }
             let age = self.now_ms.saturating_sub(entry.created_ms) as f32;
-            let score = (score_text(&entry.doc.to_text(), &query)
-                + 1.0 / (1.0 + age / 60_000.0) * 1e-3)
-                .min(1.0);
+            // Paridade com o servidor real (BM25): com query, só volta quem
+            // casa com pelo menos um termo — não é um dump do escopo.
+            let matched = score_text(&entry.doc.to_text(), &query);
+            if !query.is_empty() && matched == 0.0 {
+                continue;
+            }
+            let score = (matched + 1.0 / (1.0 + age / 60_000.0) * 1e-3).min(1.0);
             hits.push((
                 score,
                 Json::obj([
@@ -427,8 +431,11 @@ impl MockTransport {
                 continue;
             }
             let age = self.now_ms.saturating_sub(text.created_ms) as f32;
-            let score =
-                (score_text(&text.text, &query) + 1.0 / (1.0 + age / 60_000.0) * 1e-3).min(1.0);
+            let matched = score_text(&text.text, &query);
+            if !query.is_empty() && matched == 0.0 {
+                continue;
+            }
+            let score = (matched + 1.0 / (1.0 + age / 60_000.0) * 1e-3).min(1.0);
             hits.push((
                 score,
                 Json::obj([

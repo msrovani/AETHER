@@ -220,9 +220,135 @@ impl Invocation {
             }
         }
         Err(SgdbError::Config(
-            "informe --mock, --url ou --stdio (ou AETHER_SGDB_URL)".to_string(),
+            "informe --mock, --url ou --stdio (ou AETHER_SGDB_URL / .env)"
+                .to_string(),
         ))
     }
+}
+
+/// Carrega `.env` da raiz do repo (não sobrescreve variáveis já definidas).
+fn load_dotenv() {
+    let Some(root) = discover_aether_root() else {
+        return;
+    };
+    let path = root.join(".env");
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return;
+    };
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let key = key.trim();
+        if key.is_empty() || std::env::var_os(key).is_some() {
+            continue;
+        }
+        let mut val = value.trim().to_string();
+        if (val.starts_with('"') && val.ends_with('"'))
+            || (val.starts_with('\'') && val.ends_with('\''))
+        {
+            val = val[1..val.len() - 1].to_string();
+        }
+        // SAFETY: single-threaded CLI bootstrap before any worker threads.
+        std::env::set_var(key, val);
+    }
+}
+
+/// Se não há transporte, aponta stdio para o launcher neural-sgdb irmão + outbox local.
+/// Usa DB dedicado em `.nsgdb/memory.db` (não o DB do Cursor MCP) — 1 writer por ficheiro.
+fn apply_local_sgdb_defaults() {
+    let has_url = std::env::var("AETHER_SGDB_URL")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_some();
+    let has_stdio = std::env::var("AETHER_SGDB_STDIO")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_some();
+
+    if std::env::var("AETHER_SGDB_OUTBOX")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_none()
+    {
+        std::env::set_var("AETHER_SGDB_OUTBOX", "target/aether_sgdb.jsonl");
+    }
+
+    if has_url || has_stdio {
+        return;
+    }
+
+    let Some(launcher) = discover_mcp_launcher() else {
+        return;
+    };
+    let cmd = if cfg!(windows) {
+        format!(
+            "powershell -NoProfile -ExecutionPolicy Bypass -File {}",
+            launcher.display()
+        )
+    } else {
+        format!("{}", launcher.display())
+    };
+    std::env::set_var("AETHER_SGDB_STDIO", cmd);
+
+    if std::env::var("NEURAL_SGDB_DB")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_none()
+    {
+        if let Some(root) = discover_aether_root() {
+            let db_dir = root.join(".nsgdb");
+            let _ = std::fs::create_dir_all(&db_dir);
+            std::env::set_var("NEURAL_SGDB_DB", db_dir.join("memory.db"));
+        }
+    }
+}
+
+fn discover_aether_root() -> Option<PathBuf> {
+    let mut dir = std::env::current_dir().ok()?;
+    for _ in 0..8 {
+        let manifest = dir.join("Cargo.toml");
+        if manifest.is_file() {
+            if let Ok(text) = std::fs::read_to_string(&manifest) {
+                if text.contains("name = \"aether_engine\"") || text.contains("name = 'aether_engine'")
+                {
+                    return Some(dir);
+                }
+            }
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    None
+}
+
+fn discover_mcp_launcher() -> Option<PathBuf> {
+    let root = discover_aether_root()?;
+    let win = root
+        .join("..")
+        .join("neural-sgdb")
+        .join("scripts")
+        .join("mcp-server.ps1");
+    let sh = root
+        .join("..")
+        .join("neural-sgdb")
+        .join("scripts")
+        .join("mcp-server.sh");
+    if cfg!(windows) && win.is_file() {
+        return win.canonicalize().ok().or(Some(win));
+    }
+    if sh.is_file() {
+        return sh.canonicalize().ok().or(Some(sh));
+    }
+    if win.is_file() {
+        return win.canonicalize().ok().or(Some(win));
+    }
+    None
 }
 
 fn env_u64(name: &str) -> Option<u64> {
@@ -315,6 +441,8 @@ fn record_failure(out: &mut dyn Write, error: &SgdbError) {
 
 /// Executa a CLI. `argv` são os argumentos **sem** o nome do programa.
 pub fn run(argv: &[String], out: &mut dyn Write) -> i32 {
+    load_dotenv();
+    apply_local_sgdb_defaults();
     let inv = match parse(argv) {
         Ok(inv) => inv,
         Err(e) => {
