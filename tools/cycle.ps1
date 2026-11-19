@@ -245,6 +245,15 @@ try {
     if ($isRelease) {
         if ($currentVersion -match '^0\.0\.(\d+)$') {
             $newVersion = "0.0.$([int]$Matches[1] + 1)"
+        } elseif ($currentVersion -match '^(\d+)\.(\d+)\.(\d+)$') {
+            # Pós-0.0.x (ex.: 0.1.0 = freeze v0.1): bump de PATCH, nunca descer.
+            # (MSG 0715/0720: o else antigo resetava 0.1.0 -> 0.0.1 a cada ciclo.)
+            $parsed = [version]$currentVersion
+            if ($parsed -ge [version]'0.1.0') {
+                $newVersion = "0.$($parsed.Minor).$($parsed.Build + 1)"
+            } else {
+                $newVersion = '0.0.1'
+            }
         } else {
             $newVersion = '0.0.1'
         }
@@ -306,9 +315,22 @@ try {
         $commit = Invoke-Git commit -m $title -m $body
         if ($commit.Code -eq 0) {
             $commitHash = (Invoke-Git rev-parse --short HEAD).Output
+            # Guard doutrina V01 (MSG 0720): tag automatica SOMENTE enquanto
+            # a versao < 0.1.0; a partir do freeze, tag exige pedido humano.
+            $autoTagAllowed = $false
             if ($isRelease) {
+                $vTmp = [version]::new()
+                if ([version]::TryParse($newVersion, [ref]$vTmp)) {
+                    $autoTagAllowed = ($vTmp -lt [version]'0.1.0')
+                } else {
+                    $autoTagAllowed = $true  # formato legacy inesperado: mantem comportamento antigo
+                }
+            }
+            if ($isRelease -and $autoTagAllowed) {
                 Invoke-Git tag -a "v$newVersion" -m "AETHER $newVersion - ciclo automatico ($gate)" | Out-Null
                 Write-Log "commit $commitHash versao $newVersion"
+            } elseif ($isRelease) {
+                Write-Log "commit $commitHash versao $newVersion (SEM tag: >= 0.1.0 exige pedido humano)"
             } else {
                 Write-Log "commit wip $commitHash (gate: $gate)"
             }
