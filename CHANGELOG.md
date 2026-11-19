@@ -156,11 +156,25 @@ Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto
 - A3-shard: completude do pipeline `20261117_b0_paws_s0/s1`
   (embed → harvest `--jl-only` → `b0_pair_cosines`) para o gate da lei de
   capacidade E1B (2×2500 < 4096).
+- `tests/us_aggregate_gate.rs` + `docs/US0_AGGREGATE_G7.md` — G7 do freeze
+  v0.1: checklist executável 1:1 (pass=4, wired=6, fail=0) com validação
+  numérica dos artefatos presentes e assert de existência das fontes.
+- `tools/d1_maxsim_st6.py` — probe D1 per-token com a API canônica do ST6
+  (`MultiVectorEncoder.encode_query/encode_document` assimétrico), meanmaxsim
+  + maxsim_sum, Youden t_mid, bootstrap estratificado B=1000 IC95,
+  `--dry-check` (guard do CURSOR, MSG 0674).
+- `docs/B2_BITS_F32_RERANK.md` — desenho B2: routing bits + re-rank f32,
+  critérios de gate (recall@1 ≥ 0,90 teto A3 intocado, p99 ≤ 5 ms, 0 alloc).
 
 ### Fixed
 
 - `docs/DOACAO_PLAYBOOK.md` — Estágio 2 passa a apontar a tool do escriba
   própria; REBEL (CC BY-NC) removido da receita.
+- `tools/cycle.ps1` (commit `3c00358`) — versão nunca desce de 0.1.0 (o
+  regex antigo resetava para 0.0.1 a cada ciclo pós-freeze) e tag automática
+  somente abaixo de 0.1.0 (tag 0.1.x exige pedido humano, doutrina V01).
+- `tools/scribe_extract.py` — guard anti-deslocamento batch/outputs
+  (lição MSG 0567); linha morta removida.
 
 ## [0.0.171] - 2026-11-18
 
