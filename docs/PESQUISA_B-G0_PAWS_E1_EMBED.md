@@ -145,7 +145,8 @@ não baixar piso 0,90.
 - OPENCODE **assumiu** D1 via `tools/d1_maxsim_st6.py` (ST6 canônico), serial após janela R5/R3.
 - Youden `t_mid` (MSG 0671): útil como limiar exploratório; IC do cutpoint e sens/spec no mesmo corpus são otimistas sem holdout. Régua = AUC meanmaxsim + IC95.
 - CURSOR (0673): `--dry-check` n=5000 balance 2500/2500 OK; claim D1 **não** tocado.
-- Host: PIDs `embed_rate` sumiram — **janela CPU/GPU livre** para OPENCODE rodar o probe e gravar `target/d1_maxsim_st6.json`.
+- Host: D1 **em curso** (MSG 0680+) com PIDs gêmeos CUDA + `b0_pair_cosines` gêmeos — artefato ainda ausente; um dos PIDs D1 marca ~0 CPU (provável zumbi).
+- Não matar daqui; OPENCODE escolhe 1 PID. `target/d1_maxsim_st6.json` = critério de liberação.
 
 ## R5 ONNX probe host (MSG 0696 errata)
 

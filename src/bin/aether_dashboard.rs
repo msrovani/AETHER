@@ -743,6 +743,169 @@ mod aether_dashboard_win {
             }
         }
 
+        fn draw_situation(&mut self, ui: &mut egui::Ui) {
+            self.section_header(ui, "Situação");
+            ui.horizontal_top(|ui| {
+                let w = ((ui.available_width() - 8.0) * 0.5).max(220.0);
+                self.situation_card(ui, w, "Programa", &self.program_lines());
+                ui.add_space(8.0);
+                self.situation_card(ui, w, "Online", &self.online_lines());
+            });
+            ui.add_space(14.0);
+        }
+
+        fn program_lines(&self) -> Vec<(String, Color32)> {
+            let mut lines = vec![
+                (
+                    format!("versão {}", env!("CARGO_PKG_VERSION")),
+                    theme::TEXT,
+                ),
+                (
+                    "LLM gera; AETHER cita, certifica ou abstem.".into(),
+                    theme::BRAND,
+                ),
+            ];
+            if self.view.dimensions.is_empty() {
+                lines.push(("scorecard ausente — rode a auditoria".into(), theme::WARN));
+            } else {
+                let hot = if self.view.hot_path_bytes == 0.0 {
+                    theme::OK
+                } else {
+                    theme::WARN
+                };
+                lines.push((
+                    format!(
+                        "ACQ {:.2} · cobertura {:.2} · hot-path {}",
+                        self.view.quotient,
+                        self.view.real_coverage,
+                        fmt_compact(self.view.hot_path_bytes)
+                    ),
+                    hot,
+                ));
+            }
+            if self.api_eval.present {
+                let n = self.api_eval.cases.len();
+                let ok = self.api_eval.cases.iter().filter(|c| c.pass).count();
+                let color = if ok == n && n > 0 { theme::OK } else { theme::WARN };
+                lines.push((format!("API eval {ok}/{n} casos"), color));
+            } else {
+                lines.push(("API eval ainda não rodou".into(), theme::MUTED));
+            }
+            if self.agent_drive.present {
+                let n = self.agent_drive.asks.len();
+                let summary = self
+                    .agent_drive
+                    .asks
+                    .iter()
+                    .map(|a| format!("{}→{}", a.subject, a.action))
+                    .collect::<Vec<_>>()
+                    .join(" · ");
+                lines.push((
+                    format!("agente {n} asks · {summary}"),
+                    theme::TEXT,
+                ));
+            } else {
+                lines.push(("test drive do agente ainda não rodou".into(), theme::MUTED));
+            }
+            lines
+        }
+
+        fn online_lines(&self) -> Vec<(String, Color32)> {
+            let snap = self.jobs.snapshot();
+            let job = match snap.phase {
+                JobPhase::Idle => ("job parado".into(), theme::MUTED),
+                JobPhase::Running => (
+                    format!(
+                        "job em curso · {}",
+                        snap.kind.map(|k| k.label()).unwrap_or("…")
+                    ),
+                    theme::RUN,
+                ),
+                JobPhase::Done => (
+                    format!(
+                        "job concluído · {}",
+                        snap.kind.map(|k| k.label()).unwrap_or("—")
+                    ),
+                    theme::OK,
+                ),
+                JobPhase::Failed => ("job falhou — veja o log na barra".into(), theme::BAD),
+            };
+            let demo = match self.jobs.trace.lock() {
+                Ok(t) if t.running => (format!("demo ao vivo · {}", t.title), theme::RUN),
+                Ok(t) if !t.samples.is_empty() => {
+                    (format!("último demo · {}", t.title), theme::MUTED)
+                }
+                _ => ("demo parado".into(), theme::MUTED),
+            };
+            let sgdb = sgdb_pointed();
+            let sgdb_line = if sgdb {
+                ("SGDB apontado nesta sessão".into(), theme::OK)
+            } else {
+                ("SGDB não apontado (stdio/url vazios)".into(), theme::WARN)
+            };
+            let host_line = match &self.host {
+                None => (
+                    "sonda ausente — use Sondar hardware".into(),
+                    theme::WARN,
+                ),
+                Some(h) => {
+                    let livre = h
+                        .ram_available_mb
+                        .map(|mb| format!("{} MB livres", fmt_compact(mb)))
+                        .unwrap_or_else(|| "RAM livre ?".into());
+                    (
+                        format!(
+                            "{} CPUs · {livre} · cargo {}",
+                            h.logical_cpus,
+                            on_off(h.cargo_on_path)
+                        ),
+                        theme::TEXT,
+                    )
+                }
+            };
+            vec![
+                job,
+                demo,
+                sgdb_line,
+                host_line,
+                (
+                    "CPU e RAM são da última sonda, não um relógio ao vivo.".into(),
+                    theme::MUTED,
+                ),
+            ]
+        }
+
+        fn situation_card(
+            &mut self,
+            ui: &mut egui::Ui,
+            width: f32,
+            title: &str,
+            lines: &[(String, Color32)],
+        ) {
+            let body = lines
+                .iter()
+                .map(|(t, _)| t.as_str())
+                .collect::<Vec<_>>()
+                .join("\n");
+            egui::Frame::none()
+                .fill(theme::PANEL)
+                .stroke(Stroke::new(1.0_f32, theme::STROKE))
+                .inner_margin(10.0)
+                .rounding(4.0)
+                .show(ui, |ui| {
+                    ui.set_min_width(width);
+                    ui.set_max_width(width);
+                    ui.label(RichText::new(title).strong().color(theme::BRAND));
+                    ui.add_space(4.0);
+                    for (text, color) in lines {
+                        let resp = ui.label(RichText::new(text).small().color(*color));
+                        if resp.hovered() {
+                            self.note_hover(title, body.clone());
+                        }
+                    }
+                });
+        }
+
         fn draw_globals(&mut self, ui: &mut egui::Ui) {
             self.section_header(ui, "Visão global");
             if let Some(err) = &self.view.load_error {
@@ -1445,6 +1608,15 @@ mod aether_dashboard_win {
                 }
             }
         }
+    }
+
+    fn sgdb_pointed() -> bool {
+        let set = |key: &str| {
+            std::env::var(key)
+                .map(|v| !v.trim().is_empty())
+                .unwrap_or(false)
+        };
+        set("AETHER_SGDB_STDIO") || set("AETHER_SGDB_URL")
     }
 
     fn on_off(v: bool) -> &'static str {

@@ -22,6 +22,7 @@ Single-flight global: um job por vez em qualquer aba.
 | Região | Conteúdo |
 |---|---|
 | Barra superior | **AETHER** + versão + frase de fronteira (*LLM gera; AETHER cita, certifica ou abstem.*) + seletor Lab \| Testes IA + jobs da aba ativa + status |
+| Centro (Lab e Testes IA) | Faixa **Situação**: cartão Programa (versão, fronteira, ACQ, API eval, agente) e cartão Online (job, demo, SGDB, última sonda de CPU/RAM) |
 | Centro (Lab) | ACQ, cobertura, hot-path, T01–T12, vazão, doação (origem/destino/gates/E3 + chip USO), gaps, host |
 | Centro (Testes IA) | Grade U1–U6, tabela API eval, painel ask/cite/abstain, contrato usabilidade |
 | Coluna direita **Detalhe** | Chip glossário/hover/ficha; hover sem tooltip flutuante; ficha T0x fixa; textos longos; gráficos demo |

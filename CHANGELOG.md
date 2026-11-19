@@ -7,6 +7,19 @@ Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto
 
 ### Changed
 
+- Ciclo automatico: 5 arquivo(s) (.:1, docs:2, scripts:1, src:1).
+- Gate: ok (1s).
+
+- `Cargo.toml`
+- `docs/HUB_DASHBOARD.md`
+- `docs/PESQUISA_B-G0_PAWS_E1_EMBED.md`
+- `scripts/produto-c-smoke.ps1`
+- `src/bin/aether_dashboard.rs`
+
+## [0.0.1] - 2026-11-19
+
+### Changed
+
 - Ciclo automatico: 17 arquivo(s) (.:1, data:1, docs:7, scripts:3, src:3, tools:2).
 - Gate: ok (223s).
 
