@@ -71,3 +71,20 @@ desta tabela.
   assistida, 5–10 usuários, sucesso de tarefa e confiança reportada).
 * **T3** (externo): só faz sentido com linguagem; LLM na borda gera,
   AETHER verifica — nunca o contrário.
+
+## Estatísticas v0.1.0 (2026-11-18)
+
+Retrato pós-tag (`0.1.0`), todos os gates em `--release`:
+
+| Métrica | Valor |
+|---|---|
+| Eval T0 (`agent_eval_suite`) | action_accuracy **1,0**; false_act **0** |
+| CIC abstenção (n=140) | A: 40/40 agem · B: **0/80** false-abstain (IC95 sup 4,6% ≤ 6%) · C: **0/20** false-act |
+| Parser (language, 9/9) | exact+slot 100/100 · p99 < 10ms |
+| Usabilidade (US0, 6/6) | U12: planner p50 ≈ 0–1µs, 6 allocs/call (tetos 8µs/40) |
+| Orçamento D1 (n=200) | p50 700ns · p99 800ns · allocs 6 · RSS 24,9MB (tetos 2µs/5µs/7/27,3MB) |
+| API | api_agent 14/14 · api_eval 1/1 · integrity 10/10 · lifecycle 5/5 |
+| Smoke F7 | hit conhecido · OOD→abstain · certificado no solve (30,5s) |
+| Higiene | fmt 0 · clippy 0 · lib 172/172 |
+
+Artefato consolidado: `target/ia_usabilidade_stats_0.1.0.json`.
