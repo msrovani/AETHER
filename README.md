@@ -1,7 +1,8 @@
 # AETHER — motor cognitivo pós-token em Rust
 
-Versão crate: ver `Cargo.toml` (freeze IA usável → **0.1.0** quando gates F1–F7
-verdes; plano: [`docs/V01_DELIVERY_PLAN.md`](docs/V01_DELIVERY_PLAN.md)).
+Versão crate: **`0.1.0`** (tag `v0.1.0` · MSG 0666 / `c8621d2` — freeze IA usável;
+plano e checklist: [`docs/V01_DELIVERY_PLAN.md`](docs/V01_DELIVERY_PLAN.md) ·
+[`docs/CYCLE_CLOSE_V01_FREEZE.md`](docs/CYCLE_CLOSE_V01_FREEZE.md)).
 Suite cognitiva: `docs/COGNITIVE_AUDIT_RUN_2026-11-17.md` (ACQ 100 · 12/12).
 
 Protótipo experimental de computação baseada em física contínua: **zero tokens,
@@ -20,6 +21,15 @@ cd C:\Users\msrov\Documents\AETHER
 ```
 
 Guia do hub: [docs/USER_GUIDE.md](docs/USER_GUIDE.md) · doação/ETL: [docs/DOACAO_PLAYBOOK.md](docs/DOACAO_PLAYBOOK.md).
+
+## Produto C — escudo de host
+
+```powershell
+.\scripts\cargo.ps1 run --release --bin aether-daemon -- --duration 15s --human
+.\scripts\produto-c-smoke.ps1 -Package   # zip em target\aether-daemon-win.zip
+```
+
+Guia: [docs/PRODUTO_C.md](docs/PRODUTO_C.md).
 
 ## 5 minutos IA (coprocessador — não chatbot)
 
@@ -47,6 +57,7 @@ API: [docs/EXTERNAL_API.md](docs/EXTERNAL_API.md). O hub **observa** (ACQ); a IA
 * **docs/HARDENING_REPORT.md** - auditoria, correcoes e medicoes finais (2026-11-15).
 * **docs/COGNITIVE_AUDIT_RUN_2026-11-17.md** — reexecução da auditoria cognitiva (12/12 `MEASURED`, ACQ 100, 318 testes).
 * **docs/USER_DELIVERY_PLAN.md** — mapa do entregável ao usuário + plano de ondas (demo → Produto C → A/B).
+* **docs/PRODUTO_C.md** — escudo de host: CALMO/ALERTA/SONHANDO, zip e smoke.
 * **docs/V01_DELIVERY_PLAN.md** — freeze v0.1: IA usável (coerência act/cite/abstain + gates F1–F7).
 * **docs/O_PROBLEMA_DOS_3_CORPOS_NAO.md** (+ `_VOL2`, `_VOL3`) — dossiê dos três "NÃO" (linguagem, lógica, self): tese, preço em hardware e gestão do conhecimento. Registro mestre no Vol. III §11.
 * **docs/SGDB_INTEGRATION.md** — encaixe operacional do `neural-sgdb` (`T2`): MCP, outbox, leitura de fase e gates F4.

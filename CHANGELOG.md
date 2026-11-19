@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.0.1] - 2026-11-19
+
+### Changed
+
+- Ciclo automatico: 17 arquivo(s) (.:1, data:1, docs:7, scripts:3, src:3, tools:2).
+- Gate: ok (223s).
+
+- `README.md`
+- `docs/GPU_PLAN.md`
+- `docs/HUB_DASHBOARD.md`
+- `docs/PESQUISA_B-G0_PAWS_E1_EMBED.md`
+- `docs/USER_DELIVERY_PLAN.md`
+- `scripts/package-daemon.ps1`
+- `src/bin/aether_daemon.rs`
+- `src/bin/aether_dashboard.rs`
+- `src/dashboard/catalog.rs`
+- `tools/b0_bits_f32_rerank.py`
+- `data/rounds/20261117_b0_paws/emb/s2_query_n200.f32`
+- `docs/B2_BITS_F32_RERANK.md`
+
 ## [0.1.0] - 2026-11-18 — **freeze IA usável**
 
 ### Added

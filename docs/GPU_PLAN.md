@@ -399,6 +399,8 @@ Não confundir com razão JL wgpu (5–6×).
 | ratio ONNX/torch | — | **0,59×** |
 | cosine mean/min | — | **1,0 / 1,0** |
 
-Gate cosine ≥0,99 **PASS**; gate taxa ≥torch **FAIL** → `promote_onnx=false` (ABSTAIN). Export sem optimum (conflito ST6). Janela n128+R3: claim OPENCODE 0659.
+Gate cosine ≥0,99 **PASS**; gate taxa ≥torch **FAIL** → `promote_onnx=false` (ABSTAIN). Export sem optimum (conflito ST6).
+
+**n=128** (`onnx_backend_probe.json`, MSG 0675): torch **1,57** txt/s · ONNX **0,01** txt/s (ratio **0,003**) — ABSTAIN promove; CUDA R4 19,33 segue preferido.
 
 

@@ -766,9 +766,11 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
                     "  --sgdb-every <n> emite um padrão a cada n ciclos (padrão 60; 0 desliga)"
                 );
                 println!("  --sgdb-run <id>  linhagem durável no escopo (padrão 0)");
-                println!("  --human          linha curta: CALMO / ALERTA / SONHANDO");
                 println!(
-                    "  --host           u(t) vem da telemetria do SO (Windows), sem busy-loop"
+                    "  --human          Produto C: CALMO/ALERTA/SONHANDO + glossário (via surprise)"
+                );
+                println!(
+                    "  --host           u(t) da telemetria do SO (Windows); ligado automaticamente com --human"
                 );
                 println!("  --log <arquivo>  log rotativo de floats, colunas fixas");
                 println!("  --help           esta ajuda");
@@ -944,7 +946,15 @@ fn append_float_log(path: &std::path::Path, cols: &[f32]) -> std::io::Result<()>
             let _ = std::fs::rename(path, rotated);
         }
     }
-    let mut line = String::with_capacity(cols.len() * 12);
+    let needs_header = !path.exists()
+        || path
+            .metadata()
+            .map(|meta| meta.len() == 0)
+            .unwrap_or(true);
+    let mut line = String::with_capacity(cols.len() * 12 + 48);
+    if needs_header {
+        line.push_str("cycles,R_lan,peers,F,S\n");
+    }
     for (i, v) in cols.iter().enumerate() {
         if i > 0 {
             line.push(',');
@@ -960,24 +970,50 @@ fn append_float_log(path: &std::path::Path, cols: &[f32]) -> std::io::Result<()>
     file.write_all(line.as_bytes())
 }
 
+fn print_human_banner(host: bool, alert: f32) {
+    println!("AETHER Produto C — escudo de host (v{})", env!("CARGO_PKG_VERSION"));
+    println!("  multicast {MULTICAST_GROUP}:{MULTICAST_PORT}");
+    println!("  estados: CALMO → ALERTA (S≥{:.2}) → SONHANDO (S>--alert)", alert * 0.5);
+    println!("  S = surpresa  |  R = coerência LAN entre peers (0..1)");
+    if host {
+        println!("  u(t) = telemetria do SO (--host)");
+    } else {
+        println!("  tip: no Windows use --host para sentir CPU/rede reais");
+    }
+    println!();
+}
+
 fn main() -> Result<()> {
-    let cfg = match parse_cli() {
+    let mut cfg = match parse_cli() {
         Ok(c) => c,
         Err(e) => {
             eprintln!("erro de uso: {e}");
             std::process::exit(2);
         }
     };
+    // Produto C: --human no Windows liga telemetria real por default.
+    #[cfg(windows)]
+    if cfg.human && !cfg.host {
+        cfg.host = true;
+    }
     let human = cfg.human;
+    let host = cfg.host;
     let alert = cfg.alert_free_energy;
     let log_path = cfg.log.clone();
-    println!("AETHER daemon — organismo encarnado (multicast {MULTICAST_GROUP}:{MULTICAST_PORT})");
+    if human {
+        print_human_banner(host, alert);
+    } else {
+        println!("AETHER daemon — organismo encarnado (multicast {MULTICAST_GROUP}:{MULTICAST_PORT})");
+    }
     let mut daemon = AetherDaemon::new(cfg)?;
     daemon.run(|t| {
         if human {
+            // Estados seguem a mesma grandeza do sonho (`surprise`), não
+            // `free_energy` morfogênico (~3–4), que tornava CALMO inalcançável.
+            let warn = (alert * 0.5).max(1e-3);
             let state = if t.dreaming {
                 "SONHANDO"
-            } else if t.free_energy >= alert {
+            } else if t.surprise >= warn {
                 "ALERTA"
             } else {
                 "CALMO"
@@ -987,7 +1023,10 @@ fn main() -> Result<()> {
                 "ALERTA" => "surpresa subindo: observe carga e rede",
                 _ => "host estável",
             };
-            println!("{state} — {phrase} | F={:.3} R={:.3}", t.free_energy, t.lan_coherence);
+            println!(
+                "{state} — {phrase} | S={:.3} R={:.3}",
+                t.surprise, t.lan_coherence
+            );
         } else {
             println!(
                 "ciclo {:>6} | R(LAN)={:.3} peers={} | F={:.3} S={:.3} | E_mem={:+.3} | U={:.3} | topologia={:.1}% | {} | {}µs | drops={}",
@@ -1033,10 +1072,13 @@ mod log_gate {
         let _ = std::fs::remove_file(&path);
         append_float_log(&path, &[1.5, -0.25, 2.0, 0.1, 0.0]).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
+        let mut lines = text.lines();
+        assert_eq!(lines.next(), Some("cycles,R_lan,peers,F,S"));
+        let data = lines.next().expect("linha de dados");
         assert!(
-            text.chars()
-                .all(|c| c.is_ascii_digit() || matches!(c, '.' | ',' | '-' | '\n')),
-            "log com texto livre: {text}"
+            data.chars()
+                .all(|c| c.is_ascii_digit() || matches!(c, '.' | ',' | '-')),
+            "log com texto livre: {data}"
         );
         std::fs::write(&path, vec![b'1'; 1_048_577]).unwrap();
         append_float_log(&path, &[3.0, 0.0, 0.0, 0.0, 0.0]).unwrap();

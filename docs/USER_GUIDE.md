@@ -76,7 +76,17 @@ Artefatos: `target/aether_transplant_uso.json`, `target/aether_api_eval.json`, `
 
 **Recarregar** relê scorecard + host + doação + artefatos da aba Testes IA.
 
-## 8) 5 minutos IA (fora do hub — coprocessador)
+## 8) Produto C — escudo de host (fora do hub)
+
+```powershell
+.\scripts\cargo.ps1 run --release --bin aether-daemon -- --duration 15s --human
+# ou zip: .\scripts\package-daemon.ps1 → target\aether-daemon-win.zip
+.\scripts\produto-c-smoke.ps1
+```
+
+Estados: **CALMO / ALERTA / SONHANDO**. Guia: [PRODUTO_C.md](PRODUTO_C.md).
+
+## 9) 5 minutos IA (fora do hub — coprocessador)
 
 ```powershell
 # Gates F1–F6 (lab)

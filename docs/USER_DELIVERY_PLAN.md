@@ -145,12 +145,12 @@ Implementação: `src/dashboard/*` (`catalog`, `jobs`, `host_probe`, `gaps`, `mo
 
 | # | Entrega | Critério de aceite |
 |---|---|---|
-| 1.1 | `SystemTelemetryTransducer: TransducerIo` real | sample_into zero-alloc; F≈0 em idle; F sobe sob stress |
-| 1.2 | Daemon consome `TransducerIo` (não só busy-loop ad hoc) | troca de backend sem mudar o loop cognitivo |
-| 1.3 | Modo `--human` / painel de estados | estados: CALMO / ATERTA / SONHANDO + 1 frase de ação |
-| 1.4 | Empacote Windows: zip + `aether-daemon.exe` + README curto | roda sem `cargo` (ainda pode exigir VC++/MinGW runtime se necessário) |
-| 1.5 | Log rotativo opcional (binário ou CSV de floats) | sem JSON de tokens; colunas fixas |
-| 1.6 | Teste E2E “duas instâncias → peers_heard≥1, R>0.9” | CI ou script documentado |
+| 1.1 | `SystemTelemetryTransducer: TransducerIo` real | sample_into zero-alloc; F≈0 em idle; F sobe sob stress (**código pronto**; `--host`) |
+| 1.2 | Daemon consome `TransducerIo` (não só busy-loop ad hoc) | troca de backend sem mudar o loop cognitivo (**feito** `--host`) |
+| 1.3 | Modo `--human` / painel de estados | estados: CALMO / ALERTA / SONHANDO + 1 frase (**feito**; fix 2026-11-18: limiar via `surprise`) |
+| 1.4 | Empacote Windows: zip + `aether-daemon.exe` + README curto | `scripts/package-daemon.ps1` → `target/aether-daemon-win.zip` (**feito** 2026-11-18) |
+| 1.5 | Log rotativo opcional (binário ou CSV de floats) | `--log` colunas fixas (**feito**) |
+| 1.6 | Teste E2E “duas instâncias → peers_heard≥1, R>0.9” | `scripts/two-instances.ps1` **PASS** peers=2 R=1 (2026-11-18) |
 
 **Resultado:** um operador vê o host “respirar” e um enxame acoplar, sem IDE.
 
@@ -200,9 +200,9 @@ Só depois das Ondas 0–2 estáveis — senão embalamos um lab.
 1. **PR-U0** — organism: `--help` + wiring Ratatui (`--tui`).  
 2. **PR-U0b / (5)** — **dashboard Windows** (`aether-dashboard`) com hover/tooltips.  
 3. **PR-U1** — `docs/USER_GUIDE.md` + README “5 minutos” + `run-demo.ps1`.  
-4. **PR-U2** — daemon `--human` + glossário R/F no banner.  
-5. **PR-U3** — `SystemTelemetryTransducer` + integração no daemon.  
-6. **PR-U4** — artefato zip Windows + smoke test.  
+4. **PR-U2** — daemon `--human` + glossário R/S no banner (**feito** 2026-11-18; ver [`PRODUTO_C.md`](PRODUTO_C.md)).  
+5. **PR-U3** — `SystemTelemetryTransducer` + integração no daemon (**feito** `--host` auto com `--human`).  
+6. **PR-U4** — artefato zip Windows + smoke (`package-daemon.ps1` / `produto-c-smoke.ps1`) (**feito**).  
 7. **PR-U5+** — backends A/B conforme hardware disponível.
 
 Cada PR: claim no fórum, não tocar ownership BUFFY (`phase_memory`,

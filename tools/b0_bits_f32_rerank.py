@@ -77,12 +77,17 @@ def load_queries_hv(path: Path, n: int, words: int) -> list[list[int]]:
 
 
 def hamming(a: list[int], b: list[int]) -> int:
-    return sum((x ^ y).bit_count() for x, y in zip(a, b))
+    # Guarda anti-deslocamento (MSG 0567/0599): lengths iguais ou fail.
+    if len(a) != len(b):
+        raise SystemExit(f"hamming len mismatch {len(a)} vs {len(b)}")
+    return sum((x ^ y).bit_count() for x, y in zip(a, b, strict=True))
 
 
 def cosine(a: list[float], b: list[float]) -> float:
+    if len(a) != len(b):
+        raise SystemExit(f"cosine len mismatch {len(a)} vs {len(b)}")
     acc = nx = ny = 0.0
-    for x, y in zip(a, b):
+    for x, y in zip(a, b, strict=True):
         acc += x * y
         nx += x * x
         ny += y * y
@@ -141,6 +146,22 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--out", type=Path, default=Path("target/b0_bits_f32_rerank.json"))
+    ap.add_argument(
+        "--dry-check",
+        action="store_true",
+        help="valida artefatos/gate; nao carrega modelo nem faz Hamming completo",
+    )
+    ap.add_argument(
+        "--gate-recall1",
+        type=float,
+        default=0.90,
+        help="piso A3 sugerido para recall@1 pos-rerank (default 0.90)",
+    )
+    ap.add_argument(
+        "--self-query-proxy",
+        action="store_true",
+        help="usa bank.f32[i] como query float (sem --embed-s2; assimetria s2 fora)",
+    )
     args = ap.parse_args()
 
     t0 = time.perf_counter()
@@ -153,32 +174,73 @@ def main() -> int:
         if q_f32_sample.exists():
             q_f32 = q_f32_sample
 
-    if args.embed_s2 or not q_f32.exists():
-        if not args.embed_s2:
-            print(
-                json.dumps(
-                    {
-                        "ok": False,
-                        "abstain": True,
-                        "reason": "falta emb/s2_query.f32 — rode com --embed-s2",
-                    }
-                )
-            )
-            return 2
-        print(json.dumps({"phase": "embed_s2", "device": args.device, "sample": args.sample}))
-        q_f32 = embed_s2(
-            args.round,
-            args.donor,
-            args.dim,
-            args.seed,
-            args.device,
-            limit=args.sample,
-        )
+    if args.dry_check:
+        meta = {
+            "ok": True,
+            "dry_check": True,
+            "round": str(args.round).replace("\\", "/"),
+            "artifacts": {
+                "hv_bank": hv_bin.exists(),
+                "s2_query_hv": q_hv.exists(),
+                "bank_f32": doc_f32.exists(),
+                "s2_query_f32": q_f32.exists(),
+            },
+            "gate_recall1_bits_f32_rerank": args.gate_recall1,
+            "proxy_s0": {
+                "path": "target/pos_reboot/hv_bits_float_rerank_s0.json",
+                "recall1_bits": 0.88,
+                "recall1_bits_then_float": 1.0,
+                "note": "self-query proxy; assimetria s2 vs fato concat fora",
+            },
+            "ready_to_run": hv_bin.exists()
+            and q_hv.exists()
+            and doc_f32.exists()
+            and (q_f32.exists() or args.self_query_proxy),
+            "abstain_if_missing_s2": (not q_f32.exists()) and (not args.self_query_proxy),
+            "self_query_proxy": bool(args.self_query_proxy),
+            "ref": "MSG_0576_0568_0635_0677_A3_0.90",
+        }
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        dry_out = args.out.with_name(args.out.stem + "_dry.json")
+        dry_out.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps(meta, ensure_ascii=False, indent=2))
+        return 0 if meta["artifacts"]["hv_bank"] and meta["artifacts"]["bank_f32"] else 2
 
-    n_hv, words, bank = load_hv(hv_bin)
-    queries = load_queries_hv(q_hv, n_hv, words)
-    n_doc, dim, docs = load_f32(doc_f32)
-    n_q, dim_q, qs = load_f32(q_f32)
+    if args.self_query_proxy:
+        n_hv, words, bank = load_hv(hv_bin)
+        queries = load_queries_hv(q_hv, n_hv, words)
+        n_doc, dim, docs = load_f32(doc_f32)
+        qs = docs
+        n_q, dim_q = n_doc, dim
+    else:
+        if args.embed_s2 or not q_f32.exists():
+            if not args.embed_s2:
+                print(
+                    json.dumps(
+                        {
+                            "ok": False,
+                            "abstain": True,
+                            "reason": "falta emb/s2_query.f32 — rode com --embed-s2 ou --self-query-proxy",
+                            "gate_recall1": args.gate_recall1,
+                        }
+                    )
+                )
+                return 2
+            print(json.dumps({"phase": "embed_s2", "device": args.device, "sample": args.sample}))
+            q_f32 = embed_s2(
+                args.round,
+                args.donor,
+                args.dim,
+                args.seed,
+                args.device,
+                limit=args.sample,
+            )
+
+        n_hv, words, bank = load_hv(hv_bin)
+        queries = load_queries_hv(q_hv, n_hv, words)
+        n_doc, dim, docs = load_f32(doc_f32)
+        n_q, dim_q, qs = load_f32(q_f32)
+
     if dim != dim_q or words != WORDS or n_doc != n_hv:
         raise SystemExit(
             f"desalinhado n_hv={n_hv} n_doc={n_doc} n_q={n_q} dim={dim}/{dim_q} words={words}"
@@ -207,8 +269,12 @@ def main() -> int:
 
     r1_bits = hit_bits / n
     r1_rr = hit_rerank / n
+    gate = args.gate_recall1
+    passed = bool(r1_rr >= gate)
     art = {
         "ok": True,
+        "gate": "B2_bits_f32_rerank",
+        "verdict": "PASS" if passed else "FAIL",
         "round": str(args.round).replace("\\", "/"),
         "n": n,
         "k": args.k,
@@ -217,14 +283,23 @@ def main() -> int:
         "recall1_bits": round(r1_bits, 4),
         "recall1_bits_f32_rerank": round(r1_rr, 4),
         "delta_pp": round((r1_rr - r1_bits) * 100.0, 2),
+        "gate_recall1": gate,
+        "gate_pass": passed,
+        "self_query_proxy": bool(args.self_query_proxy),
         "seed": args.seed,
-        "ref": "MSG_0576_0568_0591",
+        "ref": "MSG_0576_0568_0591_0635_0677",
+        "doc": "docs/GATE_B2_BITS_F32_RERANK.md",
+        "note": (
+            "self-query proxy: assimetria s2 vs fato concat fora deste probe"
+            if args.self_query_proxy
+            else "s2_query.f32 real"
+        ),
         "elapsed_s": round(time.perf_counter() - t0, 2),
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(art, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(art, ensure_ascii=False))
-    return 0
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":

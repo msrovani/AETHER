@@ -9,6 +9,7 @@ pub fn global_tooltip(key: &str) -> &'static str {
              É a nota de inteligência operacional do motor: \
              quanto o organismo prevê, aprende, corrige-se e \
              lembra sem tokens nem backprop.\n\
+             Não é MMLU nem nota de chatbot.\n\
              Meta de gate: ≥ 99."
         }
         "coverage" => {
@@ -49,7 +50,7 @@ pub fn glossary_entries() -> &'static [(&'static str, &'static str)] {
         ),
         (
             "Inteligência / ACQ",
-            "Nota operacional 0–100: média T01–T12. Gate de lab ≥ 99.",
+            "Nota operacional 0–100: média T01–T12. Gate de lab ≥ 99. Não é MMLU.",
         ),
         (
             "cycles/s",

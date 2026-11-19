@@ -338,6 +338,7 @@ mod aether_dashboard_win {
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         match self.tab {
                             HubTab::Lab => {
+                                self.draw_situation(ui);
                                 self.draw_globals(ui);
                                 ui.add_space(14.0);
                                 self.draw_dimensions(ui);
@@ -359,6 +360,7 @@ mod aether_dashboard_win {
                                 );
                             }
                             HubTab::AiTests => {
+                                self.draw_situation(ui);
                                 self.draw_ai_uso(ui);
                                 ui.add_space(16.0);
                                 self.draw_ai_api(ui);
@@ -597,11 +599,16 @@ mod aether_dashboard_win {
                     ui.add_space(4.0);
                     ui.label(
                         RichText::new(format!(
-                            "hub · métricas + testes · v{}",
+                            "coprocessador · v{} · não conversa",
                             env!("CARGO_PKG_VERSION")
                         ))
                         .small()
                         .color(theme::MUTED),
+                    );
+                    ui.label(
+                        RichText::new("LLM gera; AETHER cita, certifica ou abstem.")
+                            .small()
+                            .color(theme::TEXT),
                     );
                 });
                 ui.add_space(16.0);

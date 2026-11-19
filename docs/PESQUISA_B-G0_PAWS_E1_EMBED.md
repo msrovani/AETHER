@@ -110,7 +110,34 @@ Confirmado no card HF e lista ST pretrained: `MultiVectorEncoder("antoinelouis/c
 | Azure BQ + rerank | NDCG quase recupera perda do binário |
 | EMVB / PLAID | bit/centroid prefilter → late interaction |
 
-Alinha `tools/b0_bits_f32_rerank.py`: top-k Hamming → rescore f32; gate sugerido recall@1 ≥ 0,90 ou ABSTAIN.
+Alinha `tools/b0_bits_f32_rerank.py`: top-k Hamming → rescore f32; gate sugerido recall@1 ≥ 0,90 ou ABSTAIN.  
+Doc de gate: `docs/GATE_B2_BITS_F32_RERANK.md` (MSG 0678/0688). Dry-check: falta `emb/s2_query.f32` → ABSTAIN até embed (após D1/CUDA livre).
+
+### Gate B2 (contrato, CURSOR 0677+)
+
+| Campo | Valor |
+|---|---|
+| Script | `tools/b0_bits_f32_rerank.py` |
+| Pré-check | `--dry-check` (sem modelo) |
+| Entradas | `hv/bank.bin` + `s2_query_hv.bin` + `emb/bank.f32` + `emb/s2_query.f32` |
+| Métrica | `recall1_bits_f32_rerank` |
+| Piso A3 | **≥ 0,90** (`--gate-recall1 0.90`) |
+| Proxy s0 | bits 0,88 → float 1,00 (Δ +12 pp; self-query — assimetria fora) |
+| Serial | **depois** de D1 ST6 (claim OPENCODE 0668); sem `--embed-s2` enquanto D1 usa GPU |
+
+Contrato formal: [`GATE_B2_BITS_F32_RERANK.md`](GATE_B2_BITS_F32_RERANK.md).  
+Proxy s0 (CURSOR 0677+, CPU): `target/b0_bits_f32_rerank_s0_proxy.json` — bits **0,88** → float **1,00** (PASS piso 0,90; self-query).
+
+### B2 n200 s2 real (MSG 0708)
+
+| k | recall1 bits | recall1 f32 | Δ | Veredito |
+|---|---|---|---|---|
+| 32 | (vizinho) | ~igual | ~0,5 pp | FAIL &lt; 0,90 |
+| **256** | **0,745** | **0,75** | **+0,5 pp** | **FAIL** — oversample não recupera |
+
+Artefato: `target/b0_bits_f32_rerank_n200_k256.json`. Leitura: misses fora do top-K Hamming
+(assimetria s2 vs bank) — não é só K curto. Próximo design: alinhar query ao índice / ADC;
+não baixar piso 0,90.
 
 ## D1 status (MSG 0667/0668 → 0673+)
 
@@ -120,14 +147,18 @@ Alinha `tools/b0_bits_f32_rerank.py`: top-k Hamming → rescore f32; gate sugeri
 - CURSOR (0673): `--dry-check` n=5000 balance 2500/2500 OK; claim D1 **não** tocado.
 - Host: PIDs `embed_rate` sumiram — **janela CPU/GPU livre** para OPENCODE rodar o probe e gravar `target/d1_maxsim_st6.json`.
 
-## R5 ONNX probe host (artefato `target/pos_reboot/onnx_backend_probe.json`)
+## R5 ONNX probe host (MSG 0696 errata)
 
-| Backend | txt/s (n=128 batch16 CPU) | Cosine vs torch |
-|---|---|---|
-| torch fp32 | **1,57** | — |
-| ONNX CPU EP | **0,01** | 1,0 (gate 0,99 PASS) |
+Artefato `onnx_backend_probe.json` das **20:38** foi **INVALIDADO** (sono Windows
+13:56→20:37, Kernel-Power 506/507): `encode_s` ONNX **24192 s** inclui ~6h41 de
+sono; torch 1,57 txt/s pré-sono já sob contenção; `contended=false` no JSON estava
+errado. Cosine **1,0** permanece válido (fidelidade ≠ taxa).
 
-`promote_onnx=false` — fidelidade OK, taxa ~**157×** pior que torch neste export. Não promove; R5 continua ABSTAIN em throughput.
+Quarentena: `onnx_backend_probe_INVALIDO_sono_…json`. Sequenciador novo:
+`scripts/measure_window.ps1` (claim OPENCODE) — quiet 30s, keep-awake, detecção
+de sono, piso 6,5 txt/s, veredito em `measure_window_verdict.json`.
+
+**Não** usar números de taxa daquele probe para promover ONNX.
 
 ## Identidade ≠ geometria (MSG 0649, arXiv:2609.28290)
 
