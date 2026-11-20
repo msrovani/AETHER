@@ -5,7 +5,7 @@
   "dst": "data/f1_decision_smoke_selftest.json",
   "sha256": "602ba7673b486a78ea86ab6d401ee20ab0f1d22643d2e90f0cd681bffd560738",
   "bytes": 1004,
-  "promoted_at_utc": "2026-11-20T15:28:54.703037+00:00",
+  "promoted_at_utc": "2026-11-20T15:33:01.470863+00:00",
   "checks": {
     "passou_not_unknown": true,
     "conformal_set_present": true,

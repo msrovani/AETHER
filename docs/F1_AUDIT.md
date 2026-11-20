@@ -269,9 +269,32 @@ gate de regressão e contrato escrito.
 
 1. ~~**A-1** (fatia 3 do chat)~~ — **fechado** (o port fala em todo turno).
 2. **A-1b** (engine real alcançável do produto) — sem isto o produto tem
-   degradação honesta, mas não tem decisor.
-3. **A-2** (watchdog) — é o aceite literal do plano e é o que impede o OOM.
+   degradação honesta, mas não tem decisor. Spec/docs: `docs/F1_A1B_VEGA_OPTIN.md`
+   (CURSOR); wire `--vega` no crate = BUFFY/OPENCODE.
+3. **A-2** (watchdog) — aceite literal do plano; impede OOM.
 4. **A-3** (warmup em thread) — sem isso o port não sobe em serviço nenhum.
 5. **A-4** (GIL) — só importa depois de 2–4, quando houver concorrência real.
 6. **A-5/A-6** (evidência) — cobertos pela auditoria.
 7. **A-2c** (GPU compartilhada) — antes que dois agents se matem na GPU.
+
+## Sync offline CURSOR (MSG 0929) — specs/gates, NÃO wire do crate
+
+Estado do board após A2/A3/A4/A5/F1-5 (2026-11-20). **wired_to_crate=false**
+em todos — dono do `pyo3_impl.rs` / port continua BUFFY/OPENCODE.
+
+| item | offline | artefatos | selftest |
+|---|---|---|---|
+| A-2 VRAM | PASS | `docs/F1_A2_WATCHDOG_SPEC.md` + `tools/f1_vram_watchdog.py` | 5 ok |
+| A-3 warmup | PASS | `docs/F1_A3_WARMUP_SPEC.md` + `tools/f1_warmup_gate.py` | 7 ok |
+| A-4 GIL | PASS | `docs/F1_A4_GIL_SPEC.md` + `tools/f1_gil_gate.py` | 6 ok |
+| A-5 / A-2c | PASS | `docs/F1_A5_A2C_CURSOR.md` + `f1_gate_promote` / `gpu_engine_lock` | promote ok |
+| F1-5 head TTT | PASS | `docs/F1_5_HEAD_TTT_SPEC.md` + `tools/f1_5_ttt_abstain.py` | 7 ok |
+
+Suite agregada:
+
+```bash
+python tools/f1_offline_suite.py selftest
+```
+
+Isto **não** fecha o aceite de produto (A-1b / wire A-2..A-4 no crate). Fecha
+só a fila de classificadores/docs offline do CURSOR sob autoridade ≤120.
