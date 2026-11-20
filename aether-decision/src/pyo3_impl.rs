@@ -15,7 +15,7 @@
 //! (`Python::detach` em torno do forward torch) fica para a fatia de azeite
 //! (Eixo D), medida com re-probe n=30 antes/depois.
 
-use crate::types::{AbstainReason, Answer, DecisionError, DecisionMeta, DecisionRequest, DecisionResponse};
+use crate::types::{Answer, DecisionError, DecisionMeta, DecisionRequest, DecisionResponse};
 use crate::port::DecisionPort;
 use crate::config::EngineConfig;
 use pyo3::prelude::*;
@@ -129,11 +129,12 @@ impl DecisionPort for VegaPort {
             None => primary_answers,
         };
 
+        let conformal_set = conformal_map(&answers);
         Ok(DecisionResponse {
             answers,
-            // O head ttt não produz conjunto conformal (ver types.rs); quando o
-            // vegaml expõe `prediction_set`, o mapeamento entra aqui.
-            conformal_set: None,
+            // F1-2 (MSG 0793): o vegaml expoe `prediction_set` hoje; vira o
+            // conjunto conformal do lote, sem interpretacao.
+            conformal_set,
             meta: DecisionMeta {
                 latency_ms: t0.elapsed().as_secs_f64() * 1000.0,
                 engine: self.engine_label.clone(),
@@ -141,6 +142,25 @@ impl DecisionPort for VegaPort {
                 vram_used_mb: None,
             },
         })
+    }
+}
+
+/// Mapa `{pergunta: prediction_set}` — o conjunto conformal do lote.
+///
+/// F1-2 (MSG 0793): o vegaml devolve `prediction_set` por pergunta (lista de
+/// candidatos). O `combine` do AND gate preserva o conjunto do primario, entao
+/// aqui e so agregar: pergunta sem conjunto fica fora (nao inventamos `null`).
+fn conformal_map(answers: &[Answer]) -> Option<serde_json::Value> {
+    let mut map = serde_json::Map::new();
+    for a in answers {
+        if let Some(set) = &a.conformal_set {
+            map.insert(a.question.clone(), set.clone());
+        }
+    }
+    if map.is_empty() {
+        None
+    } else {
+        Some(serde_json::Value::Object(map))
     }
 }
 
@@ -210,10 +230,22 @@ fn py_answer_to_answer(
     let abstain = get("abstain")
         .and_then(|v| v.extract::<bool>().ok())
         .unwrap_or(false);
-    // vegaml não tipa o motivo da abstain; tipamos na borda: abstain do reader
-    // é `unknown` por default — o AND gate refina para conflict quando os
-    // readers discordam. Classificação fina (question_kind) entra na F2.
-    let abstain_reason = if abstain { Some(AbstainReason::Unknown) } else { None };
+    let unbound = get("unbound")
+        .and_then(|v| v.extract::<bool>().ok())
+        .unwrap_or(false);
+    let prediction_set = get("prediction_set").and_then(|v| json_from_py(py, &v));
+    let prediction_set_len = prediction_set
+        .as_ref()
+        .and_then(|v| v.as_array())
+        .map(|a| a.len());
+    let boolean = get("boolean").and_then(|v| v.extract::<f64>().ok());
+    // F1-1/F1-3 (MSG 0793): a derivacao vive em `types` para ser testada sem
+    // Python (feature `pyo3` nao e necessaria para o teste de regressao).
+    let choice = crate::types::derive_choice(
+        get("choice").and_then(|v| v.extract::<String>().ok()),
+        boolean,
+    );
+    let abstain_reason = crate::types::derive_abstain_reason(abstain, unbound, prediction_set_len);
     let probs = get("probs").and_then(|p| json_from_py(py, &p));
     // Confiança do readout = probabilidade da melhor opção (Eixo B: campo
     // auditável). `abstain` sem probs ⇒ None.
@@ -225,12 +257,13 @@ fn py_answer_to_answer(
 
     Ok(Answer {
         question: qid.to_string(),
-        choice: get("choice").and_then(|v| v.extract::<String>().ok()),
+        choice,
         probs,
         abstain,
         abstain_reason,
         readout: get("readout").and_then(|v| v.extract::<String>().ok()),
         confidence,
+        conformal_set: prediction_set,
     })
 }
 

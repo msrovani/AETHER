@@ -55,6 +55,11 @@ pub struct Answer {
     /// Confiança do readout (probabilidade da melhor opção).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confidence: Option<f64>,
+    /// Conjunto conformal DESTA pergunta (Eixo B), direto do `prediction_set`
+    /// do vegaml: lista (`[false, true]`) ou lista de criterios. `None` = o
+    /// reader nao produziu conjunto (nao inventamos).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conformal_set: Option<serde_json::Value>,
 }
 
 impl Answer {
@@ -65,6 +70,103 @@ impl Answer {
             abstain_reason: Some(reason),
             ..Self::default()
         }
+    }
+}
+
+/// F1-1 (MSG 0793): `type: boolean` NAO devolve `choice` no vegaml (medido);
+/// a decisao vem em `boolean` (float). Derivamos o argmax para o schema ficar
+/// uniforme entre os tipos de pergunta. `reported` sempre vence: em pergunta de
+/// escolha o reader ja manda o `choice`. Nada aqui promove abstain a decisao —
+/// quem diz se agiu e `Answer::abstain`.
+#[cfg_attr(not(feature = "pyo3"), allow(dead_code))]
+pub(crate) fn derive_choice(reported: Option<String>, boolean: Option<f64>) -> Option<String> {
+    match (reported, boolean) {
+        (Some(choice), _) => Some(choice),
+        (None, Some(b)) => Some(if b >= 0.5 { "True" } else { "False" }.to_string()),
+        (None, None) => None,
+    }
+}
+
+/// F1-3 (MSG 0793): motivo TIPADO da abstencao. `unknown` e a unica porta do
+/// vetor de pesquisa externa (F2, `admits_research`) — entao so pode significar
+/// LACUNA de conhecimento, isto e, `unbound` (fora do lexico). Margem fina
+/// (conjunto com mais de um candidato) e abstain sem classe sao `ambiguous`
+/// (escalam HITL). Nunca `unknown` por default: rotular ambiguidade de lacuna
+/// faria o harness gastar rede no caso errado.
+#[cfg_attr(not(feature = "pyo3"), allow(dead_code))]
+pub(crate) fn derive_abstain_reason(
+    abstain: bool,
+    unbound: bool,
+    prediction_set_len: Option<usize>,
+) -> Option<AbstainReason> {
+    if !abstain {
+        return None;
+    }
+    if unbound {
+        return Some(AbstainReason::Unknown);
+    }
+    // Margem fina: o conjunto tem mais de um candidato que o reader nao separa.
+    // Sem conjunto declarado, a abstencao nao tem classe -> tambem HITL.
+    match prediction_set_len {
+        Some(n) if n > 1 => Some(AbstainReason::Ambiguous),
+        _ => Some(AbstainReason::Ambiguous),
+    }
+}
+
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+
+    #[test]
+    fn boolean_without_choice_derives_argmax() {
+        // Caso medido (MSG 0793): boolean 0.6125, sem chave `choice`.
+        assert_eq!(
+            derive_choice(None, Some(0.6125)).as_deref(),
+            Some("True")
+        );
+        assert_eq!(derive_choice(None, Some(0.3875)).as_deref(), Some("False"));
+        // 0.5 exato cai em True (reader empata: abstain e quem decide).
+        assert_eq!(derive_choice(None, Some(0.5)).as_deref(), Some("True"));
+    }
+
+    #[test]
+    fn reported_choice_always_wins() {
+        assert_eq!(
+            derive_choice(Some("reformular".into()), Some(0.9)).as_deref(),
+            Some("reformular")
+        );
+        assert_eq!(derive_choice(None, None), None);
+    }
+
+    #[test]
+    fn unbound_is_the_only_unknown() {
+        assert_eq!(
+            derive_abstain_reason(true, true, Some(3)),
+            Some(AbstainReason::Unknown)
+        );
+        assert!(derive_abstain_reason(true, true, Some(3))
+            .unwrap()
+            .admits_research());
+    }
+
+    #[test]
+    fn fine_margin_is_ambiguous_not_unknown() {
+        // C1 medido (0.489/0.511): abstain com 2 candidatos = ambiguidade.
+        let reason = derive_abstain_reason(true, false, Some(2)).unwrap();
+        assert_eq!(reason, AbstainReason::Ambiguous);
+        assert!(!reason.admits_research());
+        assert!(reason.escalates_hitl());
+        // Abstain sem conjunto declarado tambem nao vira lacuna.
+        assert_eq!(
+            derive_abstain_reason(true, false, None),
+            Some(AbstainReason::Ambiguous)
+        );
+    }
+
+    #[test]
+    fn acting_answer_has_no_reason() {
+        assert_eq!(derive_abstain_reason(false, false, Some(1)), None);
+        assert_eq!(derive_abstain_reason(false, true, None), None);
     }
 }
 
@@ -81,9 +183,9 @@ pub struct DecisionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DecisionResponse {
     pub answers: Vec<Answer>,
-    /// Conjunto conformal (Eixo B: schema `{answers, conformal_set, meta}`).
-    /// Vem do `prediction_set` do vegaml; `None` enquanto o head `ttt` não
-    /// produz (o head não carrega conjunto conformal).
+    /// Conjunto conformal do lote (Eixo B: `{answers, conformal_set, meta}`).
+    /// Objeto `{pergunta: prediction_set}` montado do `prediction_set` do
+    /// vegaml; perguntas sem conjunto ficam de fora. `None` = nenhuma tinha.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conformal_set: Option<serde_json::Value>,
     pub meta: DecisionMeta,

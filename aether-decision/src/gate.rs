@@ -110,6 +110,7 @@ mod tests {
             abstain_reason: None,
             readout: Some("engine".into()),
             confidence: Some(0.8),
+            conformal_set: None,
         }
     }
 

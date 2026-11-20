@@ -78,6 +78,49 @@ impl EngineConfig {
         }
     }
 
+    /// Config a partir do ambiente — o daemon e o CLI apontam o motor aqui.
+    ///
+    /// `VEGA_PYTHON` / `VEGA_SITE_PACKAGES`; `PYTHONPATH` é o fallback
+    /// porque é a variável que o próprio Python lê.
+    pub fn from_env() -> Self {
+        let mut cfg = Self::default();
+        if let Some(v) = std::env::var("VEGA_PYTHON").ok().filter(|s| !s.trim().is_empty()) {
+            cfg.python = Some(v);
+        }
+        let site = std::env::var("VEGA_SITE_PACKAGES")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| std::env::var("PYTHONPATH").ok().filter(|s| !s.trim().is_empty()));
+        cfg.python_site_packages = site;
+        cfg
+    }
+
+    /// `site-packages` efetivo: config → `PYTHONPATH` → derivado do venv.
+    ///
+    /// Derivar do interpretador pinado é o fallback que faz o embed
+    /// funcionar sem variável extra: o venv do engine tem layout fixo
+    /// (`<venv>/Scripts/python.exe` → `<venv>/Lib/site-packages`).
+    pub fn effective_site_packages(&self) -> Option<String> {
+        if let Some(s) = &self.python_site_packages {
+            if !s.trim().is_empty() {
+                return Some(s.clone());
+            }
+        }
+        self.python.as_ref().and_then(|py| {
+            let p = std::path::Path::new(py);
+            let dir = p.parent()?;
+            let root = dir.parent()?;
+            let cand = if cfg!(windows) {
+                root.join("Lib").join("site-packages")
+            } else {
+                root.join("lib").join("python3.14").join("site-packages")
+            };
+            cand
+                .exists()
+                .then(|| cand.to_string_lossy().to_string())
+        })
+    }
+
     /// Carrega de arquivo JSON (Eixo B: cano tipado, sem config solta).
     pub fn from_file(path: &str) -> Result<Self, crate::types::DecisionError> {
         let json = std::fs::read_to_string(path)

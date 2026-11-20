@@ -167,6 +167,7 @@ mod tests {
                 abstain_reason: None,
                 readout: Some("engine".into()),
                 confidence: Some(0.9),
+                conformal_set: None,
             }],
             conformal_set: None,
             meta: DecisionMeta {
