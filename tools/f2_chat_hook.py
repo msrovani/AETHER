@@ -24,6 +24,8 @@ from research_harness import (  # noqa: E402
     run_research,
     write_quarantine,
 )
+import research_live  # noqa: E402
+from research_live import live_research  # noqa: E402
 from research_reliability import find_case, load_json  # noqa: E402
 
 OUT = ROOT / "data" / "reports" / "f2_chat_quarantine.jsonl"
@@ -51,6 +53,37 @@ def once(text: str, reason: str, out: Path) -> dict:
     dig = digest_certificate(f"edge=fora_lexico text={text}")
     if dig["n_tokens"] > 320 or not dig.get("ok", True):
         return {"opens": False, "line": "pesquisa: digest_reject", "network": False}
+    # G4 (opt-in HITL): com AETHER_RESEARCH_NETWORK=1 o vetor é REAL — busca
+    # viva (DuckDuckGo lite), tier por domínio, convergência numérica
+    # conservadora, tripla do Eixo F em quarentena (60–120, nunca 255).
+    if research_live.network_enabled():
+        live = research_live.live_research(text, DEFAULT_TIER)
+        rec = {
+            "kind": "external_research",
+            "abstain_reason": "unknown",
+            "question": text[:240],
+            "verdict": live.get("verdict", "open"),
+            "authority": live.get("authority", 60),
+            "n_independent": live.get("n_independent", 0),
+            "reason": live.get("reason"),
+            "convergence_sigma_over_mu": live.get("convergence_sigma_over_mu"),
+            "evidence": live.get("evidence", []),
+            "hitl_required_for_255": True,
+            "never_255": True,
+            "network": True,
+            "state_digest": {"n_tokens": dig["n_tokens"], "preview": dig["digest"][:120]},
+        }
+        write_quarantine(out, rec)
+        return {
+            "opens": bool(live.get("ok")),
+            "line": (
+                f"pesquisa (vivo): quarentena veredito={rec['verdict']} "
+                f"autoridade={rec['authority']} fontes={rec['n_independent']} "
+                f"motivo={rec['reason']}"
+            ),
+            "network": True,
+            "case": None,
+        }
     case_id = match_case(text, DEFAULT_CASES)
     if case_id is None:
         rec = {
