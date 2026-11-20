@@ -165,6 +165,7 @@ mod tests {
                 readout: Some("engine".into()),
                 confidence: Some(0.9),
                 conformal_set: None,
+                cv_accuracy: None,
             }],
             conformal_set: None,
             meta: DecisionMeta {

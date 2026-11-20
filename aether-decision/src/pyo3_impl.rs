@@ -239,12 +239,7 @@ fn py_answer_to_answer(
         .and_then(|v| v.as_array())
         .map(|a| a.len());
     let boolean = get("boolean").and_then(|v| v.extract::<f64>().ok());
-    if std::env::var_os("AETHER_F1_DEBUG").is_some() {
-        eprintln!(
-            "[f1] {qid}: set={:?} unbound={unbound} abstain={abstain} boolean={boolean:?}",
-            prediction_set
-        );
-    }
+
     // F1-1/F1-3 (MSG 0793): a derivacao vive em `types` para ser testada sem
     // Python (feature `pyo3` nao e necessaria para o teste de regressao).
     let choice = crate::types::derive_choice(
@@ -270,6 +265,8 @@ fn py_answer_to_answer(
         readout: get("readout").and_then(|v| v.extract::<String>().ok()),
         confidence,
         conformal_set: prediction_set,
+        // `readout="ttt"` nao tem `abstain`/`prediction_set`; traz `cv_accuracy`.
+        cv_accuracy: get("cv_accuracy").and_then(|v| v.extract::<f64>().ok()),
     })
 }
 

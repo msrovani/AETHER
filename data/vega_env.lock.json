@@ -1,89 +1,42 @@
 {
   "schema": "aether.vega_env_lock/v1",
-  "measured_at": "2026-11-20T11:40:00-03:00",
-  "measured_by": "OPENCODE sessao F1 (pip freeze do venv medido)",
-  "host": {
-    "os": "windows",
-    "python": "3.14.10",
-    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
-  },
-  "why": "O plano F1 exige 'torch e python pinados no lockfile'. O engine medido vivia dentro de target/vega (4.697 MB), e o cargo clean do ciclo apaga target/ (ja aconteceu: forum MSG 0748). Este lockfile + tools/vega_env_setup.ps1 tornam o ambiente reproduzivel FORA de target/.",
-  "layout": {
-    "venv": ".vega/venv",
-    "checkpoints": ".vega/models",
-    "gitignore": "/.vega/"
-  },
+  "measured_at": "2026-11-20T17:15:00-03:00",
+  "measured_from": "target/vega (antes da migracao; cargo clean apaga target/)",
+  "sanctioned_by_hitl": "chat 2026-11-20 'sim' (migracao do motor para fora de target)",
   "python": {
-    "version": "3.14.10",
-    "pin": "3.14.10",
-    "build": "CPython"
+    "pin": "3.14",
+    "version": "3.14.10"
   },
   "torch": {
     "version": "2.14.1+cu126",
     "index": "https://download.pytorch.org/whl/cu126",
-    "cuda": "12.6"
+    "cuda_required": true
   },
   "packages": {
-    "annotated-doc": "0.0.7",
-    "annotated-types": "0.8.0",
-    "anyio": "4.16.0",
-    "cffi": "2.1.1",
-    "click": "8.5.1",
-    "colorama": "0.4.6",
-    "cryptography": "50.0.2",
-    "einops": "0.8.2",
-    "filelock": "4.2.4",
-    "fla-core": "0.5.0",
-    "flash-linear-attention": "0.5.0",
-    "fsspec": "2026.9.0",
-    "h11": "0.16.0",
-    "hf-xet": "1.8.0",
-    "httpcore2": "2.16.2",
-    "httpx2": "2.16.2",
-    "huggingface_hub": "2.4.0",
-    "idna": "3.20",
-    "Jinja2": "3.1.6",
-    "markdown-it-py": "4.3.0",
-    "MarkupSafe": "3.0.3",
-    "mdurl": "0.1.2",
-    "mpmath": "1.3.0",
-    "networkx": "3.7",
-    "numpy": "2.5.5",
-    "packaging": "26.3",
-    "pycparser": "3.12",
-    "pydantic": "2.14.3",
-    "pydantic_core": "2.50.4",
-    "Pygments": "2.21.0",
-    "PyYAML": "6.0.3",
-    "regex": "2026.11.19",
-    "rich": "15.0.0",
-    "safetensors": "0.8.0",
-    "setuptools": "78.1.0",
-    "shellingham": "1.5.4",
-    "sympy": "1.14.0",
-    "tokenizers": "0.23.3",
-    "torch": "2.14.1+cu126",
-    "tqdm": "4.70.1",
+    "vegaml": "0.16.5",
     "transformers": "5.23.0",
+    "flash-linear-attention": "0.5.0",
     "triton-windows": "3.8.0.post29",
-    "truststore": "0.10.5",
-    "typer": "0.29.2",
-    "typing-inspection": "0.4.5",
-    "typing_extensions": "4.16.0",
-    "vegaml": "0.16.5"
+    "tokenizers": "0.23.3",
+    "safetensors": "0.8.0",
+    "einops": "0.8.2",
+    "huggingface_hub": "2.4.0",
+    "numpy": "2.5.5",
+    "pydantic": "2.14.3"
   },
-  "env": {
-    "VEGA_PYTHON": ".vega/venv/Scripts/python.exe",
-    "VEGA_SITE_PACKAGES": ".vega/venv/Lib/site-packages",
-    "VEGA_MODEL": ".vega/models/vega-u-gemma-1b",
-    "VEGA_PROSE_MODEL": ".vega/models/vega-u-gemma-1b-prose",
-    "VEGA_CALIBRATION": "data/vega_calibration_starter.json",
-    "PYO3_PYTHON": ".vega/venv/Scripts/python.exe",
-    "PYTHONPATH": ".vega/venv/Lib/site-packages"
+  "layout": {
+    "venv": ".vega/venv",
+    "models": ".vega/models",
+    "checkpoints": [
+      "vega-u-gemma-1b",
+      "vega-u-gemma-1b-prose"
+    ]
   },
-  "invariants": [
-    "PYTHONPATH deve conter o site-packages do venv: o interpreter EMBUTIDO do PyO3 usa o Python BASE e nao herda o venv (medido: prefix=Python314).",
-    "O lock NAO sobe versao: mudou pin => rebuild + re-probe n=30 (Eixo D do plano).",
-    "O venv e os checkpoints ficam FORA de target/: cargo clean nao pode levar o motor."
-  ]
+  "env_vars_for_pyo3": {
+    "PYO3_PYTHON": "<root>/.vega/venv/Scripts/python.exe",
+    "PYTHONPATH": "<root>/.vega/venv/Lib/site-packages",
+    "VEGA_MODEL": "<root>/.vega/models/vega-u-gemma-1b",
+    "VEGA_PROSE_MODEL": "<root>/.vega/models/vega-u-gemma-1b-prose",
+    "note": "PYO3_PYTHON e pin de BUILD; PYTHONPATH e pin de RUNTIME (o interpreter embutido nao herda o site-packages do venv — MSG 0792/0793)"
+  }
 }

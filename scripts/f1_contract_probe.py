@@ -57,6 +57,12 @@ def main() -> int:
     ap.add_argument("--model", default="target/vega/vega-u-gemma-1b-prose")
     ap.add_argument("--corpus", default="data/vega_calibration_starter.json")
     ap.add_argument("--n", type=int, default=5, help="amostras de latencia (apos warmup)")
+    ap.add_argument(
+        "--fit-n",
+        type=int,
+        default=40,
+        help="exemplos de calibracao no fit (124 liga os heads TTT; 40 nao)",
+    )
     ap.add_argument("--out", default="target/f1_contract.json")
     args = ap.parse_args()
 
@@ -72,8 +78,8 @@ def main() -> int:
         rec["load_s"] = round(time.time() - t0, 1)
 
         t0 = time.time()
-        engine.fit(corpus["examples"][:40], corpus["questions"])
-        rec["fit_examples"] = 40
+        engine.fit(corpus["examples"][: args.fit_n], corpus["questions"])
+        rec["fit_examples"] = min(args.fit_n, len(corpus["examples"]))
         rec["fit_s"] = round(time.time() - t0, 1)
 
         engine.decide(STATE, {"passou": corpus["questions"]["passou"]})  # warmup

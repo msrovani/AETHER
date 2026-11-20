@@ -63,23 +63,57 @@ pronto para virar verde quando a fatia 3 cair.
 cumprido. VRAM acima de 5GB não vira `engine_unavailable`: vira OOM do
 processo, exatamente o que o plano proibia (*"nunca travа"*).
 
-**Correção.** O port mede **antes** do `decide`; acima do orçamento devolve
-`EngineUnavailable` e preenche `vram_used_mb` no `meta`.
+**Medido durante a auditoria** (o probe da auditoria rodando com os DOIS
+leitors do AND gate, no mesmo processo):
 
-**Dono.** BUFFY (`pyo3_impl.rs`).
+```
+nvidia-smi --query-gpu=memory.used  ->  5757 MiB
+orçamento do plano (Eixo E)         ->  5120 MiB (5 GB)
+```
+
+Ou seja: **o gate AND, como está, estoura o orçamento que o próprio plano
+fixou** — em 637 MiB. O plano previa *"4 a 4,5 GB de 6 GB"* (MSG 0757) para os
+dois readers; o medido é 5,76 GB.
+
+**Consequência para quem ligar o watchdog**: ligado como está, ele abortaria
+*sempre* — o port passaria a abstener em toda decisão. Ligar o watchdog
+(A-2) e decidir o orçamento de VRAM (A-2b) é **um** trabalho, não dois.
+
+**A-2b · MÉDIA-ALTA · O orçamento de 5 GB é incompatível com o gate AND.**
+Opções, para o dono decidir: (i) subir o orçamento para ~6 GB (a carta tem
+6 GB e o boot já mede 90 s — o risco é OOM, não slow); (ii) carregar um reader
+por vez (o sentinela é quem pega o OOD; dá para recarregar sob demanda);
+(iii) manter os dois, mas com o orçamento medido e publicado em vez de 5 GB.
+**Correção (A-2).** O port mede **antes** do `decide`; acima do orçamento
+devolve `EngineUnavailable` e preenche `vram_used_mb` no `meta`.
+
+**Dono.** BUFFY (`pyo3_impl.rs`) + dono do orçamento (HITL).
 
 ### A-3 · MÉDIA-ALTA · O warmup não é thread: o boot bloqueia ~90 s
 
 **Evidência.** `EngineHandle` (`bootstrap.rs`) não tem consumidor nenhum
 (`rg EngineHandle` → só o próprio módulo); `VegaPort::new` faz `load` + `fit(124)`
-**síncrono**. Boot medido: **90,4 s** (esta auditoria) e 99,3 s (BUFFY,
-MSG 0793).
+**síncrono**.
 
-**Impacto.** O plano (Eixo A) pede *"load() + fit(124) no start da thread;
-lazy + warmup thread"*. Com o boot síncrono, qualquer processo que construa o
-port — daemon, CLI, API — fica 1,5 min sem responder antes da primeira
-pergunta. A máquina de estados que já existe no crate é o caminho curto:
-só não é usada.
+**Boot medido (dois readers, um processo):**
+
+| medição | boot |
+|---|---|
+| BUFFY, MSG 0793 | 99,3 s |
+| smoke `f1_smoke` | 90,4 s |
+| auditoria, `f1_reprobe` | **337,3 s** |
+
+Três medições do mesmo boot, com dispersão de **3,7×**. O plano exige
+*"Bootstrap: 1–2 min, **determinístico**, na subida do daemon (lazy + warmup
+thread)"* — hoje o boot nem cabe na janela de 1–2 min, quanto menos ser
+determinístico. (A dispersão tem duas causas prováveis: contenção de GPU com
+outro processo e o `fit(124)` correndo em CPU; a auditoria não isolou as
+variáveis — e isso também é achado: **falta um re-probe do boot**, o Eixo D
+fala de latência de decisão, não de boot.)
+
+**Impacto.** Qualquer processo que construa o port — daemon, CLI, API — fica
+de 1,5 a 5,6 min sem responder antes da primeira pergunta. A máquina de
+estados que já existe no crate é o caminho curto: só não é usada.
 
 **Correção.** `VegaPort::new` → `spawn_warmup` + `wait_ready(timeout)`; o
 estado `Cold/Warming/Ready/Failed` já está pronto.
@@ -115,18 +149,29 @@ mesma regra.)
 
 **Dono.** auditoria (feito) / BUFFY (o smoke).
 
-### A-6 · MÉDIA · Não há baseline de latência com n=30 (Eixo D)
+### A-6 · MÉDIA · Não há baseline de latência com n=30 (Eixo D) — **RESOLVIDO pela auditoria**
 
-**Evidência.** Só há medições soltas: 2110 ms por decisão (2 perguntas,
-2 readers), 289–292 ms por reader, boot 90–99 s. O plano exige *"re-probe
-n=30 antes/depois de cada mudança. Ganho medido ou não vale."*
+**Situação anterior.** Só havia medições soltas: 2110 ms por decisão (2
+perguntas, 2 readers, decisão fria), 289–292 ms por reader, boot 90–99 s. O
+plano exige *"re-probe n=30 antes/depois de cada mudança. Ganho medido ou
+não vale."* — sem baseline, um "ganho" alegado depois não tem contra o que
+comparar.
 
-**Impacto.** Um "ganho" alegado depois não tem contra o que comparar.
+**Entregue.** `examples/f1_reprobe.rs` (novo, na raiz) → `data/f1_gate_baseline.json`
+(fora de `target/`), com gate `baseline_da_f1_existe_fora_de_target_e_e_coerente`.
 
-**Correção.** `examples/f1_reprobe.rs` (auditoria) → `data/f1_gate_baseline.json`
-com p50/p95, n=30, boot e o contrato por resposta.
+**Baseline medido (n=30, dois readers, duas perguntas calibradas):**
 
-**Dono.** auditoria (feito).
+| métrica | valor |
+|---|---|
+| latência p50 | **581,7 ms** |
+| latência p95 | **626,9 ms** |
+| latência min / max | 558,1 ms / 3833,5 ms (a primeira, fria) |
+| boot | 337,3 s |
+| contrato | `ok: true` — `choice` em toda resposta |
+| motivos de abstenção | `["ambiguous", "none"]` — **nenhum `unknown`** (F1-3 confirmado) |
+
+**Dono.** auditoria (entregue).
 
 ### A-7 · BAIXA · O port do chat pergunta "abstention" (booleano genérico)
 

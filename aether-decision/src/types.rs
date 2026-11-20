@@ -60,6 +60,12 @@ pub struct Answer {
     /// reader nao produziu conjunto (nao inventamos).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conformal_set: Option<serde_json::Value>,
+    /// Acuracia em cross-validation do head TTT que respondeu
+    /// (`readout="ttt"`). So o head traz. O contrato do head NAO tem
+    /// `abstain`/`prediction_set`/`unbound` (medido, MSG 0795): sem este
+    /// campo, a ausencia de sinal de abstenção parece confiança.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cv_accuracy: Option<f64>,
 }
 
 impl Answer {

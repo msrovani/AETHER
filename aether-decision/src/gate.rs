@@ -126,6 +126,7 @@ mod tests {
             readout: Some("engine".into()),
             confidence: Some(0.8),
             conformal_set: None,
+            cv_accuracy: None,
         }
     }
 

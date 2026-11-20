@@ -1,0 +1,55 @@
+{
+  "abstain": false,
+  "answers": [
+    {
+      "abstain": true,
+      "abstain_reason": "ambiguous",
+      "choice": "False",
+      "confidence": 0.6738819616236172,
+      "conformal_set_present": true,
+      "has_choice": true,
+      "question": "passou",
+      "readout": "and_gate"
+    },
+    {
+      "abstain": false,
+      "abstain_reason": null,
+      "choice": "reformular",
+      "confidence": 0.5467802286148071,
+      "conformal_set_present": false,
+      "has_choice": true,
+      "question": "route",
+      "readout": "and_gate"
+    }
+  ],
+  "boot_s": 337.27,
+  "contract": {
+    "choice_em_toda_resposta": true,
+    "nota": "F1-1 choice derivado no booleano; F1-2 prediction_set -> conformal_set; F1-3 margem fina = ambiguous (nunca unknown)",
+    "ok": true,
+    "reasons": [
+      "ambiguous",
+      "none"
+    ]
+  },
+  "degraded": false,
+  "engine": "vega-u-0.8b AND gemma-prose",
+  "inputs": {
+    "corpus": "data/vega_calibration_starter.json",
+    "model_primary": "target/vega/vega-u-gemma-1b",
+    "model_sentinel": "target/vega/vega-u-gemma-1b-prose",
+    "python": null,
+    "python_site_packages": "C:\\Users\\msrov\\Documents\\AETHER\\target\\vega\\Lib\\site-packages",
+    "state": "Gate cargo_test_release: 176 passed, 0 failed, clippy -D warnings limpo, fmt OK"
+  },
+  "latency_ms": {
+    "max": 3833.5,
+    "min": 558.1,
+    "p50": 581.7,
+    "p95": 626.9
+  },
+  "measured_at": "2026-11-20T15:08:43Z",
+  "n": 30,
+  "note": "Eixo D: re-probe n=30 antes/depois de cada mudanca. Este arquivo e o baseline congelado; um novo probe com outro numero e uma mudanca, nao um numero novo.",
+  "schema": "aether.f1_gate_baseline/v1"
+}

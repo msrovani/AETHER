@@ -272,3 +272,4 @@
 | 2026-11-20T14:57:57Z | wip | 1 | aether-decision:1 | ok (59s) | - | sim |
 | 2026-11-20T15:03:27Z | wip | 4 | .:1, aether-decision:2, examples:1 | ok (37s) | - | sim |
 | 2026-11-20T15:08:06Z | 0.1.7 | 19 | data:2, docs:6, src:2, tests:1, tools:8 | ok (102s) | - | sim |
+| 2026-11-20T15:12:07Z | wip | 6 | .:1, aether-decision:1, data:2, docs:1, scripts:1 | ok (45s) | - | sim |
