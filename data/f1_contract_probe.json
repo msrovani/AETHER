@@ -1,0 +1,47 @@
+{
+ "vegaml": "0.16.5",
+ "checkpoint": "target/vega/vega-u-gemma-1b-prose",
+ "loaded": "Vega",
+ "fit": 40,
+ "out_type": "dict",
+ "out_keys": [
+  "answers",
+  "latency_ms",
+  "n_tokens",
+  "views",
+  "mode"
+ ],
+ "answer_keys": [
+  "probs",
+  "confidence",
+  "prediction_set",
+  "abstain",
+  "unbound",
+  "settle_steps",
+  "energy",
+  "boolean",
+  "readout"
+ ],
+ "answer_types": {
+  "probs": "dict",
+  "confidence": "float",
+  "prediction_set": "list",
+  "abstain": "bool",
+  "unbound": "bool",
+  "settle_steps": "int",
+  "energy": "float",
+  "boolean": "float",
+  "readout": "str"
+ },
+ "answer_repr": {
+  "probs": "{'False': 0.3874831606379155, 'True': 0.6125168393620845}",
+  "confidence": "0.6125168393620845",
+  "prediction_set": "[False, True]",
+  "abstain": "True",
+  "unbound": "False",
+  "settle_steps": "12",
+  "energy": "-1.5183504819869995",
+  "boolean": "0.6125168393620845",
+  "readout": "'engine'"
+ }
+}

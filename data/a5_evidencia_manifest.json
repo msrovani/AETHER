@@ -1,0 +1,486 @@
+{
+  "schema": "aether.a5_evidencia_audit/v1",
+  "ok": true,
+  "network": false,
+  "ref": "MSG_0967",
+  "n_target_matched": 29,
+  "n_need_migrate": 28,
+  "data_canon": [
+    {
+      "path": "data/f1_decision_smoke.json",
+      "exists": true,
+      "bytes": 1004
+    },
+    {
+      "path": "data/f1_gate_baseline.json",
+      "exists": true,
+      "bytes": 1655
+    },
+    {
+      "path": "data/embed_eval_set.jsonl",
+      "exists": true,
+      "bytes": 852643
+    }
+  ],
+  "target_artifacts": [
+    {
+      "path": "target/embed_eval.json",
+      "bytes": 3790,
+      "in_target": true,
+      "kind": "measurement",
+      "migrate_to": "data/embed_eval_last.json (+ meta sha) — set ja em data/",
+      "ok_durable": false
+    },
+    {
+      "path": "target/embed_eval_bm25_baseline.json",
+      "bytes": 1557,
+      "in_target": true,
+      "kind": "measurement",
+      "migrate_to": "data/embed_eval_last.json (+ meta sha) — set ja em data/",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_5_ttt_abstain.json",
+      "bytes": 378,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_5_ttt_abstain.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_a1b_vega_check.json",
+      "bytes": 540,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_a1b_vega_check.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_contract.json",
+      "bytes": 3185,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_contract.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_contract_fit124.json",
+      "bytes": 2608,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_contract_fit124.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_contract_primary.json",
+      "bytes": 3159,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_contract_primary.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_contract_probe.json",
+      "bytes": 959,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_contract_probe.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_contract_probe2.json",
+      "bytes": 886,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_contract_probe2.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_decision_smoke.json",
+      "bytes": 273,
+      "in_target": true,
+      "kind": "has_data_mirror",
+      "migrate_to": "promover_via_f1_gate_promote_ou_confirmar_sha_em_data/f1_decision_smoke.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_gil_gate.json",
+      "bytes": 529,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_gil_gate.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_offline_suite.json",
+      "bytes": 1188,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_offline_suite.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_vram_watchdog.json",
+      "bytes": 349,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_vram_watchdog.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t0_eval.json",
+      "bytes": 5636,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t0_eval.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t1_eval.json",
+      "bytes": 2076,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t1_eval.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t1_loop.json",
+      "bytes": 1507,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t1_loop.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t1_selftest.json",
+      "bytes": 938,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t1_selftest.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t2_allowlist.json",
+      "bytes": 204,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t2_allowlist.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t3_eval.json",
+      "bytes": 1819,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t3_eval.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t3_eval_selftest.json",
+      "bytes": 2481,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t3_eval_selftest.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t3_rankings_bad_sha.json",
+      "bytes": 45,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t3_rankings_bad_sha.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t3_rankings_selftest.json",
+      "bytes": 1519,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t3_rankings_selftest.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t3_rankings_selftest_synth.json",
+      "bytes": 76265,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t3_rankings_selftest_synth.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/mf2_gate_regression.json",
+      "bytes": 484,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/mf2_gate_regression.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/mf2_gate_regression_0841.json",
+      "bytes": 484,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/mf2_gate_regression_0841.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/qa_suite_probe.json",
+      "bytes": 716,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/qa_suite_probe.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/qa_suite_probe_composer.json",
+      "bytes": 716,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/qa_suite_probe_composer.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/research_quarantine_selftest.jsonl",
+      "bytes": 1537,
+      "in_target": true,
+      "kind": "quarantine_ephemeral",
+      "migrate_to": "manter_efemero_ou_data/research_quarantine/ se HITL quiser",
+      "ok_durable": true
+    },
+    {
+      "path": "target/vega_path_audit.json",
+      "bytes": 1289,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/vega_path_audit.json",
+      "ok_durable": false
+    }
+  ],
+  "need_migrate": [
+    {
+      "path": "target/embed_eval.json",
+      "bytes": 3790,
+      "in_target": true,
+      "kind": "measurement",
+      "migrate_to": "data/embed_eval_last.json (+ meta sha) — set ja em data/",
+      "ok_durable": false
+    },
+    {
+      "path": "target/embed_eval_bm25_baseline.json",
+      "bytes": 1557,
+      "in_target": true,
+      "kind": "measurement",
+      "migrate_to": "data/embed_eval_last.json (+ meta sha) — set ja em data/",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_5_ttt_abstain.json",
+      "bytes": 378,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_5_ttt_abstain.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_a1b_vega_check.json",
+      "bytes": 540,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_a1b_vega_check.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_contract.json",
+      "bytes": 3185,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_contract.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_contract_fit124.json",
+      "bytes": 2608,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_contract_fit124.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_contract_primary.json",
+      "bytes": 3159,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_contract_primary.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_contract_probe.json",
+      "bytes": 959,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_contract_probe.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_contract_probe2.json",
+      "bytes": 886,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_contract_probe2.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_decision_smoke.json",
+      "bytes": 273,
+      "in_target": true,
+      "kind": "has_data_mirror",
+      "migrate_to": "promover_via_f1_gate_promote_ou_confirmar_sha_em_data/f1_decision_smoke.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_gil_gate.json",
+      "bytes": 529,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_gil_gate.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_offline_suite.json",
+      "bytes": 1188,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_offline_suite.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f1_vram_watchdog.json",
+      "bytes": 349,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/f1_vram_watchdog.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t0_eval.json",
+      "bytes": 5636,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t0_eval.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t1_eval.json",
+      "bytes": 2076,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t1_eval.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t1_loop.json",
+      "bytes": 1507,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t1_loop.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t1_selftest.json",
+      "bytes": 938,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t1_selftest.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t2_allowlist.json",
+      "bytes": 204,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t2_allowlist.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t3_eval.json",
+      "bytes": 1819,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t3_eval.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t3_eval_selftest.json",
+      "bytes": 2481,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t3_eval_selftest.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t3_rankings_bad_sha.json",
+      "bytes": 45,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t3_rankings_bad_sha.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t3_rankings_selftest.json",
+      "bytes": 1519,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t3_rankings_selftest.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/f5_t3_rankings_selftest_synth.json",
+      "bytes": 76265,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/f5_t3_rankings_selftest_synth.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/mf2_gate_regression.json",
+      "bytes": 484,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/mf2_gate_regression.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/mf2_gate_regression_0841.json",
+      "bytes": 484,
+      "in_target": true,
+      "kind": "gate_report",
+      "migrate_to": "data/mf2_gate_regression_0841.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/qa_suite_probe.json",
+      "bytes": 716,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/qa_suite_probe.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/qa_suite_probe_composer.json",
+      "bytes": 716,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/qa_suite_probe_composer.json",
+      "ok_durable": false
+    },
+    {
+      "path": "target/vega_path_audit.json",
+      "bytes": 1289,
+      "in_target": true,
+      "kind": "tier_report",
+      "migrate_to": "data/reports/vega_path_audit.json",
+      "ok_durable": false
+    }
+  ],
+  "policy": "aceite duravel mora em data/; target/ e efemero (cargo clean)"
+}

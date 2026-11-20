@@ -17,11 +17,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 GATES = [
     ("A2_vram", "tools/f1_vram_watchdog.py"),
-    ("A2c_gpu_lock", "tools/gpu_engine_lock.py"),
+    # MSG 1014: tranca canónica em .vega/engine.lock (não target/)
+    ("A2c_engine_lock", "tools/engine_lock.py"),
     ("A3_warmup", "tools/f1_warmup_gate.py"),
     ("A4_gil", "tools/f1_gil_gate.py"),
     ("F1_5_ttt", "tools/f1_5_ttt_abstain.py"),
     ("A5_promote", "tools/f1_gate_promote.py"),
+    # MSG 1025/1033: classificador AttributeError torch.cpu.device (offline)
+    ("torch_cpu_device", "tools/f1_torch_device_check.py"),
 ]
 
 
@@ -38,10 +41,22 @@ def run_one(name: str, rel: str) -> dict:
         errors="replace",
     )
     payload = None
+    raw = proc.stdout or ""
     try:
-        payload = json.loads(proc.stdout)
+        payload = json.loads(raw)
     except json.JSONDecodeError:
-        payload = {"raw_tail": (proc.stdout or "")[-400:], "parse": False}
+        # tools que misturam log + JSON no stdout: pega o último objeto
+        start = raw.rfind("\n{")
+        if start < 0:
+            start = raw.find("{")
+        else:
+            start += 1
+        try:
+            payload = json.loads(raw[start:]) if start >= 0 else None
+        except json.JSONDecodeError:
+            payload = {"raw_tail": raw[-400:], "parse": False}
+    if payload is None:
+        payload = {"raw_tail": raw[-400:], "parse": False}
 
     ok = proc.returncode == 0
     if isinstance(payload, dict) and "ok" in payload:

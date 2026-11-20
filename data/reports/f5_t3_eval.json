@@ -1,0 +1,92 @@
+{
+  "schema": "aether.f5_t3_eval/v1",
+  "ok": true,
+  "sha256_set": "f868244256ee75a896f39cf4092ccfbf3bdf915002c451a1dcf450255d416bf0",
+  "n_queries": 142,
+  "rankings": "f5_t3_rankings_selftest_synth.json",
+  "k": 5,
+  "systems": {
+    "lexical_bm25": {
+      "n": 142,
+      "hits": 142,
+      "k": 5,
+      "hit_at_k": 1.0,
+      "gate": 0.974,
+      "gate_pass": true,
+      "network": false
+    },
+    "embed_minilm": {
+      "n": 142,
+      "hits": 142,
+      "k": 5,
+      "hit_at_k": 1.0,
+      "gate": 0.974,
+      "gate_pass": true,
+      "network": false
+    },
+    "hybrid_rrf60": {
+      "n": 142,
+      "hits": 142,
+      "k": 5,
+      "hit_at_k": 1.0,
+      "gate": 0.974,
+      "gate_pass": true,
+      "network": false
+    }
+  },
+  "per_kind": {
+    "lexical_bm25": {
+      "hard": {
+        "n": 23,
+        "hit_at_k": 1.0
+      },
+      "lexical": {
+        "n": 50,
+        "hit_at_k": 1.0
+      },
+      "semantic": {
+        "n": 69,
+        "hit_at_k": 1.0
+      }
+    },
+    "embed_minilm": {
+      "hard": {
+        "n": 23,
+        "hit_at_k": 1.0
+      },
+      "lexical": {
+        "n": 50,
+        "hit_at_k": 1.0
+      },
+      "semantic": {
+        "n": 69,
+        "hit_at_k": 1.0
+      }
+    },
+    "hybrid_rrf60": {
+      "hard": {
+        "n": 23,
+        "hit_at_k": 1.0
+      },
+      "lexical": {
+        "n": 50,
+        "hit_at_k": 1.0
+      },
+      "semantic": {
+        "n": 69,
+        "hit_at_k": 1.0
+      }
+    }
+  },
+  "gate": {
+    "hit_at_k_min": 0.974,
+    "embed_pass": true,
+    "hybrid_pass": true,
+    "embed_beats_or_ties_lexical": true,
+    "hybrid_beats_or_ties_lexical": true,
+    "gate_pass": true
+  },
+  "failures": [],
+  "network": false,
+  "ref": "MSG_0951_0862"
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "aether.f1_a1b_vega_check/v1",
+  "ok": true,
+  "action": "proceed_contract_present",
+  "cli": "src/agent/cli.rs",
+  "doc_present": true,
+  "hits": {
+    "flag_help": true,
+    "clap_or_args_field": true,
+    "argv_parse": true,
+    "open_chat_port": true,
+    "vega_ctor": true,
+    "stub_fallback": true,
+    "eixo_c_msg": true
+  },
+  "missing": [],
+  "network": false,
+  "wired_to_crate": false,
+  "mutated": false,
+  "note": "readonly — NAO edita cli.rs; wire/feature decision-pyo3 = BUFFY/OPENCODE"
+}

@@ -1,0 +1,83 @@
+{
+  "schema": "aether.a5_p3_promote/v1",
+  "ok": true,
+  "n_promoted": 6,
+  "n_skipped": 0,
+  "n_failed": 0,
+  "results": [
+    {
+      "ok": true,
+      "skipped": false,
+      "schema": "aether.a5_p3_promote/v1",
+      "src": "target/f1_5_ttt_abstain.json",
+      "dst": "data/f1_5_ttt_abstain.json",
+      "sha256": "d90d557bb3ad6e84bcec04182c5de283c268f186e034d479ff415484792ec5b7",
+      "bytes": 378,
+      "promoted_at_utc": "2026-11-20T16:10:34.630124+00:00",
+      "ref": "MSG_0967 A5_P3",
+      "meta": "data/f1_5_ttt_abstain.json.meta.json"
+    },
+    {
+      "ok": true,
+      "skipped": false,
+      "schema": "aether.a5_p3_promote/v1",
+      "src": "target/f1_a1b_vega_check.json",
+      "dst": "data/f1_a1b_vega_check.json",
+      "sha256": "92214ec1863bb5f2aa48a05fc0fe40220e471d58c6cc7a0dee15ea362a5d28df",
+      "bytes": 540,
+      "promoted_at_utc": "2026-11-20T16:10:34.633990+00:00",
+      "ref": "MSG_0967 A5_P3",
+      "meta": "data/f1_a1b_vega_check.json.meta.json"
+    },
+    {
+      "ok": true,
+      "skipped": false,
+      "schema": "aether.a5_p3_promote/v1",
+      "src": "target/f1_offline_suite.json",
+      "dst": "data/f1_offline_suite.json",
+      "sha256": "4456dbbf287fba0b27a3327d7e2e943516868749db68a1f4506b84ba55441358",
+      "bytes": 1188,
+      "promoted_at_utc": "2026-11-20T16:10:34.636972+00:00",
+      "ref": "MSG_0967 A5_P3",
+      "meta": "data/f1_offline_suite.json.meta.json"
+    },
+    {
+      "ok": true,
+      "skipped": false,
+      "schema": "aether.a5_p3_promote/v1",
+      "src": "target/f5_t1_eval.json",
+      "dst": "data/reports/f5_t1_eval.json",
+      "sha256": "2f3d45cc36a0954d513605b2febaad0703ec156c470fe195d923a8ec0a863880",
+      "bytes": 2076,
+      "promoted_at_utc": "2026-11-20T16:10:34.651728+00:00",
+      "ref": "MSG_0967 A5_P3",
+      "meta": "data/reports/f5_t1_eval.json.meta.json"
+    },
+    {
+      "ok": true,
+      "skipped": false,
+      "schema": "aether.a5_p3_promote/v1",
+      "src": "target/f5_t1_loop.json",
+      "dst": "data/reports/f5_t1_loop.json",
+      "sha256": "53a8640ba0589800315d3dc5f02b97209aaceebf44c9e1f40b6c804f239faa88",
+      "bytes": 1507,
+      "promoted_at_utc": "2026-11-20T16:10:34.672184+00:00",
+      "ref": "MSG_0967 A5_P3",
+      "meta": "data/reports/f5_t1_loop.json.meta.json"
+    },
+    {
+      "ok": true,
+      "skipped": false,
+      "schema": "aether.a5_p3_promote/v1",
+      "src": "target/f5_t2_allowlist.json",
+      "dst": "data/reports/f5_t2_allowlist.json",
+      "sha256": "07143c6bd370e1a15b062f2c8913a1176b5079dcd41bb0ef675e0a5ad141512c",
+      "bytes": 204,
+      "promoted_at_utc": "2026-11-20T16:10:34.688083+00:00",
+      "ref": "MSG_0967 A5_P3",
+      "meta": "data/reports/f5_t2_allowlist.json.meta.json"
+    }
+  ],
+  "network": false,
+  "wired_to_crate": false
+}

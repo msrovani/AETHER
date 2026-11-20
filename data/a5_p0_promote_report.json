@@ -1,0 +1,39 @@
+{
+  "schema": "aether.a5_p0_promote_batch/v1",
+  "ok": true,
+  "network": false,
+  "ref": "MSG_0986",
+  "n": 3,
+  "items": [
+    {
+      "schema": "aether.a5_p0_promote/v1",
+      "ref": "MSG_0986_0967",
+      "src": "target/embed_eval.json",
+      "dst": "data/embed_eval_last.json",
+      "sha256": "e3acc01e796bad1ed5c8541dc38b19acacb4faca6f4d5f73746b6851a6012b3e",
+      "bytes": 3790,
+      "promoted_at_utc": "2026-11-20T16:16:34.235623+00:00",
+      "ok": true
+    },
+    {
+      "schema": "aether.a5_p0_promote/v1",
+      "ref": "MSG_0986_0967",
+      "src": "target/embed_eval_bm25_baseline.json",
+      "dst": "data/embed_eval_bm25_baseline.json",
+      "sha256": "44d3f94d07fe831d841cf9bad4b53430f5b3c0428d53611a627a74985a01c68a",
+      "bytes": 1557,
+      "promoted_at_utc": "2026-11-20T16:16:34.238905+00:00",
+      "ok": true
+    },
+    {
+      "schema": "aether.a5_p0_promote/v1",
+      "ref": "MSG_0986_0967",
+      "src": "target/mf2_gate_regression.json",
+      "dst": "data/mf2_gate_regression.json",
+      "sha256": "c67db886e356e0577b132dd6d3d06a22d00faabc84da21794b39f49d1bcff887",
+      "bytes": 484,
+      "promoted_at_utc": "2026-11-20T16:16:34.242717+00:00",
+      "ok": true
+    }
+  ]
+}

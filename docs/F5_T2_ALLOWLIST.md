@@ -14,6 +14,7 @@ Preparação **offline** da política de rede para `research.query`:
 | HTTP | **não implementado** neste stub |
 
 T2 *live* (fetch real) fica na fila até allowlist + HITL + implementação.
+Contrato: `docs/F5_T2_LIVE_SPEC.md` (MSG 0968) — **sem HTTP** nesta fase.
 
 ## Artefatos
 

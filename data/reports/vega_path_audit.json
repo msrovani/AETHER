@@ -1,0 +1,46 @@
+{
+  "schema": "aether.vega_path_audit/v1",
+  "ref": "MSG_0892",
+  "network": false,
+  "lock_ok": true,
+  "layout": {
+    "venv": ".vega/venv",
+    "models": ".vega/models",
+    "checkpoints": [
+      "vega-u-gemma-1b",
+      "vega-u-gemma-1b-prose"
+    ]
+  },
+  "target_vega_mentions": 5,
+  "dot_vega_mentions": 18,
+  "actionable_residues": [],
+  "allowed_migration_mentions": [
+    {
+      "file": "tools/vega_env_setup.ps1",
+      "line": 4,
+      "text": "#   The engine (python env + checkpoints) lived in target/vega (4.697 MB) and"
+    },
+    {
+      "file": "tools/vega_env_setup.ps1",
+      "line": 93,
+      "text": "$src = Join-Path $Root \"target/vega\""
+    },
+    {
+      "file": "tools/vega_path_audit.py",
+      "line": 3,
+      "text": "\"\"\"Varre tools/ e scripts/ em busca de defaults `target/vega` vs contrato `.vega`."
+    },
+    {
+      "file": "tools/vega_path_audit.py",
+      "line": 23,
+      "text": "# Arquivos que PODEM citar target/vega (fonte de migração / auditoria)."
+    },
+    {
+      "file": "tools/vega_path_audit.py",
+      "line": 25,
+      "text": "\"tools/vega_env_setup.ps1\",  # copia DE target/vega PARA .vega"
+    }
+  ],
+  "ok": true,
+  "rule": "nunca_criar_venv_dentro_de_target__usar_dot_vega"
+}

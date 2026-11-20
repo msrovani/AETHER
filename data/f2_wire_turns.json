@@ -1,0 +1,72 @@
+{
+  "schema": "aether.f2_wire_turns/v1",
+  "ref": "MSG_1014 F2_WIRE — fora do léxico + unknown do port",
+  "network_default": false,
+  "turns": [
+    {
+      "id": "fora_lexico_unknown",
+      "text": "zxq qwerty fora do lexico do projeto",
+      "edge": "fora_lexico",
+      "oov": true,
+      "port": {
+        "abstain": true,
+        "unbound": true,
+        "prediction_set_len": 0,
+        "abstain_reason": "unknown",
+        "engine": "vega-u-0.8b",
+        "degraded": false
+      },
+      "cert": {
+        "energy": -0.12,
+        "gap": 0.01,
+        "violations": 0,
+        "consensus": 0.4,
+        "provenance": "port",
+        "authority": 0,
+        "question": "zxq qwerty fora do lexico"
+      },
+      "research_case": "terra_lua",
+      "expect_open": true
+    },
+    {
+      "id": "ambiguous_no_wire",
+      "text": "margem fina A vs B",
+      "edge": "in_lexicon",
+      "oov": false,
+      "port": {
+        "abstain": true,
+        "unbound": false,
+        "prediction_set_len": 2,
+        "abstain_reason": "ambiguous"
+      },
+      "expect_open": false
+    },
+    {
+      "id": "act_no_wire",
+      "text": "qual e a capital do Brasil",
+      "edge": "in_lexicon",
+      "oov": false,
+      "port": {
+        "abstain": false,
+        "unbound": false,
+        "prediction_set_len": 1,
+        "abstain_reason": null
+      },
+      "expect_open": false
+    },
+    {
+      "id": "head_ttt_sem_set_no_wire",
+      "text": "cv_accuracy path sem conformal",
+      "edge": "in_lexicon",
+      "oov": false,
+      "port": {
+        "abstain": false,
+        "unbound": false,
+        "readout": "ttt",
+        "cv_accuracy": 0.9,
+        "abstain_reason": null
+      },
+      "expect_open": false
+    }
+  ]
+}

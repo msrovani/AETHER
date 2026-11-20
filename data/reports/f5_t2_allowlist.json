@@ -1,0 +1,7 @@
+{
+  "schema": "aether.f5_t2_allowlist/v1",
+  "ok": true,
+  "failures": [],
+  "network_attempted": false,
+  "allowlist": "C:\\Users\\msrov\\Documents\\AETHER\\data\\research_network_allowlist.json"
+}

@@ -1,0 +1,51 @@
+{
+  "schema": "aether.f1_prod_decision/v1",
+  "abstain": false,
+  "measured_at": "2026-11-20T14:21:21-0300",
+  "phrase": "qual e a capital do Brasil",
+  "wall_s": 1494.9,
+  "wall_note": "inclui o BOOT do engine (load+fit) - numero da A-3",
+  "exit_code": 0,
+  "port": "vega",
+  "checks": {
+    "port_real": true,
+    "tem_veredito": true,
+    "veredito_nao_e_degradacao": true,
+    "engine_and_gate": true,
+    "nao_degradado": true,
+    "core_respondeu": true
+  },
+  "answers": [
+    {
+      "question": "passou",
+      "verdict": "abstain motivo=ambiguous",
+      "engine": "vega-u-0.8b AND gemma-prose",
+      "degraded": false,
+      "readout": null
+    },
+    {
+      "question": "route",
+      "verdict": "abstain motivo=ambiguous",
+      "engine": "vega-u-0.8b AND gemma-prose",
+      "degraded": false,
+      "readout": null
+    }
+  ],
+  "core_answered": true,
+  "output_head": [
+    "decisor: port=vega engine=vega-u-0.8b AND gemma-prose (A-1b opt-in)",
+    "você: qual e a capital do Brasil",
+    "decisor: q=passou abstain motivo=ambiguous | engine=vega-u-0.8b AND gemma-prose | degrado=false",
+    "decisor: q=route abstain motivo=ambiguous | engine=vega-u-0.8b AND gemma-prose | degrado=false",
+    "borda: intent=ask confiança=1.00",
+    "sucesso=true ação=act | critério de sucesso verificado",
+    "  1. fact       score=1.050 met=true 1113881us — expert=transplant FHRR dim=1024 traces=8 fatos=205 margem=0.781",
+    "resposta: Brasília (fonte transplant)",
+    "C:\\Users\\msrov\\Documents\\AETHER\\target\\vega\\Lib\\site-packages\\triton\\windows_utils.py:465: UserWarning: Failed to find CUDA. Install CUDA Toolkit (https://developer.nvidia.com/cuda-downloads) or set CUDA_HOME / CUDA_PATH environment variable.",
+    "  warnings.warn(\"Failed to find CUDA.\"",
+    "Loading weights:   0%|          | 0/340 [00:00<?, ?it/s]",
+    "Loading weights:   1%|          | 2/340 [00:00<02:41,  2.09it/s]"
+  ],
+  "mutated_crate": false,
+  "network": false
+}

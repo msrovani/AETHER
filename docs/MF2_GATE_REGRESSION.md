@@ -21,5 +21,7 @@ python tools/research_harness.py selftest   # inclui MF2
 python tools/f5_t0_eval.py                  # T0 + MF2
 ```
 
-Artefato de gate esperado: `target/f1_decision_smoke.json` com
-`passou.abstain_reason=ambiguous` e `conformal_set_present=true`.
+Artefato de gate esperado: preferir `data/f1_decision_smoke.json` (durável)
+quando `target/f1_decision_smoke.json` for stub `engine_unavailable` do chat
+VEGA (MSG 0962). Exige `passou.abstain_reason=ambiguous` e
+`conformal_set_present=true`.

@@ -20,7 +20,8 @@ use aether_decision::{AbstainReason, DecisionPort, DecisionRequest, StubPort};
 
 use super::language::{GoalSchema, LanguageError, ParserPort};
 use super::{
-    Action, AetherAgent, AgentConfig, Claim, ExpertId, Feedback, Goal, Outcome, Task, ToolAgent,
+    Action, AetherAgent, AgentConfig, Claim, ExpertId, Feedback, Goal, MemoryCitations, Outcome,
+    Task, ToolAgent,
 };
 
 /// Códigos de saída.
@@ -301,20 +302,35 @@ fn chat(args: &Args, out: &mut dyn Write) -> i32 {
     }
     sgdb_fallback(&mut cfg);
     let mut agent = build_agent(&cfg);
+    // F1 fatia 4 (CITA QUANDO LEMBRA): memória durável no chat. OOV consulta
+    // o recall do nsgdb ANTES de abster — o que lembra é CITAÇÃO (proveniência
+    // na tela), nunca afirmação. Fora do laço de coerência: a síntese abstém
+    // por heterogeneidade legítima; a citação é evidência bruta. Sem sgdb
+    // configurado, abste como antes.
+    let mut memory_agent = match &cfg.sgdb {
+        Some(spec) => match MemoryCitations::new(spec) {
+            Ok(m) => Some(m),
+            Err(e) => {
+                let _ = writeln!(out, "decisor: memoria=off aviso={e} — chat segue sem citações");
+                None
+            }
+        },
+        None => None,
+    };
     // F1: o chat fala com a trait, nunca com o Python. Default = StubPort
     // (Eixo C). `--vega` (A-1b) tenta o engine real e cai no stub com aviso.
     let port = open_chat_port(args.vega, out);
 
     let one_shot = args.positional.join(" ");
     if !one_shot.trim().is_empty() {
-        return chat_turn(&mut agent, port.as_ref(), &one_shot, out);
+        return chat_turn(&mut agent, port.as_ref(), memory_agent.as_mut(), &one_shot, out);
     }
 
     // REPL: uma frase por turno; 'sair' ou EOF encerra. Entrada injetável
     // (`dyn BufRead`) para o gate testar o laço sem processo.
     let stdin = std::io::stdin();
     let mut input = stdin.lock();
-    chat_repl(&mut agent, port.as_ref(), &mut input, out)
+    chat_repl(&mut agent, port.as_ref(), memory_agent.as_mut(), &mut input, out)
 }
 
 /// A-1b: constrói o `DecisionPort` do chat.
@@ -368,6 +384,7 @@ fn open_chat_port(want_vega: bool, out: &mut dyn Write) -> Box<dyn DecisionPort>
 fn chat_repl(
     agent: &mut ToolAgent,
     port: &dyn DecisionPort,
+    mut memory: Option<&mut MemoryCitations>,
     input: &mut dyn std::io::BufRead,
     out: &mut dyn Write,
 ) -> i32 {
@@ -390,7 +407,7 @@ fn chat_repl(
         if line.eq_ignore_ascii_case("sair") || line.eq_ignore_ascii_case("exit") {
             break;
         }
-        let _ = chat_turn(agent, port, line, out);
+        let _ = chat_turn(agent, port, memory.as_deref_mut(), line, out);
     }
     EXIT_OK
 }
@@ -475,11 +492,39 @@ fn decision_port_line(port: &dyn DecisionPort, text: &str) -> String {
     }
 }
 
+/// True só quando alguma linha do port traz `motivo=unknown` (não ambiguous,
+/// não engine_unavailable).
+fn port_reason_opens_research(port_line: &str) -> bool {
+    port_line
+        .split_whitespace()
+        .any(|tok| tok == "motivo=unknown")
+}
+
+/// Chama o cabo offline. Não escolhe caso: texto sem caso vira `sem_caso`.
+fn f2_research_notice(text: &str) -> String {
+    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tools/f2_chat_hook.py");
+    let out = std::process::Command::new("python")
+        .arg(&script)
+        .arg("once")
+        .arg("--text")
+        .arg(text)
+        .output();
+    match out {
+        Ok(done) if done.status.success() => String::from_utf8_lossy(&done.stdout)
+            .lines()
+            .next()
+            .unwrap_or("pesquisa: sem_saida")
+            .to_string(),
+        _ => "pesquisa: indisponivel".to_string(),
+    }
+}
+
 /// Um turno de conversa. Devolve o código de saída do turno (abstenção NÃO é
 /// erro de conversa — é resposta honesta).
 fn chat_turn(
     agent: &mut ToolAgent,
     port: &dyn DecisionPort,
+    mut memory: Option<&mut MemoryCitations>,
     text: &str,
     out: &mut dyn Write,
 ) -> i32 {
@@ -487,7 +532,8 @@ fn chat_turn(
     let mut parser = ParserPort::new();
     let report = parser.analyze(text, &GoalSchema::agent_default());
     // F1 fatia 3 (A-1): o port fala em TODO turno — evidência, não decisão.
-    let _ = writeln!(out, "{}", decision_port_line(port, text));
+    let port_line = decision_port_line(port, text);
+    let _ = writeln!(out, "{port_line}");
 
     if report.is_oov() {
         let erro = match report.error {
@@ -509,6 +555,34 @@ fn chat_turn(
             out,
             "dica: fatos do léxico (\"qual e a capital do Brasil\"), memória (\"o que e o AETHER\") ou comandos sat/solve/memory"
         );
+        // F1 fatia 4 (CITA QUANDO LEMBRA): antes de desistir, consulta a
+        // memória durável. Hit = CITAÇÃO com score/authority na tela
+        // (evidência, não afirmação — o core não decide). Sem sgdb ou sem
+        // hit, o abstain permanece honesto.
+        if let Some(mem) = memory.as_deref_mut() {
+            match mem.recall(text, 8) {
+                Ok(citations) if !citations.is_empty() => {
+                    let _ = writeln!(out, "memória (citação, não afirmação):");
+                    for c in citations.iter().take(3) {
+                        let snippet: String = c.text.chars().take(110).collect();
+                        let _ = writeln!(
+                            out,
+                            "  [{:.2} auth={}] {}",
+                            c.score, c.authority, snippet
+                        );
+                    }
+                    return EXIT_OK;
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    let _ = writeln!(out, "memória: indisponível ({e})");
+                }
+            }
+        }
+        // F2 (MSG 1022): só unknown do port abre pesquisa. Stub = engine_unavailable.
+        if port_reason_opens_research(&port_line) {
+            let _ = writeln!(out, "{}", f2_research_notice(text));
+        }
         return EXIT_OK;
     }
     let Some(goal) = report.goal else {
@@ -1540,6 +1614,19 @@ mod tests {
     }
 
     #[test]
+    fn port_unknown_abre_pesquisa_stub_nao() {
+        assert!(port_reason_opens_research(
+            "decisor: q=route abstain motivo=unknown | engine=vega | degrado=false"
+        ));
+        assert!(!port_reason_opens_research(
+            "decisor: q=passou abstain motivo=engine_unavailable | engine=stub | degrado=true"
+        ));
+        assert!(!port_reason_opens_research(
+            "decisor: q=passou abstain motivo=ambiguous | engine=vega | degrado=false"
+        ));
+    }
+
+    #[test]
     fn chat_fora_do_lexico_abste_com_residuo_visivel() {
         let (code, text) = run_capture(&["chat", "quem escreveu Dom Casmurro?"]);
         assert_eq!(code, EXIT_OK, "{text}");
@@ -1558,7 +1645,7 @@ mod tests {
         let cfg = AgentConfig::default();
         let mut agent = build_agent(&cfg);
         let port = StubPort;
-        let code = chat_repl(&mut agent, &port, &mut input, &mut out);
+        let code = chat_repl(&mut agent, &port, None, &mut input, &mut out);
         assert_eq!(code, EXIT_OK);
         let text = String::from_utf8_lossy(&out);
         assert!(text.contains("AETHER chat"), "{text}");

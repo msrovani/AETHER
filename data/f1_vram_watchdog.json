@@ -1,0 +1,15 @@
+{
+  "schema": "aether.f1_vram_watchdog/v1",
+  "ok": true,
+  "used_mib": 4393.0,
+  "budget_mib": 5120,
+  "scope": "process",
+  "over_budget": false,
+  "action": "proceed",
+  "meta": {
+    "vram_used_mb": 4393.0
+  },
+  "network": false,
+  "wired_to_crate": false,
+  "note": "port deve consultar ANTES do decide; crate = BUFFY/OPENCODE"
+}

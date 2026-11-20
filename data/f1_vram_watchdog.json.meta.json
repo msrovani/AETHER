@@ -1,0 +1,10 @@
+{
+  "schema": "aether.a5_promote_p1/v1",
+  "ref": "MSG_0990_0967",
+  "src": "target/f1_vram_watchdog.json",
+  "dst": "data/f1_vram_watchdog.json",
+  "sha256": "f046de743f697a9a98cf61484a22866c046e1540043a2842a04f26610e9aa392",
+  "bytes": 349,
+  "promoted_at_utc": "2026-11-20T16:09:17.761848+00:00",
+  "ok": true
+}

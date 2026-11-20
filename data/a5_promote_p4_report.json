@@ -1,0 +1,76 @@
+{
+  "schema": "aether.a5_p4_promote/v1",
+  "ok": true,
+  "n_promoted": 6,
+  "n_skipped": 0,
+  "n_failed": 0,
+  "results": [
+    {
+      "ok": true,
+      "skipped": false,
+      "schema": "aether.a5_p4_promote/v1",
+      "src": "target/f1_contract.json",
+      "dst": "data/f1_contract.json",
+      "sha256": "75a7dddd06b8aadb1de4035420eb82038c3318cd913e916d8f57cc3720d608c7",
+      "bytes": 3185,
+      "promoted_at_utc": "2026-11-20T16:12:48.626922+00:00",
+      "ref": "MSG_1009 A5_P4"
+    },
+    {
+      "ok": true,
+      "skipped": false,
+      "schema": "aether.a5_p4_promote/v1",
+      "src": "target/f1_contract_fit124.json",
+      "dst": "data/f1_contract_fit124.json",
+      "sha256": "ce912a60fedf518a215b6413a911d8e80dada7a47a78b8ef8a5e09a40c4034ea",
+      "bytes": 2608,
+      "promoted_at_utc": "2026-11-20T16:12:48.631829+00:00",
+      "ref": "MSG_1009 A5_P4"
+    },
+    {
+      "ok": true,
+      "skipped": false,
+      "schema": "aether.a5_p4_promote/v1",
+      "src": "target/f1_contract_primary.json",
+      "dst": "data/f1_contract_primary.json",
+      "sha256": "7e3677c042b41cbcff041d1b91a4a395ecb5487fe0263145a681a890bde53dbe",
+      "bytes": 3159,
+      "promoted_at_utc": "2026-11-20T16:12:48.635649+00:00",
+      "ref": "MSG_1009 A5_P4"
+    },
+    {
+      "ok": true,
+      "skipped": false,
+      "schema": "aether.a5_p4_promote/v1",
+      "src": "target/f1_contract_probe.json",
+      "dst": "data/f1_contract_probe.json",
+      "sha256": "cbfd499b80895a3bea5a7b354daaa3107320152c33d7d19494830e215fb2baf6",
+      "bytes": 959,
+      "promoted_at_utc": "2026-11-20T16:12:48.650883+00:00",
+      "ref": "MSG_1009 A5_P4"
+    },
+    {
+      "ok": true,
+      "skipped": false,
+      "schema": "aether.a5_p4_promote/v1",
+      "src": "target/f1_contract_probe2.json",
+      "dst": "data/f1_contract_probe2.json",
+      "sha256": "df057111bb659a7203c892292b476603c63276d0923bfaf0a2510defb37e6fc9",
+      "bytes": 886,
+      "promoted_at_utc": "2026-11-20T16:12:48.664634+00:00",
+      "ref": "MSG_1009 A5_P4"
+    },
+    {
+      "ok": true,
+      "skipped": false,
+      "schema": "aether.a5_p4_promote/v1",
+      "src": "target/mf2_gate_regression_0841.json",
+      "dst": "data/mf2_gate_regression_0841.json",
+      "sha256": "c67db886e356e0577b132dd6d3d06a22d00faabc84da21794b39f49d1bcff887",
+      "bytes": 484,
+      "promoted_at_utc": "2026-11-20T16:12:48.667833+00:00",
+      "ref": "MSG_1009 A5_P4"
+    }
+  ],
+  "network": false
+}

@@ -1,0 +1,10 @@
+{
+  "schema": "aether.a5_p2_promote/v1",
+  "ref": "MSG_A5_P2",
+  "src": "target/f1_offline_suite.json",
+  "dst": "data/reports/f1_offline_suite.json",
+  "sha256": "4456dbbf287fba0b27a3327d7e2e943516868749db68a1f4506b84ba55441358",
+  "bytes": 1188,
+  "promoted_at_utc": "2026-11-20T16:16:34.574443+00:00",
+  "ok": true
+}

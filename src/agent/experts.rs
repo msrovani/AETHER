@@ -596,6 +596,53 @@ struct MemoryExpert {
     scope: ScopeId,
 }
 
+/// Citação de memória para a borda: hit bruto do recall, sem síntese.
+///
+/// A doutrina separa **citar** de **afirmar**: a coerência do motor julga
+/// grupos de claims e pode abstain por heterogeneidade legítima; a borda
+/// conversacional não afirma — expõe os hits com score/authority. Para isso
+/// existe este cliente dedicado, fora do laço de coerência.
+pub struct MemoryCitations {
+    client: SgdbClient<Box<dyn Transport>>,
+    scope: ScopeId,
+}
+
+/// Um hit pronto para citação na borda.
+#[derive(Debug, Clone)]
+pub struct RecallCitation {
+    pub text: String,
+    pub score: f32,
+    pub authority: u8,
+}
+
+impl MemoryCitations {
+    /// Abre a memória durável uma vez (o chat reusa em todo turno OOV).
+    pub fn new(spec: &str) -> Result<Self, String> {
+        let cfg = SgdbConfig::from_env();
+        let client = open(spec, cfg).map_err(|e| e.to_string())?;
+        Ok(Self {
+            client,
+            scope: ScopeId::new(1, 0, 1),
+        })
+    }
+
+    /// Recall textual cru — citações, não afirmações.
+    pub fn recall(&mut self, query: &str, k: usize) -> Result<Vec<RecallCitation>, String> {
+        let hits = self
+            .client
+            .recall_text(self.scope, query, k)
+            .map_err(|e| e.to_string())?;
+        Ok(hits
+            .into_iter()
+            .map(|h| RecallCitation {
+                text: h.text,
+                score: h.score,
+                authority: h.authority,
+            })
+            .collect())
+    }
+}
+
 impl MemoryExpert {
     fn new(spec: &str) -> Result<Self, String> {
         let cfg = SgdbConfig::from_env();

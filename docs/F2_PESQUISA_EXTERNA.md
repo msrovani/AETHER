@@ -42,13 +42,15 @@ unknown → buscar fontes → tier (camada 0) → independência → convergênc
 Implementação executável:
 - `tools/research_reliability.py` — Eixo F (tier/convergência/ampliar)
 - `tools/research_harness.py` — tomada F2: só `unknown` → evaluate → quarentena ≤120
+- `tools/f2_wire_port.py` — **cabo** MSG 1014: DecisionPort/`fora_lexico` → digest ≤320 → harness → quarentena (sem editar `cli.rs`)
 
-Casos de régua: `data/research_cases.json`.
+Casos de régua: `data/research_cases.json`. Fixture do cabo: `data/f2_wire_turns.json`.
 
 ```bash
 python tools/research_harness.py selftest
 python tools/research_harness.py --reason unknown --case terra_lua \
   --write-quarantine target/research_quarantine.jsonl
+python tools/f2_wire_port.py selftest
 ```
 
 Rede default **OFF** (socket fora do inventário). `--allow-network` = reserva F5.

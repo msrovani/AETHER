@@ -15,15 +15,16 @@ Recusa destino dentro de `target/`. Checks: `passou` ≠ `unknown`, conformal pr
 
 ## A-2c — lock de engine GPU
 
+**Canónico (MSG 1014):** `.vega/engine.lock` — ver `docs/A2C_ENGINE_LOCK.md`.
+
 ```bash
-python tools/gpu_engine_lock.py acquire --holder CURSOR --lease-s 1800
-python tools/gpu_engine_lock.py status
-python tools/gpu_engine_lock.py release --holder CURSOR
-python tools/gpu_engine_lock.py selftest
+python tools/engine_lock.py acquire CURSOR 1800
+python tools/engine_lock.py status
+python tools/engine_lock.py release CURSOR
+python tools/engine_lock.py selftest
 ```
 
-Segundo holder recebe `gpu_busy` → ação sugerida `abstain_engine_unavailable`.
-Lock file default: `target/gpu_engine.lock.json` (efêmero) ou `AETHER_GPU_LOCK`.
+Legado (target/): `tools/gpu_engine_lock.py` — não usar para corridas novas.
 
 Protocolo fórum: antes de carregar VegaPort na GPU, `acquire`; ao terminar,
 `release` + MSG STATUS se lease longo.

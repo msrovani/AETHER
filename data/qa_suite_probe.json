@@ -1,0 +1,38 @@
+{
+  "schema": "aether.qa_suite_probe/v1",
+  "ref": "MSG_0879",
+  "network": false,
+  "when_utc": "2026-11-20T15:24:02.847869+00:00",
+  "steps": [
+    {
+      "label": "green",
+      "exit": 0,
+      "seconds": 0.362,
+      "cmd": [
+        "cargo",
+        "test",
+        "--workspace",
+        "--no-run",
+        "--quiet"
+      ]
+    },
+    {
+      "label": "green",
+      "exit": 0,
+      "seconds": 0.358,
+      "cmd": [
+        "cargo",
+        "test",
+        "-p",
+        "aether_engine",
+        "--test",
+        "f1_contract",
+        "--quiet"
+      ]
+    }
+  ],
+  "tails": [],
+  "overall": "green",
+  "ok": true,
+  "guidance": "suite reproduzivel nesta passagem"
+}

@@ -1,0 +1,10 @@
+{
+  "schema": "aether.a5_p0_promote/v1",
+  "ref": "MSG_0986_0967",
+  "src": "target/mf2_gate_regression.json",
+  "dst": "data/mf2_gate_regression.json",
+  "sha256": "c67db886e356e0577b132dd6d3d06a22d00faabc84da21794b39f49d1bcff887",
+  "bytes": 484,
+  "promoted_at_utc": "2026-11-20T16:16:34.242717+00:00",
+  "ok": true
+}

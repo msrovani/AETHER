@@ -1,0 +1,106 @@
+{
+  "schema": "aether.f5_t0_eval/v1",
+  "tier": "T0",
+  "ok": true,
+  "failed": 0,
+  "n": 16,
+  "network": false,
+  "results": [
+    {
+      "name": "research_reliability",
+      "ok": true,
+      "exit": 0,
+      "tail": "s_delta_registrado\",\n      \"pass\": true,\n      \"delta\": {\n        \"verdict\": [\n          \"open\",\n          \"weak\"\n        ],\n        \"authority\": [\n          60,\n          100\n        ],\n        \"n_independent\": [\n          1,\n          2\n        ],\n        \"mark\": \"resolvido_por_ampliacao\"\n      }\n    },\n    {\n      \"name\": \"copias_contam_como_1\",\n      \"pass\": true\n    }\n  ],\n  \"f25_ok\": true\n}\n"
+    },
+    {
+      "name": "research_harness",
+      "ok": true,
+      "exit": 0,
+      "tail": "{\n  \"ok\": true,\n  \"failures\": [],\n  \"n_checks\": 14,\n  \"quarantine_path\": \"C:\\\\Users\\\\msrov\\\\Documents\\\\AETHER\\\\target\\\\research_quarantine_selftest.jsonl\",\n  \"mf2\": \"PASS\"\n}\n"
+    },
+    {
+      "name": "vega_corpus_grow",
+      "ok": true,
+      "exit": 0,
+      "tail": "_kind\": {\n      \"procedural\": 494,\n      \"irreducible_open\": 114,\n      \"ood\": 164,\n      \"conflict_arb\": 500,\n      \"factual\": 228\n    },\n    \"authority\": {\n      \"120\": 124,\n      \"100\": 400,\n      \"60\": 976\n    },\n    \"provenance\": {\n      \"starter\": 124,\n      \"forum_mine\": 400,\n      \"augment\": 976\n    },\n    \"gaps_to_500\": {\n      \"passou\": 0,\n      \"winner\": 0,\n      \"route\": 0\n    }\n  }\n}\n"
+    },
+    {
+      "name": "f1_abstain_map_mf2",
+      "ok": true,
+      "exit": 0,
+      "tail": "{\n  \"ok\": true,\n  \"failures\": [],\n  \"n_fixture\": 5,\n  \"rule\": \"unknown so quando unbound; prediction_set>1 ou abstain sem unbound -> ambiguous; so unknown abre pesquisa\"\n}\n"
+    },
+    {
+      "name": "mf2_gate_regression",
+      "ok": true,
+      "exit": 0,
+      "tail": "{\n  \"ok\": true,\n  \"failures\": [],\n  \"smoke\": \"C:\\\\Users\\\\msrov\\\\Documents\\\\AETHER\\\\data\\\\f1_decision_smoke.json\",\n  \"smoke_durable\": true,\n  \"contract\": \"F1_3 unboundÃ¢â€ â€™unknown; prediction_set>1Ã¢â€ â€™ambiguous; so unknown abre F2\",\n  \"ref\": \"MSG_0802_0806_0808_0962\"\n}\n"
+    },
+    {
+      "name": "f1_offline_suite",
+      "ok": true,
+      "exit": 0,
+      "tail": "      \"path\": \"tools/f1_5_ttt_abstain.py\",\n      \"ok\": true,\n      \"returncode\": 0,\n      \"wired_to_crate\": false\n    },\n    {\n      \"name\": \"A5_promote\",\n      \"path\": \"tools/f1_gate_promote.py\",\n      \"ok\": true,\n      \"returncode\": 0,\n      \"wired_to_crate\": false\n    }\n  ],\n  \"wired_to_crate\": false,\n  \"network\": false,\n  \"note\": \"suite de classificador offline; wire crate = BUFFY/OPENCODE\"\n}\n"
+    },
+    {
+      "name": "vega_path_audit",
+      "ok": true,
+      "exit": 0,
+      "tail": "{\n  \"ok\": true,\n  \"allow_setup\": true\n}\n"
+    },
+    {
+      "name": "qa_suite_probe",
+      "ok": true,
+      "exit": 0,
+      "tail": "{\n  \"ok\": true,\n  \"green\": \"green\",\n  \"flake\": \"flake_edit_or_lock\",\n  \"real\": \"real_fail\"\n}\n"
+    },
+    {
+      "name": "f5_t1_agent_loop",
+      "ok": true,
+      "exit": 0,
+      "tail": "nflict\",\n        \"text\": \"dois readers discordam no AND gate\",\n        \"abstain\": true,\n        \"abstain_reason\": \"conflict\",\n        \"network\": false,\n        \"action\": \"escalate_hitl\",\n        \"research\": {\n          \"opened\": false,\n          \"reason\": \"conflict\"\n        }\n      }\n    ],\n    \"quarantine_path\": \"C:\\\\Users\\\\msrov\\\\Documents\\\\AETHER\\\\target\\\\f5_t1_quarantine_selftest.jsonl\"\n  }\n}\n"
+    },
+    {
+      "name": "f5_t2_allowlist",
+      "ok": true,
+      "exit": 0,
+      "tail": "{\n  \"schema\": \"aether.f5_t2_allowlist/v1\",\n  \"ok\": true,\n  \"failures\": [],\n  \"network_attempted\": false,\n  \"allowlist\": \"C:\\\\Users\\\\msrov\\\\Documents\\\\AETHER\\\\data\\\\research_network_allowlist.json\"\n}\n"
+    },
+    {
+      "name": "f5_t3_eval",
+      "ok": true,
+      "exit": 0,
+      "tail": "092ccfbf3bdf915002c451a1dcf450255d416bf0\",\n    \"freeze_match\": true,\n    \"n_docs\": 722,\n    \"n_queries\": 142,\n    \"gate_hit5\": 0.974,\n    \"k\": 5,\n    \"ranking_present\": false,\n    \"hit_at_k\": null,\n    \"why\": \"sem_ranking_minilm_fica_com_AGENT_A\",\n    \"network\": false\n  },\n  \"eval_additive\": {\n    \"refused_bad_sha\": true,\n    \"synth_gate_pass\": true,\n    \"n_queries\": 142\n  },\n  \"network\": false\n}\n"
+    },
+    {
+      "name": "a5_evidencia_audit",
+      "ok": true,
+      "exit": 0,
+      "tail": "{\n  \"ok\": true,\n  \"failed\": [],\n  \"n_need_migrate\": 28,\n  \"n_target_matched\": 29\n}\n"
+    },
+    {
+      "name": "a5_p0_promote",
+      "ok": true,
+      "exit": 0,
+      "tail": "{\n  \"ok\": true,\n  \"failures\": [],\n  \"n\": 3\n}\n"
+    },
+    {
+      "name": "a5_p2_promote",
+      "ok": true,
+      "exit": 0,
+      "tail": "{\n  \"ok\": true,\n  \"failures\": [],\n  \"n\": 4\n}\n"
+    },
+    {
+      "name": "valida_buffy_1002_pin",
+      "ok": true,
+      "exit": 0,
+      "tail": "{\n  \"ok\": true,\n  \"failures\": [],\n  \"n\": 9,\n  \"mutated_crate\": false\n}\n"
+    },
+    {
+      "name": "f2_wire_port",
+      "ok": true,
+      "exit": 0,
+      "tail": ",\n        \"research\": {\n          \"opened\": false,\n          \"reason\": null\n        }\n      }\n    ],\n    \"quarantine_path\": \"C:\\\\Users\\\\msrov\\\\Documents\\\\AETHER\\\\target\\\\f2_wire_quarantine_selftest.jsonl\",\n    \"network\": false,\n    \"mutated_crate\": false\n  },\n  \"durable_quarantine\": \"C:\\\\Users\\\\msrov\\\\Documents\\\\AETHER\\\\data\\\\reports\\\\f2_wire_quarantine_selftest.jsonl\",\n  \"ref\": \"MSG_1014_1015\"\n}\n"
+    }
+  ]
+}

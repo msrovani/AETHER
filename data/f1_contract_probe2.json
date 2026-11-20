@@ -1,0 +1,39 @@
+{
+ "checkpoint": "target/vega/vega-u-gemma-1b-prose",
+ "route_types": {
+  "probs": "dict",
+  "confidence": "float",
+  "prediction_set": "list",
+  "abstain": "bool",
+  "unbound": "bool",
+  "settle_steps": "int",
+  "energy": "float",
+  "choice": "str",
+  "readout": "str"
+ },
+ "route_repr": {
+  "probs": "{'escalar': 0.22901601358742976, 'reformular': 0.35805820873526056, 'responder': 0.4129257776773096}",
+  "confidence": "0.4129257776773096",
+  "prediction_set": "['reformular', 'responder']",
+  "abstain": "True",
+  "unbound": "False",
+  "settle_steps": "12",
+  "energy": "0.1342763900756836",
+  "choice": "'responder'",
+  "readout": "'engine'"
+ },
+ "route_has_choice": true,
+ "top_keys": [
+  "answers",
+  "latency_ms",
+  "n_tokens",
+  "views",
+  "mode"
+ ],
+ "meta": {
+  "latency_ms": 627.7,
+  "n_tokens": 117,
+  "views": 1,
+  "mode": "auto"
+ }
+}

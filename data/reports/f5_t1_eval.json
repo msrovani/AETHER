@@ -1,0 +1,73 @@
+{
+  "schema": "aether.f5_t1_eval/v1",
+  "tier": "T1",
+  "ok": true,
+  "network": false,
+  "selftest": {
+    "ok": true,
+    "failures": [],
+    "report": {
+      "ok": true,
+      "n_turns": 4,
+      "n_quarantine_lines": 1,
+      "results": [
+        {
+          "turn_id": "t_unknown_ood",
+          "text": "zxq qwerty fora do lexico do projeto",
+          "abstain": true,
+          "abstain_reason": "unknown",
+          "network": false,
+          "action": "quarantine",
+          "research": {
+            "opened": true,
+            "exit": 0,
+            "case": "terra_lua",
+            "ok": true,
+            "quarantine_authority": 120,
+            "write": {
+              "ok": true,
+              "path": "C:\\Users\\msrov\\Documents\\AETHER\\target\\f5_t1_quarantine_selftest.jsonl",
+              "authority": 120
+            }
+          }
+        },
+        {
+          "turn_id": "t_ambiguous_margin",
+          "text": "gate 176 passed com margem fina entre A e B",
+          "abstain": true,
+          "abstain_reason": "ambiguous",
+          "network": false,
+          "action": "escalate_hitl",
+          "research": {
+            "opened": false,
+            "reason": "ambiguous"
+          }
+        },
+        {
+          "turn_id": "t_act",
+          "text": "qual e a capital do Brasil",
+          "abstain": false,
+          "abstain_reason": null,
+          "network": false,
+          "action": "age",
+          "research": null
+        },
+        {
+          "turn_id": "t_conflict",
+          "text": "dois readers discordam no AND gate",
+          "abstain": true,
+          "abstain_reason": "conflict",
+          "network": false,
+          "action": "escalate_hitl",
+          "research": {
+            "opened": false,
+            "reason": "conflict"
+          }
+        }
+      ],
+      "quarantine_path": "C:\\Users\\msrov\\Documents\\AETHER\\target\\f5_t1_quarantine_selftest.jsonl"
+    }
+  },
+  "docs": "docs/F5_T1_AGENT_LOOP.md",
+  "claim_ref": "MSG_0812"
+}

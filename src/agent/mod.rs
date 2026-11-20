@@ -60,6 +60,7 @@ use crate::json::Json;
 
 use self::coherence::{CoherenceEngine, CoherenceResult};
 use self::experts::{default_experts, Expert};
+pub use self::experts::{MemoryCitations, RecallCitation};
 use self::router::MoERouter;
 
 pub use eval::{default_eval_path, EvalReport, EvalTier};

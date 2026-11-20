@@ -1,0 +1,145 @@
+{
+  "ok": true,
+  "failures": [],
+  "n": 4,
+  "report": {
+    "schema": "aether.f2_wire_port/v1",
+    "ok": true,
+    "n_turns": 4,
+    "n_quarantine_lines": 1,
+    "results": [
+      {
+        "turn_id": "fora_lexico_unknown",
+        "text": "zxq qwerty fora do lexico do projeto",
+        "edge": "fora_lexico",
+        "oov": true,
+        "network": false,
+        "opens_research": true,
+        "abstain_reason": "unknown",
+        "gate": {
+          "opens_research": true,
+          "abstain_reason": "unknown",
+          "head_ttt": false,
+          "conformal_present": false,
+          "expected_absent": false,
+          "note": "pesquisa_so_em_unknown"
+        },
+        "digest": {
+          "n_tokens": 12,
+          "truncated": false,
+          "ok": true,
+          "preview": "cert E=-0.1200 gap=0.0100 viol=0 consensus=0.4000 prov=port auth=0 zxq qwerty fora do lexico"
+        },
+        "action": "quarantine",
+        "research": {
+          "opened": true,
+          "exit": 0,
+          "case": "terra_lua",
+          "ok": true,
+          "verdict": "settled",
+          "n_independent": 3,
+          "authority": 120,
+          "write": {
+            "ok": true,
+            "path": "C:\\Users\\msrov\\Documents\\AETHER\\target\\f2_wire_quarantine_selftest.jsonl",
+            "authority": 120
+          },
+          "triple": {
+            "evidencia_n_independent": 3,
+            "convergencia_verdict": "settled",
+            "quarentena_authority": 120
+          }
+        }
+      },
+      {
+        "turn_id": "ambiguous_no_wire",
+        "text": "margem fina A vs B",
+        "edge": "in_lexicon",
+        "oov": false,
+        "network": false,
+        "opens_research": false,
+        "abstain_reason": "ambiguous",
+        "gate": {
+          "opens_research": false,
+          "abstain_reason": "ambiguous",
+          "head_ttt": false,
+          "conformal_present": false,
+          "expected_absent": false,
+          "note": "pesquisa_so_em_unknown"
+        },
+        "digest": {
+          "n_tokens": 7,
+          "truncated": false,
+          "ok": true,
+          "preview": "edge=in_lexicon text=margem fina A vs B engine=unknown"
+        },
+        "action": "escalate_hitl",
+        "research": {
+          "opened": false,
+          "reason": "ambiguous"
+        }
+      },
+      {
+        "turn_id": "act_no_wire",
+        "text": "qual e a capital do Brasil",
+        "edge": "in_lexicon",
+        "oov": false,
+        "network": false,
+        "opens_research": false,
+        "abstain_reason": null,
+        "gate": {
+          "opens_research": false,
+          "abstain_reason": null,
+          "head_ttt": false,
+          "conformal_present": false,
+          "expected_absent": false,
+          "note": "pesquisa_so_em_unknown"
+        },
+        "digest": {
+          "n_tokens": 8,
+          "truncated": false,
+          "ok": true,
+          "preview": "edge=in_lexicon text=qual e a capital do Brasil engine=unknown"
+        },
+        "action": "age",
+        "research": {
+          "opened": false,
+          "reason": null
+        }
+      },
+      {
+        "turn_id": "head_ttt_sem_set_no_wire",
+        "text": "cv_accuracy path sem conformal",
+        "edge": "in_lexicon",
+        "oov": false,
+        "network": false,
+        "opens_research": false,
+        "abstain_reason": null,
+        "gate": {
+          "opens_research": false,
+          "abstain_reason": null,
+          "head_ttt": true,
+          "conformal_present": false,
+          "expected_absent": true,
+          "note": "conjunto_ausente_no_head_nao_e_unknown"
+        },
+        "digest": {
+          "n_tokens": 6,
+          "truncated": false,
+          "ok": true,
+          "preview": "edge=in_lexicon text=cv_accuracy path sem conformal engine=unknown"
+        },
+        "action": "age",
+        "research": {
+          "opened": false,
+          "reason": null
+        }
+      }
+    ],
+    "quarantine_path": "C:\\Users\\msrov\\Documents\\AETHER\\target\\f2_wire_quarantine_selftest.jsonl",
+    "network": false,
+    "mutated_crate": false
+  },
+  "durable_quarantine": "C:\\Users\\msrov\\Documents\\AETHER\\data\\reports\\f2_wire_quarantine_selftest.jsonl",
+  "ref": "MSG_1014_1015"
+}

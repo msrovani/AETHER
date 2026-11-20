@@ -1,0 +1,16 @@
+{
+  "schema": "aether.f1_gil_gate/v1",
+  "ok": false,
+  "gil_held_during_forward": true,
+  "liberated": false,
+  "concurrent_threads": 2,
+  "readers": 2,
+  "audit_held_s_ref": 2.1,
+  "concurrent_blocked": true,
+  "action": "require_allow_threads",
+  "reason": "gil_held_blocks_concurrent_host_threads",
+  "network": false,
+  "wired_to_crate": false,
+  "fix": "Python::detach / allow_threads em torno do forward; clonar handle antes",
+  "note": "dono do wire=BUFFY pyo3_impl.rs; Eixo D re-probe n=30 antes/depois"
+}

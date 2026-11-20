@@ -1,0 +1,36 @@
+{
+  "schema": "aether.f1_chat_smoke_vega/v1",
+  "date": "2026-11-20",
+  "command": "cargo run --features decision-pyo3 --bin aether-agent -- chat --vega 'qual e a capital do Brasil'",
+  "env": {
+    "PYO3_PYTHON": ".vega/venv/Scripts/python.exe",
+    "VEGA_PYTHON": ".vega/venv/Scripts/python.exe",
+    "VEGA_SITE_PACKAGES": ".vega/venv/Lib/site-packages",
+    "PYTHONPATH": ".vega/venv/Lib/site-packages"
+  },
+  "port_loaded": "vega-u-0.8b AND gemma-prose (A-1b opt-in)",
+  "port_result": {
+    "abstain": true,
+    "reason": "engine_unavailable",
+    "error": "AttributeError: module 'torch.cpu' has no attribute 'device'"
+  },
+  "chat_result": {
+    "action": "act",
+    "answer": "Brasília (fonte transplant)",
+    "confidence": 1.0,
+    "latency_us": 3044168
+  },
+  "verdict": "SMOKE_PASS_COM_DEGRADACAO_HONESTA",
+  "evidence": [
+    "decisor: port=vega engine=vega-u-0.8b AND gemma-prose (A-1b opt-in)",
+    "decisor: abstain motivo=engine_indisponivel (engine indisponível: AttributeError: module 'torch.cpu' has no attribute 'device')",
+    "sucesso=true ação=act | critério de sucesso verificado",
+    "resposta: Brasília (fonte transplant)"
+  ],
+  "notes": [
+    "Eixo E cumprido: excecao Python virou abstain tipado, nunca panic para o chat.",
+    "O gate AND nao emitiu veredito nesta rodada; o core AETHER decidiu corretamente.",
+    "Achado novo (hipotese, autoridade 60): incompatibilidade torch.cpu.device entre vegaml 0.16.5 e o runtime pinado; investigar na proxima missao.",
+    "Warnings nao bloqueantes: triton sem CUDA_HOME, causal_conv1d em fallback reference."
+  ]
+}

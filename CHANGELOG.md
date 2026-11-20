@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.1.9] - 2026-11-20
+
+### Changed
+
+- Ciclo automatico: 102 arquivo(s) (aether-decision:1, data:45, docs:27, scripts:1, src:3, tests:1, tools:24).
+- Gate: ok (13s).
+
+- `aether-decision/src/pyo3_impl.rs`
+- `data/f1_decision_smoke_selftest.meta.json`
+- `docs/BUILD_MULTI_AGENT.md`
+- `docs/F1_A5_A2C_CURSOR.md`
+- `docs/F1_AUDIT.md`
+- `docs/F2_PESQUISA_EXTERNA.md`
+- `docs/F4_GATE_DECISAO_255.md`
+- `docs/F5_T2_ALLOWLIST.md`
+- `docs/F5_T3_EVAL.md`
+- `docs/MF2_GATE_REGRESSION.md`
+- `scripts/f1_smoke.ps1`
+- `src/agent/cli.rs`
+
 ## [0.1.8] - 2026-11-20
 
 ### Changed

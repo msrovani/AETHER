@@ -1,0 +1,144 @@
+{
+ "schema": "aether.f1_contract/v1",
+ "model": "target/vega/vega-u-gemma-1b-prose",
+ "vegaml": "0.16.5",
+ "load_s": 12.7,
+ "fit_examples": 40,
+ "fit_s": 6.2,
+ "latency_ms": {
+  "p50": 300.7,
+  "min": 292.7,
+  "max": 308.8,
+  "n": 2
+ },
+ "top_keys": [
+  "answers",
+  "latency_ms",
+  "n_tokens",
+  "views",
+  "mode"
+ ],
+ "meta": {
+  "latency_ms": 292.6,
+  "n_tokens": 223,
+  "views": 1,
+  "mode": "auto"
+ },
+ "boolean": {
+  "keys": [
+   "probs",
+   "confidence",
+   "prediction_set",
+   "abstain",
+   "unbound",
+   "settle_steps",
+   "energy",
+   "boolean",
+   "readout"
+  ],
+  "types": {
+   "probs": "dict",
+   "confidence": "float",
+   "prediction_set": "list",
+   "abstain": "bool",
+   "unbound": "bool",
+   "settle_steps": "int",
+   "energy": "float",
+   "boolean": "float",
+   "readout": "str"
+  },
+  "has_choice": false,
+  "has_prediction_set": true,
+  "abstain": true,
+  "choice_present_with_abstain": false,
+  "sample": {
+   "probs": "{'False': 0.405513200991645, 'True': 0.594486799008355}",
+   "confidence": "0.594486799008355",
+   "prediction_set": "[False, True]",
+   "abstain": "True",
+   "unbound": "False",
+   "settle_steps": "12",
+   "energy": "-1.4412477016448975",
+   "boolean": "0.594486799008355",
+   "readout": "'engine'"
+  }
+ },
+ "choice": {
+  "keys": [
+   "probs",
+   "confidence",
+   "prediction_set",
+   "abstain",
+   "unbound",
+   "settle_steps",
+   "energy",
+   "choice",
+   "readout"
+  ],
+  "types": {
+   "probs": "dict",
+   "confidence": "float",
+   "prediction_set": "list",
+   "abstain": "bool",
+   "unbound": "bool",
+   "settle_steps": "int",
+   "energy": "float",
+   "choice": "str",
+   "readout": "str"
+  },
+  "has_choice": true,
+  "has_prediction_set": true,
+  "abstain": true,
+  "choice_present_with_abstain": true,
+  "sample": {
+   "probs": "{'escalar': 0.1283969066946967, 'reformular': 0.4150145049105728, 'responder': 0.45658858839473065}",
+   "confidence": "0.45658858839473065",
+   "prediction_set": "['reformular', 'responder']",
+   "abstain": "True",
+   "unbound": "True",
+   "settle_steps": "12",
+   "energy": "1.5373568534851074",
+   "choice": "'responder'",
+   "readout": "'engine'"
+  }
+ },
+ "choice_on_choice_state": {
+  "keys": [
+   "probs",
+   "confidence",
+   "prediction_set",
+   "abstain",
+   "unbound",
+   "settle_steps",
+   "energy",
+   "choice",
+   "readout"
+  ],
+  "types": {
+   "probs": "dict",
+   "confidence": "float",
+   "prediction_set": "list",
+   "abstain": "bool",
+   "unbound": "bool",
+   "settle_steps": "int",
+   "energy": "float",
+   "choice": "str",
+   "readout": "str"
+  },
+  "has_choice": true,
+  "has_prediction_set": true,
+  "abstain": true,
+  "choice_present_with_abstain": true,
+  "sample": {
+   "probs": "{'escalar': 0.22278454299333666, 'reformular': 0.368779052682371, 'responder': 0.40843640432429223}",
+   "confidence": "0.40843640432429223",
+   "prediction_set": "['reformular', 'responder']",
+   "abstain": "True",
+   "unbound": "False",
+   "settle_steps": "12",
+   "energy": "0.13413786888122559",
+   "choice": "'responder'",
+   "readout": "'engine'"
+  }
+ }
+}

@@ -4,7 +4,7 @@
 
 Uso:
   python tools/mf2_gate_regression.py
-  python tools/mf2_gate_regression.py --smoke target/f1_decision_smoke.json
+  python tools/mf2_gate_regression.py --smoke data/f1_decision_smoke.json
 """
 
 from __future__ import annotations
@@ -20,7 +20,25 @@ sys.path.insert(0, str(ROOT / "tools"))
 from research_harness import run_research  # noqa: E402
 from research_reliability import DEFAULT_CASES, DEFAULT_TIER  # noqa: E402
 
-DEFAULT_SMOKE = ROOT / "target" / "f1_decision_smoke.json"
+TARGET_SMOKE = ROOT / "target" / "f1_decision_smoke.json"
+DURABLE_SMOKE = ROOT / "data" / "f1_decision_smoke.json"
+
+
+def resolve_smoke(explicit: Path | None = None) -> Path:
+    """Preferir data/ durável se target/ estiver degradado (engine_unavailable)."""
+    if explicit is not None:
+        return explicit
+    if DURABLE_SMOKE.is_file():
+        try:
+            data = json.loads(DURABLE_SMOKE.read_text(encoding="utf-8"))
+            if data.get("answers") and data.get("conformal_set_present"):
+                return DURABLE_SMOKE
+        except (OSError, json.JSONDecodeError):
+            pass
+    return TARGET_SMOKE
+
+
+DEFAULT_SMOKE = resolve_smoke()
 
 
 def derive_abstain_reason(abstain: bool, unbound: bool, prediction_set_len: int) -> str | None:
@@ -110,20 +128,22 @@ def main() -> int:
             pass
 
     ap = argparse.ArgumentParser(description="MF2 gate regression F1_3 × harness F2")
-    ap.add_argument("--smoke", default=str(DEFAULT_SMOKE))
+    ap.add_argument("--smoke", default=None, help="default: data/ durável se ok, senão target/")
     args = ap.parse_args()
 
+    smoke_path = resolve_smoke(Path(args.smoke) if args.smoke else None)
     failures: list[str] = []
     failures.extend(check_taxonomy_table())
-    failures.extend(check_smoke(Path(args.smoke)))
+    failures.extend(check_smoke(smoke_path))
     failures.extend(check_harness_gates())
 
     report = {
         "ok": not failures,
         "failures": failures,
-        "smoke": args.smoke,
+        "smoke": str(smoke_path),
+        "smoke_durable": smoke_path == DURABLE_SMOKE,
         "contract": "F1_3 unbound→unknown; prediction_set>1→ambiguous; so unknown abre F2",
-        "ref": "MSG_0802_0806_0808",
+        "ref": "MSG_0802_0806_0808_0962",
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if not failures else 1

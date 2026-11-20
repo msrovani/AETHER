@@ -1,0 +1,65 @@
+{
+  "schema": "aether.valida_buffy_1002_pin/v1",
+  "ref": "MSG_1002_1010",
+  "ok": true,
+  "failed": 0,
+  "n": 9,
+  "network": false,
+  "mutated_crate": false,
+  "results": [
+    {
+      "name": "pin_fn_public",
+      "ok": true,
+      "path": "aether-decision/src/pyo3_impl.rs",
+      "needle": "pub fn pin_sys_path"
+    },
+    {
+      "name": "pin_before_import_call",
+      "ok": true,
+      "path": "aether-decision/src/pyo3_impl.rs",
+      "needle": "pin_sys_path(py, cfg)"
+    },
+    {
+      "name": "erro_acionavel_path",
+      "ok": true,
+      "path": "aether-decision/src/pyo3_impl.rs",
+      "needle": "python_site_packages nao existe"
+    },
+    {
+      "name": "test_inserts",
+      "ok": true,
+      "path": "aether-decision/src/pyo3_impl.rs",
+      "needle": "fn pin_sys_path_inserts_the_configured_site_packages"
+    },
+    {
+      "name": "test_rejects",
+      "ok": true,
+      "path": "aether-decision/src/pyo3_impl.rs",
+      "needle": "fn pin_sys_path_rejects_a_path_that_does_not_exist"
+    },
+    {
+      "name": "test_noop",
+      "ok": true,
+      "path": "aether-decision/src/pyo3_impl.rs",
+      "needle": "fn pin_sys_path_is_a_noop_without_config"
+    },
+    {
+      "name": "smoke_grava_efetivo",
+      "ok": true,
+      "path": "aether-decision/examples/f1_smoke.rs",
+      "needle": "\"python_site_packages\""
+    },
+    {
+      "name": "effective_site_packages",
+      "ok": true,
+      "path": "aether-decision/src/config.rs",
+      "needle": "fn effective_site_packages"
+    },
+    {
+      "name": "doc_contrato",
+      "ok": true,
+      "path": "docs/F1_CONTRATO_MEDIDO.md",
+      "needle": "pin_sys_path"
+    }
+  ]
+}

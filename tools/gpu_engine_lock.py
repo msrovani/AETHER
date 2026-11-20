@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-# A-2c — lock de engine GPU entre agentes (arquivo + protocolo forum).
+# A-2c LEGADO (target/) — preferir tools/engine_lock.py (.vega/engine.lock, MSG 1014).
 """Evita dois engines na mesma 3050 sem coordenacao (docs/F1_AUDIT.md A-2c).
 
-Uso:
+DEPRECADO para producao: a tranca canonica e `python tools/engine_lock.py`
+(`.vega/engine.lock`, fora de target/). Este arquivo permanece para selftests
+legados que usam `target/gpu_engine.lock.json`.
+
+Uso legado:
   python tools/gpu_engine_lock.py acquire --holder CURSOR --lease-s 1800
   python tools/gpu_engine_lock.py status
   python tools/gpu_engine_lock.py release --holder CURSOR
   python tools/gpu_engine_lock.py selftest
+
+Canonico:
+  python tools/engine_lock.py acquire CURSOR 1800
 """
 
 from __future__ import annotations

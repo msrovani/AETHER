@@ -1,0 +1,10 @@
+{
+  "schema": "aether.a5_p2_promote/v1",
+  "ref": "MSG_A5_P2",
+  "src": "target/f5_t3_eval.json",
+  "dst": "data/reports/f5_t3_eval.json",
+  "sha256": "a2b286fb93d113a8b8ef6595b96c064227d7a0f921e1aacb6ed01721bbcb4b69",
+  "bytes": 1819,
+  "promoted_at_utc": "2026-11-20T16:16:34.563359+00:00",
+  "ok": true
+}

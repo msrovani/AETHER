@@ -21,9 +21,22 @@ CHECKS = [
     ("vega_corpus_grow", [sys.executable, str(ROOT / "tools" / "vega_corpus_grow.py"), "selftest"]),
     ("f1_abstain_map_mf2", [sys.executable, str(ROOT / "tools" / "f1_abstain_map.py"), "selftest"]),
     ("mf2_gate_regression", [sys.executable, str(ROOT / "tools" / "mf2_gate_regression.py")]),
+    # F1 offline (MSG 0948): A2/A2c/A3/A4/F1_5/A5 — sem crate, sem rede
+    ("f1_offline_suite", [sys.executable, str(ROOT / "tools" / "f1_offline_suite.py"), "selftest"]),
+    ("vega_path_audit", [sys.executable, str(ROOT / "tools" / "vega_path_audit.py"), "selftest"]),
+    ("qa_suite_probe", [sys.executable, str(ROOT / "tools" / "qa_suite_probe.py"), "selftest"]),
     ("f5_t1_agent_loop", [sys.executable, str(ROOT / "tools" / "f5_t1_agent_loop.py"), "selftest"]),
     ("f5_t2_allowlist", [sys.executable, str(ROOT / "tools" / "f5_t2_allowlist.py"), "selftest"]),
     ("f5_t3_eval", [sys.executable, str(ROOT / "tools" / "f5_t3_eval.py"), "selftest"]),
+    # MSG 0978 — A5 evidência (0967) no T0; tool alheia só selftest
+    ("a5_evidencia_audit", [sys.executable, str(ROOT / "tools" / "a5_evidencia_audit.py"), "selftest"]),
+    # MSG 0998 — P0/P2 promote durável no T0
+    ("a5_p0_promote", [sys.executable, str(ROOT / "tools" / "a5_p0_promote.py"), "selftest"]),
+    ("a5_p2_promote", [sys.executable, str(ROOT / "tools" / "a5_p2_promote.py"), "selftest"]),
+    # MSG 1010 — validação readonly pin BUFFY 1002
+    ("valida_buffy_1002_pin", [sys.executable, str(ROOT / "tools" / "valida_buffy_1002_pin.py"), "selftest"]),
+    # MSG 1015 — F2_WIRE port→pesquisa
+    ("f2_wire_port", [sys.executable, str(ROOT / "tools" / "f2_wire_port.py"), "selftest"]),
 ]
 
 

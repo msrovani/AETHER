@@ -1,0 +1,85 @@
+{
+  "schema": "aether.embed_eval_bm25_baseline/v1",
+  "tier": "T3_prep",
+  "sha256_set": "f868244256ee75a896f39cf4092ccfbf3bdf915002c451a1dcf450255d416bf0",
+  "n_docs": 722,
+  "n_queries": 142,
+  "meta_note": null,
+  "latency": {
+    "bm25_s": 0.26
+  },
+  "systems": {
+    "lexical_bm25": {
+      "hit5": 0.7042,
+      "recall5": 0.7042,
+      "misses": [
+        "f01",
+        "f05",
+        "f08",
+        "f11",
+        "f12",
+        "f21",
+        "d07",
+        "d11",
+        "d14",
+        "d16",
+        "d21",
+        "d22",
+        "d24",
+        "d30",
+        "d37",
+        "d38",
+        "d41",
+        "d43",
+        "d44",
+        "d45",
+        "d46",
+        "d49",
+        "d57",
+        "d62",
+        "d63",
+        "d65",
+        "d67",
+        "d69",
+        "d74",
+        "d80",
+        "d82",
+        "d84",
+        "d88",
+        "d91",
+        "d95",
+        "d96",
+        "d99",
+        "d100",
+        "d114",
+        "d116",
+        "d117",
+        "d121"
+      ]
+    }
+  },
+  "per_kind": {
+    "lexical_bm25": {
+      "hard": {
+        "n": 23,
+        "hit5": 0.6957
+      },
+      "lexical": {
+        "n": 50,
+        "hit5": 0.9
+      },
+      "semantic": {
+        "n": 69,
+        "hit5": 0.5652
+      }
+    }
+  },
+  "gate": {
+    "hit5_min": 0.974,
+    "bm25_hit5": 0.7042,
+    "bm25_pass_as_lexical_floor": true,
+    "note": "baseline lexical; MiniLM/híbrido = AGENT-A --run"
+  },
+  "network": false,
+  "ref": "MSG_0862_0870"
+}

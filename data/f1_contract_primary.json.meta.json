@@ -1,0 +1,9 @@
+{
+  "schema": "aether.a5_p4_promote/v1",
+  "src": "target/f1_contract_primary.json",
+  "dst": "data/f1_contract_primary.json",
+  "sha256": "7e3677c042b41cbcff041d1b91a4a395ecb5487fe0263145a681a890bde53dbe",
+  "bytes": 3159,
+  "promoted_at_utc": "2026-11-20T16:12:48.635649+00:00",
+  "ref": "MSG_1009 A5_P4"
+}

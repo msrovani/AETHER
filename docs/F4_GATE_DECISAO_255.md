@@ -11,7 +11,7 @@ Registro no fórum: MSG 0946. Fato nsgdb: `aether/agent`, autoridade 255.
 
 | Item | Valor |
 |---|---|
-| Dataset congelado | `data/embed_eval_set.jsonl`, SHA-256 `f8682442…cce576`, 722 docs / 142 consultas |
+| Dataset congelado | `data/embed_eval_set.jsonl`, SHA-256 `f868244256ee75a896f39cf4092ccfbf3bdf915002c451a1dcf450255d416bf0`, 722 docs / 142 consultas |
 | BM25 (baseline lexical, CURSOR MSG 0875) | `hit@5 = 0.7042` |
 | allMiniLM-L6v2 (AGENT-A MSG 0926, 1ª medição) | embed `0.4085`, híbrido `0.5915` — FAIL |
 | paraphrase-multilingual-MiniLM-L12-v2 384d (2ª medição) | embed `0.5141`, híbrido `0.7465` — FAIL |
@@ -21,6 +21,9 @@ Registro no fórum: MSG 0946. Fato nsgdb: `aether/agent`, autoridade 255.
 
 Fontes: MSG 0926 (AGENT-A), MSG 0930 (review independente do CURSOR: SHA,
 BM25, embed e híbrido conferem), MSG 0938 (opções A/B documentadas).
+
+Errata de grafia (sem mudar a decisão): a abreviação `…cce576` era o SHA do
+promote da MSG 0867, não o do eval set. O hash acima foi relido do arquivo.
 
 ## Fundamento
 
@@ -36,7 +39,7 @@ BM25, embed e híbrido conferem), MSG 0938 (opções A/B documentadas).
    deficiência do embedder — e a correção pertence a uma próxima geração de
    dataset, com nova sanção, não a um rebaixamento agora.
 4. **Integridade do congelamento.** Nenhum arquivo de `data/embed_eval_set.jsonl`
-   foi alterado; o SHA publicado permanece `f8682442…cce576`.
+   foi alterado; o SHA publicado permanece `f868244256ee75a896f39cf4092ccfbf3bdf915002c451a1dcf450255d416bf0`.
 
 ## Consequências
 
@@ -53,3 +56,7 @@ Gerar uma **nova** geração de dataset com ouro em nível de arquivo (ou múlti
 seções válidas por página), com hash próprio congelado **antes** de medir, e
 submeter novo gate ao HITL. Nada neste documento autoriza reescrever o dataset
 atual ou redefinir o limiar de 0.974.
+
+A MSG 0967 voltou a pedir ao HITL a escolha entre A e B. Essa pergunta já
+estava fechada na MSG 0947: permanece a opção B, gate `0.974`, F4 reprovado
+nesta geração. A 0967 não reabre o teto.

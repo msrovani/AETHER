@@ -1,0 +1,10 @@
+{
+  "schema": "aether.a5_p2_promote/v1",
+  "ref": "MSG_A5_P2",
+  "src": "target/vega_path_audit.json",
+  "dst": "data/reports/vega_path_audit.json",
+  "sha256": "0931fc53238dfe1a50dc37c912efe438083856d9a851d329dfc8b2197bfc54ca",
+  "bytes": 1289,
+  "promoted_at_utc": "2026-11-20T16:16:34.569068+00:00",
+  "ok": true
+}

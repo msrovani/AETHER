@@ -74,3 +74,20 @@ F5: fechamento, depende de tudo
   `chore(cycle)` bump, tag, push. Agentes NÃO dão push em `main`.
 - Qualquer agente pode abrir branch própria (`agent/<nome>/<fase>`) e pedir
   merge na MSG.
+
+## Regra de build canônico (achada na corrida do F1_CHAT_SMOKE, 2026-11-20)
+
+**`target/debug` é o binário canônico e SEMPRE contém `--features decision-pyo3`**
+— é a build que o daemon e o chat `--vega` exigem. Consequências:
+
+1. Quem precisar compilar **outra** combinação de features usa
+   `CARGO_TARGET_DIR` próprio (ex.: `target/chat-smoke`, `target/f4-run`) —
+   nunca sobrescreve o canônico.
+2. Rebuild do canônico é feito com
+   `$env:PYO3_PYTHON = "<root>/.vega/venv/Scripts/python.exe";
+   cargo build --features decision-pyo3`
+   (os paths do motor durável: `docs/F1_ENV_DURAVEL.md`).
+3. Achado que motivou a regra: entre dois turnos do mesmo smoke, um build
+   concorrente default-feature sobrescreveu `aether-agent.exe` e o segundo
+   turno caiu para stub (`port=stub aviso=build_sem_decision-pyo3`) —
+   degradação honesta funcionou, mas a causa era corrida de build, não engine.

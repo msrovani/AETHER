@@ -20,9 +20,13 @@ hash MSG 0862).
 ```bash
 python tools/f5_t3_eval.py selftest
 python tools/f5_t3_eval.py prepare
+python tools/f5_t3_eval.py eval data/f5_t3_rankings_agent_a.json
 ```
 
 `prepare` confere freeze MSG 0862 (722/142, sha `f868…`) sem inventar hit@k.
+`eval` (MSG 0951/0957, aditivo): aplica gate hit@5 ≥ 0.974 e ≥ lexical sobre
+rankings materializados; recusa SHA ≠ freeze; sem rede. Selftest cobre o
+caminho com rankings sintéticos.
 Contrato: `data/f5_t3_contract.json`.
 
 ## Relação com F4

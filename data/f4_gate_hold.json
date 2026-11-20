@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "failures": [],
+  "verdict": "REPROVADO_NESTA_GERACAO",
+  "gate_hit5": 0.974,
+  "bm25_hit5": 0.7042,
+  "embed_hit5": 0.5141,
+  "hybrid_hit5": 0.7465,
+  "sha256": "f868244256ee75a896f39cf4092ccfbf3bdf915002c451a1dcf450255d416bf0",
+  "sha_ok": true,
+  "gate_in_file": 0.974,
+  "lowered": false,
+  "dataset_written": false,
+  "ref": "MSG_0947_0953"
+}

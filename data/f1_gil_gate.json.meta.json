@@ -1,0 +1,10 @@
+{
+  "schema": "aether.a5_promote_p1/v1",
+  "ref": "MSG_0990_0967",
+  "src": "target/f1_gil_gate.json",
+  "dst": "data/f1_gil_gate.json",
+  "sha256": "cbf6978034131312827ad9d2e30bdede61a8c95e7a6390aef274128b2ef8a90a",
+  "bytes": 529,
+  "promoted_at_utc": "2026-11-20T16:09:17.772154+00:00",
+  "ok": true
+}

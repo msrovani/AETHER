@@ -1,0 +1,62 @@
+{
+  "schema": "aether.f5_t1_loop/v1",
+  "tier": "T1",
+  "ok": true,
+  "network": false,
+  "n_events": 4,
+  "n_research": 2,
+  "n_hitl_skip": 1,
+  "max_authority": 120,
+  "never_255": true,
+  "quarantine_path": "C:/Users/msrov/Documents/AETHER/target/f5_t1_quarantine.jsonl",
+  "steps": [
+    {
+      "ok": true,
+      "id": "passou",
+      "action": "hitl_or_skip",
+      "research": false,
+      "reason": "ambiguous",
+      "note": "pesquisa_so_em_unknown"
+    },
+    {
+      "ok": true,
+      "id": "route",
+      "action": "act_or_cite",
+      "research": false,
+      "reason": null
+    },
+    {
+      "ok": true,
+      "id": "ood_unbound_lacuna",
+      "action": "research_quarantine",
+      "research": true,
+      "reason": "unknown",
+      "exit": 0,
+      "authority": 120,
+      "verdict": "settled",
+      "write": {
+        "ok": true,
+        "path": "C:\\Users\\msrov\\Documents\\AETHER\\target\\f5_t1_quarantine.jsonl",
+        "authority": 120
+      },
+      "network": false
+    },
+    {
+      "ok": true,
+      "id": "unbound_wins_over_set",
+      "action": "research_quarantine",
+      "research": true,
+      "reason": "unknown",
+      "exit": 0,
+      "authority": 120,
+      "verdict": "settled",
+      "write": {
+        "ok": true,
+        "path": "C:\\Users\\msrov\\Documents\\AETHER\\target\\f5_t1_quarantine.jsonl",
+        "authority": 120
+      },
+      "network": false
+    }
+  ],
+  "ref": "MSG_0803_0806_F5_T1"
+}

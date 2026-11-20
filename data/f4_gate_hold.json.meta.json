@@ -1,0 +1,10 @@
+{
+  "schema": "aether.a5_promote_p1/v1",
+  "ref": "MSG_0990_0967",
+  "src": "tools/f4_gate_hold.py selftest",
+  "dst": "data/f4_gate_hold.json",
+  "sha256": "8f6b5863f2f1db8fa85a2649647e04bf09eb89066e9f0a7e66c455eab856f3f3",
+  "bytes": 379,
+  "promoted_at_utc": "2026-11-20T16:09:17.939755+00:00",
+  "ok": true
+}

@@ -19,7 +19,25 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SMOKE = ROOT / "target" / "f1_decision_smoke.json"
+TARGET_SMOKE = ROOT / "target" / "f1_decision_smoke.json"
+DURABLE_SMOKE = ROOT / "data" / "f1_decision_smoke.json"
+
+
+def resolve_smoke(explicit: Path | None = None) -> Path:
+    """Preferir data/ se target/ for stub engine_unavailable (MSG 0962)."""
+    if explicit is not None:
+        return explicit if explicit.is_absolute() else (ROOT / explicit)
+    if DURABLE_SMOKE.is_file():
+        try:
+            data = json.loads(DURABLE_SMOKE.read_text(encoding="utf-8"))
+            if data.get("answers") and data.get("conformal_set_present"):
+                return DURABLE_SMOKE
+        except (OSError, json.JSONDecodeError):
+            pass
+    return TARGET_SMOKE
+
+
+DEFAULT_SMOKE = resolve_smoke()
 
 
 def _head_ttt(answer: dict) -> bool:
@@ -123,11 +141,13 @@ def selftest() -> int:
     if research_gate(margem)["opens_research"]:
         failures.append("ambiguous nao abre")
 
-    failures.extend(check_smoke(DEFAULT_SMOKE))
+    smoke = resolve_smoke()
+    failures.extend(check_smoke(smoke))
     report = {
         "ok": not failures,
         "failures": failures,
-        "ref": "MSG_0853_0859",
+        "smoke": str(smoke),
+        "ref": "MSG_0853_0859_0962",
         "rule": "head_ttt sem conformal_set nao abre pesquisa; so unknown de lacuna",
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -139,11 +159,12 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd")
     sub.add_parser("selftest")
     p = sub.add_parser("check")
-    p.add_argument("--smoke", default=str(DEFAULT_SMOKE))
+    p.add_argument("--smoke", default=None, help="default: data/ durável se ok")
     args = ap.parse_args()
     if args.cmd == "check":
-        errs = check_smoke(Path(args.smoke))
-        print(json.dumps({"ok": not errs, "failures": errs}, ensure_ascii=False))
+        smoke = resolve_smoke(Path(args.smoke) if args.smoke else None)
+        errs = check_smoke(smoke)
+        print(json.dumps({"ok": not errs, "failures": errs, "smoke": str(smoke)}, ensure_ascii=False))
         return 0 if not errs else 1
     return selftest()
 

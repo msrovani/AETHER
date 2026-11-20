@@ -1,0 +1,53 @@
+{
+  "schema": "aether.f1_offline_suite/v1",
+  "ok": true,
+  "n": 6,
+  "failed": [],
+  "results": [
+    {
+      "name": "A2_vram",
+      "path": "tools/f1_vram_watchdog.py",
+      "ok": true,
+      "returncode": 0,
+      "wired_to_crate": false
+    },
+    {
+      "name": "A2c_gpu_lock",
+      "path": "tools/gpu_engine_lock.py",
+      "ok": true,
+      "returncode": 0,
+      "wired_to_crate": false
+    },
+    {
+      "name": "A3_warmup",
+      "path": "tools/f1_warmup_gate.py",
+      "ok": true,
+      "returncode": 0,
+      "wired_to_crate": false
+    },
+    {
+      "name": "A4_gil",
+      "path": "tools/f1_gil_gate.py",
+      "ok": true,
+      "returncode": 0,
+      "wired_to_crate": false
+    },
+    {
+      "name": "F1_5_ttt",
+      "path": "tools/f1_5_ttt_abstain.py",
+      "ok": true,
+      "returncode": 0,
+      "wired_to_crate": false
+    },
+    {
+      "name": "A5_promote",
+      "path": "tools/f1_gate_promote.py",
+      "ok": true,
+      "returncode": 0,
+      "wired_to_crate": false
+    }
+  ],
+  "wired_to_crate": false,
+  "network": false,
+  "note": "suite de classificador offline; wire crate = BUFFY/OPENCODE"
+}

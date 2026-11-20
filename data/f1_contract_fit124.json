@@ -1,0 +1,120 @@
+{
+ "schema": "aether.f1_contract/v1",
+ "model": "target/vega/vega-u-gemma-1b",
+ "vegaml": "0.16.5",
+ "load_s": 55.0,
+ "fit_examples": 124,
+ "fit_s": 77.2,
+ "latency_ms": {
+  "p50": 310.7,
+  "min": 310.7,
+  "max": 310.7,
+  "n": 1
+ },
+ "top_keys": [
+  "answers",
+  "latency_ms",
+  "n_tokens",
+  "views",
+  "mode"
+ ],
+ "meta": {
+  "latency_ms": 310.7,
+  "n_tokens": 223,
+  "views": 1,
+  "mode": "auto"
+ },
+ "boolean": {
+  "keys": [
+   "probs",
+   "confidence",
+   "prediction_set",
+   "abstain",
+   "unbound",
+   "settle_steps",
+   "energy",
+   "boolean",
+   "readout"
+  ],
+  "types": {
+   "probs": "dict",
+   "confidence": "float",
+   "prediction_set": "list",
+   "abstain": "bool",
+   "unbound": "bool",
+   "settle_steps": "int",
+   "energy": "float",
+   "boolean": "float",
+   "readout": "str"
+  },
+  "has_choice": false,
+  "has_prediction_set": true,
+  "abstain": false,
+  "choice_present_with_abstain": false,
+  "sample": {
+   "probs": "{'False': 0.6738819616236172, 'True': 0.3261180383763828}",
+   "confidence": "0.6738819616236172",
+   "prediction_set": "[False]",
+   "abstain": "False",
+   "unbound": "False",
+   "settle_steps": "12",
+   "energy": "-1.0192146301269531",
+   "boolean": "0.3261180383763828",
+   "readout": "'engine'"
+  }
+ },
+ "choice": {
+  "keys": [
+   "probs",
+   "confidence",
+   "cv_accuracy",
+   "readout",
+   "choice"
+  ],
+  "types": {
+   "probs": "dict",
+   "confidence": "float",
+   "cv_accuracy": "float",
+   "readout": "str",
+   "choice": "str"
+  },
+  "has_choice": true,
+  "has_prediction_set": false,
+  "abstain": false,
+  "choice_present_with_abstain": false,
+  "sample": {
+   "probs": "{'escalar': 0.20252910256385803, 'reformular': 0.5467802286148071, 'responder': 0.25069066882133484}",
+   "confidence": "0.5467802286148071",
+   "cv_accuracy": "0.7419354838709677",
+   "readout": "'ttt'",
+   "choice": "'reformular'"
+  }
+ },
+ "choice_on_choice_state": {
+  "keys": [
+   "probs",
+   "confidence",
+   "cv_accuracy",
+   "readout",
+   "choice"
+  ],
+  "types": {
+   "probs": "dict",
+   "confidence": "float",
+   "cv_accuracy": "float",
+   "readout": "str",
+   "choice": "str"
+  },
+  "has_choice": true,
+  "has_prediction_set": false,
+  "abstain": false,
+  "choice_present_with_abstain": false,
+  "sample": {
+   "probs": "{'escalar': 0.6342523953943564, 'reformular': 0.3373749394384188, 'responder': 0.028372665167224843}",
+   "confidence": "0.6342523953943564",
+   "cv_accuracy": "0.7419354838709677",
+   "readout": "'ttt'",
+   "choice": "'escalar'"
+  }
+ }
+}

@@ -63,24 +63,26 @@ comportamento novo. Evidência: as duas linhas `decisor: q=passou` /
 `decisor: q=route` acima, e `tests/f1_contract.rs` → 7 pass / 0 fail /
 0 ignored.
 
-### A-1b · ALTA · O engine real ainda é inalcançável do produto
+### A-1b · ALTA · ~~O engine real ainda é inalcançável do produto~~ — **FECHADO (fatia 3 + validação readonly)**
 
-**Evidência.** `src/agent/cli.rs` (`chat()`): `let port = StubPort;` — literal,
-sem flag, sem leitura de ambiente. Toda linha `decisor:` do produto sai com
+**Evidência (antes).** `src/agent/cli.rs` (`chat()`): `let port = StubPort;` — literal,
+sem flag, sem leitura de ambiente. Toda linha `decisor:` do produto saía com
 `engine=stub | degrado=true`.
 
-**Impacto.** A trait está certa e o port é consultado, mas **o veredito real
-nunca existe no produto**: o AND gate, o head `route` e o `fit(124)` só rodam
-no `example`. O aceite da F1 ("primeira decisão via DecisionPort") continua
-sendo do exemplo, não do chat — com a degradação honesta aparecendo em todo
-turno, o que é correto mas é um produto sem decisor.
+**Impacto.** A trait estava certa e o port era consultado, mas **o veredito real
+nunca existia no produto**: o AND gate, o head `route` e o `fit(124)` só rodavam
+no `example`.
 
-**Correção.** Uma flag (`--vega`) que constrói o `VegaPort` quando o
-ambiente está disponível (`PYO3_PYTHON` + `PYTHONPATH` + modelos) e cai no
-`StubPort` com um aviso explícito quando não está. Nada de "sempre engine":
-o default continua sendo o stub (Eixo C).
+**Fechado.** A fatia 3 entregou a flag `--vega` (opt-in):
+`open_chat_port(want_vega)` → `VegaPort::new` sob a feature `decision-pyo3`,
+com queda para `StubPort` + aviso `vega_indisponivel` quando o engine não
+sobe (degradação honesta). O CURSOR validou o contrato **readonly** (MSG
+0936: 7 hits, `docs/F1_A1B_VEGA_VALIDACAO.md`) e a feature `decision-pyo3`
+foi criada na raiz para ligar o crate ao binário.
 
-**Dono.** OPENCODE, fatia 4 (ou BUFFY, se preferirem).
+**Resta:** o *aceite* — uma decisão real no caminho de produto. É a missão
+**F1_PROD** (ver `data/f1_prod_decision.json` e
+`tools/f1_prod_acceptance.py`).
 
 ### A-2 · ALTA · O watchdog de VRAM não está ligado a nada
 

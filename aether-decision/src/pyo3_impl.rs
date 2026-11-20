@@ -33,10 +33,7 @@ use pyo3::IntoPyObjectExt;
 ///
 /// Devolve os caminhos inseridos. `Ok(None)` = nada configurado (ai o erro
 /// de import e honestamente "nada configurado", nao "motor quebrado").
-pub fn pin_sys_path(
-    py: Python<'_>,
-    cfg: &EngineConfig,
-) -> Result<Option<String>, DecisionError> {
+pub fn pin_sys_path(py: Python<'_>, cfg: &EngineConfig) -> Result<Option<String>, DecisionError> {
     let Some(raw) = cfg.effective_site_packages() else {
         return Ok(None);
     };

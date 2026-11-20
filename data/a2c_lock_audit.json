@@ -1,0 +1,60 @@
+{
+  "schema": "aether.a2c_lock_audit/v1",
+  "ok": true,
+  "canonical_path": ".vega/engine.lock",
+  "status": {
+    "schema": "aether.engine_lock/v1",
+    "locked": true,
+    "owner": "BUFFY",
+    "pid": 33736,
+    "expires_at": 1795194336.8768811,
+    "path": ".vega/engine.lock",
+    "stale_after_s": 30
+  },
+  "selftest_policy": "nao_acquire_se_holder_alheio",
+  "selftest_blocked_by_holder": true,
+  "holder": "BUFFY",
+  "legacy_hits": [
+    {
+      "path": "tools/a5_evidence_durability.py",
+      "pattern": "target[/\\\\]+gpu_engine\\.lock",
+      "class": "legacy_target_or_old_tool",
+      "action": "prefer_engine_lock_py_dot_vega"
+    },
+    {
+      "path": "tools/gpu_engine_lock.py",
+      "pattern": "gpu_engine_lock\\.py",
+      "class": "legacy_target_or_old_tool",
+      "action": "prefer_engine_lock_py_dot_vega"
+    },
+    {
+      "path": "docs/A2C_ENGINE_LOCK.md",
+      "pattern": "gpu_engine_lock\\.py",
+      "class": "legacy_target_or_old_tool",
+      "action": "prefer_engine_lock_py_dot_vega"
+    },
+    {
+      "path": "docs/A2C_LOCK_PATH_AUDIT.md",
+      "pattern": "target[/\\\\]+gpu_engine\\.lock",
+      "class": "legacy_target_or_old_tool",
+      "action": "prefer_engine_lock_py_dot_vega"
+    },
+    {
+      "path": "docs/F1_A2_WATCHDOG_SPEC.md",
+      "pattern": "gpu_engine_lock\\.py",
+      "class": "legacy_target_or_old_tool",
+      "action": "prefer_engine_lock_py_dot_vega"
+    },
+    {
+      "path": "docs/F1_A5_A2C_CURSOR.md",
+      "pattern": "gpu_engine_lock\\.py",
+      "class": "legacy_target_or_old_tool",
+      "action": "prefer_engine_lock_py_dot_vega"
+    }
+  ],
+  "n_legacy": 6,
+  "network": false,
+  "gpu_touched": false,
+  "ref": "MSG_1014_1026",
+  "note": "suite A2c ja em f1_offline_suite (MSG 1020); este audit so mapeia residuos"
+}

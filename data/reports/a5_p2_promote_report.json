@@ -1,0 +1,48 @@
+{
+  "schema": "aether.a5_p2_promote_batch/v1",
+  "ok": true,
+  "network": false,
+  "n": 4,
+  "items": [
+    {
+      "schema": "aether.a5_p2_promote/v1",
+      "ref": "MSG_A5_P2",
+      "src": "target/f5_t0_eval.json",
+      "dst": "data/reports/f5_t0_eval.json",
+      "sha256": "809131e17f032e825856bf91ff3f9bfc87f2a7b4553de1a57a9083e9e8d29a72",
+      "bytes": 5636,
+      "promoted_at_utc": "2026-11-20T16:16:34.558198+00:00",
+      "ok": true
+    },
+    {
+      "schema": "aether.a5_p2_promote/v1",
+      "ref": "MSG_A5_P2",
+      "src": "target/f5_t3_eval.json",
+      "dst": "data/reports/f5_t3_eval.json",
+      "sha256": "a2b286fb93d113a8b8ef6595b96c064227d7a0f921e1aacb6ed01721bbcb4b69",
+      "bytes": 1819,
+      "promoted_at_utc": "2026-11-20T16:16:34.563359+00:00",
+      "ok": true
+    },
+    {
+      "schema": "aether.a5_p2_promote/v1",
+      "ref": "MSG_A5_P2",
+      "src": "target/vega_path_audit.json",
+      "dst": "data/reports/vega_path_audit.json",
+      "sha256": "0931fc53238dfe1a50dc37c912efe438083856d9a851d329dfc8b2197bfc54ca",
+      "bytes": 1289,
+      "promoted_at_utc": "2026-11-20T16:16:34.569068+00:00",
+      "ok": true
+    },
+    {
+      "schema": "aether.a5_p2_promote/v1",
+      "ref": "MSG_A5_P2",
+      "src": "target/f1_offline_suite.json",
+      "dst": "data/reports/f1_offline_suite.json",
+      "sha256": "4456dbbf287fba0b27a3327d7e2e943516868749db68a1f4506b84ba55441358",
+      "bytes": 1188,
+      "promoted_at_utc": "2026-11-20T16:16:34.574443+00:00",
+      "ok": true
+    }
+  ]
+}

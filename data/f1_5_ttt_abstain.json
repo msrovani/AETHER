@@ -1,0 +1,13 @@
+{
+  "schema": "aether.f1_5_ttt_abstain/v1",
+  "ok": false,
+  "action": "forbid_acted_assumed",
+  "reason": "sem_sinal_abstain_nao_e_agiu",
+  "readout": "ttt",
+  "cv_accuracy": null,
+  "missing_contract": true,
+  "ref_cv_accuracy": 0.7419,
+  "network": false,
+  "wired_to_crate": false,
+  "fix": "expor Answer.cv_accuracy; NUNCA unwrap_or(false) em abstain ausente"
+}

@@ -1,0 +1,323 @@
+{
+  "schema": "aether.a5_evidence_durability/v1",
+  "ref": "MSG_0967_MISSAO_CURSOR_A5",
+  "ok": true,
+  "network": false,
+  "n": 15,
+  "n_durable_ok": 6,
+  "n_only_target_risk": 8,
+  "n_missing": 0,
+  "risk_ids": [
+    "f1_contract_fit124",
+    "embed_eval_run",
+    "embed_eval_bm25",
+    "f5_t3_eval_report",
+    "f5_t0_eval_report",
+    "mf2_report",
+    "qa_suite_probe",
+    "f4_nsgdb_dump"
+  ],
+  "items": [
+    {
+      "id": "f1_decision_smoke",
+      "role": "aceite_F1_smoke",
+      "target": "target/f1_decision_smoke.json",
+      "durable": "data/f1_decision_smoke.json",
+      "migrate": "promote_via_tools_f1_gate_promote_py_quando_engine_real",
+      "priority": "P0",
+      "target_stat": {
+        "path": "target/f1_decision_smoke.json",
+        "exists": true,
+        "bytes": 273,
+        "mtime": 1795189256
+      },
+      "durable_stat": {
+        "path": "data/f1_decision_smoke.json",
+        "exists": true,
+        "bytes": 1004,
+        "mtime": 1795187663
+      },
+      "status": "durable_ok",
+      "cargo_clean_wipes": false
+    },
+    {
+      "id": "f1_gate_baseline",
+      "role": "aceite_F1_baseline_n30",
+      "target": "target/f1_gate_baseline.json",
+      "durable": "data/f1_gate_baseline.json",
+      "migrate": "ja_em_data_manter_gate_fora_de_target",
+      "priority": "P0",
+      "target_stat": {
+        "path": "target/f1_gate_baseline.json",
+        "exists": false
+      },
+      "durable_stat": {
+        "path": "data/f1_gate_baseline.json",
+        "exists": true,
+        "bytes": 1655,
+        "mtime": 1795187323
+      },
+      "status": "durable_ok",
+      "cargo_clean_wipes": false
+    },
+    {
+      "id": "f1_contract_fit124",
+      "role": "evidencia_contrato_fit",
+      "target": "target/f1_contract_fit124.json",
+      "durable": "data/f1_contract_fit124.json",
+      "migrate": "copiar_para_data_apos_rodada_limpa_BUFFY",
+      "priority": "P1",
+      "target_stat": {
+        "path": "target/f1_contract_fit124.json",
+        "exists": true,
+        "bytes": 2608,
+        "mtime": 1795187456
+      },
+      "durable_stat": {
+        "path": "data/f1_contract_fit124.json",
+        "exists": false
+      },
+      "status": "only_in_target_RISK",
+      "cargo_clean_wipes": true
+    },
+    {
+      "id": "embed_eval_set",
+      "role": "freeze_F4_dataset",
+      "target": null,
+      "durable": "data/embed_eval_set.jsonl",
+      "migrate": "ja_duravel_nao_mover",
+      "priority": "P0",
+      "target_stat": {
+        "path": null,
+        "exists": false
+      },
+      "durable_stat": {
+        "path": "data/embed_eval_set.jsonl",
+        "exists": true,
+        "bytes": 852643,
+        "mtime": 1795187840
+      },
+      "status": "durable_ok",
+      "cargo_clean_wipes": false
+    },
+    {
+      "id": "embed_eval_run",
+      "role": "medicao_F4_hit5",
+      "target": "target/embed_eval.json",
+      "durable": "data/embed_eval_last.json",
+      "migrate": "promover_numeros_do_run_REPROVADO_para_data_apos_ACK",
+      "priority": "P0",
+      "target_stat": {
+        "path": "target/embed_eval.json",
+        "exists": true,
+        "bytes": 3790,
+        "mtime": 1795188562
+      },
+      "durable_stat": {
+        "path": "data/embed_eval_last.json",
+        "exists": false
+      },
+      "status": "only_in_target_RISK",
+      "cargo_clean_wipes": true
+    },
+    {
+      "id": "embed_eval_bm25",
+      "role": "piso_lexical_F4_T3",
+      "target": "target/embed_eval_bm25_baseline.json",
+      "durable": "data/embed_eval_bm25_baseline.json",
+      "migrate": "promover_baseline_0_7042_para_data",
+      "priority": "P0",
+      "target_stat": {
+        "path": "target/embed_eval_bm25_baseline.json",
+        "exists": true,
+        "bytes": 1557,
+        "mtime": 1795187962
+      },
+      "durable_stat": {
+        "path": "data/embed_eval_bm25_baseline.json",
+        "exists": false
+      },
+      "status": "only_in_target_RISK",
+      "cargo_clean_wipes": true
+    },
+    {
+      "id": "f5_t3_contract",
+      "role": "contrato_T3",
+      "target": null,
+      "durable": "data/f5_t3_contract.json",
+      "migrate": "ja_duravel",
+      "priority": "P1",
+      "target_stat": {
+        "path": null,
+        "exists": false
+      },
+      "durable_stat": {
+        "path": "data/f5_t3_contract.json",
+        "exists": true,
+        "bytes": 495,
+        "mtime": 1795187943
+      },
+      "status": "durable_ok",
+      "cargo_clean_wipes": false
+    },
+    {
+      "id": "f5_t3_eval_report",
+      "role": "relatorio_T3_eval",
+      "target": "target/f5_t3_eval.json",
+      "durable": "data/f5_t3_eval_last.json",
+      "migrate": "promover_apos_eval_com_rankings_AGENT_A",
+      "priority": "P2",
+      "target_stat": {
+        "path": "target/f5_t3_eval.json",
+        "exists": true,
+        "bytes": 1819,
+        "mtime": 1795190680
+      },
+      "durable_stat": {
+        "path": "data/f5_t3_eval_last.json",
+        "exists": false
+      },
+      "status": "only_in_target_RISK",
+      "cargo_clean_wipes": true
+    },
+    {
+      "id": "f5_t0_eval_report",
+      "role": "relatorio_T0",
+      "target": "target/f5_t0_eval.json",
+      "durable": "data/f5_t0_eval_last.json",
+      "migrate": "opcional_promover_ultimo_verde",
+      "priority": "P2",
+      "target_stat": {
+        "path": "target/f5_t0_eval.json",
+        "exists": true,
+        "bytes": 5636,
+        "mtime": 1795187148
+      },
+      "durable_stat": {
+        "path": "data/f5_t0_eval_last.json",
+        "exists": false
+      },
+      "status": "only_in_target_RISK",
+      "cargo_clean_wipes": true
+    },
+    {
+      "id": "mf2_report",
+      "role": "regressao_MF2",
+      "target": "target/mf2_gate_regression.json",
+      "durable": "data/mf2_gate_regression_last.json",
+      "migrate": "opcional_smoke_ja_em_data",
+      "priority": "P2",
+      "target_stat": {
+        "path": "target/mf2_gate_regression.json",
+        "exists": true,
+        "bytes": 484,
+        "mtime": 1795187124
+      },
+      "durable_stat": {
+        "path": "data/mf2_gate_regression_last.json",
+        "exists": false
+      },
+      "status": "only_in_target_RISK",
+      "cargo_clean_wipes": true
+    },
+    {
+      "id": "qa_suite_probe",
+      "role": "qa_flake_probe",
+      "target": "target/qa_suite_probe.json",
+      "durable": "data/qa_suite_probe_last.json",
+      "migrate": "efemero_ok_manter_em_target",
+      "priority": "P3",
+      "target_stat": {
+        "path": "target/qa_suite_probe.json",
+        "exists": true,
+        "bytes": 716,
+        "mtime": 1795188242
+      },
+      "durable_stat": {
+        "path": "data/qa_suite_probe_last.json",
+        "exists": false
+      },
+      "status": "only_in_target_RISK",
+      "cargo_clean_wipes": true
+    },
+    {
+      "id": "f4_nsgdb_dump",
+      "role": "fonte_freeze_auxiliar",
+      "target": "target/f4_nsgdb_dump.jsonl",
+      "durable": "data/f4_nsgdb_dump.jsonl",
+      "migrate": "dump_auxiliar_promover_se_entrar_no_freeze",
+      "priority": "P2",
+      "target_stat": {
+        "path": "target/f4_nsgdb_dump.jsonl",
+        "exists": true,
+        "bytes": 6634,
+        "mtime": 1795187024
+      },
+      "durable_stat": {
+        "path": "data/f4_nsgdb_dump.jsonl",
+        "exists": false
+      },
+      "status": "only_in_target_RISK",
+      "cargo_clean_wipes": true
+    },
+    {
+      "id": "research_cases",
+      "role": "fixtures_F2",
+      "target": null,
+      "durable": "data/research_cases.json",
+      "migrate": "ja_duravel",
+      "priority": "P1",
+      "target_stat": {
+        "path": null,
+        "exists": false
+      },
+      "durable_stat": {
+        "path": "data/research_cases.json",
+        "exists": true,
+        "bytes": 3521,
+        "mtime": 1795184716
+      },
+      "status": "durable_ok",
+      "cargo_clean_wipes": false
+    },
+    {
+      "id": "source_tier",
+      "role": "tier_F2_5",
+      "target": null,
+      "durable": "data/source_tier.json",
+      "migrate": "ja_duravel",
+      "priority": "P1",
+      "target_stat": {
+        "path": null,
+        "exists": false
+      },
+      "durable_stat": {
+        "path": "data/source_tier.json",
+        "exists": true,
+        "bytes": 2362,
+        "mtime": 1795184860
+      },
+      "status": "durable_ok",
+      "cargo_clean_wipes": false
+    },
+    {
+      "id": "gpu_engine_lock",
+      "role": "lock_A2c_efemero",
+      "target": "target/gpu_engine.lock.json",
+      "durable": null,
+      "migrate": "efemero_por_design_nao_versionar",
+      "priority": "P3",
+      "target_stat": {
+        "path": "target/gpu_engine.lock.json",
+        "exists": false
+      },
+      "durable_stat": {
+        "path": null,
+        "exists": false
+      },
+      "status": "ephemeral_ok",
+      "cargo_clean_wipes": false
+    }
+  ],
+  "rule": "aceite_do_ciclo_nao_pode_morrer_no_cargo_clean"
+}

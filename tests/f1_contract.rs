@@ -248,8 +248,73 @@ fn engine_fora_e_degradacao_e_nao_conflito() {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Baseline congelado da F1 (Eixo D) — fora de `target/`.
+// 4. Aceite da F1 no CAMINHO DE PRODUTO (chat + --vega + engine real).
 // ---------------------------------------------------------------------------
+
+#[test]
+fn aceite_da_f1_no_produto_existe_fora_de_target_e_e_verdadeiro() {
+    // O aceite que faltava: a F1 foi provada num `example`; aqui é o caminho
+    // que o usuário toca. O artefato é congelado FORA de `target/` (o
+    // `cargo clean` apaga `target/` — foi assim que o motor quase sumiu).
+    let path = "data/f1_prod_decision.json";
+    let raw = std::fs::read_to_string(path).unwrap_or_else(|e| {
+        panic!(
+            "aceite da F1 no produto ausente em {path} ({e}). Gere com: \
+             python tools/f1_prod_acceptance.py check"
+        )
+    });
+    let v: serde_json::Value = serde_json::from_str(&raw).expect("artefato é JSON");
+
+    assert_eq!(v["schema"], "aether.f1_prod_decision/v1");
+    assert_eq!(
+        v["abstain"],
+        false,
+        "o aceite falhou: {}",
+        v["checks"].to_string()
+    );
+    let checks = v["checks"].as_object().expect("checks");
+    assert!(
+        !checks.is_empty(),
+        "o artefato tem de trazer os checks do contrato"
+    );
+    for (name, ok) in checks {
+        assert_eq!(
+            ok,
+            &serde_json::json!(true),
+            "check do aceite falhou: {name} ({})",
+            v["output_head"].to_string()
+        );
+    }
+    assert_eq!(
+        v["port"], "vega",
+        "o port tem de ser o engine real, não o stub"
+    );
+    assert!(
+        v["wall_s"].as_f64().unwrap_or(0.0) > 0.0,
+        "o wall clock (boot incluso) tem de estar medido"
+    );
+    assert_eq!(v["core_answered"], true, "o core continua respondendo");
+    assert!(
+        !path.starts_with("target"),
+        "evidência de aceite não mora em target/"
+    );
+}
+
+#[test]
+#[ignore = "exige o engine real (GPU + minutos de boot): python tools/f1_prod_acceptance.py check"]
+fn aceite_da_f1_no_produto_com_engine_real() {
+    let out = std::process::Command::new("python")
+        .args(["tools/f1_prod_acceptance.py", "check"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("python disponivel");
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "o aceite da F1 no produto falhou:\n{text}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
 
 #[test]
 fn baseline_da_f1_existe_fora_de_target_e_e_coerente() {

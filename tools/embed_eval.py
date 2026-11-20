@@ -360,18 +360,17 @@ def per_kind(queries: list[dict], rankings: list[list[int]], docs: list[dict]) -
 # --------------------------------------------------------------------------- #
 # run
 # --------------------------------------------------------------------------- #
-def cmd_run(expect_sha: str, embed_url: str, out: Path) -> int:
-    meta, docs, queries = load_set(expect_sha)
-    print(f"dataset congelado ok: {len(docs)} docs, {len(queries)} consultas, sha {expect_sha[:12]}...")
-
-    texts = [d["text"] for d in docs]
+def compute_ranks(
+    docs: list[dict], queries: list[dict], embed_url: str
+) -> tuple[dict[str, list[list[int]]], list[list[float]], float, float]:
+    """Rankings dos três sistemas no set congelado. Único ponto que fala com o embedder."""
     t0 = time.time()
     bm25 = BM25(docs)
     lex_rank = [bm25.rank(q["q"]) for q in queries]
     t_lex = time.time() - t0
 
     t0 = time.time()
-    doc_vecs = embed_texts(embed_url, texts)
+    doc_vecs = embed_texts(embed_url, [d["text"] for d in docs])
     q_vecs = embed_texts(embed_url, [q["q"] for q in queries])
     t_emb = time.time() - t0
     if len(doc_vecs) != len(docs):
@@ -381,6 +380,24 @@ def cmd_run(expect_sha: str, embed_url: str, out: Path) -> int:
 
     emb_rank = [cosine_rank(qv, doc_vecs) for qv in q_vecs]
     hyb_rank = [rrf([lex, emb]) for lex, emb in zip(lex_rank, emb_rank)]
+    return (
+        {"lexical_bm25": lex_rank, "embed_minilm": emb_rank, "hybrid_rrf60": hyb_rank},
+        doc_vecs,
+        t_lex,
+        t_emb,
+    )
+
+
+def cmd_run(expect_sha: str, embed_url: str, out: Path) -> int:
+    meta, docs, queries = load_set(expect_sha)
+    print(f"dataset congelado ok: {len(docs)} docs, {len(queries)} consultas, sha {expect_sha[:12]}...")
+
+    ranks, doc_vecs, t_lex, t_emb = compute_ranks(docs, queries, embed_url)
+    lex_rank, emb_rank, hyb_rank = (
+        ranks["lexical_bm25"],
+        ranks["embed_minilm"],
+        ranks["hybrid_rrf60"],
+    )
 
     systems = {
         "lexical_bm25": score(queries, lex_rank, docs),
@@ -452,6 +469,49 @@ def cmd_bm25_only(expect_sha: str, out: Path) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# dump de rankings (F5_T3, MSG 0951) — schema do fixture data/f5_t3_rankings_fixture.json
+# --------------------------------------------------------------------------- #
+def cmd_dump_rankings(expect_sha: str, embed_url: str, out: Path) -> int:
+    meta, docs, queries = load_set(expect_sha)
+    print(f"dump: dataset congelado ok ({len(docs)} docs, {len(queries)} queries, sha {expect_sha[:12]}...)")
+    ranks, _vecs, t_lex, t_emb = compute_ranks(docs, queries, embed_url)
+    id_of = {i: d["id"] for i, d in enumerate(docs)}
+    payload = {
+        "schema": "aether.f5_t3_rankings/v1",
+        "k": TOP_K,
+        "dataset_sha256": expect_sha,
+        "n_docs": len(docs),
+        "n_queries": len(queries),
+        "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "latency": {"bm25_s": round(t_lex, 2), "embed_s": round(t_emb, 2)},
+        "queries": [
+            {"id": q["id"], "gold": q["gold"], "kind": q.get("kind", "outro")} for q in queries
+        ],
+        "systems": {
+            name: {q["id"]: [id_of[i] for i in rank[:10]] for q, rank in zip(queries, ranks[name])}
+            for name in ranks
+        },
+        "ref": "MSG_0951",
+        "network": "localhost_embed_server_only",
+    }
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(
+        json.dumps(
+            {
+                "arquivo": out.relative_to(ROOT).as_posix(),
+                "systems": list(payload["systems"]),
+                "top_k_dump": 10,
+                "sha256_set": expect_sha,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # selftest (sem rede, sem modelo)
 # --------------------------------------------------------------------------- #
 def cmd_selftest() -> int:
@@ -489,6 +549,11 @@ def main(argv: list[str] | None = None) -> int:
         help="T3 prep: só BM25 no set congelado (sem embedder/rede)",
     )
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument(
+        "--dump-rankings",
+        action="store_true",
+        help="F5_T3 (MSG 0951): materializa rankings dos 3 sistemas no schema do fixture",
+    )
     ap.add_argument("--sha256", default=os.environ.get("AETHER_EVAL_SET_SHA256", ""))
     ap.add_argument("--embed-url", default=os.environ.get("AETHER_EMBED_URL", "http://127.0.0.1:8788"))
     ap.add_argument("--out", type=Path, default=OUT_PATH)
@@ -503,6 +568,15 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("--sha256 obrigatório (hash publicado no fórum)")
         out = args.out if args.out != OUT_PATH else (ROOT / "target" / "embed_eval_bm25_baseline.json")
         return cmd_bm25_only(args.sha256.lower(), out)
+    if args.dump_rankings:
+        if not args.sha256:
+            raise SystemExit("--sha256 obrigatório (hash do fórum, MSG 0862)")
+        out = (
+            args.out
+            if args.out != OUT_PATH
+            else (ROOT / "data" / "f5_t3_rankings_agent_a.json")
+        )
+        return cmd_dump_rankings(args.sha256.lower(), args.embed_url, out)
     if args.run:
         if not args.sha256:
             raise SystemExit("--sha256 obrigatório (hash publicado no fórum antes da medição)")
