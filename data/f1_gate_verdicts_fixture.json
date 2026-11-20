@@ -1,0 +1,52 @@
+{
+  "schema": "aether.f1_gate_verdicts_fixture/v1",
+  "ref": "MSG 0793 F1_3 + MSG 0802 MF2_GATE_REGRESSION",
+  "rule": "unknown so quando unbound; prediction_set>1 ou abstain sem unbound -> ambiguous; so unknown abre pesquisa",
+  "cases": [
+    {
+      "id": "ood_unbound_lacuna",
+      "note": "fora do lexico: unbound=true -> Unknown -> pesquisa OK",
+      "abstain": true,
+      "unbound": true,
+      "prediction_set_len": 0,
+      "expect_reason": "unknown",
+      "expect_admits_research": true
+    },
+    {
+      "id": "c1_margem_fina",
+      "note": "C1 0.489/0.511 medido MSG 0793: set com 2 -> Ambiguous -> SEM pesquisa",
+      "abstain": true,
+      "unbound": false,
+      "prediction_set_len": 2,
+      "expect_reason": "ambiguous",
+      "expect_admits_research": false
+    },
+    {
+      "id": "passou_margem_sem_set",
+      "note": "abstain sem unbound e sem set declarado -> Ambiguous (nunca Unknown default)",
+      "abstain": true,
+      "unbound": false,
+      "prediction_set_len": null,
+      "expect_reason": "ambiguous",
+      "expect_admits_research": false
+    },
+    {
+      "id": "act_sem_abstain",
+      "note": "age: sem reason",
+      "abstain": false,
+      "unbound": false,
+      "prediction_set_len": 1,
+      "expect_reason": null,
+      "expect_admits_research": false
+    },
+    {
+      "id": "unbound_wins_over_set",
+      "note": "unbound=true mesmo com set>1 -> Unknown (lacuna)",
+      "abstain": true,
+      "unbound": true,
+      "prediction_set_len": 3,
+      "expect_reason": "unknown",
+      "expect_admits_research": true
+    }
+  ]
+}

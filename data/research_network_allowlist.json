@@ -1,0 +1,13 @@
+{
+  "schema": "aether.research_network_allowlist/v0",
+  "phase": "F5_T2_stub",
+  "ref": "docs/F5_T2_ALLOWLIST.md",
+  "default_policy": "deny",
+  "allow_network_default": false,
+  "hosts": [],
+  "notes": [
+    "Deny-by-default: nenhum host autorizado até HITL sancionar allowlist.",
+    "T2 live (rede) só com allow_network=true E host na lista E HITL ack.",
+    "Este stub não faz HTTP — só valida política offline."
+  ]
+}

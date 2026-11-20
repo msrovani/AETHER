@@ -20,6 +20,10 @@ Só `AbstainReason::Unknown` admite pesquisa (`admits_research()`). Demais motiv
 - `ambiguous` / `conflict` → HITL
 - `engine_unavailable` → degradação, sem inventar
 
+**F1_3 / MF2 (MSG 0802):** `unknown` só quando `unbound=true`; `prediction_set` com
+mais de 1 candidato → `ambiguous` (não dispara harness). Regressão:
+`python tools/mf2_gate_regression.py` (usa `target/f1_decision_smoke.json`).
+
 Na F2 a tomada usa **websearch do harness**. Tool própria no `aether-agent` é F5.
 
 ## Pipeline

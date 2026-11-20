@@ -1,0 +1,5 @@
+{
+  "schema": "aether.research_allowlist/alias",
+  "canonical": "data/research_network_allowlist.json",
+  "note": "Alias MSG 0823 — use research_network_allowlist.json (deny-by-default)."
+}

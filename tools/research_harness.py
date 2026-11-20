@@ -206,11 +206,22 @@ def selftest() -> int:
     if code != 2:
         failures.append("conflict should exit 2")
 
+    # MF2 (MSG 0802/0808): regressão F1_3 — só unknown abre pesquisa
+    mf2 = subprocess.run(
+        [sys.executable, str(ROOT / "tools" / "mf2_gate_regression.py")],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if mf2.returncode != 0:
+        failures.append(f"mf2_gate_regression failed: {mf2.stdout[-200:]}")
+
     report = {
         "ok": not failures,
         "failures": failures,
-        "n_checks": 3 + 3 + 2 + 2,  # digest×2 + rel + 3 cases + ambiguous + conflict
+        "n_checks": 3 + 3 + 2 + 2 + 1,  # + MF2
         "quarantine_path": str(qpath),
+        "mf2": "PASS" if mf2.returncode == 0 else "FAIL",
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if not failures else 1

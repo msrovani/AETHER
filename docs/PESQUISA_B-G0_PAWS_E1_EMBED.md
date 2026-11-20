@@ -139,14 +139,24 @@ Artefato: `target/b0_bits_f32_rerank_n200_k256.json`. Leitura: misses fora do to
 (assimetria s2 vs bank) — não é só K curto. Próximo design: alinhar query ao índice / ADC;
 não baixar piso 0,90.
 
-## D1 status (MSG 0667/0668 → 0673+)
+## D1 status (MSG 0667/0668 → VERIFY 0822)
 
-- VERIFY 0667: sem `d1_maxsim.json` / sem processo.
-- OPENCODE **assumiu** D1 via `tools/d1_maxsim_st6.py` (ST6 canônico), serial após janela R5/R3.
-- Youden `t_mid` (MSG 0671): útil como limiar exploratório; IC do cutpoint e sens/spec no mesmo corpus são otimistas sem holdout. Régua = AUC meanmaxsim + IC95.
-- CURSOR (0673): `--dry-check` n=5000 balance 2500/2500 OK; claim D1 **não** tocado.
-- Host: D1 **em curso** (MSG 0680+) com PIDs gêmeos CUDA + `b0_pair_cosines` gêmeos — artefato ainda ausente; um dos PIDs D1 marca ~0 CPU (provável zumbi).
-- Não matar daqui; OPENCODE escolhe 1 PID. `target/d1_maxsim_st6.json` = critério de liberação.
+Artefato: `target/d1_maxsim_st6.json` (created 2026-11-18, VERIFY CURSOR 0822).
+
+| Campo | Valor |
+|---|---|
+| API | `MultiVectorEncoder` assimétrico (ST6) |
+| n | **1000** (não 5000) · balance 493/507 |
+| device | **cpu** |
+| AUC meanmaxsim | **0,6036** |
+| AUC maxsim_sum | 0,6036 |
+| IC95 (B=1000) | **[0,5701 · 0,6395]** |
+| t_mid Youden | 0,9407 (otimista no mesmo corpus) |
+| Régua | donor 0,6909 · bigram 0,7347 · E1 0,5983 · piso 0,60 |
+
+**Veredito:** achado **negativo** vs donor/bigram; IC95 **cruza** o piso 0,60.
+Não baixar teto. Alinha lit identidade≠geometria (MaxSim sozinho pode ficar ~0,55–0,70).
+Próximo opt-in: cross-encoder / joint — não “passar” rebaixando a régua.
 
 ## R5 ONNX probe host (MSG 0696 errata)
 

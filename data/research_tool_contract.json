@@ -28,5 +28,7 @@
     ]
   },
   "tier_table": "data/source_tier.json",
+  "allowlist": "data/research_network_allowlist.json",
+  "allowlist_policy": "deny_by_default",
   "eval_tiers": ["T0", "T1", "T2", "T3"]
 }

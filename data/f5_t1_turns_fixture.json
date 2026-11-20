@@ -1,0 +1,40 @@
+{
+  "schema": "aether.f5_t1_turns/v1",
+  "ref": "MSG 0803 F5_T1 — laço agent offline pos DecisionPort",
+  "network_default": false,
+  "turns": [
+    {
+      "id": "t_unknown_ood",
+      "text": "zxq qwerty fora do lexico do projeto",
+      "abstain": true,
+      "unbound": true,
+      "prediction_set_len": 0,
+      "abstain_reason": "unknown",
+      "research_case": "terra_lua",
+      "state": "digest E=0.1 gap=0.01 viol=0 OOD"
+    },
+    {
+      "id": "t_ambiguous_margin",
+      "text": "gate 176 passed com margem fina entre A e B",
+      "abstain": true,
+      "unbound": false,
+      "prediction_set_len": 2,
+      "abstain_reason": "ambiguous"
+    },
+    {
+      "id": "t_act",
+      "text": "qual e a capital do Brasil",
+      "abstain": false,
+      "unbound": false,
+      "prediction_set_len": 1
+    },
+    {
+      "id": "t_conflict",
+      "text": "dois readers discordam no AND gate",
+      "abstain": true,
+      "abstain_reason": "conflict",
+      "unbound": false,
+      "prediction_set_len": 2
+    }
+  ]
+}

@@ -28,9 +28,12 @@ fn chat_consulta_o_port_e_degrada_sem_inventar() {
     // Turno fora do léxico: a borda de linguagem abstém E o port responde.
     // Com o StubPort (default) o veredito é `engine_unavailable` — degradação
     // honesta, nunca uma resposta inventada.
+    //
+    // NOTA DA AUDITORIA (A-1, `docs/F1_AUDIT.md`): este é o **único** ramo
+    // que consulta o port. O teste `chat_consulta_o_port_em_TODO_turno`
+    // (ignorado até a fatia 3) exige o port em todo turno.
     let mut out: Vec<u8> = Vec::new();
     let argv = vec![
-        "aether-agent".to_string(),
         "chat".to_string(),
         "zzz qqq xxx nao esta no lexico".to_string(),
     ];
@@ -53,12 +56,34 @@ fn chat_consulta_o_port_e_degrada_sem_inventar() {
 }
 
 #[test]
+#[ignore = "F1 fatia 3 (A-1): hoje o port so e consultado no ramo OOV — o gate \
+            AND nunca fala nos turnos em que a decisao importa"]
+fn chat_consulta_o_port_em_TODO_turno() {
+    // Turno DENTRO do léxico: a borda entende e o core age. O port tem de
+    // falar também — é ele que carrega o head `route` (escalar/reformular/
+    // responder, medido 0.97+ no fórum MSG 0758) e o gate AND.
+    //
+    // Evidência da auditoria: hoje a saída deste turno NÃO tem linha
+    // `decisor:` nenhuma. O core decide; o vega é evidência que nunca chega.
+    let mut out: Vec<u8> = Vec::new();
+    let argv = vec![
+        "chat".to_string(),
+        "qual e a capital do Brasil".to_string(),
+    ];
+    let _ = aether_engine::agent::cli::run(&argv, &mut out);
+    let text = String::from_utf8_lossy(&out).to_string();
+    assert!(
+        text.contains("decisor:"),
+        "o port tem de ser consultado em todo turno, nao so no ramo OOV: {text}"
+    );
+}
+
+#[test]
 fn chat_nao_chama_o_python_e_nao_faz_chamada_externa() {
     // Eixo C: default = StubPort, zero chamada externa. Se um dia o default
     // passar a carregar o engine, este teste acusa.
     let mut out: Vec<u8> = Vec::new();
     let argv = vec![
-        "aether-agent".to_string(),
         "chat".to_string(),
         "qual e a capital do Brasil".to_string(),
     ];

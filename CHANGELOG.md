@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.1.7] - 2026-11-20
+
+### Changed
+
+- Ciclo automatico: 19 arquivo(s) (data:2, docs:6, src:2, tests:1, tools:8).
+- Gate: ok (102s).
+
+- `docs/F1_CONTRATO_MEDIDO.md`
+- `docs/F2_PESQUISA_EXTERNA.md`
+- `docs/F5_RESEARCH_TOOL_CONTRACT.md`
+- `docs/PESQUISA_B-G0_PAWS_E1_EMBED.md`
+- `src/agent/mod.rs`
+- `tests/f1_contract.rs`
+- `tools/f5_t0_eval.py`
+- `tools/research_harness.py`
+- `data/f1_gate_verdicts_fixture.json`
+- `data/f5_t1_turns_fixture.json`
+- `docs/F5_T1_AGENT_LOOP.md`
+- `docs/MF2_GATE_REGRESSION.md`
+
 ## [0.1.6] - 2026-11-20
 
 ### Changed

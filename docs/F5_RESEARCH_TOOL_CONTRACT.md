@@ -34,7 +34,7 @@ Este doc é **contrato**, não implementação no agent (F1/OPENCODE ainda fia
 Regras:
 - `abstain_reason` ≠ `unknown` → recusa (mesma doutrina F2)
 - `ampliar` só se objeto `{ "hitl_ack": "SIM", "actions": [...] }`
-- `allow_network=true` exige allowlist de hosts (a definir na implementação)
+- `allow_network=true` exige allowlist + HITL ack (`data/research_network_allowlist.json`, stub T2)
 
 ## Schema de saída
 
@@ -67,9 +67,9 @@ Invariantes: `authority ≤ 120`; nunca 255; cópias → 1 origem (Jaccard /
 
 | Tier | O que mede |
 |---|---|
-| T0 | selftest fixtures (já: `research_harness.py selftest`) |
-| T1 | unknown→quarentena em laço agent (pós-wire DecisionPort) |
-| T2 | híbrido com rede allowlist |
+| T0 | selftest fixtures (`tools/f5_t0_eval.py`) |
+| T1 | unknown→quarentena em laço agent — **DONE** `tools/f5_t1_agent_loop.py` / `docs/F5_T1_AGENT_LOOP.md` |
+| T2 | híbrido com rede allowlist — stub deny-by-default `tools/f5_t2_allowlist.py` (MSG 0823); HITL ainda não sancionou hosts |
 | T3 | suite externa / regressão hit@k (com F4) |
 
 ## Fora de escopo deste draft

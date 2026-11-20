@@ -139,12 +139,14 @@ Artefato: `target/f1_decision_smoke.json`.
 
 | Medida | Valor |
 |---|---|
-| boot (`load` 2 readers + `fit(124)`) | **99.3 s** |
-| latencia do lote (2 perguntas x 2 readers) | **596.0 ms** |
+| boot (`load` 2 readers + `fit(124)`) | **~99–132 s** (varia por host) |
+| latencia do lote (2 perguntas x 2 readers) | **~0.6–0.7 s** |
 | engine | `vega-u-0.8b AND gemma-prose`, `degraded=false` |
-| `passou` | `abstain=true`, `abstain_reason=unknown` |
+| `passou` | `abstain=true`, `abstain_reason=ambiguous` (F1-3: margem fina, **não** unknown) |
 | `route` | `abstain=false`, `choice=reformular`, `readout=and_gate` |
-| `conformal_set_present` | **false** (F-2 no artefato) |
+| `conformal_set_present` | **true** (F1-2: mapa `{passou:[false]}`) |
+
+Regressão MF2 (MSG 0802/0808): `python tools/mf2_gate_regression.py` — unknown só com `unbound`; `prediction_set>1` → ambiguous; harness F2 só abre em unknown.
 
 ### 5.1 O pin que faltava: `PYTHONPATH` e runtime, `PYO3_PYTHON` e build
 
@@ -166,9 +168,10 @@ decide. Duas consequencias:
    e o bootstrap fazer `sys.path` append antes do `import vegaml`, porque o
    venv vive em `target/` e o caminho nao pode ser implicito.
 
-### 5.2 Leitura do resultado
+### 5.2 Leitura do resultado (pós-fixes BUFFY / aceite MSG 0805)
 
-`passou` e do lexico do projeto (gate de 176 testes) e abste por margem 0.61 -
-mesmo assim sai como `unknown` (F-3). `route` age: `reformular` com confianca
-0.55, `readout=and_gate`. O porto funciona; o que falta e **tipar o motivo** e
-**preencher o conformal**, os dois fixes acima.
+`passou` é do léxico do projeto e abste por margem (~0.67/0.33) →
+`abstain_reason=ambiguous` (HITL; **não** abre F2). `route` age:
+`reformular` com confiança ~0.55, `readout=and_gate`. Conformal preenchido.
+Gate de regressão: `tools/mf2_gate_regression.py` + hook no
+`research_harness.py selftest`.

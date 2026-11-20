@@ -19,6 +19,10 @@ CHECKS = [
     ("research_reliability", [sys.executable, str(ROOT / "tools" / "research_reliability.py"), "selftest"]),
     ("research_harness", [sys.executable, str(ROOT / "tools" / "research_harness.py"), "selftest"]),
     ("vega_corpus_grow", [sys.executable, str(ROOT / "tools" / "vega_corpus_grow.py"), "selftest"]),
+    ("f1_abstain_map_mf2", [sys.executable, str(ROOT / "tools" / "f1_abstain_map.py"), "selftest"]),
+    ("mf2_gate_regression", [sys.executable, str(ROOT / "tools" / "mf2_gate_regression.py")]),
+    ("f5_t1_agent_loop", [sys.executable, str(ROOT / "tools" / "f5_t1_agent_loop.py"), "selftest"]),
+    ("f5_t2_allowlist", [sys.executable, str(ROOT / "tools" / "f5_t2_allowlist.py"), "selftest"]),
 ]
 
 
