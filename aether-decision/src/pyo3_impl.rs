@@ -277,6 +277,17 @@ fn json_from_py(py: Python<'_>, v: &Bound<'_, PyAny>) -> Option<serde_json::Valu
     if let Ok(s) = v.extract::<String>() {
         return Some(serde_json::Value::String(s));
     }
+    // F1-2: `prediction_set` e uma LISTA no vegaml (medido, MSG 0793). Sem
+    // este braco a conversao devolvia `None` em silencio e o conjunto conformal
+    // nunca chegava ao schema — a mesma classe de perda silenciosa do parser
+    // do B-G0 (MSG 0567).
+    if let Ok(l) = v.cast::<pyo3::types::PyList>() {
+        let mut arr = Vec::with_capacity(l.len());
+        for it in l.iter() {
+            arr.push(json_from_py(py, &it)?);
+        }
+        return Some(serde_json::Value::Array(arr));
+    }
     if let Ok(d) = v.cast::<pyo3::types::PyDict>() {
         let mut map = serde_json::Map::new();
         for (k, val) in d.iter() {

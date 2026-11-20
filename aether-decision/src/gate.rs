@@ -11,7 +11,7 @@
 //! |---|---|---|
 //! | responde X | responde X | **resposta X** (readout `and_gate`) |
 //! | responde X | responde Y≠X | `conflict` → escala HITL |
-//! | responde X | abstém (OOD) | `unknown` → vetor de pesquisa (F2) |
+//! | responde X | abstém | motivo de QUEM ABSTEVE (OOD ⇒ `unknown`; margem ⇒ `ambiguous`) |
 //! | abstém | responde | motivo do primário (`unknown`/`ambiguous`) |
 //! | abstém | abstém | `unknown` se ambos OOD, senão o motivo mais grave |
 //!
@@ -43,24 +43,39 @@ pub fn combine(primary: &Answer, sentinel: &Answer) -> Answer {
                 a.readout = Some("and_gate".into());
                 a
             }
-            _ => Answer::abstained(
-                primary.question.clone(),
-                AbstainReason::Conflict,
-            ),
+            _ => abstained_verdict(primary, sentinel, AbstainReason::Conflict),
         };
     }
 
-    // 3) Um abstém, o outro não.
-    //    - a sentinela abstém = ela detectou OOD ⇒ `unknown` (pesquisa);
-    //    - o primário abstém = o motivo do primário manda.
-    let reason = if sentinel.abstain {
-        primary.abstain_reason.unwrap_or(AbstainReason::Unknown)
-    } else {
-        sentinel
-            .abstain_reason
-            .unwrap_or_else(|| primary.abstain_reason.unwrap_or(AbstainReason::Unknown))
-    };
-    Answer::abstained(primary.question.clone(), reason)
+    // 3) Um abstém, o outro não. O motivo vem de QUEM ABSTEVE — quem age não
+    //    tem motivo, e ler o silêncio dele como `unknown` transformava margem
+    //    fina em lacuna de conhecimento (F1-3, MSG 0793). `unknown` fica
+    //    reservado ao `unbound` do reader; o resto escala como `ambiguous`.
+    let abstainer = if sentinel.abstain { sentinel } else { primary };
+    let reason = abstainer
+        .abstain_reason
+        .or(primary.abstain_reason)
+        .or(sentinel.abstain_reason)
+        .unwrap_or(AbstainReason::Ambiguous);
+    abstained_verdict(primary, sentinel, reason)
+}
+
+/// Veredito abstido que não perde o que os readers mediram.
+///
+/// `abstain`/`abstain_reason` são a autoridade sobre agir; `choice` (argmax),
+/// `probs`, `confidence` e o conjunto conformal seguem do primário (fallback:
+/// sentinela) — é o mesmo contrato do vegaml, onde `choice` e `abstain`
+/// coexistem (medido, MSG 0793). Sem isso o AND gate jogava fora o
+/// `conformal_set` (F1-2) em todo veredito abstido.
+fn abstained_verdict(primary: &Answer, sentinel: &Answer, reason: AbstainReason) -> Answer {
+    let mut out = primary.clone();
+    out.abstain = true;
+    out.abstain_reason = Some(reason);
+    out.readout = Some("and_gate".into());
+    if out.conformal_set.is_none() {
+        out.conformal_set = sentinel.conformal_set.clone();
+    }
+    out
 }
 
 /// Chave de comparação da resposta: a `choice` canônica.

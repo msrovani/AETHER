@@ -92,6 +92,7 @@ fn main() {
                 "engine": resp.meta.engine,
                 "degraded": resp.meta.degraded,
                 "conformal_set_present": resp.conformal_set.is_some(),
+                "conformal_set": resp.conformal_set,
                 "n_answers": resp.answers.len(),
                 "n_abstain": abstains,
                 "answers": resp.answers,
