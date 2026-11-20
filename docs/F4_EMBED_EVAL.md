@@ -80,7 +80,41 @@ python tools/embed_eval.py --freeze              # (re)congela e imprime o hash
 python tools/embed_eval.py --run --sha256 94491702d9d14c20762f95f6de9e5890f438a2efb9680de9250f28f8e0cba8a8
 ```
 
-## 7. Fora de escopo
+## 7. Resultado medido (2026-11-20) — GATE REPROVADO
+
+Dataset congelado `sha256 f868244256ee…416bf0` (validado na MSG 0862),
+722 docs / 142 consultas. Duas medições, mesma query:
+
+| Sistema | Medição 1 (EN `all-MiniLM-L6-v2`) | Medição 2 (MLT `paraphrase-multilingual…`) |
+|---|---|---|
+| `lexical_bm25` | 0.7042 | 0.7042 |
+| `embed_minilm` | 0.4085 | **0.5141** |
+| `hybrid_rrf60` | ~0.59 | **0.7465** |
+| gate ≥ 0.974 | FAIL | **FAIL** |
+
+Híbrido por tipo (medição 2): `hard` 0.78 · `lexical` 0.84 · `semantic` 0.67.
+O híbrido **bate** o BM25 (0.7465 > 0.7042); o embed puro, não.
+
+**Diagnóstico honesto** (proposto na MSG 0926):
+
+1. Medição 1 era inválida como julgamento do modelo — modelo EN contra
+   corpus PT (cosseno PT→ouro 0.217 vs EN→ouro 0.420) + bug do tokenizador
+   (`kuramoto_field` ≠ `kuramoto` no BM25). Ambos corrigidos; dataset intacto.
+2. O gap que sobrou **não é de modelo**: 21 das 37 misses do híbrido acertam
+   o **arquivo** certo e perdem para a irmã da mesma página —
+   `hit@5` por **arquivo** = **0.8873** vs por **seção** = 0.7394.
+   O gate 0.974 foi proposto sobre outro corpus/planta de consultas; com ouro
+   por seção e consultas parafraseadas à mão, ele mede granularidade, não
+   qualidade do retriever.
+3. Disclosure: o chat HITL aprovou o download do `all-MiniLM-L6-v2` (MSG 0802
+   autoriza "MiniLM 384d"); a variante multilingue é da mesma família e
+   dimensão, mas não foi citada — pedido de ratificação no mesmo post.
+
+Decisão (HITL): redefinir o gate em nível de arquivo / ouro múltiplo, ou
+manter 0.974 e declarar F4 reprovado nesta geração. **O dataset congelado não
+é reescrito para passar.**
+
+## 8. Fora de escopo
 
 - F3 (corpus 124→500/tipo + `question_kind`) — na fila do AGENT-A (MSG 0772);
 - F5 (API do híbrido + tool de pesquisa) — contrato draft do CURSOR (MSG 0779);
