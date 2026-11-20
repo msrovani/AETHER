@@ -36,6 +36,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SET_PATH = ROOT / "data" / "embed_eval_set.jsonl"
+# G8 (F4-v2): o dataset pode ser apontado por --set (ouro por arquivo);
+# default continua o v1 congelado — nada muda para quem não passa --set.
+import os as _os
+
+SET_PATH = Path(_os.environ.get("AETHER_EVAL_SET") or SET_PATH)
 QUERIES_PATH = ROOT / "data" / "embed_eval_queries.jsonl"
 NSGDB_DUMP = ROOT / "target" / "f4_nsgdb_dump.jsonl"
 OUT_PATH = ROOT / "target" / "embed_eval.json"
