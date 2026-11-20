@@ -1,0 +1,143 @@
+{
+  "schema": "aether.cycle_gate/v1",
+  "ok": true,
+  "failed": [],
+  "measured_at": "2026-11-20T15:06:01-0300",
+  "steps": [
+    {
+      "returncode": 0,
+      "ok": true,
+      "seconds": 1.1,
+      "tail": [],
+      "name": "fmt"
+    },
+    {
+      "returncode": 0,
+      "ok": true,
+      "seconds": 8.7,
+      "tail": [
+        "    Checking aether_decision v0.1.0 (C:\\Users\\msrov\\Documents\\AETHER\\aether-decision)",
+        "    Checking aether_engine v0.1.10 (C:\\Users\\msrov\\Documents\\AETHER)",
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.47s"
+      ],
+      "name": "clippy"
+    },
+    {
+      "returncode": 0,
+      "ok": true,
+      "seconds": 1.0,
+      "tail": [
+        "[neural-sgdb] mcp=1.5.12 tools=5 git=aa81818 binary=C:\\Users\\msrov\\Documents\\neural-sgdb\\.nsgdb\\bin\\mcp_server.exe mtime=Some(1795050104) db=C:\\Users\\msrov\\Documents\\neural-sgdb\\.nsgdb\\memory.db backend=file default_scope=Some(\"aether/project\") idx_snapshot=Off",
+        "[neural-sgdb] stdin fechado â€” encerrando",
+        "[neural-sgdb] stdin fechado â€” encerrando"
+      ],
+      "name": "test_lib"
+    },
+    {
+      "returncode": 0,
+      "ok": true,
+      "seconds": 0.5,
+      "tail": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s",
+        "     Running unittests src\\lib.rs (target\\debug\\build\\aether_decision/4f3690ea37be9cf6\\out\\aether_decision-4f3690ea37be9cf6.exe)",
+        "   Doc-tests aether_decision"
+      ],
+      "name": "test_decision"
+    },
+    {
+      "returncode": 0,
+      "ok": true,
+      "seconds": 16.7,
+      "tail": [
+        "[neural-sgdb] mcp=1.5.12 tools=5 git=aa81818 binary=C:\\Users\\msrov\\Documents\\neural-sgdb\\.nsgdb\\bin\\mcp_server.exe mtime=Some(1795050104) db=C:\\Users\\msrov\\Documents\\neural-sgdb\\.nsgdb\\memory.db backend=file default_scope=Some(\"aether/project\") idx_snapshot=Off",
+        "[neural-sgdb] stdin fechado â€” encerrando",
+        "[neural-sgdb] stdin fechado â€” encerrando"
+      ],
+      "name": "test_f1_contract"
+    },
+    {
+      "returncode": 0,
+      "ok": true,
+      "seconds": 0.6,
+      "tail": [
+        "  \"network\": false,",
+        "  \"note\": \"suite de classificador offline; wire crate = BUFFY/OPENCODE\"",
+        "}"
+      ],
+      "name": "suite_offline"
+    },
+    {
+      "returncode": 0,
+      "ok": true,
+      "seconds": 0.1,
+      "tail": [
+        "[f1_prod] selftest produto_real: ok (ok=True, esperado=True)",
+        "[f1_prod] selftest stub_default: ok (ok=False, esperado=False)",
+        "[f1_prod] selftest engine_fora: ok (ok=False, esperado=False)"
+      ],
+      "name": "f1_prod_selftest"
+    },
+    {
+      "returncode": 0,
+      "ok": true,
+      "seconds": 0.1,
+      "tail": [
+        "[engine_lock] tranca tomada por CURSOR_SELFTEST (ttl 60s)",
+        "[engine_lock] ocupado por CURSOR_SELFTEST (expira em 59s) � espere ou faca outra coisa; NAO rode o engine junto.",
+        "[engine_lock] tranca devolvida por CURSOR_SELFTEST"
+      ],
+      "name": "engine_lock_selftest"
+    },
+    {
+      "ok": true,
+      "items": [
+        {
+          "path": "data/f1_gate_baseline.json",
+          "exists": true,
+          "outside_target": true,
+          "meta_present": false,
+          "sha256": "60f3d963cdb91ab37c7806f01bbd3e2108b86f60b39a27de4f6c4edb7d69a5b2",
+          "sha_match": null,
+          "ok": true
+        },
+        {
+          "path": "data/f1_prod_decision.json",
+          "exists": true,
+          "outside_target": true,
+          "meta_present": false,
+          "sha256": "a0725a18d630eec3985d5a663fe4f5507258b016dce5b3822519b493c4958dde",
+          "sha_match": null,
+          "ok": true
+        },
+        {
+          "path": "data/vega_env.lock.json",
+          "exists": true,
+          "outside_target": true,
+          "meta_present": false,
+          "sha256": "2c55e71c33037922d468e2f480255d16b903b2b93311877faeeb4c994f6b7ebd",
+          "sha_match": null,
+          "ok": true
+        },
+        {
+          "path": "data/f1_offline_suite.json",
+          "exists": true,
+          "outside_target": true,
+          "meta_present": true,
+          "sha256": "b8fbc8a563db3bdbb831cc00faae377a82dd53be5da3fd6ab9e1a14ac72e95c3",
+          "sha256_expected": "b8fbc8a563db3bdbb831cc00faae377a82dd53be5da3fd6ab9e1a14ac72e95c3",
+          "sha_match": true,
+          "ok": true
+        }
+      ],
+      "note": "artefato sem .meta.json nao falha (sem hash publicado); fora de target/ e obrigatorio",
+      "name": "integridade"
+    }
+  ],
+  "frozen_artifacts": [
+    "data/f1_gate_baseline.json",
+    "data/f1_prod_decision.json",
+    "data/vega_env.lock.json",
+    "data/f1_offline_suite.json"
+  ],
+  "network": false
+}

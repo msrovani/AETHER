@@ -1,0 +1,9 @@
+{
+  "schema": "aether.cycle_gate_meta/v1",
+  "src": "data/cycle_gate.json",
+  "dst": "data/cycle_gate.json",
+  "sha256": "52d007088352e1a65ff00f059cbe85a677514a9f28cb97f8a4ae2b872d2b49fc",
+  "bytes": 4921,
+  "promoted_at_utc": "2026-11-20T18:06:01Z",
+  "ok": true
+}

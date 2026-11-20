@@ -24,7 +24,7 @@ use crate::core::knowledge_bridge_f1::ScopeId;
 use crate::core::logic_pipeline::{violations_3, LogicPipeline};
 use crate::core::thermodynamic_solver::{IsingLandscape, RelaxOutcome, ThermodynamicIsingSolver};
 use crate::json::Json;
-use crate::knowledge::sgdb::{open, SgdbClient, SgdbConfig, Transport};
+use crate::knowledge::sgdb::{open, SgdbClient, SgdbConfig, TextHit, Transport};
 use crate::phase_memory::ComplexPhaseMemory;
 
 use super::{AgentConfig, Claim, ExpertId, ExpertOutput, Feedback, Task, TaskFeatures};
@@ -643,6 +643,8 @@ impl MemoryCitations {
             .client
             .recall_text(self.scope, query, k)
             .map_err(|e| e.to_string())?;
+        let mut hits = hits;
+        self.enrich_authority(&mut hits);
         Ok(hits
             .into_iter()
             .map(|h| RecallCitation {
@@ -652,6 +654,64 @@ impl MemoryCitations {
             })
             .collect())
     }
+
+    /// Enriquece a autoridade dos hits que voltaram sem ela.
+    ///
+    /// Medido: o `recall` do servidor devolve `authority: 0` para todo hit,
+    /// mesmo com o fato gravado em 120 ou 255 (conferido com `explain`).
+    /// Uma citação que mostra `auth=0` mente sobre a proveniência — e a
+    /// doutrina do projeto é justamente que 255 = sancionado por humano.
+    /// Então, para os hits sem autoridade, o port pergunta ao banco
+    /// (`explain`) e usa a autoridade gravada. Se o banco não responder,
+    /// fica 0 — desconhecido é desconhecido.
+    ///
+    /// O custo é uma ida ao banco por citação; por isso o teto (as três
+    /// primeiras, que são as que o chat mostra).
+    fn enrich_authority(&mut self, hits: &mut [TextHit]) {
+        const MAX_ASKS: usize = 3;
+        let mut asks = 0;
+        for h in hits.iter_mut() {
+            if h.authority != 0 || asks >= MAX_ASKS {
+                continue;
+            }
+            let Some(key) = h.storage_key.clone() else {
+                continue;
+            };
+            asks += 1;
+            if let Ok(json) = self.client.explain(&key) {
+                if let Some(a) = authority_from_explain(&json) {
+                    h.authority = a;
+                }
+            }
+        }
+    }
+}
+
+/// Lê a autoridade de um `explain` (o banco pode mudar a forma do payload).
+fn authority_from_explain(json: &Json) -> Option<u8> {
+    let direct = json.get("authority").and_then(|a| a.as_u64()).or_else(|| {
+        json.get("structuredContent")
+            .and_then(|s| s.get("authority"))
+            .and_then(|a| a.as_u64())
+    });
+    if let Some(v) = direct {
+        return Some(v.min(255) as u8);
+    }
+    // `content[0].text` costuma ser o documento em JSON.
+    let text = json
+        .get("content")
+        .and_then(|c| c.idx(0))
+        .and_then(|c| c.get("text"))
+        .and_then(|t| t.as_str())?;
+    let doc = crate::json::Json::parse(text).ok()?;
+    doc.get("authority")
+        .and_then(|a| a.as_u64())
+        .or_else(|| {
+            doc.get("meta")
+                .and_then(|m| m.get("authority"))
+                .and_then(|a| a.as_u64())
+        })
+        .map(|v| v.min(255) as u8)
 }
 
 impl MemoryExpert {
@@ -822,5 +882,36 @@ mod tests {
         assert_eq!(out.claims.len(), 1);
         assert_eq!(out.claims[0].value, "++++");
         assert!(out.certificate.unwrap().gap > 0.0);
+    }
+
+    /// A autoridade gravada tem de chegar à citação: o `recall` do servidor
+    /// devolve 0 e uma citação com `auth=0` mente sobre a proveniência.
+    #[test]
+    fn autoridade_vem_do_explain_em_qualquer_forma_do_payload() {
+        // Forma direta (structuredContent).
+        let j = Json::obj([(
+            "structuredContent",
+            Json::obj([("authority", Json::num(255.0))]),
+        )]);
+        assert_eq!(authority_from_explain(&j), Some(255));
+
+        // Forma na raiz.
+        let j = Json::obj([("authority", Json::num(120.0))]);
+        assert_eq!(authority_from_explain(&j), Some(120));
+
+        // Forma `content[0].text` com o documento JSON dentro.
+        let doc = "{\"authority\": 60, \"meta\": {\"authority\": 99}}";
+        let j = Json::obj([(
+            "content",
+            Json::Arr(vec![Json::obj([
+                ("text", Json::str(doc)),
+                ("type", Json::str("text")),
+            ])]),
+        )]);
+        assert_eq!(authority_from_explain(&j), Some(60));
+
+        // Sem autoridade: desconhecido, não zero inventado.
+        let j = Json::obj([("foo", Json::str("bar"))]);
+        assert_eq!(authority_from_explain(&j), None);
     }
 }

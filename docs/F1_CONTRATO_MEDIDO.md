@@ -266,13 +266,21 @@ Falhas ficam acionaveis em vez de enganosas:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/f1_smoke.ps1
 ```
 
-Equivalente manual:
+Equivalente manual (venv **canonico**, fora de `target/` -- `cargo clean` apaga
+`target/` e levava o motor junto, MSG 0748/0892):
 
 ```text
-PYO3_PYTHON=target/vega/Scripts/python.exe
-VEGA_PYTHON=target/vega/Scripts/python.exe
-VEGA_SITE_PACKAGES=target/vega/Lib/site-packages   # ou PYTHONPATH
+PYO3_PYTHON=.vega/venv/Scripts/python.exe          # build-time
+VEGA_PYTHON=.vega/venv/Scripts/python.exe
+PYTHONPATH=.vega/venv/Lib/site-packages            # runtime (ou VEGA_SITE_PACKAGES)
 ```
+
+Os pins do ambiente vivem em `data/vega_env.lock.json` (medido: Python 3.14.10,
+vegaml 0.16.5, torch 2.14.1+cu126, layout `.vega/venv` + `.vega/models`) e sao
+materializados por `tools/vega_env_setup.ps1` (`-VerifyOnly` so confere).
+`scripts/f1_smoke.ps1` recusa rodar (exit 3) se `.vega/venv` nao existir, em
+vez de cair no `target/vega` legado -- um smoke que passa no caminho efemero
+esconde justamente a perda que a migracao evita.
 
 O artefato do smoke grava `python_site_packages` efetivo, entao da para saber
 qual caminho o embed usou sem adivinhar.
@@ -287,3 +295,9 @@ qual caminho o embed usou sem adivinhar.
 
 Prova de ponta a ponta: smoke rodado **sem** `PYTHONPATH` e **sem**
 `VEGA_SITE_PACKAGES`, so com `VEGA_PYTHON` -- a derivacao tem que bastar.
+
+Medicao no venv canonico (2026-11-20, host sob contencao, tranca
+`tools/engine_lock.py` tomada antes): EXIT 0, `python_site_packages =
+.vega\venv\Lib\site-packages`, boot 844,3 s, latencia 10 526,7 ms. Os numeros
+limpos do mesmo smoke sao 32,7 s / 240,2 ms (MSG 1002/1014); a diferenca e
+contencao de host, nao regressao do pin.

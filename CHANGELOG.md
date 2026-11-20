@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.1.11] - 2026-11-20
+
+### Changed
+
+- Ciclo automatico: 14 arquivo(s) (data:11, docs:1, src:1, tools:1).
+- Gate: ok (10s).
+
+- `data/a5_promote_p3_report.json`
+- `data/f1_5_ttt_abstain.json.meta.json`
+- `data/f1_a1b_vega_check.json.meta.json`
+- `data/f1_decision_smoke_selftest.meta.json`
+- `data/f1_offline_suite.json`
+- `data/f1_offline_suite.json.meta.json`
+- `data/reports/f5_t1_eval.json.meta.json`
+- `data/reports/f5_t1_loop.json.meta.json`
+- `data/reports/f5_t2_allowlist.json.meta.json`
+- `docs/F1_CONTRATO_MEDIDO.md`
+- `src/agent/experts.rs`
+- `data/cycle_gate.json`
+
 ## [0.1.10] - 2026-11-20
 
 ### Changed
