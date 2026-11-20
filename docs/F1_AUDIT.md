@@ -287,13 +287,14 @@ em todos — dono do `pyo3_impl.rs` / port continua BUFFY/OPENCODE.
 | A-2 VRAM | PASS | `docs/F1_A2_WATCHDOG_SPEC.md` + `tools/f1_vram_watchdog.py` | 5 ok |
 | A-3 warmup | PASS | `docs/F1_A3_WARMUP_SPEC.md` + `tools/f1_warmup_gate.py` | 7 ok |
 | A-4 GIL | PASS | `docs/F1_A4_GIL_SPEC.md` + `tools/f1_gil_gate.py` | 6 ok |
-| A-5 / A-2c | PASS | `docs/F1_A5_A2C_CURSOR.md` + `f1_gate_promote` / `gpu_engine_lock` | promote ok |
+| A-5 / A-2c | PASS | `docs/F1_A5_A2C_CURSOR.md` + `f1_gate_promote` / `gpu_engine_lock` | promote + lock ok |
 | F1-5 head TTT | PASS | `docs/F1_5_HEAD_TTT_SPEC.md` + `tools/f1_5_ttt_abstain.py` | 7 ok |
 
-Suite agregada:
+Suite agregada (MSG **0941**: inclui A-2c):
 
 ```bash
 python tools/f1_offline_suite.py selftest
+# → 6/6 (A2, A2c, A3, A4, F1-5, A5)
 ```
 
 Isto **não** fecha o aceite de produto (A-1b / wire A-2..A-4 no crate). Fecha

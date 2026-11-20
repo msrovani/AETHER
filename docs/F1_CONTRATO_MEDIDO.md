@@ -222,3 +222,68 @@ confianca. Threshold de abstain para head e decisao da F3.
 
 Reproducao: `scripts/f1_contract_probe.py --fit-n 124` (40 exemplos nao ligam
 os heads; 124 liga).
+
+## 7. Pin de runtime: `sys.path` antes do `import vegaml`
+
+O pin tem duas metades e so uma delas era conhecida:
+
+| Metade | Variavel | Quando age | Se faltar |
+|---|---|---|---|
+| build-time | `PYO3_PYTHON` | link do PyO3 | build usa outro Python (ABI errada) |
+| runtime | `VEGA_SITE_PACKAGES` / `PYTHONPATH` | `import vegaml` | `ModuleNotFoundError` -> `engine_unavailable` |
+
+O embed (`auto-initialize`) resolve o **Python base** da maquina; o venv do
+engine (`target/vega`) nao entra no `sys.path` sozinho. Sem a segunda metade o
+port abste para sempre, e o erro culpa o motor quando o problema e caminho.
+
+### 7.1 O que o codigo faz agora
+
+`EngineConfig` expoe `python_site_packages` (serde + `from_env`), e
+`effective_site_packages()` resolve em cadeia:
+
+1. `python_site_packages` da config;
+2. `VEGA_SITE_PACKAGES`;
+3. `PYTHONPATH`;
+4. derivado de `VEGA_PYTHON` (`<venv>/Scripts/python.exe` ->
+   `<venv>/Lib/site-packages`).
+
+`VegaPort::new` chama `pin_sys_path(py, cfg)` **antes** do import: cada caminho
+existente entra na frente do `sys.path` (`sys.path.insert(0, ...)`), `PYTHONPATH`
+com varios caminhos e respeitado (separador do host).
+
+Falhas ficam acionaveis em vez de enganosas:
+
+- caminho configurado que nao existe -> `python_site_packages nao existe: <p>
+  (configure VEGA_SITE_PACKAGES, PYTHONPATH ou VEGA_PYTHON)`;
+- nada configurado -> `vegaml nao importou: nenhum site-packages configurado
+  (VEGA_SITE_PACKAGES, PYTHONPATH ou VEGA_PYTHON)`.
+
+### 7.2 Repro / runner
+
+`scripts/f1_smoke.ps1` exporta as duas metades e roda o smoke:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/f1_smoke.ps1
+```
+
+Equivalente manual:
+
+```text
+PYO3_PYTHON=target/vega/Scripts/python.exe
+VEGA_PYTHON=target/vega/Scripts/python.exe
+VEGA_SITE_PACKAGES=target/vega/Lib/site-packages   # ou PYTHONPATH
+```
+
+O artefato do smoke grava `python_site_packages` efetivo, entao da para saber
+qual caminho o embed usou sem adivinhar.
+
+### 7.3 Regressao
+
+`pyo3_impl::ffi_contract_tests`:
+
+- `pin_sys_path_inserts_the_configured_site_packages` (entra na frente);
+- `pin_sys_path_rejects_a_path_that_does_not_exist` (mensagem acionavel);
+- `pin_sys_path_is_a_noop_without_config` (sem config, sem mentira).
+
+Prova de ponta a ponta: smoke rodado **sem** `PYTHONPATH` e **sem**
+`VEGA_SITE_PACKAGES`, so com `VEGA_PYTHON` -- a derivacao tem que bastar.

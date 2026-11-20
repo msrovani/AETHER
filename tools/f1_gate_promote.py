@@ -77,9 +77,23 @@ def promote(src: Path, dst: Path, meta_path: Path) -> dict:
     return meta
 
 
+def _smoke_ok_for_selftest(path: Path) -> bool:
+    """Aceita só smoke com answers + conformal — ignora stub engine_unavailable em target/."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    answers = data.get("answers") or []
+    return bool(answers) and bool(data.get("conformal_set_present"))
+
+
 def selftest() -> int:
+    # Preferir data/ durável se target/ foi sobrescrito por smoke degradado (sem vegaml).
+    durable = DEFAULT_DST
     src = DEFAULT_SRC
-    if not src.exists():
+    if durable.is_file() and _smoke_ok_for_selftest(durable):
+        src = durable
+    elif not (src.is_file() and _smoke_ok_for_selftest(src)):
         src = ROOT / "target" / "f1_gate_promote_selftest_src.json"
         src.parent.mkdir(parents=True, exist_ok=True)
         src.write_text(

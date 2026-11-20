@@ -8,8 +8,17 @@
 //!
 //! ```text
 //! PYO3_PYTHON=target/vega/Scripts/python.exe \
+//! VEGA_SITE_PACKAGES=target/vega/Lib/site-packages \
+//! PYTHONPATH=target/vega/Lib/site-packages \
 //!   cargo run -p aether_decision --features pyo3 --example f1_smoke
 //! ```
+//!
+//! O pin tem duas metades: `PYO3_PYTHON` e **build-time** (qual Python o
+//! PyO3 linka); `PYTHONPATH`/`VEGA_SITE_PACKAGES` sao **runtime** (o que o
+//! embed enxerga em `sys.path`). Faltando a segunda, o `import vegaml` falha
+//! e o port abste para sempre com `engine_unavailable`. Com `VEGA_PYTHON`
+//! apontando para o venv, `VegaPort` deriva o `site-packages` sozinho e o
+//! `PYTHONPATH` passa a ser opcional. Atalho: `scripts/f1_smoke.ps1`.
 //!
 //! Exit 0 = decidiu; exit 3 = ABSTAIN honesto (artefato com o motivo).
 
@@ -37,6 +46,12 @@ fn write_artifact(rec: &serde_json::Value) {
 fn main() {
     let corpus_path = "data/vega_calibration_starter.json";
     let mut cfg = EngineConfig::gate_f1(Some(corpus_path.to_string()));
+    // Pin de runtime: `gate_f1` e so a config fixa da cadeira, sem env. Os
+    // pins (`VEGA_PYTHON` / `VEGA_SITE_PACKAGES` / `PYTHONPATH`) entram por
+    // cima para o smoke exercitar o mesmo caminho do CLI/daemon.
+    let env_cfg = EngineConfig::from_env();
+    cfg.python = env_cfg.python.or(cfg.python);
+    cfg.python_site_packages = env_cfg.python_site_packages.or(cfg.python_site_packages);
     // `gate_f1` deixa o primário no hub (download). O smoke é offline por
     // contrato: usa o checkpoint local que já está no disco.
     cfg.model_primary = Some(
@@ -93,6 +108,7 @@ fn main() {
                 "degraded": resp.meta.degraded,
                 "conformal_set_present": resp.conformal_set.is_some(),
                 "conformal_set": resp.conformal_set,
+                "python_site_packages": cfg.effective_site_packages(),
                 "n_answers": resp.answers.len(),
                 "n_abstain": abstains,
                 "answers": resp.answers,

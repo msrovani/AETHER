@@ -21,6 +21,47 @@ use crate::types::{Answer, DecisionError, DecisionMeta, DecisionRequest, Decisio
 use pyo3::prelude::*;
 use pyo3::IntoPyObjectExt;
 
+/// Pina o `site-packages` do venv no `sys.path` **antes** do `import vegaml`.
+///
+/// O embed (`auto-initialize`) resolve o Python base da maquina: o venv do
+/// engine (`target/vega`) nao entra no `sys.path` sozinho. Sem este passo o
+/// `import vegaml` falha e o port degrada para `engine_unavailable` para
+/// sempre — erro que culpa o motor quando o problema e o caminho.
+///
+/// Ordem de resolucao (`EngineConfig::effective_site_packages`):
+/// config -> `PYTHONPATH` -> derivado de `VEGA_PYTHON`.
+///
+/// Devolve os caminhos inseridos. `Ok(None)` = nada configurado (ai o erro
+/// de import e honestamente "nada configurado", nao "motor quebrado").
+pub fn pin_sys_path(
+    py: Python<'_>,
+    cfg: &EngineConfig,
+) -> Result<Option<String>, DecisionError> {
+    let Some(raw) = cfg.effective_site_packages() else {
+        return Ok(None);
+    };
+    // `PYTHONPATH` pode trazer varios caminhos; o separador e o do host.
+    let existing: Vec<String> = std::env::split_paths(&raw)
+        .filter(|p| p.is_dir())
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+    if existing.is_empty() {
+        return Err(DecisionError::EngineUnavailable(format!(
+            "python_site_packages nao existe: {raw} \
+             (configure VEGA_SITE_PACKAGES, PYTHONPATH ou VEGA_PYTHON)"
+        )));
+    }
+    let sys = py.import("sys").map_err(py_err_to_engine)?;
+    let path = sys.getattr("path").map_err(py_err_to_engine)?;
+    // Reverso para que o primeiro caminho configurado fique na frente.
+    for entry in existing.iter().rev() {
+        path.call_method1("insert", (0, entry))
+            .map_err(py_err_to_engine)?;
+    }
+    let sep = if cfg!(windows) { ";" } else { ":" };
+    Ok(Some(existing.join(sep)))
+}
+
 /// Port real: primário (+ sentinela quando configurada), single interpreter.
 pub struct VegaPort {
     primary: Py<PyAny>,
@@ -33,7 +74,20 @@ impl VegaPort {
     /// executado aqui (determinístico, ~1–2 min no start — bootstrap).
     pub fn new(cfg: &EngineConfig) -> PyResult<Self> {
         Python::attach(|py| {
-            let vegaml = py.import("vegaml")?;
+            // Pin de runtime (F1): o `site-packages` do venv entra no
+            // `sys.path` ANTES do import. Sem isso `vegaml` some e o port
+            // abste para sempre com `engine_unavailable`.
+            pin_sys_path(py, cfg)
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            let vegaml = py.import("vegaml").map_err(|e| {
+                let hint = match cfg.effective_site_packages() {
+                    Some(p) => format!("vegaml nao importou com site-packages '{p}'"),
+                    None => "vegaml nao importou: nenhum site-packages configurado \
+                             (VEGA_SITE_PACKAGES, PYTHONPATH ou VEGA_PYTHON)"
+                        .to_string(),
+                };
+                pyo3::exceptions::PyModuleNotFoundError::new_err(format!("{hint}: {e}"))
+            })?;
             let primary = match &cfg.model_primary {
                 Some(m) => vegaml.call_method1("load", (m,))?,
                 None => vegaml.call_method0("load")?,
@@ -175,6 +229,54 @@ mod ffi_contract_tests {
         let map = conformal_map(&[com_set, sem_set]).expect("um conjunto presente");
         assert_eq!(map["passou"], serde_json::json!([false, true]));
         assert!(map.get("route").is_none(), "nao inventamos conjunto");
+    }
+
+    /// Pin de runtime: o caminho configurado entra na FRENTE do `sys.path`,
+    /// que e o que faz o `import vegaml` achar o venv do engine.
+    #[test]
+    fn pin_sys_path_inserts_the_configured_site_packages() {
+        let dir = std::env::temp_dir().join("aether_pin_site_packages");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut cfg = EngineConfig::default();
+        cfg.python_site_packages = Some(dir.to_string_lossy().to_string());
+
+        pyo3::Python::attach(|py| {
+            let pinned = pin_sys_path(py, &cfg)
+                .expect("pin ok")
+                .expect("caminho configurado e existente");
+            assert!(pinned.contains("aether_pin_site_packages"), "{pinned}");
+            let sys = py.import("sys").unwrap();
+            let head: String = sys
+                .getattr("path")
+                .unwrap()
+                .get_item(0)
+                .unwrap()
+                .extract()
+                .unwrap();
+            assert_eq!(head, dir.to_string_lossy(), "deve entrar na frente");
+        });
+    }
+
+    /// Caminho errado falha com mensagem acionavel — nao com "motor quebrado".
+    #[test]
+    fn pin_sys_path_rejects_a_path_that_does_not_exist() {
+        let mut cfg = EngineConfig::default();
+        cfg.python_site_packages = Some("target/nao_existe_site_packages".into());
+        pyo3::Python::attach(|py| {
+            let err = pin_sys_path(py, &cfg).expect_err("deve falhar");
+            let msg = err.to_string();
+            assert!(msg.contains("nao existe"), "{msg}");
+            assert!(msg.contains("target/nao_existe_site_packages"), "{msg}");
+        });
+    }
+
+    /// Sem config o pin e no-op: o erro de import continua sendo do vegaml.
+    #[test]
+    fn pin_sys_path_is_a_noop_without_config() {
+        let cfg = EngineConfig::default();
+        pyo3::Python::attach(|py| {
+            assert!(pin_sys_path(py, &cfg).unwrap().is_none());
+        });
     }
 }
 

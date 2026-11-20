@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 GATES = [
     ("A2_vram", "tools/f1_vram_watchdog.py"),
+    ("A2c_gpu_lock", "tools/gpu_engine_lock.py"),
     ("A3_warmup", "tools/f1_warmup_gate.py"),
     ("A4_gil", "tools/f1_gil_gate.py"),
     ("F1_5_ttt", "tools/f1_5_ttt_abstain.py"),
