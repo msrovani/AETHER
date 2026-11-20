@@ -13,13 +13,18 @@ não valores de sorte.
 
 ## 1. Ambiente medido
 
+> **MSG 0892:** o motor durável migrou para `.vega/` (gitignored). Não criar
+> venv em `target/`. Paths canônicos abaixo; medições antigas que citam
+> `target/vega` permanecem como histórico da sonda inicial.
+
 | Item | Valor |
 |---|---|
-| Interpretador | `target/vega/Scripts/python.exe` — Python **3.14.10** (MSC v.1944, 64-bit) |
+| Interpretador | `.vega/venv/Scripts/python.exe` — Python **3.14.10** (MSC v.1944, 64-bit) |
 | `vegaml` | **0.16.5** (o plano cita 0.16.3) |
 | `torch` | 2.14.1+cu126, `cuda_available=True` |
-| Checkpoints | `target/vega/vega-u-gemma-1b`, `target/vega/vega-u-gemma-1b-prose` (`stats.npz` + `vega_config.json`) |
+| Checkpoints | `.vega/models/vega-u-gemma-1b`, `.vega/models/vega-u-gemma-1b-prose` |
 | `pyo3` no crate | 0.30.1 — **resolve com cp314** quando `PYO3_PYTHON` aponta o interpretador acima |
+| Env | `PYO3_PYTHON=.vega/venv/Scripts/python.exe` · `PYTHONPATH=.vega/venv/Lib/site-packages` |
 
 `vegaml.load()` sem `device` explícito roda em **CPU** neste host: as latências
 abaixo são CPU. Os 116–186 ms do plano/0758 são o caminho GPU com kernels
@@ -111,7 +116,7 @@ Correção mínima, sem tocar no engine: `unbound == true` → `Unknown`;
 `"abstain_sem_classe"` (nunca `Unknown` por default).
 
 **F-4 — o toolchain NÃO é o bloqueio (medido).**
-Com `PYO3_PYTHON=target/vega/Scripts/python.exe`,
+Com `PYO3_PYTHON=.vega/venv/Scripts/python.exe` (antes: `target/vega/...`),
 `cargo check -p aether_decision --features pyo3` fecha **EXIT 0** (pyo3 0.30.1,
 um único warning de `dead_code`). Histórico útil: às 11:2x o mesmo check dava 5
 erros (`E0583` bootstrap/config ausentes, `E0432` `combine`/`AndGatePort`,
@@ -159,14 +164,15 @@ abstain=true, reason=engine_unavailable,
 error="ModuleNotFoundError: No module named 'vegaml'"
 ```
 
-Com `PYTHONPATH=target/vega/Lib/site-packages` o mesmo binario (sem rebuild)
-decide. Duas consequencias:
+Com `PYTHONPATH=.vega/venv/Lib/site-packages` (MSG 0892; legado
+`target/vega/...` é resíduo apagável) o mesmo binário (sem rebuild) decide.
+Duas consequências:
 
-1. A degradacao e honesta e tipada (exit 3, sem panic) - criterio do plano ok.
+1. A degradação é honesta e tipada (exit 3, sem panic) — critério do plano ok.
 2. Sem o pin, o chat com `DecisionPort` fiado abste **para sempre** e parece
-   "engine fora do ar". O caminho robusto e `EngineConfig.python_site_packages`
-   e o bootstrap fazer `sys.path` append antes do `import vegaml`, porque o
-   venv vive em `target/` e o caminho nao pode ser implicito.
+   "engine fora do ar". O caminho robusto é `EngineConfig.python_site_packages`
+   e o bootstrap fazer `sys.path` append antes do `import vegaml`. O venv
+   **não** pode viver em `target/` (`cargo clean` apaga o motor).
 
 ### 5.2 Leitura do resultado (pós-fixes BUFFY / aceite MSG 0805)
 

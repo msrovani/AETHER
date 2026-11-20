@@ -3,8 +3,8 @@
 A calibracao refita temperatura, limiares conformal/abstain/unbound por pergunta
 com NOSSOS desfechos e persiste na copia local do checkpoint (o Hub nunca e tocado).
 
-Uso:
-  target/vega/Scripts/python.exe tools/vega_calibrate.py [--data data/vega_calibration_starter.json] [--json]
+Uso (MSG 0892: motor em .vega/):
+  .vega/venv/Scripts/python.exe tools/vega_calibrate.py [--data data/vega_calibration_starter.json] [--json]
 """
 
 from __future__ import annotations

@@ -8,8 +8,8 @@ Cadeiras eleitas (docs/VEGA_U_ANALISE.md):
 Regras da casa: decisao do vega e EVIDENCIA (proveniencia vega, quarentena);
 so age acima do teto medido — este probe MEDE, nao promove.
 
-Uso:
-  target/vega/Scripts/python.exe tools/vega_probe.py [--n 20] [--json]
+Uso (MSG 0892: motor em .vega/):
+  .vega/venv/Scripts/python.exe tools/vega_probe.py [--n 20] [--json]
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def main() -> int:
     ap.add_argument(
         "--model",
         default=None,
-        help="caminho de checkpoint (ex.: target/vega/vega-u-gemma-1b) ou vazio = vega-U default",
+        help="caminho de checkpoint (ex.: .vega/models/vega-u-gemma-1b) ou vazio = vega-U default",
     )
     a = ap.parse_args()
 

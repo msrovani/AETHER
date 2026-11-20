@@ -13,8 +13,8 @@ Medido em 2026-11-20 (MSG 0771):
   - topo: answers, latency_ms, n_tokens, views, mode.
 
 Uso:
-  target/vega/Scripts/python.exe scripts/f1_contract_probe.py \
-      --model target/vega/vega-u-gemma-1b-prose --n 5
+  .vega/venv/Scripts/python.exe scripts/f1_contract_probe.py \
+      --model .vega/models/vega-u-gemma-1b-prose --n 5
 
 Exit 0 = mediu; exit 3 = ABSTAIN (sem modelo/pacote, artefato com motivo).
 """
@@ -54,7 +54,7 @@ def describe(answer: dict) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="target/vega/vega-u-gemma-1b-prose")
+    ap.add_argument("--model", default=".vega/models/vega-u-gemma-1b-prose")
     ap.add_argument("--corpus", default="data/vega_calibration_starter.json")
     ap.add_argument("--n", type=int, default=5, help="amostras de latencia (apos warmup)")
     ap.add_argument(

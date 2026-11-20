@@ -4,8 +4,8 @@ Os heads são cross-validados; o modo auto só os usa se vencerem o engine
 (mesmo critério do pacote). Custo: segundos em features cacheadas.
 Corpus: data/vega_calibration_starter.json (124 rótulos reais).
 
-Uso:
-  target/vega/Scripts/python.exe tools/vega_fit_probe.py [--model CAMINHO]
+Uso (MSG 0892: motor em .vega/):
+  .vega/venv/Scripts/python.exe tools/vega_fit_probe.py [--model CAMINHO]
 """
 
 from __future__ import annotations

@@ -5,8 +5,8 @@ Sem rótulos e sem retreino: o anchor 0.8B gera os alvos no espaço compartilhad
 o porto do Gemma é ajustado em forma fechada (ridge + refine) contra o engine
 congelado. Requer HF_TOKEN no ambiente (gated model) e licença aceita no Hub.
 
-Uso:
-  $env:HF_TOKEN = "..." ; target/vega/Scripts/python.exe tools/vega_attach.py
+Uso (MSG 0892: motor em .vega/, nunca recriar venv em target/):
+  $env:HF_TOKEN = "..." ; .vega/venv/Scripts/python.exe tools/vega_attach.py
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ def main() -> int:
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--corpus", default="data/vega_attach_corpus.txt")
-    ap.add_argument("--out", default="target/vega/vega-u-gemma-1b")
+    ap.add_argument("--out", default=".vega/models/vega-u-gemma-1b")
     a = ap.parse_args()
 
     texts = [
