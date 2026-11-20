@@ -16,7 +16,9 @@ use std::path::PathBuf;
 
 use crate::core::logic_pipeline::Clause3;
 use crate::json::Json;
-use aether_decision::{AbstainReason, DecisionPort, DecisionRequest, StubPort};
+use aether_decision::{
+    AbstainReason, DecisionPort, DecisionRequest, DecisionResponse, StubPort,
+};
 
 use super::language::{GoalSchema, LanguageError, ParserPort};
 use super::{
@@ -573,8 +575,9 @@ fn abstain_reason_label(reason: Option<&AbstainReason>) -> &'static str {
     }
 }
 
-/// Linha(s) auditáveis do `DecisionPort` (F1 fatia 3 / A-1+A-7).
-fn decision_port_line(port: &dyn DecisionPort, text: &str) -> String {
+/// Linha(s) auditáveis do `DecisionPort` (F1 fatia 3 / A-1+A-7) + a resposta
+/// estruturada para a fusão C3 (o route head decide a ação do turno OOV).
+fn decision_port_turn(port: &dyn DecisionPort, text: &str) -> (String, Option<DecisionResponse>) {
     let req = DecisionRequest {
         state: state_digest(text),
         questions: decision_questions(),
@@ -582,7 +585,7 @@ fn decision_port_line(port: &dyn DecisionPort, text: &str) -> String {
     match port.decide(&req) {
         Ok(resp) => {
             if resp.answers.is_empty() {
-                return "decisor: sem resposta | engine=unknown".into();
+                return ("decisor: sem resposta | engine=unknown".into(), Some(resp));
             }
             let mut lines = Vec::with_capacity(resp.answers.len());
             for ans in &resp.answers {
@@ -602,10 +605,23 @@ fn decision_port_line(port: &dyn DecisionPort, text: &str) -> String {
                     ));
                 }
             }
-            lines.join("\n")
+            (lines.join("\n"), Some(resp))
         }
-        Err(err) => format!("decisor: abstain motivo=engine_indisponivel ({err})"),
+        Err(err) => (
+            format!("decisor: abstain motivo=engine_indisponivel ({err})"),
+            None,
+        ),
     }
+}
+
+/// `choice` do answer `route` (a cadeira C3), quando o port não abstém nela.
+fn route_choice(resp: Option<&DecisionResponse>) -> Option<&str> {
+    resp?
+        .answers
+        .iter()
+        .find(|a| a.question == "route" && !a.abstain)?
+        .choice
+        .as_deref()
 }
 
 /// True só quando alguma linha do port traz `motivo=unknown` (não ambiguous,
@@ -648,10 +664,40 @@ fn chat_turn(
     let mut parser = ParserPort::new();
     let report = parser.analyze(text, &GoalSchema::agent_default());
     // F1 fatia 3 (A-1): o port fala em TODO turno — evidência, não decisão.
-    let port_line = decision_port_line(port, text);
+    // G3: a resposta estruturada acompanha a linha — a cadeira C3 (route head)
+    // passa a EXECUTAR no turno OOV (reformular/escalar/responder).
+    let (port_line, port_resp) = decision_port_turn(port, text);
     let _ = writeln!(out, "{port_line}");
 
     if report.is_oov() {
+        // G3 (cadeira C3 executando): o route head decide a ação do turno OOV.
+        // escalar = injeção/override → para o humano; reformular = ambíguo →
+        // pergunta de esclarecimento; responder = claro no gate → segue para
+        // memória/pesquisa. Port abstendo ou stub = comportamento honesto
+        // anterior (abstain + memória).
+        match route_choice(port_resp.as_ref()) {
+            Some("escalar") => {
+                let _ = writeln!(
+                    out,
+                    "ação: escalar | motivo: o decisor classificou este turno como \
+                     tentativa de instrução/injeção — precisa do humano"
+                );
+                return EXIT_OK;
+            }
+            Some("reformular") => {
+                let residuo = report.unconsumed.join(" ");
+                let foco = if residuo.is_empty() { text } else { residuo.as_str() };
+                let _ = writeln!(
+                    out,
+                    "ação: reformular | confiança {:.2} | pergunta de esclarecimento: \
+                     você quis dizer algo sobre \"{foco}\"? tente nos termos do léxico \
+                     (fatos, memória, sat, verify)",
+                    report.confidence
+                );
+                return EXIT_OK;
+            }
+            _ => {} // responder / abstain / sem port → fluxo de citação abaixo
+        }
         let erro = match report.error {
             Some(LanguageError::Empty) => "texto vazio",
             Some(LanguageError::Ambiguous) => "ambíguo",
@@ -1800,19 +1846,21 @@ mod tests {
                 vram_used_mb: None,
             },
         }));
-        let line = decision_port_line(&port, "pergunta fora do lexico");
+        let (line, resp) = decision_port_turn(&port, "pergunta fora do lexico");
         assert!(line.contains("motivo=unknown"), "{line}");
         assert!(line.contains("q=route"), "{line}");
         assert!(line.contains("choice=reformular"), "{line}");
         assert!(line.contains("engine=scripted"), "{line}");
+        assert_eq!(route_choice(resp.as_ref()), Some("reformular"));
 
         let stub = StubPort;
-        let line = decision_port_line(&stub, "pergunta fora do lexico");
+        let (line, resp) = decision_port_turn(&stub, "pergunta fora do lexico");
         assert!(line.contains("motivo=engine_unavailable"), "{line}");
         assert!(
             line.contains("q=passou") || line.contains("q=route"),
             "{line}"
         );
+        assert_eq!(route_choice(resp.as_ref()), None);
     }
 
     /// F1 fatia 5 (fórum MSG 1056): o agente precisa falar o mesmo idioma do

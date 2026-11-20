@@ -76,6 +76,12 @@ impl VegaPort {
             // abste para sempre com `engine_unavailable`.
             pin_sys_path(py, cfg)
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            // G1 (Eixo D): cache de features de fit em disco. Falha de cache
+            // nunca impede o bootstrap — degrada para leitura cheia.
+            let tools_dir = feature_tools_dir(cfg);
+            if let Some(tools) = &tools_dir {
+                let _ = add_sys_path(py, tools);
+            }
             let vegaml = py.import("vegaml").map_err(|e| {
                 let hint = match cfg.effective_site_packages() {
                     Some(p) => format!("vegaml nao importou com site-packages '{p}'"),
@@ -90,13 +96,19 @@ impl VegaPort {
                 None => vegaml.call_method0("load")?,
             };
             if let Some(cal) = &cfg.calibration {
+                install_feature_cache(py, &primary, cal, "primary", tools_dir.as_deref())?;
+                install_engine_cache(py, &primary, cal, "primary", tools_dir.as_deref())?;
                 fit_from_file(py, &primary, cal)?;
+                flush_feature_cache(py, tools_dir.as_deref());
             }
             let sentinel = match &cfg.model_sentinel {
                 Some(m) => {
                     let s = vegaml.call_method1("load", (m,))?;
                     if let Some(cal) = &cfg.calibration {
+                        install_feature_cache(py, &s, cal, "sentinel", tools_dir.as_deref())?;
+                        install_engine_cache(py, &s, cal, "sentinel", tools_dir.as_deref())?;
                         fit_from_file(py, &s, cal)?;
+                        flush_feature_cache(py, tools_dir.as_deref());
                     }
                     Some(s)
                 }
@@ -299,6 +311,232 @@ fn conformal_map(answers: &[Answer]) -> Option<serde_json::Value> {
 fn py_err_to_engine(e: PyErr) -> DecisionError {
     // Eixo E: exceção Python NUNCA sobe como panic — vira abstain tipado.
     DecisionError::EngineUnavailable(format!("{e}"))
+}
+
+/// Diretório do cache de features (G1): `VEGA_FEATURE_CACHE` vence; default =
+/// `<dir do corpus>/../tools` (o repo — o módulo `vega_disk_cache.py` mora lá).
+fn feature_tools_dir(cfg: &EngineConfig) -> Option<std::path::PathBuf> {
+    if let Ok(v) = std::env::var("VEGA_FEATURE_TOOLS") {
+        if !v.trim().is_empty() {
+            return Some(std::path::PathBuf::from(v));
+        }
+    }
+    let cal = cfg.calibration.as_ref()?;
+    let p = std::path::Path::new(cal);
+    // <root>/data/<corpus>.json → <root>/tools
+    p.parent()?.parent().map(|root| root.join("tools"))
+}
+
+/// Insere `dir` no `sys.path` do interpreter embutido (idempotente o bastante).
+fn add_sys_path(py: Python<'_>, dir: &std::path::Path) -> PyResult<()> {
+    let sys = py.import("sys")?;
+    let path = sys.getattr("path")?;
+    let entry = dir.to_string_lossy().to_string();
+    // Já presente? Não duplica.
+    let contains = path.call_method0("__contains__")?;
+    let has = contains.call1((entry.clone(),))?.extract::<bool>()?;
+    if !has {
+        path.call_method1("insert", (0, entry))?;
+    }
+    Ok(())
+}
+
+/// Instala o cache de features de disco (G1) para um reader. Falha de cache
+/// (módulo ausente, path errado) é ABAFADA com aviso: o bootstrap segue com
+/// leitura cheia — cache é azeite, não fundação.
+fn install_feature_cache(
+    py: Python<'_>,
+    reader: &Bound<'_, PyAny>,
+    calibration: &str,
+    tag: &str,
+    tools_dir: Option<&std::path::Path>,
+) -> PyResult<()> {
+    match tools_dir {
+        Some(t) if t.join("vega_disk_cache.py").exists() => {
+            eprintln!("[aether-decision] G1: instalando cache de features tag={tag} tools={t:?}");
+        }
+        Some(t) => {
+            eprintln!("[aether-decision] G1: modulo vega_disk_cache ausente em {t:?} — sem cache");
+            return Ok(());
+        }
+        None => {
+            eprintln!("[aether-decision] G1: tools_dir None — sem cache");
+            return Ok(());
+        }
+    }
+    let tools = tools_dir.unwrap();
+    let cal_dir = std::path::Path::new(calibration)
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .to_string_lossy()
+        .to_string();
+    let cache_dir = std::env::var("VEGA_FEATURE_CACHE")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| {
+            format!(
+                "{cal_dir}{}feature_cache",
+                std::path::MAIN_SEPARATOR
+            )
+        });
+    let tools_str = tools.to_string_lossy().to_string();
+    let sep = std::path::MAIN_SEPARATOR.to_string();
+    let script = format!(
+        "import sys as _s; _s.path.insert(0, r'{t}'); \
+import vega_disk_cache as _c; \
+_c.install(_vega_reader, r'{cd}{sp}feat_{tg}.pkl'); \
+import sys; print('[G1] cache instalado:', _c.stats(), flush=True)",
+        t = tools_str,
+        cd = cache_dir,
+        sp = sep,
+        tg = tag,
+    );
+    // Publica o reader como global temporário e roda o install.
+    let globals = pyo3::types::PyDict::new(py);
+    globals.set_item("_vega_reader", reader)?;
+    globals.set_item("__builtins__", py.import("builtins")?)?;
+    py.run(
+        std::ffi::CString::new(script.as_str())
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?
+            .as_c_str(),
+        Some(&globals),
+        None,
+    )
+    .map_err(|e| {
+        eprintln!("[aether-decision] aviso: cache de features nao instalado ({e})");
+        e
+    })
+}
+
+/// Fingerprint do motor para o cache de respostas (G1, camada 2): muda o
+/// checkpoint ou o corpus → cache invalidado. Barato: sizes+mtimes.
+fn engine_fingerprint(cfg: &EngineConfig) -> String {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for p in [
+        cfg.model_primary.as_deref().unwrap_or("hub-default"),
+        cfg.model_sentinel.as_deref().unwrap_or(""),
+        cfg.calibration.as_deref().unwrap_or(""),
+    ] {
+        std::hash::Hash::hash(&p, &mut h);
+        if let Ok(meta) = std::fs::metadata(p) {
+            std::hash::Hash::hash(&meta.len(), &mut h);
+            if let Ok(m) = meta.modified() {
+                if let Ok(d) = m.duration_since(std::time::UNIX_EPOCH) {
+                    std::hash::Hash::hash(&d.as_secs(), &mut h);
+                }
+            }
+        }
+        std::hash::Hash::hash(&0u8, &mut h);
+    }
+    format!("{:016x}", std::hash::Hasher::finish(&h))
+}
+
+/// Instala o cache de RESPOSTAS do engine (G1 camada 2) — a leitura 2 do fit.
+fn install_engine_cache(
+    py: Python<'_>,
+    reader: &Bound<'_, PyAny>,
+    calibration: &str,
+    tag: &str,
+    tools_dir: Option<&std::path::Path>,
+) -> PyResult<()> {
+    let Some(tools) = tools_dir else { return Ok(()) };
+    let tools_str = tools.to_string_lossy().to_string();
+    let cal_dir = std::path::Path::new(calibration)
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .to_string_lossy()
+        .to_string();
+    let cache_dir = std::env::var("VEGA_FEATURE_CACHE")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| {
+            format!(
+                "{cal_dir}{}feature_cache",
+                std::path::MAIN_SEPARATOR
+            )
+        });
+    // O fingerprint usa a cfg do PRÓPRIO reader via closure do Python? Não:
+    // o fingerprint é computado aqui (paths já são os deste reader).
+    let fp = engine_fingerprint_of_reader(reader, calibration);
+    let script = format!(
+        "import sys as _s; _s.path.insert(0, r'{t}'); \
+import vega_disk_cache as _c; \
+_c.install_engine(_vega_reader, r'{cd}{sp}eng_{tg}.pkl', r'{fp}'); \
+print('[G1] engine cache ok:', _c.stats(), flush=True)",
+        t = tools_str,
+        cd = cache_dir,
+        sp = std::path::MAIN_SEPARATOR,
+        tg = tag,
+        fp = fp,
+    );
+    let globals = pyo3::types::PyDict::new(py);
+    globals.set_item("_vega_reader", reader)?;
+    if let Ok(b) = py.import("builtins") {
+        let _ = globals.set_item("__builtins__", b);
+    }
+    if let Err(e) = py.run(
+        match std::ffi::CString::new(script.as_str()) {
+            Ok(cs) => cs,
+            Err(e) => {
+                eprintln!("[aether-decision] aviso: engine cache falhou ({e})");
+                return Ok(());
+            }
+        }
+        .as_c_str(),
+        Some(&globals),
+        None,
+    ) {
+        eprintln!("[aether-decision] aviso: engine cache nao instalado ({e})");
+    }
+    Ok(())
+}
+
+/// Fingerprint por reader: hash dos paths reais que o vegaml usou (o reader
+/// sabe o próprio diretorio via config do vegaml; do lado Rust usamos os
+/// caminhos conhecidos do cfg + o caminho do corpus).
+fn engine_fingerprint_of_reader(
+    _reader: &Bound<'_, PyAny>,
+    calibration: &str,
+) -> String {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hash::hash(&calibration, &mut h);
+    if let Ok(text) = std::fs::read_to_string(calibration) {
+        use std::hash::Hasher;
+        h.write(text.as_bytes());
+    }
+    format!("{:016x}", std::hash::Hasher::finish(&h))
+}
+
+/// Persiste o cache de features (G1) — o atexit do Python NÃO roda quando o
+/// processo Rust sai sem finalizar o interpreter (achado do ciclo), então o
+/// hospedeiro chama o flush explicitamente após cada fit.
+fn flush_feature_cache(py: Python<'_>, tools_dir: Option<&std::path::Path>) {    let Some(tools) = tools_dir else { return };
+    let tools_str = tools.to_string_lossy().to_string();
+    let script = format!(
+        "import sys as _s; _s.path.insert(0, r'{t}'); \
+import vega_disk_cache as _c; \
+_n = _c.flush(); \
+print('[G1] flush:', _n, 'arquivo(s)', _c.stats(), flush=True)",
+        t = tools_str,
+    );
+    let globals = pyo3::types::PyDict::new(py);
+    if let Ok(b) = py.import("builtins") {
+        let _ = globals.set_item("__builtins__", b);
+    }
+    if let Err(e) = py.run(
+        match std::ffi::CString::new(script.as_str()) {
+            Ok(cs) => cs,
+            Err(e) => {
+                eprintln!("[aether-decision] aviso: flush de cache falhou ({e})");
+                return;
+            }
+        }
+        .as_c_str(),
+        Some(&globals),
+        None,
+    ) {
+        eprintln!("[aether-decision] aviso: flush de cache falhou ({e})");
+    }
 }
 
 fn fit_from_file(py: Python<'_>, reader: &Bound<'_, PyAny>, path: &str) -> PyResult<()> {

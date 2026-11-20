@@ -458,6 +458,11 @@ fn g4_abstains_on_oov_noise_and_depth() {
 // Gate 5 — zero alocação e latência
 // ---------------------------------------------------------------------------
 
+// G2 (plano de fechamento 2026-11-20): gate medido em `--release`
+// (p50 8.10µs / p99 13.20µs / allocs=0). Em debug o p50 é ~270µs
+// (~33x) — latência de debug não é o que o gate certifica; rodar
+// `cargo test --release --test e1_language_gate`.
+#[cfg_attr(debug_assertions, ignore = "gate de release: rode com --release")]
 #[test]
 fn g5_zero_alloc_and_latency() {
     let _guard = serial();
