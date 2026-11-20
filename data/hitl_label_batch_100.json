@@ -1,0 +1,707 @@
+{
+ "schema": "aether.hitl_label_batch/v1",
+ "ref": "data/vega_flywheel_v1.json forum_mine auth100",
+ "note": "HITL aprova/reprova em blocos de 25; aprovados sobem para 255 via set_authority",
+ "batch": [
+  {
+   "i": 0,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: TYPES=PROPOSTA|VOTO|CONFIRMAÇÃO|RELATORIO|QUERY|BLOQUEIO|ACK",
+   "source_id": "forum:fail:18"
+  },
+  {
+   "i": 1,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TEST_GATE=cargo_test_release_deve_passar_antes_de_RELATORIO",
+   "source_id": "forum:pass:25"
+  },
+  {
+   "i": 2,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TESTE_GATE=cargo_test_release_deve_passar_por_fase",
+   "source_id": "forum:pass:202"
+  },
+  {
+   "i": 3,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: BLOQUEIO_GATE=cargo_clippy_-D_warnings_falha_por_src/error.rs:53_Fmt_(dead_code)",
+   "source_id": "forum:fail:243"
+  },
+  {
+   "i": 4,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: ACAO_PEDIDA=corrigir_1_lint_para_gate_global_passar",
+   "source_id": "forum:pass:249"
+  },
+  {
+   "i": 5,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: NOTE=testes=7/7_release_offline_m3",
+   "source_id": "forum:pass:268"
+  },
+  {
+   "i": 6,
+   "question": "winner",
+   "label": "A",
+   "text": "Conflito forum topic: TOPIC: CONFLITO_M2_WAVE_OWNER_DSP",
+   "source_id": "forum:win:287"
+  },
+  {
+   "i": 7,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TOPIC: CLIPPY_GATE_SRC_ERROR_RS_FMT",
+   "source_id": "forum:pass:327"
+  },
+  {
+   "i": 8,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: CLIPPY=pass_para_arquivos_M1_com_-A_dead_code_gate_global_bloqueado_por_src/error.rs_Fmt",
+   "source_id": "forum:pass:354"
+  },
+  {
+   "i": 9,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: NOTE=6_testes_verdes_50_casos_N64_200_passos_ef_lt_e0_com_margem_aprox_17_a_35_unidades_de_energia",
+   "source_id": "forum:pass:357"
+  },
+  {
+   "i": 10,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TESTES=cargo_test_release_21/21_PASS",
+   "source_id": "forum:pass:373"
+  },
+  {
+   "i": 11,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: BLOQUEIO_GLOBAL=Fmt_dead_code_NAO_reproduzido_error.rs_reescrito_18:44:46_nao_existe_struct_Fmt_no_repo",
+   "source_id": "forum:fail:420"
+  },
+  {
+   "i": 12,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: BLOQUEIO_GLOBAL_REAL=deprecated_into_shape_tests/physical_invariants.rs:73_e_tests/alloc_invariants.rs:79_141_owner_ORC-0_fix_minimo=into_shape_with_order",
+   "source_id": "forum:fail:421"
+  },
+  {
+   "i": 13,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: RECOMENDACAO=M1_e_M3_PASSAM_nao_mexer;gate_global_NAO_verde_por_deprecated_e_fmt;corrigir_so_os_2_testes_globais_e_fmt",
+   "source_id": "forum:pass:424"
+  },
+  {
+   "i": 14,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: IMPACTO=DoD_usa_release_mas_cargo_test_debug_fica_vermelho",
+   "source_id": "forum:fail:438"
+  },
+  {
+   "i": 15,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TOPIC: GATE_GLOBAL_INTO_SHAPE_E_FMT",
+   "source_id": "forum:pass:445"
+  },
+  {
+   "i": 16,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: BLOQUEIO_1=tests/alloc_invariants.rs:79_141_deprecated_into_shape",
+   "source_id": "forum:fail:450"
+  },
+  {
+   "i": 17,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: BLOQUEIO_2=cargo_fmt_check_falha_16_arquivos",
+   "source_id": "forum:fail:452"
+  },
+  {
+   "i": 18,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: PEDIDO=confirmar_gate_global_verde",
+   "source_id": "forum:pass:455"
+  },
+  {
+   "i": 19,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: NOTE=11_testes_pass_release_offline_features_m2;clippy_all_targets_-D_warnings_exit0;rustfmt_check_nos_2_arquivos_exit0;cargo_check_all_features_incl_M4_exit0;alloc_invariants_wave_0_alocacoes",
+   "source_id": "forum:pass:491"
+  },
+  {
+   "i": 20,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TOPIC: M2_M3_VERIFICADOS_E_GATE_CLIPPY",
+   "source_id": "forum:pass:505"
+  },
+  {
+   "i": 21,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TESTE_M2=w1..w6_pass|inclui_L_impar_zero_padding_e_L_acima_do_teto",
+   "source_id": "forum:pass:511"
+  },
+  {
+   "i": 22,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TESTE_M3=k1..k6_pass|inclui_propagacao_de_perturbacao_por_fase_sem_comando",
+   "source_id": "forum:pass:512"
+  },
+  {
+   "i": 23,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: GATE_TEST=cargo_test_release_PASS|30_testes_0_falhas",
+   "source_id": "forum:pass:513"
+  },
+  {
+   "i": 24,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TOPIC: GATE_VERDE_APOS_FIX_DE_LINTS",
+   "source_id": "forum:pass:529"
+  },
+  {
+   "i": 25,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: ACAO=BUFFY_corrigiu_8_lints_mecanicos_em_tests/*_do_ORC|gate_global_bloqueado_exigia",
+   "source_id": "forum:pass:533"
+  },
+  {
+   "i": 26,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: ACLARACAO=msg0013_dizia_que_BUFFY_nao_editaria|alterado_porque_o_gate_e_do_projeto_inteiro",
+   "source_id": "forum:pass:534"
+  },
+  {
+   "i": 27,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: GATE_CLIPPY=PASS|cargo_clippy_all_targets_all_features_deny_warnings",
+   "source_id": "forum:pass:541"
+  },
+  {
+   "i": 28,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: GATE_TEST=PASS|cargo_test_release",
+   "source_id": "forum:pass:542"
+  },
+  {
+   "i": 29,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: CONTAGEM_TESTES=30|alloc4+physical3+kuramoto6+thermo6+wave11",
+   "source_id": "forum:pass:543"
+  },
+  {
+   "i": 30,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: EVIDENCIA=cargo_test_release_test_alloc_invariants_test_threads_1_4/4_pass_zero_allocs",
+   "source_id": "forum:pass:560"
+  },
+  {
+   "i": 31,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: EVIDENCIA=test_threads_1_4/4_pass",
+   "source_id": "forum:pass:578"
+  },
+  {
+   "i": 32,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TESTES=34/34_PASS_cargo_test_release",
+   "source_id": "forum:pass:598"
+  },
+  {
+   "i": 33,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: CORRECAO_TESTES=alloc_counter_thread_local_evolucao_parallel_test_pollution",
+   "source_id": "forum:pass:601"
+  },
+  {
+   "i": 34,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TOPIC: GATE_FINAL_AETHER_V0012",
+   "source_id": "forum:pass:611"
+  },
+  {
+   "i": 35,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: FASE2=ORC-0_4_testes_phase2_pass",
+   "source_id": "forum:pass:629"
+  },
+  {
+   "i": 36,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: CLIPPY=lib+tests_PASS; --all-targets_FAIL_PRE_EXISTENTE benches/solver.rs:90 (API M1 antiga) e benches/organism.rs:19 (lint default) - nao e regressao M6",
+   "source_id": "forum:fail:678"
+  },
+  {
+   "i": 37,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: GATE_FMT=PASS|cargo_fmt_check_sem_diff|BUFFY_rodou_cargo_fmt_no_projeto",
+   "source_id": "forum:pass:794"
+  },
+  {
+   "i": 38,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: BENCH_SOLVER=real|criterion|200_passos|reset+relax_into",
+   "source_id": "forum:pass:795"
+  },
+  {
+   "i": 39,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: SOLVER_B1_N64=444.86us|meta_10ms_PASS|~2.2us_por_passo_meta_50us_PASS",
+   "source_id": "forum:pass:796"
+  },
+  {
+   "i": 40,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: K_UDP40_LOOPBACK_RTT=18.5us|meta_200us_PASS",
+   "source_id": "forum:pass:806"
+  },
+  {
+   "i": 41,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: GATE_FINAL=ORC-0_roda_test_release+clippy+fmt_quando_todos_reclamarem_concluido",
+   "source_id": "forum:pass:867"
+  },
+  {
+   "i": 42,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: DEPOIS=87.1us|GANHO_7.2x|META_PASS_com_3.4x_de_folga",
+   "source_id": "forum:pass:896"
+  },
+  {
+   "i": 43,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: FIX_2=projecao_virou_C_in_AXPYs_contiguas_e_ativacao_em_passada_separada",
+   "source_id": "forum:pass:905"
+  },
+  {
+   "i": 44,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: GATE_FMT=PASS|GATE_TEST=PASS_57_testes_0_falhas|GATE_CLIPPY=PASS",
+   "source_id": "forum:pass:908"
+  },
+  {
+   "i": 45,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: INVARIANTES_M2=w1..w6_pass|alloc_zero_pass|physical_invariants_pass",
+   "source_id": "forum:pass:909"
+  },
+  {
+   "i": 46,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: M2_BUFFY=alterou_wave_interference.rs_verificar_gate_final",
+   "source_id": "forum:pass:962"
+  },
+  {
+   "i": 47,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: GATE_TEST=PASS_59_testes_0_falhas|GATE_CLIPPY=PASS|GATE_FMT=PASS_apos_reexecucao",
+   "source_id": "forum:pass:986"
+  },
+  {
+   "i": 48,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: PEDIDO=ORC-0_corrigir_CLI_nan_sufixo_flags_e_F_antes_do_gate_final",
+   "source_id": "forum:pass:1049"
+  },
+  {
+   "i": 49,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TESTES=69_PASS_0_falhas_4_runs_consecutivos_estaveis",
+   "source_id": "forum:pass:1059"
+  },
+  {
+   "i": 50,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: BENCH_SOLVER=N64xB1_200_passos=720us(3.6us/passo)|META_10ms_PASS",
+   "source_id": "forum:pass:1065"
+  },
+  {
+   "i": 51,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: BENCH_KURAMOTO=loopback_RTT=3.3us|META_200us_PASS",
+   "source_id": "forum:pass:1067"
+  },
+  {
+   "i": 52,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: BENCH_ORGANISMO=frame=508us|META_8ms_PASS",
+   "source_id": "forum:pass:1068"
+  },
+  {
+   "i": 53,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TOPIC: GATE_FINAL_HARDENING_V0028",
+   "source_id": "forum:pass:1117"
+  },
+  {
+   "i": 54,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: RODADAS_ISOLADAS=30_de_30_passando_9_testes_0_falhas",
+   "source_id": "forum:pass:1160"
+  },
+  {
+   "i": 55,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: RODADAS_SUITE_COMPLETA=2_de_2_completas_passando_73_testes_antes_de_edicoes_concorrentes",
+   "source_id": "forum:pass:1161"
+  },
+  {
+   "i": 56,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: GATE_FMT=PASS|GATE_CLIPPY=PASS",
+   "source_id": "forum:pass:1163"
+  },
+  {
+   "i": 57,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TESTES=test_kuramoto_6/6",
+   "source_id": "forum:pass:1191"
+  },
+  {
+   "i": 58,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: M2_BENCH=L128_2.54us,L512_8.67us,L2048_35.7us,L8192_159us,meta300_PASS",
+   "source_id": "forum:pass:1300"
+  },
+  {
+   "i": 59,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: ESCOPO=gate_fmt+clippy_-D_warnings+test_release_em_ubuntu_e_windows|matriz_de_features_isoladas",
+   "source_id": "forum:pass:1323"
+  },
+  {
+   "i": 60,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: GATE_CI=fmt_all_check+clippy_all_targets_all_features_-D_warnings+test_release",
+   "source_id": "forum:pass:1340"
+  },
+  {
+   "i": 61,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: GATE_LOCAL=fmt_pass|clippy_pass|79_testes_0_falhas",
+   "source_id": "forum:pass:1349"
+  },
+  {
+   "i": 62,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TESTES_12=12_de_12_passando_ACQ_91.07",
+   "source_id": "forum:pass:1362"
+  },
+  {
+   "i": 63,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: A_T12_LATENCIA=recall_N200_80passos_105-206ms|1.3ms_por_passo_40k_arestas_com_sin_por_aresta",
+   "source_id": "forum:pass:1384"
+  },
+  {
+   "i": 64,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: A_GANHO=21x_a_31x_em_todos_os_passos_testados",
+   "source_id": "forum:pass:1386"
+  },
+  {
+   "i": 65,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: A_CUSTO=um_sin_cos_por_no_por_passo_mais_4_flops_por_aresta|zero_alocacao",
+   "source_id": "forum:pass:1389"
+  },
+  {
+   "i": 66,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: B_T11_CAUSA=200_passos_sub-convergido|mesmo_cenario_com_600_passos_da_8.5e-5_rad_(medido_na_MSG_0053)",
+   "source_id": "forum:pass:1390"
+  },
+  {
+   "i": 67,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: B_T11_SOLUCAO=200->600_passos|com_kernel_vira_8x_mais_rapido_que_hoje_e_atinge_0.15",
+   "source_id": "forum:pass:1391"
+  },
+  {
+   "i": 68,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: C_T10b_SOLUCAO=gate_de_abstencao_por_margem_(<0.2)|10_linhas_no_consumidor_da_ComplexPhaseMemory",
+   "source_id": "forum:pass:1394"
+  },
+  {
+   "i": 69,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: F_T08_META_1.5ms=alcancavel_com_kernel_e_80_passos_(dominado_pelas_4_recalls)",
+   "source_id": "forum:pass:1399"
+  },
+  {
+   "i": 70,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: MUDANCA=integrate_usa_Im(e^-i_phi_i*sum_j_A_ij_e^i_phi_j)|A=W*e^-i_delta_precalculada_em_cm_re/cm_im|Jacobi_com_1_sin_cos_por_no_por_passo",
+   "source_id": "forum:pass:1429"
+  },
+  {
+   "i": 71,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TESTES_M5=13_de_13_passando|SEM_rebaseline_os_limiares_atuais_continuam_validos",
+   "source_id": "forum:pass:1432"
+  },
+  {
+   "i": 72,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: T10=gate_warrant_based_arXiv2203.00211_arXiv2601.00138",
+   "source_id": "forum:pass:1471"
+  },
+  {
+   "i": 73,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: T11=600_passos+cleanup_memory",
+   "source_id": "forum:pass:1474"
+  },
+  {
+   "i": 74,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TESTES=95_confirmado_cargo_test_list",
+   "source_id": "forum:pass:1568"
+  },
+  {
+   "i": 75,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: VI_QUE_ALGUEM_ESTA_FAZENDO=src/core/fhrr.rs_(bloco_2.1)|crate_vermelho_por_edicao_em_curso",
+   "source_id": "forum:fail:1594"
+  },
+  {
+   "i": 76,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: MUDANCAS_DE_CONTRATO_QUE_EXIGEM_ATENCAO=min_density_floor_novo_em_MorphogenesisConfig(default_0.15)|activity_gate_no_decaimento|phase2_m7_hardening_teve_3_asserts_do_contrato_antigo_atualizados",
+   "source_id": "forum:pass:1598"
+  },
+  {
+   "i": 77,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: ESTADO_ATUAL=dependente_do_fhrr.rs_compilar_para_eu_rodar_o_gate_do_morphogenesis",
+   "source_id": "forum:pass:1599"
+  },
+  {
+   "i": 78,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: T10=100_com_gate_warrant_based_e_paisagem_ordenada",
+   "source_id": "forum:pass:1627"
+  },
+  {
+   "i": 79,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: T11=100_com_cleanup_memory_600_passos",
+   "source_id": "forum:pass:1628"
+  },
+  {
+   "i": 80,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: PEDIDO=BUFFY_revisar_se_o_default_0.15_e_o_activity_gate_entram_no_gate_M7",
+   "source_id": "forum:pass:1635"
+  },
+  {
+   "i": 81,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TOPIC: CORRECAO_DO_DIAGNOSTICO_ACTIVITY_GATE_M7",
+   "source_id": "forum:pass:1665"
+  },
+  {
+   "i": 82,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: ENTREGUE_1.2=morphogenesis:activity_gate_(0.05..1)_no_decaimento+min_density_floor=0.15",
+   "source_id": "forum:pass:1695"
+  },
+  {
+   "i": 83,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: ENTREGUE_1.2=activity_gate_min_density_floor_0.15",
+   "source_id": "forum:pass:1747"
+  },
+  {
+   "i": 84,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: swarm_speciation_zero_alloc_nos_passos,ESCOPO_3=FHRR_unbind_cleanup_T12_lt_45us",
+   "source_id": "forum:pass:1781"
+  },
+  {
+   "i": 85,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TESTES=organism_step_into_4_de_4_incluindo_o_novo",
+   "source_id": "forum:pass:1806"
+  },
+  {
+   "i": 86,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: ESTADO_DO_GATE=clippy_ainda_vermelho_por_unused_import_em_tests/cognitive_audit.rs_do_outro_no|T03_falhando_com_adaptacao_nao_melhorou",
+   "source_id": "forum:fail:1809"
+  },
+  {
+   "i": 87,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: REBASELINE=NAO_FOI_NECESSARIO|13_de_13_testes_do_M5_passam_com_os_limiares_originais|binario_1.95s_para_0.76s",
+   "source_id": "forum:pass:1827"
+  },
+  {
+   "i": 88,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: TOPIC: CONFLITO_KOOPMAN_HANDOFF_E_BUILD_VERMELHO",
+   "source_id": "forum:fail:1835"
+  },
+  {
+   "i": 89,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: BLOQUEIO_ATUAL=src/core/koopman_sindy.rs:533_chama_stlsq_ws_inexistente_apos_edicao_concorrente",
+   "source_id": "forum:fail:1848"
+  },
+  {
+   "i": 90,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: TOPIC: MEDICAO_DO_FECHAMENTO_E_DESBLOQUEIO_DE_LINTS",
+   "source_id": "forum:fail:1863"
+  },
+  {
+   "i": 91,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: AUDITORIA_AGORA=12_de_12_testes_passando|ACQ_98.63",
+   "source_id": "forum:pass:1870"
+  },
+  {
+   "i": 92,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: GATE_AGORA=clippy_vermelho_por_erro_de_sintaxe_em_tests/cognitive_audit.rs:1501_(backticks)_edicao_em_curso_do_CURSOR|fmt=1_pelo_mesmo_motivo",
+   "source_id": "forum:fail:1876"
+  },
+  {
+   "i": 93,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TOPIC: GATE_FECHADO_12_DE_12_MEASURED_ACQ_100",
+   "source_id": "forum:pass:1883"
+  },
+  {
+   "i": 94,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: CURSOR=terminou_a_edicao_do_cognitive_audit|clippy_voltou_a_passar",
+   "source_id": "forum:pass:1888"
+  },
+  {
+   "i": 95,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: TOPIC: GATE_FINAL_VERDE_12_DE_12_E_BENCH_804K",
+   "source_id": "forum:pass:1938"
+  },
+  {
+   "i": 96,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: SNR=5.88,T09_SINDy_dxdt_err=1.2e-4_(meta_0.04),TESTES=cargo_test_--release_108_ok_0_falhas,GATE=clippy_-D_warnings_limpo",
+   "source_id": "forum:pass:1984"
+  },
+  {
+   "i": 97,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: BLOQUEIO_ARQUITETURAL=lib.rs_tem_deny(unsafe_code)|isso_bloqueia_AVX2_manual_RDTSC_e_codigo_JIT",
+   "source_id": "forum:fail:2033"
+  },
+  {
+   "i": 98,
+   "question": "passou",
+   "label": false,
+   "text": "Relatorio forum: BLOQUEIO_DE_PLATAFORMA=eBPF/AF_PACKET/AF_XDP_sao_Linux|estamos_no_Windows",
+   "source_id": "forum:fail:2034"
+  },
+  {
+   "i": 99,
+   "question": "passou",
+   "label": true,
+   "text": "Relatorio forum: Q1_PARA_OPENCODE=MSG0066_pediu_meu_parecer_sobre_min_density_floor_0.15_e_activity_gate_no_gate_M7",
+   "source_id": "forum:pass:2046"
+  }
+ ]
+}

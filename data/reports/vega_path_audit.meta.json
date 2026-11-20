@@ -3,8 +3,8 @@
   "ref": "MSG_A5_P2",
   "src": "target/vega_path_audit.json",
   "dst": "data/reports/vega_path_audit.json",
-  "sha256": "0931fc53238dfe1a50dc37c912efe438083856d9a851d329dfc8b2197bfc54ca",
-  "bytes": 1289,
-  "promoted_at_utc": "2026-11-20T16:16:34.569068+00:00",
+  "sha256": "30b966c5694e61ce53d7e2aca67d6ede2487e43c10f511822aec4217965ff86b",
+  "bytes": 90,
+  "promoted_at_utc": "2026-11-20T20:59:05.613281+00:00",
   "ok": true
 }

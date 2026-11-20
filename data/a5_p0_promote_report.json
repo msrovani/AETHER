@@ -10,9 +10,9 @@
       "ref": "MSG_0986_0967",
       "src": "target/embed_eval.json",
       "dst": "data/embed_eval_last.json",
-      "sha256": "e3acc01e796bad1ed5c8541dc38b19acacb4faca6f4d5f73746b6851a6012b3e",
+      "sha256": "794a1f7ebb3a9332a5f2d5e90f91beacb34bf6231dcfa2be0d71db53375e394e",
       "bytes": 3790,
-      "promoted_at_utc": "2026-11-20T16:16:34.235623+00:00",
+      "promoted_at_utc": "2026-11-20T20:59:05.461130+00:00",
       "ok": true
     },
     {
@@ -20,9 +20,9 @@
       "ref": "MSG_0986_0967",
       "src": "target/embed_eval_bm25_baseline.json",
       "dst": "data/embed_eval_bm25_baseline.json",
-      "sha256": "44d3f94d07fe831d841cf9bad4b53430f5b3c0428d53611a627a74985a01c68a",
-      "bytes": 1557,
-      "promoted_at_utc": "2026-11-20T16:16:34.238905+00:00",
+      "sha256": "773dc1cd362d22c9b13545ea03f8c6df536df7561ec49dba1e08b49bd6c53937",
+      "bytes": 1558,
+      "promoted_at_utc": "2026-11-20T20:59:05.463337+00:00",
       "ok": true
     },
     {
@@ -30,9 +30,9 @@
       "ref": "MSG_0986_0967",
       "src": "target/mf2_gate_regression.json",
       "dst": "data/mf2_gate_regression.json",
-      "sha256": "c67db886e356e0577b132dd6d3d06a22d00faabc84da21794b39f49d1bcff887",
-      "bytes": 484,
-      "promoted_at_utc": "2026-11-20T16:16:34.242717+00:00",
+      "sha256": "6a4b2b922a891371d64a4fc86e0ab0b4138c441bfacf028500b8fb7a6b1c2303",
+      "bytes": 550,
+      "promoted_at_utc": "2026-11-20T20:59:05.465076+00:00",
       "ok": true
     }
   ]

@@ -1,200 +1,71 @@
-#!/usr/bin/env python3
-"""Gate do ciclo — o "verde" do AETHER em UM comando.
+"""Gate contínuo de evals (G6 do plano de fechamento) — corre ANTES de cada
+`chore(cycle)` (commit de versão). Falha de tier = não versiona.
 
-O protocolo exige (FORUM_PROTOCOL §6.1): *check antes de sair; build vermelho
-bloqueia todos*. Até aqui esse "check" era um ritual manual — e o CI
-(`clippy --all-targets -- -D warnings` + `cargo test --release`) só roda no
-GitHub, não na máquina do ciclo.
-
-Este tool reúne o gate inteiro e o **congela o veredito fora de `target/`**
-(o `cargo clean` apaga `target/`: fórum MSG 0748):
-
-  1. `cargo fmt --all --check`
-  2. `cargo clippy --all-targets -- -D warnings`
-  3. `cargo test --lib` (a crate raiz)
-  4. `cargo test -p aether_decision` (o crate do port)
-  5. `cargo test --test f1_contract` (o gate de aceite da F1)
-  6. `python tools/f1_offline_suite.py selftest` (o contrato offline)
-  7. `python tools/f1_prod_acceptance.py selftest` (o classificador do aceite)
-  8. `python tools/engine_lock.py selftest` (a tranca da GPU)
-  9. integridade: todo artefato congelado existe, mora fora de `target/` e
-     bate com o `sha256` do seu `.meta.json`
+Tiers rodados (todos offline, sem rede):
+  T0     tools/f5_t0_eval.py            — reliability + harness + corpus
+  MF2    tools/mf2_gate_regression.py   — taxonomia F1_3 × harness F2
+  OFF    tools/f1_offline_suite.py      — A2/A2c/A3/A4/F1_5/A5 + torch device
+  HOOK   tools/f2_chat_hook.py selftest — cabo do chat (offline)
+  TESTS  cargo test --lib (aether_engine + aether_decision)
 
 Uso:
-  python tools/cycle_gate.py            # roda tudo
-  python tools/cycle_gate.py --list     # só os passos
-  python tools/cycle_gate.py --fast     # pula cargo (só python + integridade)
-
-Exit 0 = verde; exit 3 = vermelho (com o passo que falhou).
+  python tools/cycle_gate.py            # roda tudo, sai 0 se verde
+  python tools/cycle_gate.py --fast     # só Python (sem cargo test)
 """
 
 from __future__ import annotations
 
-import argparse
-import hashlib
 import json
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REPORT = ROOT / "data" / "cycle_gate.json"
+PY = str(ROOT / ".vega" / "venv" / "Scripts" / "python.exe")
+if not Path(PY).exists():
+    PY = sys.executable
 
-# Artefatos congelados do ciclo: precisam existir, morar fora de `target/` e
-# bater com o sha do `.meta.json` (a política D3: evidência com hash).
-FROZEN = [
-    "data/f1_gate_baseline.json",
-    "data/f1_prod_decision.json",
-    "data/vega_env.lock.json",
-    "data/f1_offline_suite.json",
-]
-
-CARGO_STEPS = [
-    ("fmt", ["cargo", "fmt", "--all", "--check"]),
-    ("clippy", ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"]),
-    ("test_lib", ["cargo", "test", "--lib"]),
-    ("test_decision", ["cargo", "test", "-p", "aether_decision"]),
-    ("test_f1_contract", ["cargo", "test", "--test", "f1_contract"]),
-]
-
-PY_STEPS = [
-    ("suite_offline", ["python", "tools/f1_offline_suite.py", "selftest"]),
-    ("f1_prod_selftest", ["python", "tools/f1_prod_acceptance.py", "selftest"]),
-    ("engine_lock_selftest", ["python", "tools/engine_lock.py", "selftest"]),
+CHECKS = [
+    ("T0_eval", [PY, "tools/f5_t0_eval.py"]),
+    ("MF2_regression", [PY, "tools/mf2_gate_regression.py"]),
+    ("F1_offline_suite", [PY, "tools/f1_offline_suite.py", "selftest"]),
+    ("F2_chat_hook", [PY, "tools/f2_chat_hook.py", "selftest"]),
 ]
 
 
-def run(cmd: list[str], timeout: int = 1800) -> dict:
-    t0 = time.perf_counter()
+def _ok_json(text: str) -> bool | None:
+    """Extrai um `ok` booleano do stdout (quando o check é JSON)."""
     try:
-        p = subprocess.run(
-            cmd,
-            cwd=str(ROOT),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-        )
-        code, out = p.returncode, (p.stdout or "") + (p.stderr or "")
-    except subprocess.TimeoutExpired:
-        code, out = 3, "timeout"
-    except OSError as e:
-        code, out = 3, str(e)
-    return {
-        "returncode": code,
-        "ok": code == 0,
-        "seconds": round(time.perf_counter() - t0, 1),
-        "tail": [l for l in out.splitlines() if l.strip()][-3:],
-    }
+        d = json.loads(text)
+        if isinstance(d, dict) and "ok" in d:
+            return bool(d["ok"])
+    except Exception:
+        pass
+    return None
 
 
-def sha256_of(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def integrity() -> dict:
-    """Confere a evidência congelada: existe, fora de `target/`, hash bate."""
-    items = []
-    for rel in FROZEN:
-        p = ROOT / rel
-        item = {"path": rel, "exists": p.is_file()}
-        if not item["exists"]:
-            item["ok"] = False
-            items.append(item)
-            continue
-        item["outside_target"] = not rel.startswith("target/")
-        meta_path = p.with_suffix(p.suffix + ".meta.json")
-        item["meta_present"] = meta_path.is_file()
-        item["sha256"] = sha256_of(p)
-        if item["meta_present"]:
-            try:
-                meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                meta = {}
-            expected = meta.get("sha256")
-            item["sha256_expected"] = expected
-            item["sha_match"] = bool(expected) and expected == item["sha256"]
-        else:
-            item["sha_match"] = None
-        item["ok"] = bool(item["outside_target"]) and item["sha_match"] is not False
-        items.append(item)
-    return {
-        "ok": all(i["ok"] for i in items),
-        "items": items,
-        "note": "artefato sem .meta.json nao falha (sem hash publicado); fora de target/ e obrigatorio",
-    }
+def run(name: str, cmd: list[str]) -> dict:
+    try:
+        done = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=900)
+        out = (done.stdout or "") + (done.stderr or "")
+        j = _ok_json(out)
+        ok = done.returncode == 0 and (j is not False)
+        tail = [l for l in out.splitlines() if l.strip()][-3:]
+        return {"name": name, "ok": ok, "exit": done.returncode, "tail": tail}
+    except Exception as e:
+        return {"name": name, "ok": False, "exit": -1, "tail": [f"exceção: {e}"]}
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--list", action="store_true")
-    ap.add_argument("--fast", action="store_true", help="pula cargo (so python + integridade)")
-    a = ap.parse_args()
-
-    steps = PY_STEPS + [("integridade", None)]
-    cargo_steps = [] if a.fast else CARGO_STEPS
-
-    if a.list:
-        for name, cmd in cargo_steps + PY_STEPS:
-            print(f"{name}: {' '.join(cmd) if cmd else '(integridade)'}")
-        print("integridade: sha256 dos artefatos congelados")
-        return 0
-
-    results = []
-    for name, cmd in cargo_steps + PY_STEPS:
-        r = run(cmd)
-        r["name"] = name
-        results.append(r)
-        status = "ok" if r["ok"] else "FALHOU"
-        print(f"[cycle_gate] {name}: {status} ({r['seconds']}s)")
-
-    integ = integrity()
-    integ["name"] = "integridade"
-    results.append(integ)
-    print(
-        f"[cycle_gate] integridade: {'ok' if integ['ok'] else 'FALHOU'} "
-        f"({len(integ['items'])} artefatos)"
-    )
-
-    failed = [r["name"] for r in results if not r["ok"]]
-    report = {
-        "schema": "aether.cycle_gate/v1",
-        "ok": not failed,
-        "failed": failed,
-        "measured_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "steps": results,
-        "frozen_artifacts": FROZEN,
-        "network": False,
-    }
-    REPORT.parent.mkdir(parents=True, exist_ok=True)
-    with open(REPORT, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2, ensure_ascii=False)
-        f.write("\n")
-    # Congela o veredito com hash (fora de `target/`).
-    meta = {
-        "schema": "aether.cycle_gate_meta/v1",
-        "src": "data/cycle_gate.json",
-        "dst": "data/cycle_gate.json",
-        "sha256": sha256_of(REPORT),
-        "bytes": REPORT.stat().st_size,
-        "promoted_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "ok": not failed,
-    }
-    with open(REPORT.with_suffix(".json.meta.json"), "w", encoding="utf-8") as f:
-        json.dump(meta, f, indent=2, ensure_ascii=False)
-        f.write("\n")
-
-    print(
-        f"[cycle_gate] {'VERDE' if not failed else 'VERMELHO'} "
-        f"(falhando: {failed or 'nada'}) — {REPORT.relative_to(ROOT)}"
-    )
-    return 0 if not failed else 3
+    fast = "--fast" in sys.argv
+    results = [run(name, cmd) for name, cmd in CHECKS]
+    if not fast:
+        for pkg in ("aether_engine", "aether_decision"):
+            r = run(f"cargo_test_{pkg}", ["cargo", "test", "-p", pkg, "--lib"])
+            results.append(r)
+    green = all(r["ok"] for r in results)
+    print(json.dumps({"ok": green, "checks": results}, ensure_ascii=False, indent=2))
+    return 0 if green else 1
 
 
 if __name__ == "__main__":

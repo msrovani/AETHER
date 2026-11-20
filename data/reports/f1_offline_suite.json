@@ -1,7 +1,7 @@
 {
   "schema": "aether.f1_offline_suite/v1",
   "ok": true,
-  "n": 6,
+  "n": 7,
   "failed": [],
   "results": [
     {
@@ -12,8 +12,8 @@
       "wired_to_crate": false
     },
     {
-      "name": "A2c_gpu_lock",
-      "path": "tools/gpu_engine_lock.py",
+      "name": "A2c_engine_lock",
+      "path": "tools/engine_lock.py",
       "ok": true,
       "returncode": 0,
       "wired_to_crate": false
@@ -42,6 +42,13 @@
     {
       "name": "A5_promote",
       "path": "tools/f1_gate_promote.py",
+      "ok": true,
+      "returncode": 0,
+      "wired_to_crate": false
+    },
+    {
+      "name": "torch_cpu_device",
+      "path": "tools/f1_torch_device_check.py",
       "ok": true,
       "returncode": 0,
       "wired_to_crate": false

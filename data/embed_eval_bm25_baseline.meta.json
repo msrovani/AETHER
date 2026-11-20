@@ -3,8 +3,8 @@
   "ref": "MSG_0986_0967",
   "src": "target/embed_eval_bm25_baseline.json",
   "dst": "data/embed_eval_bm25_baseline.json",
-  "sha256": "44d3f94d07fe831d841cf9bad4b53430f5b3c0428d53611a627a74985a01c68a",
-  "bytes": 1557,
-  "promoted_at_utc": "2026-11-20T16:16:34.238905+00:00",
+  "sha256": "773dc1cd362d22c9b13545ea03f8c6df536df7561ec49dba1e08b49bd6c53937",
+  "bytes": 1558,
+  "promoted_at_utc": "2026-11-20T20:59:05.463337+00:00",
   "ok": true
 }
