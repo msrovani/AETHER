@@ -1,0 +1,249 @@
+//! Binding FFI PyO3 (feature `pyo3`): embed do `vegaml` no processo Rust.
+//!
+//! Decisões de desenho (plano F2→F3, decisões HITL):
+//! - interpreter inicializado uma vez (`auto-initialize`), readers no mesmo
+//!   processo (~4–4.5GB de 6GB);
+//! - exceção Python vira `DecisionError::EngineUnavailable` — nunca panic
+//!   para cima do chat (Eixo E);
+//! - versões pinadas: python 3.14.10 (venv `target/vega`) + torch 2.14.1+cu126;
+//! - PyO3 0.30: `Python::attach` (era `with_gil`), `cast` (era `downcast`),
+//!   `IntoPyObject` (era `to_object`).
+//!
+//! LIMITAÇÃO DECLARADA (honestidade > comentário bonito): por enquanto o GIL
+//! fica retido durante o `decide()` — as decisões do chat são serializadas
+//! por turno, então o custo prático é zero hoje. Liberação real do GIL
+//! (`Python::detach` em torno do forward torch) fica para a fatia de azeite
+//! (Eixo D), medida com re-probe n=30 antes/depois.
+
+use crate::types::{AbstainReason, Answer, DecisionError, DecisionMeta, DecisionRequest, DecisionResponse};
+use crate::port::DecisionPort;
+use pyo3::prelude::*;
+use pyo3::IntoPyObjectExt;
+
+/// Configuração do gate completo (primário + sentinela no MESMO processo).
+#[derive(Debug, Clone, Default)]
+pub struct VegaGateConfig {
+    /// Caminho do checkpoint primário (None = hub default 0.8B calibrado).
+    pub model_primary: Option<String>,
+    /// Caminho do checkpoint sentinela (gemma-prose). None = sem sentinela
+    /// (AND degrada para decisão simples — modo transitório da F1).
+    pub model_sentinel: Option<String>,
+    /// Caminho do corpus de calibração JSON (124 → 500 rótulos, F3).
+    pub calibration: Option<String>,
+}
+
+/// Port real: primário (+ sentinela quando configurada), single interpreter.
+pub struct VegaPort {
+    primary: Py<PyAny>,
+    sentinel: Option<Py<PyAny>>,
+    engine_label: String,
+}
+
+impl VegaPort {
+    /// Carrega os readers no interpreter embutido. O fit de calibração é
+    /// executado aqui (determinístico, ~1–2 min no start — bootstrap).
+    pub fn new(cfg: &VegaGateConfig) -> PyResult<Self> {
+        Python::attach(|py| {
+            let vegaml = py.import("vegaml")?;
+            let primary = match &cfg.model_primary {
+                Some(m) => vegaml.call_method1("load", (m,))?,
+                None => vegaml.call_method0("load")?,
+            };
+            if let Some(cal) = &cfg.calibration {
+                fit_from_file(py, &primary, cal)?;
+            }
+            let sentinel = match &cfg.model_sentinel {
+                Some(m) => {
+                    let s = vegaml.call_method1("load", (m,))?;
+                    if let Some(cal) = &cfg.calibration {
+                        fit_from_file(py, &s, cal)?;
+                    }
+                    Some(s)
+                }
+                None => None,
+            };
+            let engine_label = match sentinel {
+                Some(_) => "vega-u-0.8b AND gemma-prose".to_string(),
+                None => "vega-u-0.8b".to_string(),
+            };
+            Ok(Self {
+                primary: primary.into(),
+                sentinel: sentinel.map(Into::into),
+                engine_label,
+            })
+        })
+    }
+
+    /// Decide num reader e converte o dict do vegaml para `Answer` tipado.
+    fn decide_reader(
+        py: Python<'_>,
+        v: &Bound<'_, PyAny>,
+        state: &str,
+        questions: &serde_json::Value,
+    ) -> Result<Vec<Answer>, DecisionError> {
+        let questions_py = json_to_py(py, questions)
+            .map_err(|e| DecisionError::Contract(format!("questions: {e}")))?;
+        let out = v
+            .call_method1("decide", (state, questions_py))
+            .map_err(py_err_to_engine)?;
+        let answers_obj = out
+            .get_item("answers")
+            .map_err(|e| DecisionError::Contract(format!("answers ausente: {e}")))?;
+        let mut vec = Vec::new();
+        for qid in questions
+            .as_object()
+            .map(|o| o.keys().cloned().collect::<Vec<_>>())
+            .unwrap_or_default()
+        {
+            let a = answers_obj
+                .get_item(&qid)
+                .map_err(|e| DecisionError::Contract(format!("answer[{qid}]: {e}")))?;
+            vec.push(py_answer_to_answer(py, &a, &qid)?);
+        }
+        Ok(vec)
+    }
+}
+
+impl DecisionPort for VegaPort {
+    fn decide(&self, req: &DecisionRequest) -> Result<DecisionResponse, DecisionError> {
+        let t0 = std::time::Instant::now();
+        let (primary_answers, sentinel_answers) = Python::attach(|py| {
+            let p = Self::decide_reader(
+                py,
+                self.primary.bind(py),
+                &req.state,
+                &req.questions,
+            )?;
+            let s = match &self.sentinel {
+                Some(s) => Some(Self::decide_reader(py, s.bind(py), &req.state, &req.questions)?),
+                None => None,
+            };
+            Result::<_, DecisionError>::Ok((p, s))
+        })?;
+
+        // Sentinela falhou onde o primário passou = engine instável — honesto.
+        if self.sentinel.is_some() != sentinel_answers.is_some() {
+            return Err(DecisionError::EngineUnavailable(
+                "sentinela falhou onde primário passou".into(),
+            ));
+        }
+
+        let answers = match sentinel_answers {
+            Some(senti) => primary_answers
+                .into_iter()
+                .zip(senti)
+                .map(|(p, s)| crate::gate::and_gate(&p.question.clone(), p, s))
+                .collect(),
+            None => primary_answers,
+        };
+
+        Ok(DecisionResponse {
+            answers,
+            meta: DecisionMeta {
+                latency_ms: t0.elapsed().as_secs_f64() * 1000.0,
+                engine: self.engine_label.clone(),
+                degraded: false,
+            },
+        })
+    }
+}
+
+fn py_err_to_engine(e: PyErr) -> DecisionError {
+    // Eixo E: exceção Python NUNCA sobe como panic — vira abstain tipado.
+    DecisionError::EngineUnavailable(format!("{e}"))
+}
+
+fn fit_from_file(py: Python<'_>, reader: &Bound<'_, PyAny>, path: &str) -> PyResult<()> {
+    let json = std::fs::read_to_string(path)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("{path}: {e}")))?;
+    let cal: serde_json::Value = serde_json::from_str(&json)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("json: {e}")))?;
+    let examples = json_to_py(
+        py,
+        cal.get("examples")
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("examples"))?,
+    )?;
+    let questions = json_to_py(
+        py,
+        cal.get("questions")
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("questions"))?,
+    )?;
+    reader.call_method1("fit", (examples, questions))?;
+    Ok(())
+}
+
+fn json_to_py(py: Python<'_>, v: &serde_json::Value) -> PyResult<Py<PyAny>> {
+    match v {
+        serde_json::Value::Null => Ok(py.none()),
+        serde_json::Value::Bool(b) => b.into_py_any(py),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                i.into_py_any(py)
+            } else {
+                n.as_f64().unwrap_or(0.0).into_py_any(py)
+            }
+        }
+        serde_json::Value::String(s) => s.into_py_any(py),
+        serde_json::Value::Array(items) => {
+            let list = pyo3::types::PyList::empty(py);
+            for it in items {
+                list.append(json_to_py(py, it)?)?;
+            }
+            list.into_py_any(py)
+        }
+        serde_json::Value::Object(map) => {
+            let dict = pyo3::types::PyDict::new(py);
+            for (k, val) in map {
+                dict.set_item(k, json_to_py(py, val)?)?;
+            }
+            dict.into_py_any(py)
+        }
+    }
+}
+
+fn py_answer_to_answer(
+    py: Python<'_>,
+    a: &Bound<'_, PyAny>,
+    qid: &str,
+) -> Result<Answer, DecisionError> {
+    let get = |k: &str| a.get_item(k).ok();
+
+    let abstain = get("abstain")
+        .and_then(|v| v.extract::<bool>().ok())
+        .unwrap_or(false);
+    // vegaml não tipa o motivo da abstain; tipamos na borda: abstain do reader
+    // é `unknown` por default — o AND gate refina para conflict quando os
+    // readers discordam. Classificação fina (question_kind) entra na F2.
+    let abstain_reason = if abstain { Some(AbstainReason::Unknown) } else { None };
+    let probs = get("probs").and_then(|p| json_from_py(py, &p));
+
+    Ok(Answer {
+        question: qid.to_string(),
+        choice: get("choice").and_then(|v| v.extract::<String>().ok()),
+        probs,
+        abstain,
+        abstain_reason,
+        readout: get("readout").and_then(|v| v.extract::<String>().ok()),
+    })
+}
+
+fn json_from_py(py: Python<'_>, v: &Bound<'_, PyAny>) -> Option<serde_json::Value> {
+    if let Ok(b) = v.extract::<bool>() {
+        return Some(serde_json::Value::Bool(b));
+    }
+    if let Ok(f) = v.extract::<f64>() {
+        return Some(serde_json::json!(f));
+    }
+    if let Ok(s) = v.extract::<String>() {
+        return Some(serde_json::Value::String(s));
+    }
+    if let Ok(d) = v.cast::<pyo3::types::PyDict>() {
+        let mut map = serde_json::Map::new();
+        for (k, val) in d.iter() {
+            let k: String = k.extract().ok()?;
+            map.insert(k, json_from_py(py, &val)?);
+        }
+        return Some(serde_json::Value::Object(map));
+    }
+    None
+}

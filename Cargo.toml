@@ -1,4 +1,8 @@
-﻿[package]
+﻿[workspace]
+members = [".", "aether-decision"]
+resolver = "2"
+
+[package]
 name = "aether_engine"
 version = "0.1.4"
 edition = "2021"

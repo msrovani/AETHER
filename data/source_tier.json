@@ -1,0 +1,69 @@
+{
+  "schema": "aether.source_tier/v1",
+  "ref": "docs/VEGA_F3_PLANO_CONSOLIDADO.md Eixo F camada 0",
+  "authority_cap_note": "autoridade_final = min(teto_do_tier, score_de_convergencia) - penalidade_independencia; nunca 255 sem HITL",
+  "tiers": [
+    {
+      "id": "primary",
+      "rank": 0,
+      "label": "primaria",
+      "examples": ["paper", "docs_oficiais", "repos_canonicos", "padrao_ISO"],
+      "authority_cap": 120,
+      "notes": "teto de quarentena settled; HITL sanciona 255"
+    },
+    {
+      "id": "secondary",
+      "rank": 1,
+      "label": "secundaria",
+      "examples": ["handbook", "manuais_vendor", "RFCs", "wikis_moderadas"],
+      "authority_cap": 100,
+      "notes": "convergiu fraco no maximo sem primary"
+    },
+    {
+      "id": "aggregator",
+      "rank": 2,
+      "label": "agregador",
+      "examples": ["wikipedia", "stackexchange", "news_wires"],
+      "authority_cap": 80,
+      "notes": "util para bootstrap; nao sobe sozinho"
+    },
+    {
+      "id": "seo_llm_farm",
+      "rank": 3,
+      "label": "SEO_llm_farm",
+      "examples": ["blogs_seo", "listicles", "conteudo_gerado_em_massa"],
+      "authority_cap": 60,
+      "notes": "fonte ruim convergida NAO sobe; 3 copias = 1 origem"
+    }
+  ],
+  "independence": {
+    "copy_jaccard_threshold": 0.85,
+    "paraphrase_policy": "conta_como_1_origem",
+    "same_domain_cluster": true
+  },
+  "convergence": {
+    "numeric_sigma_over_mu_max": 0.05,
+    "semantic_labels": ["agree", "conflict", "insufficient"]
+  },
+  "verdict": {
+    "settled": {"authority": 120, "label": "conhecimento_adquirido"},
+    "weak": {"authority_min": 80, "authority_max": 100, "label": "adquirido_cautela"},
+    "open": {"authority": 60, "label": "duvida_mantida"},
+    "irreducible_open": {"authority": 60, "always": true, "label": "pergunta_sem_resposta_unica"}
+  },
+  "ampliar": {
+    "hitl_only": true,
+    "never_raises_tier_cap": true,
+    "never_auto": true,
+    "authority_ceiling": 120,
+    "actions": ["mais_fontes", "mais_tiers", "sinonimos_PT_EN", "janela_datas"],
+    "cli": "python tools/research_reliability.py ampliar --case ID --hitl-ack SIM",
+    "outcomes": {
+      "conflict_persists": "open_definitivo",
+      "converged_after": "settled_com_marca_resolvido_por_ampliacao"
+    },
+    "spec": "docs/F2_5_SOURCE_TIER_AMPLIAR.md"
+  },
+  "claim": "MSG_0768",
+  "owner": "CURSOR"
+}

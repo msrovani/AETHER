@@ -1,0 +1,117 @@
+{
+  "schema": "aether.research_cases/v1",
+  "ref": "docs/VEGA_F3_PLANO_CONSOLIDADO.md casos de regua",
+  "cases": [
+    {
+      "id": "terra_lua",
+      "question": "Qual a distancia media Terra-Lua?",
+      "question_kind_bootstrap": "factual",
+      "sources": [
+        {
+          "id": "s1",
+          "tier": "primary",
+          "url": "https://nssdc.gsfc.nasa.gov/planetary/factsheet/moonfact.html",
+          "origin": "nasa_nssdc",
+          "value_km": 384400,
+          "text": "semi-major axis 384400 km"
+        },
+        {
+          "id": "s2",
+          "tier": "secondary",
+          "url": "https://en.wikipedia.org/wiki/Lunar_distance_(astronomy)",
+          "origin": "wikipedia",
+          "value_km": 384399,
+          "text": "average distance about 384399 km"
+        },
+        {
+          "id": "s3",
+          "tier": "aggregator",
+          "url": "https://example.org/space-faq",
+          "origin": "faq_site",
+          "value_km": 384400,
+          "text": "about 384400 kilometres"
+        }
+      ],
+      "expect": {
+        "verdict": "settled",
+        "authority": 120,
+        "independent_origins": 3,
+        "sigma_over_mu_lt": 0.05
+      }
+    },
+    {
+      "id": "rust_vs_c",
+      "question": "Rust e melhor que C?",
+      "question_kind_bootstrap": "irreducible_open",
+      "sources": [
+        {
+          "id": "s1",
+          "tier": "primary",
+          "url": "https://doc.rust-lang.org/book/",
+          "origin": "rust_book",
+          "stance": "prefer_rust_safety",
+          "text": "Rust offers memory safety without GC"
+        },
+        {
+          "id": "s2",
+          "tier": "primary",
+          "url": "https://www.open-std.org/jtc1/sc22/wg14/",
+          "origin": "iso_c",
+          "stance": "prefer_c_control",
+          "text": "C remains the lingua franca of systems"
+        },
+        {
+          "id": "s3",
+          "tier": "seo_llm_farm",
+          "url": "https://blog.example/rust-better-than-c",
+          "origin": "seo_farm_a",
+          "stance": "prefer_rust_safety",
+          "text": "Rust is better than C for everything"
+        }
+      ],
+      "expect": {
+        "verdict": "open",
+        "authority": 60,
+        "never_winner_class": true,
+        "note": "mapa adquirido; nunca classe vencedora"
+      }
+    },
+    {
+      "id": "three_copied_blogs",
+      "question": "O que e QUBO?",
+      "question_kind_bootstrap": "factual",
+      "sources": [
+        {
+          "id": "s1",
+          "tier": "seo_llm_farm",
+          "url": "https://blog-a.example/qubo",
+          "origin": "seo_cluster_x",
+          "domain": "blog-a.example",
+          "text": "QUBO is Quadratic Unconstrained Binary Optimization used in annealing"
+        },
+        {
+          "id": "s2",
+          "tier": "seo_llm_farm",
+          "url": "https://blog-b.example/qubo-explained",
+          "origin": "seo_cluster_x",
+          "domain": "blog-b.example",
+          "text": "QUBO is Quadratic Unconstrained Binary Optimization used in annealing"
+        },
+        {
+          "id": "s3",
+          "tier": "seo_llm_farm",
+          "url": "https://blog-c.example/intro-qubo",
+          "origin": "seo_cluster_x",
+          "domain": "blog-c.example",
+          "text": "QUBO is Quadratic Unconstrained Binary Optimization used in annealing"
+        }
+      ],
+      "expect": {
+        "verdict": "open",
+        "authority": 60,
+        "independent_origins": 1,
+        "note": "3 blogs identicos contam como 1 fonte"
+      }
+    }
+  ]
+}

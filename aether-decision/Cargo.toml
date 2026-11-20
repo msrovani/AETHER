@@ -1,0 +1,22 @@
+[package]
+name = "aether_decision"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.78"
+description = "DecisionPort: AND gate vega-U (0.8B + gemma-prose) via FFI PyO3 — plano F2->F3"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[lib]
+name = "aether_decision"
+path = "src/lib.rs"
+
+[features]
+default = []
+# Ativa o binding PyO3 (embed do interpreter). O build default NAO precisa de Python.
+pyo3 = ["dep:pyo3"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+pyo3 = { version = "0.30", optional = true, features = ["auto-initialize"] }
