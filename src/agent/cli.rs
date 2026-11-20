@@ -338,14 +338,68 @@ fn chat_repl(
         if line.eq_ignore_ascii_case("sair") || line.eq_ignore_ascii_case("exit") {
             break;
         }
-        let _ = chat_turn(agent, line, out);
+        let _ = chat_turn(agent, port, line, out);
     }
     EXIT_OK
 }
 
+/// Digest compacto do estado para o port (Eixo B: ≤320 tokens, nunca payload
+/// bruto). Aproximação conservadora: 1 token ≈ 4 bytes em PT/EN.
+fn state_digest(text: &str) -> String {
+    const MAX_TOKENS: usize = 320;
+    let cap = MAX_TOKENS * 4;
+    if text.len() <= cap {
+        return text.to_string();
+    }
+    let mut end = cap;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...[truncado]", &text[..end])
+}
+
+/// Linha auditável com o veredito do `DecisionPort`. O port é evidência e
+/// degradação honesta — NUNCA substitui a decisão do core (regra de ouro).
+fn decision_port_line(port: &dyn DecisionPort, text: &str) -> String {
+    let req = DecisionRequest {
+        state: state_digest(text),
+        questions: serde_json::json!({"abstention": {"type": "boolean"}}),
+    };
+    match port.decide(&req) {
+        Ok(resp) => match resp.answers.first() {
+            None => "decisor: sem resposta | engine=unknown".into(),
+            Some(ans) if !ans.abstain => format!(
+                "decisor: age choice={} | engine={} | readout={}",
+                ans.choice.as_deref().unwrap_or("?"),
+                resp.meta.engine,
+                ans.readout.as_deref().unwrap_or("?"),
+            ),
+            Some(ans) => {
+                let reason = match ans.abstain_reason {
+                    Some(AbstainReason::Unknown) => "unknown",
+                    Some(AbstainReason::Ambiguous) => "ambiguous",
+                    Some(AbstainReason::Conflict) => "conflict",
+                    Some(AbstainReason::EngineUnavailable) => "engine_unavailable",
+                    None => "sem_motivo",
+                };
+                format!(
+                    "decisor: abstain motivo={reason} | engine={} | degrado={}",
+                    resp.meta.engine, resp.meta.degraded
+                )
+            }
+        },
+        Err(err) => format!("decisor: abstain motivo=engine_indisponivel ({err})"),
+    }
+}
+
 /// Um turno de conversa. Devolve o código de saída do turno (abstenção NÃO é
 /// erro de conversa — é resposta honesta).
-fn chat_turn(agent: &mut ToolAgent, text: &str, out: &mut dyn Write) -> i32 {
+fn chat_turn(
+    agent: &mut ToolAgent,
+    port: &dyn DecisionPort,
+    text: &str,
+    out: &mut dyn Write,
+) -> i32 {
     let _ = writeln!(out, "você: {text}");
     let mut parser = ParserPort::new();
     let report = parser.analyze(text, &GoalSchema::agent_default());
@@ -361,6 +415,9 @@ fn chat_turn(agent: &mut ToolAgent, text: &str, out: &mut dyn Write) -> i32 {
             "ação: abstain | confiança {:.2} | motivo: a borda de linguagem não entendeu ({erro})",
             report.confidence
         );
+        // F1: a mesma abstenção passa pelo port. O motivo tipado (`unknown`) é
+        // a porta de entrada da pesquisa externa na F2 — o core continua decidindo.
+        let _ = writeln!(out, "{}", decision_port_line(port, text));
         let residuo = report.unconsumed.join(" ");
         if !residuo.is_empty() {
             let _ = writeln!(out, "resíduo: {residuo}");
@@ -1410,7 +1467,8 @@ mod tests {
         let mut out = Vec::new();
         let cfg = AgentConfig::default();
         let mut agent = build_agent(&cfg);
-        let code = chat_repl(&mut agent, &mut input, &mut out);
+        let port = StubPort;
+        let code = chat_repl(&mut agent, &port, &mut input, &mut out);
         assert_eq!(code, EXIT_OK);
         let text = String::from_utf8_lossy(&out);
         assert!(text.contains("AETHER chat"), "{text}");
@@ -1422,5 +1480,29 @@ mod tests {
         assert_eq!(code, EXIT_OK, "{text}");
         assert!(text.contains("ação: abstain"), "{text}");
         assert!(text.contains("sat <arquivo.dimacs>"), "{text}");
+    }
+
+    #[test]
+    fn decisor_troca_de_port_sem_tocar_a_borda() {
+        use aether_decision::{Answer, DecisionMeta, DecisionResponse, ScriptedPort};
+
+        let port = ScriptedPort::new();
+        port.push(Ok(DecisionResponse {
+            answers: vec![Answer::abstained("abstention", AbstainReason::Unknown)],
+            conformal_set: None,
+            meta: DecisionMeta {
+                latency_ms: 1.0,
+                engine: "scripted".into(),
+                degraded: false,
+                vram_used_mb: None,
+            },
+        }));
+        let line = decision_port_line(&port, "pergunta fora do lexico");
+        assert!(line.contains("motivo=unknown"), "{line}");
+        assert!(line.contains("engine=scripted"), "{line}");
+
+        let stub = StubPort;
+        let line = decision_port_line(&stub, "pergunta fora do lexico");
+        assert!(line.contains("motivo=engine_unavailable"), "{line}");
     }
 }

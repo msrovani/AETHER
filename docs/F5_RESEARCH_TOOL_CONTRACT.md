@@ -3,6 +3,9 @@
 Data: 2026-11-20 · Dono draft: **CURSOR** · Plano:
 `docs/VEGA_F3_PLANO_CONSOLIDADO.md` F5 · Depende de F2/F2.5 (DONE) e F1 wired.
 
+> Alias / espelho: `docs/F5_TOOL_PESQUISA.md` (MSG 0777/0779). Machine contract:
+> `data/research_tool_contract.json`.
+
 ## Posicionamento
 
 | Fase | Quem busca | Onde mora |

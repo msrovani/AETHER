@@ -3,6 +3,23 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.1.6] - 2026-11-20
+
+### Changed
+
+- Ciclo automatico: 9 arquivo(s) (.:1, aether-decision:2, data:1, docs:3, src:1, tools:1).
+- Gate: ok (1s).
+
+- `Cargo.lock`
+- `aether-decision/Cargo.toml`
+- `data/research_tool_contract.json`
+- `docs/F1_CONTRATO_MEDIDO.md`
+- `docs/F5_RESEARCH_TOOL_CONTRACT.md`
+- `src/agent/cli.rs`
+- `aether-decision/examples/`
+- `docs/F2_CERT_DIGEST.md`
+- `tools/cert_digest.py`
+
 ## [0.1.5] - 2026-11-20
 
 ### Changed

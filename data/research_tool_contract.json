@@ -1,100 +1,32 @@
 {
-  "schema": "aether.research_tool_contract/v1",
-  "phase": "F5",
-  "ref": "docs/VEGA_F3_PLANO_CONSOLIDADO.md F5 + Eixo F",
-  "status": "draft_CURSOR",
-  "tool": {
-    "name": "research.external",
-    "owner_phase": "F5",
-    "invoked_when": "AbstainReason::Unknown",
-    "default_network": false,
-    "f2_harness": "tools/research_harness.py",
-    "f2_reliability": "tools/research_reliability.py"
-  },
+  "schema": "aether.research_tool_contract/v0",
+  "tool": "research.query",
+  "phase": "F5_draft",
+  "ref": "docs/F5_RESEARCH_TOOL_CONTRACT.md",
+  "depends_on": ["F2", "F2.5"],
   "input": {
-    "required": ["question", "abstain_reason", "state_digest"],
-    "properties": {
-      "question": {"type": "string", "max_chars": 2000},
-      "abstain_reason": {"enum": ["unknown"]},
-      "state_digest": {
-        "type": "string",
-        "description": "digest de certificado ≤320 tokens (Eixo B)"
-      },
-      "allow_network": {"type": "boolean", "default": false},
-      "ampliar": {
-        "type": "object",
-        "description": "só com hitl_ack=SIM",
-        "properties": {
-          "hitl_ack": {"enum": ["SIM"]},
-          "actions": {
-            "type": "array",
-            "items": {
-              "enum": ["mais_fontes", "mais_tiers", "sinonimos_PT_EN", "janela_datas"]
-            }
-          }
-        }
-      }
-    }
-  },
-  "source_record": {
-    "required": ["id", "tier", "origin", "text"],
-    "properties": {
-      "id": {"type": "string"},
-      "tier": {"enum": ["primary", "secondary", "aggregator", "seo_llm_farm"]},
-      "origin": {"type": "string", "description": "cluster de independencia"},
-      "url": {"type": "string"},
-      "text": {"type": "string"},
-      "value_km": {"type": "number"},
-      "stance": {"type": "string"}
+    "question": "string",
+    "abstain_reason": {"enum": ["unknown"], "only": "unknown"},
+    "state_digest_max_tokens": 320,
+    "allow_network_default": false,
+    "ampliar": {
+      "hitl_only": true,
+      "ack_required": "SIM"
     }
   },
   "output": {
-    "required": ["verdict", "authority", "n_independent", "sources", "quarantine"],
-    "properties": {
-      "verdict": {"enum": ["settled", "weak", "open"]},
-      "authority": {
-        "type": "integer",
-        "minimum": 60,
-        "maximum": 120,
-        "description": "nunca 255; HITL sanciona depois"
-      },
-      "n_independent": {"type": "integer", "minimum": 0},
-      "tier_cap_applied": {"type": "integer"},
-      "convergence": {
-        "numeric_sigma_over_mu": {"type": ["number", "null"]},
-        "semantic": {"enum": ["agree", "conflict", "insufficient"]}
-      },
-      "sources": {
-        "type": "array",
-        "items": {"$ref": "#/source_record"},
-        "description": "apos cluster de independencia (copias=1)"
-      },
-      "quarantine": {
-        "kind": "external_research",
-        "hitl_required_for_255": true,
-        "scope_hint": "aether/project"
-      },
-      "ampliacao_mark": {
-        "enum": [null, "resolvido_por_ampliacao", "open_definitivo"]
-      }
-    }
-  },
-  "authority_rules": {
-    "formula": "min(tier_cap, convergence_score) - independence_penalty",
+    "verdict": ["settled", "weak", "open"],
+    "authority_max": 120,
     "never_255_without_hitl": true,
-    "irreducible_open_always_60": true,
-    "copied_sources_count_as_one": true
+    "fields": [
+      "sources",
+      "n_independent",
+      "numeric",
+      "semantic",
+      "quarantine",
+      "ampliacao_mark"
+    ]
   },
-  "eval_tiers": {
-    "T0": "suite propria: data/research_cases.json + harness selftest",
-    "T1": "coprocessador: unknown->quarantine sem act",
-    "T2": "hibrido: DecisionPort + research.external offline",
-    "T3": "benchmark externo: so com allow_network e corpus congelado"
-  },
-  "non_goals": [
-    "promover fato a 255 no tool",
-    "ampliar automatico",
-    "chamar rede com default",
-    "atravessar escopo nsgdb"
-  ]
+  "tier_table": "data/source_tier.json",
+  "eval_tiers": ["T0", "T1", "T2", "T3"]
 }

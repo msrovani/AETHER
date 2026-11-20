@@ -91,10 +91,13 @@ existe e o `.ok()` engole. A resposta sai `abstain=false, choice=None`.
 Correção: quando `kind == boolean`, derivar `choice` de `boolean >= 0.5`
 (`"True"`/`"False"`), mantendo `probs`.
 
-**F-2 — `prediction_set` não tem casa no schema Rust.**
-O plano (Eixo B) exige `conformal_set`. O Python já entrega `prediction_set`;
-`DecisionResponse { answers, meta }` descarta. Correção: campo
-`conformal_set: Vec<String>` (ou por-answer), mapeado de `prediction_set`.
+**F-2 — `conformal_set` existe no schema e nunca é preenchido.**
+`DecisionResponse.conformal_set: Option<serde_json::Value>` já está em
+`types.rs` (Eixo B), mas `pyo3_impl` devolve `None` com o comentário "quando o
+vegaml expõe `prediction_set`, o mapeamento entra aqui". **O vegaml expõe hoje**
+— `prediction_set` é lista, presente nos dois tipos de pergunta (seção 2).
+Correção: `conformal_set = out["answers"][q]["prediction_set"]`, sem
+interpretação; a lista já é o conjunto conformal.
 
 **F-3 — todo `abstain` do Python vira `AbstainReason::Unknown`.**
 O código comenta que "vegaml não tipa o motivo", e tipa `Unknown` sempre. Mas
@@ -107,15 +110,14 @@ Correção mínima, sem tocar no engine: `unbound == true` → `Unknown`;
 `prediction_set.len() > 1` → `Ambiguous`; senão → `Ambiguous` com motivo
 `"abstain_sem_classe"` (nunca `Unknown` por default).
 
-**F-4 — `--features pyo3` não compila hoje.** Com
-`PYO3_PYTHON=target/vega/Scripts/python.exe`, `pyo3 0.30.1` compila e o rustc
-chega ao crate: **5 erros**, todos no código do crate, nenhum no toolchain:
-
-- `E0583` ×2 — módulos `bootstrap`/`config` declarados sem arquivo (refatoração em curso);
-- `E0432` ×2 — `gate::combine` e `port::AndGatePort` importados e não definidos;
-- `E0599` ×1 — `pyo3_impl.rs:177`: `py.none()` → `py.None()` (API é maiúscula).
-
-O default build (`cargo test -p aether_decision`) está verde: 13/13.
+**F-4 — o toolchain NÃO é o bloqueio (medido).**
+Com `PYO3_PYTHON=target/vega/Scripts/python.exe`,
+`cargo check -p aether_decision --features pyo3` fecha **EXIT 0** (pyo3 0.30.1,
+um único warning de `dead_code`). Histórico útil: às 11:2x o mesmo check dava 5
+erros (`E0583` bootstrap/config ausentes, `E0432` `combine`/`AndGatePort`,
+`E0599` `py.none()`), todos corrigidos pelo dono do crate em 11:27–11:30. Ou
+seja: o que falta na F1 é **semântica de contrato** (F-1..F-3), não build.
+Default build: 13/13 verde.
 
 ## 4. Consequência para o aceite da F1
 
