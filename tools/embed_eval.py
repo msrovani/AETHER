@@ -52,17 +52,28 @@ BATCH = 32
 # tokenização (uma só para todos os sistemas — lexical e semântico comem o
 # mesmo texto de entrada; nenhum sistema recebe tratamento preferencial)
 # --------------------------------------------------------------------------- #
-_TOKEN_RE = re.compile(r"[a-z0-9_]+")
+_TOKEN_RE = re.compile(r"[a-z0-9_]+")   # forma dos ids do dataset congelado (slug)
+_WORD_RE = re.compile(r"[a-z0-9]+")     # ranqueamento: `kuramoto_field` casa `kuramoto`
 
 
 def tokenize(text: str) -> list[str]:
+    """Tokenização do RANQUEAMENTO: `_` é separador.
+
+    Errata F4: com `[a-z0-9_]+` o BM25 não casava `kuramoto` com
+    `kuramoto_field` e a consulta perdia o gold por tokenização, não por
+    relevância. O `slug()` (ids do dataset congelado) mantém a forma antiga —
+    o dataset NÃO muda com este fix.
+    """
     text = unicodedata.normalize("NFKD", text.lower())
     text = "".join(c for c in text if not unicodedata.combining(c))
-    return _TOKEN_RE.findall(text)
+    return _WORD_RE.findall(text)
 
 
 def slug(text: str) -> str:
-    s = tokenize(text.replace("\n", " "))
+    # réplica exata da tokenização antiga (ids do dataset congelado não mudam)
+    t = unicodedata.normalize("NFKD", text.lower().replace("\n", " "))
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    s = _TOKEN_RE.findall(t)
     return "-".join(s[:8]) or "sec"
 
 

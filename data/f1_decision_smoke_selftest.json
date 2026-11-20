@@ -30,7 +30,7 @@
       "readout": "and_gate"
     }
   ],
-  "boot_s": 77.7,
+  "boot_s": 69.5,
   "conformal_set": {
     "passou": [
       false
@@ -39,7 +39,7 @@
   "conformal_set_present": true,
   "degraded": false,
   "engine": "vega-u-0.8b AND gemma-prose",
-  "latency_ms": 492.3614,
+  "latency_ms": 235.2558,
   "n_abstain": 1,
   "n_answers": 2,
   "schema": "aether.f1_smoke/v1"

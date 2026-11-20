@@ -71,17 +71,22 @@ Duas saídas, ambas válidas, e elas se combinam:
 
 ```powershell
 # materializar o ambiente durável (custo: download do torch ~2,5 GB)
+# destino canônico = .vega/  (NUNCA target/vega — cargo clean apaga)
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/vega_env_setup.ps1
 
-# só conferir os pins do ambiente já existente
+# só conferir os pins do ambiente já existente (.vega, não target/)
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/vega_env_setup.ps1 `
-  -VerifyOnly -Venv target/vega
+  -VerifyOnly -Venv .vega/venv
 
 # build com a feature que embute o interpreter
 $env:PYO3_PYTHON = "$PWD\.vega\venv\Scripts\python.exe"
 $env:PYTHONPATH  = "$PWD\.vega\venv\Lib\site-packages"
 cargo build -p aether_decision --features pyo3
 ```
+
+> **MSG 0892 / 0911:** todo agente usa `.vega/venv` + `PYTHONPATH=.vega/venv/Lib/site-packages`.
+> Criar venv em `target/` é proibido. Resíduos em `aether-decision` (defaults legados)
+> ficam com OPENCODE — não “corrigir” o crate sem posse.
 
 ## Por que o script recusa `target/`
 

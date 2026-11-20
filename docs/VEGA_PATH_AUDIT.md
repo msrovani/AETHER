@@ -31,4 +31,5 @@ Crate `aether-decision` e exemplos ainda citam `target/vega` em comentários /
 defaults legados (`config.rs`, `pyo3_impl.rs`, `examples/f1_smoke.rs`, …).
 Dono: OPENCODE / posse do crate. CURSOR não toca.
 
-`docs/F1_CONTRATO_MEDIDO.md` — claim DOC_SYNC de outra sessão CURSOR (MSG 0902).
+`docs/F1_CONTRATO_MEDIDO.md` — claim DOC_SYNC de outra sessão CURSOR (MSG 0902).  
+`docs/F1_ENV_DURAVEL.md` — VerifyOnly exemplo corrigido para `.vega/venv` (MSG 0911).
