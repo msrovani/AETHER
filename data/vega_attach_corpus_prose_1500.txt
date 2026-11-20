@@ -1,0 +1,1336 @@
+﻿T12 ja 13.5us com D160 K6
+SINDy 3-4 termos nao e gargalo
+BUFFY: migracao BAM sem rebaseline silencioso dos 13 testes
+claim fala 2KB 1024 entradas
+NAO_TAGEIO_0.1.0=G0 a G9 ainda abertos
+Aceito (invariante já vale para o SGDB; implementação de tools é P1).
+aprendida (EXP3 hoje; LinUCB contextual no P4) e, no planejador,   expected free
+recall / context  devolvem   evidência   com chave, autoridade e
+ADR-004 — Aprendizado exige feedback verificado
+ADR-005 — Linguagem é adaptador de borda
+ADR-006 — Toda tool declara custo, risco e pré-condições
+- Custo   orçamento ⇒  hold  (não executa) — ideia do CURSOR (MSG 0263).
+- O planner pode tratar  Task  como um  Goal  já resolvido.
+ADR-009 — AETHER é coprocessador cognitivo, não LLM
+- Medir o que o AETHER faz melhor: recall, certificado, abstenção, custo.
+extração de LLM até corroboração.
+Tiers T0 (suíte própria), T1 (coprocessador), T2 (híbrido), T3
+Não se transplantam pesos, atenção, tokenizer nem geração.
+Nenhuma iguala open-domain/geração hoje, mas o AETHER
+ADR-014 — Undo registra a intenção antes do efeito
+não apaga valor de writer concorrente (CAS/token); (7) autoridade ≥200 vira
+- Testes T1–T9 do roadmap passam a ser obrigatórios.
+A escada é  AUTHORITY_QUARANTINE=96  (inferido),  AUTHORITY_CORROBORATED=128
+corpo de requisição nunca concede autoridade.
+promoção por corroboração ( write_sourced  + proveniência) e por certificado
+em um agente com   inferência, MoE, coerência e autoaprendizado   — sem LLM,
+A coerência não vê "texto gerado": vê   afirmações tipadas   com
+Para cada tarefa, o probe de cada especialista é uma competência declarada
+conhecimento (não é energia de Ising; está documentado no código).
+não há “auto-elogio”: a própria saída nunca é rótulo.
+incompleto em ambição  : não é uma AGI, é um organismo determinístico com
+O que falta para o agente   escolher sozinho o que usar  , planejar em vários
+A “autoescolha” inclui escolher entre   ferramenta local
+Limite atual:   o   host   escolhe a  Task  ( Fact ,  Satisfy ,  Optimize …);
+Verifier  checa  SuccessCriteria  e  Certificate ;
+Com o posicionamento acima, ele vira quatro
+O LLM   não   é default; é um backend caro entre vários.
+-  src/agent/telemetry.rs  —  EpisodeTrace  JSON (sem dependências).
+Gate G-A1 (escolha certa)   —  implementado em  tests/agent_tools_gate.rs
+P2 — Planejamento multi-passo e parada (7–10 dias)
+- Falha no passo 2 → rollback do passo 1; estado final idêntico (teste de
+( UndoOp::{Insert,Restore} ) com backend de memória testado (insert/restore).
+-  src/agent/tools/fs.rs : leitura/escrita em raiz sandbox; sem traversal.
+Fechado neste ciclo: T4 túmulo (200 marca e não purga; 255 purga só com store —
+--features gpu    numa máquina com adapter;    cargo fmt --check    ainda
+concorrente;  Restore  deve usar CAS/token; replay stale conta, não falha.
+-  src/agent/bench.rs : harness de avaliação;
+- Hierarchical MoE: router de routers + LSH para muitos especialistas.
+quando o valor esperado supera custo/risco.
+tools/goal  já usa  ToolAgent  (P1).
+universal: reexecutar no mesmo host/seed antes de comparar.
+-   gate:   nenhuma claim com autoridade efetiva < 128 produz  act ; nenhuma
+-   ADR-004:   aprendizado exige feedback verificado; fatos novos entram em
+-   ADR-013:   linguagem é  LanguagePort  com backends plugáveis; LLM é um
+-     rollback de qualquer plano que falhe no verificador.
+Tudo no  T2 ; o  T0  não conhece tool.
+agent: Executor com orçamento e rollback .
+AETHER — Contrato de API Canônico (v1.0)
+M1 —  src/core/thermodynamic_solver.rs  (feature  m1 )
+INV-W4   compute_spectral_entropy  de um campo coerente < de um campo de ruido.
+Consome M1/M2/M3 conforme o contrato acima.
+O  imprint  usa projeção complexa
+Estas são   novas   e seguem as
+Destilação   offline   (texto → HV + fatos).
+"É usável como IA?" tem duas leituras e elas têm respostas   diferentes  :
+"acerta o que é idêntico, abstém no que não é".
+MIN_SCORE = 0,5  com  reason: "low_similarity" .
+persistência com reinício) e 9 testes unitários de JSON/round-trip.
+Padrão de uso   errado  : apontar  OPENAI_BASE_URL  para cá e esperar um chatbot.
+Gates novos em  tests/api_lifecycle.rs  (5): esquecer, idempotência, escopo
+Os números do núcleo (E6/E6b/E2b/E2c/E3b/E1b) resistem à auditoria   — todos
+O artefato mede  unique_ws_bytes = 1.079.784  =   1,03 MiB  , não 1,03 MB
+Com K=1 a capacidade é 0,1·D; em D=64 é 0,5·D; e o
+17,354 µs por consulta   — 5,8× acima.
+O artefato então contém  FAIL  em 2 de 3
+No  phase_language_probe.rs :   6   ocorrências de permutação,
+Isso não é um experimento a executar; é um resultado a
+3.5 Placar e fila desatualizados em um ponto
+atribuição (RG, 20 MB, penhasco).
+Regra operacional que ficou acordada:   o auditor é  read-only ; cada erro é
+Auditoria do Corpo 3 — E4/E5/E7/E8/F2/F3 (2026-11-15 23:40)
+do dossiê precisa carregar "vs.
+O valor   40   em  N=160  é a   janela de armazenamento   ( min(N/4, 64) ), não
+são harness local (não o SGDB real) e o E4 é um único seed.
+com o teorema: a implementação já extrai o autarky máximo.
+-   E2c-3A (curto prazo, exato):   DFS/DPLL com propagação de roof dual.
+Não fazer:   implementar strong persistency/BHS como “extensão do E2c-2” — o
+n=64 com 5M nós   não fecha   (três instâncias, ~50 s cada).
+Com isso,  ExactSearch  ganha um modo B&B (podar quando
+(linear negativo e constante da decomposição quadrática) — não é um wrapper.
+bound_into  foi adicionado ao  RoofDualWorkspace  (aditivo;  pass_into  e
+Suíte:   46 alvos, 277 testes, 0 falhas  ;
+0 por teorema   (simetria  s→−s ).
+path   nos três arquivos necessários validou o B&B enquanto outro agente
+Docstring certo evita “otimismo de 5×”.
+Com três agentes editando ao mesmo tempo, uma build leva   2–8 min  .
+O dono normalizou para  0,25/√D_IN  (norma 0,25) e o
+Teste decisivo:   1 quadruple,   sem ruído  ,  scale = 0,1 , 4 valores/slot.
+não aceita número de  flake  como regressão sem reexecução;
+Evidência acumulada (por que bits+f32 é o desenho)
+(concatenado) — a simetria favorece o re-rank.
+e a versão   duas direções   (fato indexado em  s1 s1
+Total dentro do teto p99 ≤ 5 ms com folga; o 30,9 s do probe Python
+f10fad), e o ciclo de capacidade E1B   0,4×D = 4096 fatos/shard  .
+multi-probe ( hv.rs  já tem single-probe; multi-probe é a lit.
+Bank por shard de 4000:  4000×160×8B = 5,12 MB  + idx 96 KB.
+run_s0  reamostrava o host via  sample_host()  a cada 10k ciclos, e  sample_host()  mede jitter ( Instant ), disco (4 KiB) e UDP loopback.
+Não corrigido (mudaria números históricos); documentado no gate e reportado ao dono.
+- Propor dono por arquivo antes de editar;  NAO_TOCO  explícito.
+(2026-11-17, v0.0.143, ACQ 100, suíte completa com 318 testes).
+target/aether_scorecard.json  consolida as 12 notas,  real_coverage , o
+Saída:  target/aether_scorecard.json  (campos  quotient ,  real_coverage ,
+JSON:  target/aether_bench_throughput.json  (mesclado em
+Store BAM T12 (~52 KB)   excede L1d 32 KB   → residência em L2.
+Spins discretos  s  ∈ {-1,+1}  inalterados   (asserção no T06 e em
+produto interno em  chunks_exact(8) , cue mascarada (sem gather), 1
+T09: SINDy streaming ( dẋ/dt  < 0.04,  fit_window  com 0 allocs).
+entregues noutros claims; não reabrir sem ownership.
+orçamento L1d de 32 KB (fica em L2) — tradeoff reportado.
+8.1 Latência do RAG holográfico (T12) — BAM u16 vs FHRR f32
+Limites honestos: o JIT   não   bate código Rust nativo fixo (0,83 ns) — seu
+Reflexo (EventDrivenCore + ActiveInference + CBF de Lyapunov) no 1º
+Parser Linux ( sysfs ) testado por unidade,   não executado   em Linux.
+AETHER — Reexecução da Auditoria Cognitiva (2026-11-17)
+Este é um   registro de execução  ; o fechamento histórico do
+A suíte completa cobre, além das 12 dimensões, os gates E1–E8, F1–F5, M3/M5/M8,
+O audit sobrescreve o scorecard e descarta o bloco
+Não   é uma prova de equivalência geral a um LLM/AGI: as dimensões são
+Autor:   OPENCODE (claim MSG 0121/0123, escopo confirmado em MSG 0128)
+Erro de auto-predição pós-plasticidade:   0,0140   (adaptativo) ×   0,0562
+Quatro atuadores com syscalls reais: throttle
+sem reexecutar o reservatório, benchmark   Mackey–Glass τ=17   e   NARMA-10  , e
+Throughput congelado   1.733.418/s   (N=100 esparso), ~8× o RLS e ~7× o
+O gradiente completo continua fora do núcleo.
+SPIRES RLS — RLS é online, mas  O(N²)  por passo e sensível a  P .
+Baseline conjunto honesto:   40 passadas de busca sem gradiente.
+próprio com  gist ; não edita  knowledge_bridge_f1.rs .
+A queda H3 variou de 45,8%
+Docs mestres:   não editados por ownership; linhas acima são a errata
+O certificado continua sendo de
+Resultados (primeira run verde, default)
+Hub é a superfície humana  : gates sem JSON no Detalhe não contam.
+LLM gera; AETHER cita, certifica ou abstém.
+E em ambos o custo fixo de compilar o
+O gate   não   exige paridade
+Shared memory com reuso por bloco   é o multiplicador: 32× no JL, e no
+Host: RTX 3050 6 GB, neural-sgdb stdio
+-  scripts/package-daemon.ps1 ,  scripts/two-instances.ps1 .
+CIC (P8)   entregue OPENCODE: false_act=0 + Wilson IC; tetos 0,49/0,20 ainda heurísticos até troca pelos donos.
+Onda   V0.1-D   fechada: tag  v0.1.0  publicada (MSG 0666 /
+CYCLE_LOG - historico do ciclo automatico
+(triplas),   nunca   uma mente (pesos/tokenizer).
+Qwen3-Embedding-0.6B é   nativo 1024   com MRL (32…1024); em produção pedir
+E1 n=5k ≈0,5983   abaixo   do donor; D1 MaxSim real em curso (0581).
+CC BY-NC — evitado (ver   RESEARCH_DOADORAS_2026.md  (RESEARCH_DOADORAS_2026.md)).
+- Header AETHV1 registra  dim_in ,  seed ,  flags.whitened ,  sha256_payload .
+Trate cada rodada como um   lote versionado  .
+Pesos HF   nunca   entram no crate.
+Se falhar Spearman/JL:   não   baixe o gate — ajuste corpus/seed/D ou declare ε.
+Set-Content -Encoding UTF8  em  .rs / .md  (duplo-encode).
+14.3 Usabilidade U1–U6 ( target/aether_transplant_uso.json )
+Objetivo: AETHER como   IA completa destokenizada  , paralela às LLMs.
+Opcional:   Qwen2.5-7B   só para relações fora do schema / normalização.
+BUFFY   · MSG   0567   · 2026-11-18 · complementa  DONOR_CATALOG.md  (CURSOR) e
+Gate que exige  acc ≥ 0,70  com  AUC = 0,6909  é insatisfazível por construção.
+Fix aplicado   (sem afrouxar teto):  .trim()  antes do  trim_start_matches(' ')
+-   O donor não é cego; ele é cego a  ordem  na faixa fina.
+Teto aritmético (usar em todo gate de limiar)
+certificado  order-sensitive por cosine pooled; os três permissivos acima dão
+o que a doadora já entrega.
+O redesenho do B4 pode continuar válido, mas o   motivo   (“similaridade não
+(sequence indexing); Plate, HRR (capacidade  k = O(n/ln(m/q)) ).
+Propagação por listas de ocorrências   ( Prop3 ).
+sobre os termos PoB: dá para decidir em  O( termos)  (≈ 774) se   alguma
+kernel denso (16 acumuladores por linha, colunas crescentes), então o
+Baseline do digest:  0xa3f3babd84c2c30f .
+p50 = 715 µs  e  min = 234 µs  para o estágio do solver.
+Estado atual (min,  n=20 , 100 reps × 5 instâncias):
+2 a 5×   acima, contra   8 a 23×   antes.
+Gates verdes: G1 100% SAT, G2 precisão 100%, G3 zero-alloc.
+energy / gap  (bits) e  out .
+(média)  , reparo 172 µs (média, ruído), simbólico   20,1 µs p50  , digest
+≤ 20 µs   no simbólico p50, com G1/G2 intactos.
+-  examples/e2_symbolic_bench.rs  (min/mediana robustos a carga)
+NRMSE MG  < 10⁻³ , treino  10⁶ < 60 s , NARMA  < 0,15 , speedup do congelado
+Readout por   equações normais + Cholesky  , com ridge.
+joint_search  — 40 candidatos  (ρ, α, input_scale) , cada um com uma passada
+Alimentar  y  no reservatório derruba
+Baseline conjunto tem de pagar o preço.
+NARMA-10 em 0,1286 é competitivo, não SOTA; o objetivo do E8 é o paradigma
+- OPENCODE 0513 (ST default sem  model_kwargs ):   0,37 vs 10,82 txt/s ≈ 29×
+-   Risco:   nenhum na doutrina (seed/T0 intactos); cosine ≈ idêntico ao bf16 para estes textos curtos
+L3 — Backend ONNX / OpenVINO (CPU) ou ONNX-GPU
+-   Quando:   rounds ≥50k recorrentes ou multi-agente competindo pelo donor
+Extrapolação de ETA (ingênua, pós-L1)
+-  x  ETA_100k_h =   2,57   < 4 (CPU ok sem GPU neste host)
+EVAL_AGENT — suíte de evidência T0 do ToolAgent
+Escopo (T0) — o que este número   não   é
+(o runner   não   chama  learn , então o self-model fica vazio e o planner é
+primeiro run que congelou a expectativa (e continua idêntico entre execuções).
+-   texto fora do schema escala, não age   (17, 18):  language.parse  devolve
+Clause3  não representa cláusula de 1 literal
+aparece como candidato acima do teto.
+Caso 19 fixa  abstain ; com teto  low  (caso 15)
+cargo test --test agent_eval_suite -- --nocapture : a tabela mostra
+Regras de higiene já embutidas no runner: self-model em
+O que é:   o adaptador que deixa um app de IA (llama.cpp, Ollama, SDK da
+Plano:   V01_DELIVERY_PLAN.md  (V01_DELIVERY_PLAN.md).
+Consulta em   outro   organismo devolve  {"abstain":true,"reason":"empty_scope"}
+resposta é  abstain  — não um texto inventado.
+Certificado é de factibilidade, não de verdade   ( energy ,  gap ,
+O disco recebe uma   linha túmulo   ( op=forget ) além de remover da memória;
+O teto é do arquivo, não do conjunto vivo — se os vivos sozinhos passarem
+Esquecer reconstrói o índice ( O(n) ), o que é aceitável porque
+Locale  : gere números JSON com cultura invariante ( 1.5 , não  1,5 ) —
+( 401 / 403 ),   persistência em disco com reinício   e   8 conexões em
+resultado (ver §6, regra anti- overfit ).
+src/phase_memory.rs:372  documenta  pattern_capacity()  como  min(N−1, 64) ,
+alcança o que a   dominância   ( persistency_qumo ) não vê — em especial no braço
+este documento:  n ∈ {1,2,5,8} , 400 instâncias × 20 atribuições, erro máximo
+Construa a rede de implicação padrão do roof dual (Boros–Hammer; implementação
+a0 + maxflow/2 == min_s H  por força bruta ( n = 10 , 20 instâncias,  1e-9 ).
+Rede canônica do  implication_network.hpp  (dwave-preprocessing),   simétrica
+com redução aparente de   14%  .
+onde há viés” — o que a implementação landada cumpre ( 0,520  vs  0,429  no
+Se a sua implementação   não   fixar o centro, o erro é de
+aether_e2c.json : objetos com  mean ,  min ,  max ,  unsound ,  seeds ).
+(ACF/IMF) e produzir   o número que a Fase 2 vai usar  : quantos padrões cabem
+( 0xE1B_0001 ,  audit_config()  de  e1b_capacity.rs ) antes de fixar a grade.
+Varra  σ_init ∈ {0; 0,05; 0,1; 0,2}  ×  rounds ∈ {1,2,4,8} .
+fenômeno é uma  cliff , não um platô, e isso é o achado).
+docs/HW_TARGET.md  (1 parágrafo: teto do M5) · post  RELATORIO .
+(é exatamente o caso "claim_before_code" do protocolo).
+T0   nunca   toca em relógio — nem  SystemTime::now() , nem
+antigo” obriga o produtor a avançar  head  — ou a sobrescrever slots ainda não
+rede no crate: zero; a feature  knowledge  não puxa dependência nova).
+ScopeId  — colisão e estabilidade.
+contador próprio; somar em  dropped  esconde a causa.
+abra  PROPOSTA  — o módulo tem dono e teste de 200k mensagens.
+relaxado depois do fato é  R9  (proveniência-teatro) em forma de experimento.
+AB no   mesmo processo   que  examples/fft_gpu_probe.rs  /  target/fft_gpu_probe.json .
+Não rouba claim D1 (OPENCODE   0668  ).
+Leitura: com query s2 real o float quase não recupera — contraste com proxy
+- OPENCODE: D1 per-token MaxSim real ( tools/b0_maxsim_colbert.py , claim 0581)
+fica em CPU por decisão, não por falta de tempo.
+Roofline  : a projeção GPU cabe no alvo de latência do estágio;
+converte cada medida em  gpu_gate::Workload::new(n, steps, target_us)  e
+src/core/gpu/mod.rs :  GpuContext  (probe de adapter,  AETHER_GPU=0  desliga,
+equivalência  :  project_into  GPU == CPU   bit-a-bit   em 10³ vetores
+mesma feature;  rustfft  continua o default do organismo.
+energia reportada ==  H(estado devolvido)  (auto-consistência,  f64  no CPU);
+Se G0 mostrar  WorthIt  no JL (esperado:
+G1 — GEMM do JL: implementado e validado no   RTX 3050
+Limite honesto:   3× está longe dos 1362× projetados.
+(cada linha relê a matriz inteira).
+propose , não  act    — a barra do plano é 2×  medido e robusto  e o v2
+Bloco = (8 palavras de 32 bits) × (32 linhas), 8 warps (256 threads), 32
+de sinal (o gate aceita ≤4 palavras em 320.000   e prova      < 1e-3 ).
+lanes leem  J j  lane  , que é  J lane  j     por simetria  .
+ficar ~0,09% pior que a CPU (~19× o piso de ruído seed-a-seed) — o gate admite
+nas   instâncias do E2c-2   (vidro  ±1  completo + viés forte em  k  sítios, o
+~500 a taxa de ocupação não paga).
+não existe crossover  : o GPU perde em qualquer lote e perde pior quanto
+Gates que continuam necessários (dívida declarada)
+verdes   no  gpu_fft_gate ; o gate (b) razão ≥ 2×   falhou honestamente em
+Não há assert barato em shader; fica no doc e no gate.
+n=128   ( onnx_backend_probe.json , MSG 0675): torch   1,57   txt/s · ONNX   0,01   txt/s (ratio   0,003  ) — ABSTAIN promove; CUDA R4 19,33 segue preferido.
+zero-alloc;  prune  é máscara permanente.
+sparsity_ratio  = fração dissolvida;  density()  = fração ativa.
+O benchmark M2 deve rodar
+C:\Users\msrov\Desktop\FORUM.txt ; ferramenta  tools/forum_post.ps1 .
+US1   (T2): medição com usuário real — fora desta onda.
+máquinas de mesa — PC, notebook e servidor  , com   CPU x86-64 multithread   e
+ISA:   x86-64,   multithread obrigatório   (SMT welcome, mas as metas são
+No Windows: plano "Alto desempenho".
+O crate sem  gpu  funciona completo (estado atual: CPU-only,
+lote, com o bit idêntico ao caminho CPU ( 0/32.000  em n=200; no lote de
+Custo fixo   11,4 ms/chamada   p50 (13 uniforms + 13
+Todo resultado GPU é validado contra a
+LAN IPv4 com   multicast habilitado   ( 239.255.42.99:7777 ); Ethernet
+ARM (Apple Silicon, Windows-on-ARM)   — compila eventualmente
+Método: 1.000 quadros de warm-up +   10.000 medidos  ; alocador contador armado na
+Penhasco de cache em N≈256  , não 512.
+N=512 consome 72,7% dele e N=1024 estoura por 3,1×.
+ThermodynamicDreamer ,  ActiveInference/CBF  e  MorphogeneticField    não estão no
+s ∈ {-1,+1}  é convertido uma
+margem para a cauda (p99 de N=1024 = 18,5 ms   16,7 ms).
+Penhasco de capacidade e métrica de cache (2026-11-16)
+bytes_tocados/ciclo = N²·8 (solver) + D·K·8 (FHRR) + estágios  comparado com
+4,07 µs continua valendo para o   laço do organismo  , não para uma consulta SAT.
+Doador padrão:  Qwen/Qwen3-Embedding-0.6B  (Apache-2.0) · D_HV = 10.240 bits
+Extração (dry-run sintético; produção: GLiNER/REBEL → Qwen2.5-7B)
+e transforma a resposta em   portas de linguagem plugáveis  , não em uma
+ter uma   porta   ( LanguagePort ) com backends plugáveis e um default que não
+-   Grammar Pruning   (EMNLP 2025): schema de API + extrator de entidades +
+Encaixe no AETHER:   excelente.
+SONAR 200 línguas; generalização zero-shot multilíngue; usa transformador e
+Encaixe no AETHER:   é o caminho mais próximo da premissa contínua.
+chega a test loss 1,81 vs 1,67 do transformer no Shakespeare; AERC 1,73;
+3.4 LMs subquadráticos (Mamba, RWKV, xLSTM, híbridos)
+Encaixe:   é “LLM de borda” mais eficiente, não uma não-LLM.
+Limite:   ainda é um LLM; qualidade em MMLU do BLT inicial é baixa sem
+tokens empata; em 1024 tokens difusão é ~2,5× mais eficiente.
+-   Scaling   (arXiv:2610.15146): custo de spike cai com compute; ainda ~0,16–
+Encaixe:   é o que o AETHER já faz (FHRR).
+Encaixe:   pode ser o   backbone de entendimento/predição   do AETHER; não
+O contrato público ( LanguagePort ,  ParserPort ,  adapt_text , tool
+Slot obrigatório ausente   (ex.:  ask  sem relação,  sat  sem  n ) ⇒ OOV.
+ToolOutcome  (antes era  1.0  fixo); abstenção vira  needs_human = true .
+6.1 C1 — confiança calibrada no parser (código em  src/agent/language.rs )
+Experimentos baratos antes de escolher (gates)
+- Diffusion survey: arXiv:2508.10875 · d3LLM: arXiv:2601.07568 · dInfer: arXiv:2510.08666 · constrained: arXiv:2607.07026 · energy: arXiv:2610.19855
+inferência, SAT/QUBO, aprendizado, orçamento, contradição.
+Nem no MoE, nem no aprendizado.
+Implemente  Expert  em  src/agent/experts.rs :
+Rode  cargo test --lib agent::  e  cargo test --test agent_gate .
+ser   verificável   (comando, arquivo, número).
+- Gates de latência ( e1_language_gate::g5 ,  phase5_hardware::t12_  ) exigem
+O gargalo semântico é o transdutor (E3), não o número de fatos.
+Baseline reproduzido nesta sessão (debug)
+-   Autoridade  : tag  source=llm|transplant ; efetiva = min(faixa, corroboração);
+Lições do Corpo 2 (E2 + E3) e do fechamento do Corpo 3 — 2026-11-16
+Lição:  em SAT apertado, o   encoding   importa mais que o solver.
+( 64·n  movimentos, 0 alloc) fecha essa distância.
+role_similarity  (evidência) detecta   fora do
+as_deref_mut()  em múltiplos usos
+FORUM_PROTOCOL.md  §6:  cargo check  antes de sair; ACK antes de editar arquivo
+decisão por factibilidade), não eliminados.
+Não é contrato de API e não altera
+II responde  "a que preço" ;
+Riscos e o que falsificaria a tese ( 9-riscos-e-o-que-falsificaria-a-tese)
+composicional  que ligue campo contínuo → símbolo → decisão → self.
+1.1 O que já existe (e é relevante aqui)
+Consequência de produto: o AETHER não substitui um chatbot.
+Leitura:   entre 2025 e 2026 a literatura está convergindo exatamente para o
+micro = traços, meso = morfema/palavra, macro = sintagma.
+Experimento E1:    examples/phase_language_probe.rs  — gramática SVO mínima,
+simbólico, aritmética geral, conhecimento enciclopédico e bom senso   não vêm de
+E conhecimento geral não precisa ser armazenado como fatos: pode ser importado
+otimização não restrita, todo mínimo local é "coerente" e  ΔE    não prediz
+Experimento E2:    examples/ising_logic_probe.rs  — 3-SAT aleatório  n ≤ 20
+Evolução existe como morfogênese reativa, não como desenvolvimento.
+4.4 Proposta — Self-Field + currículo endógeno
+evolve_topology(prediction_error, …)  já é
+Isso responde ao Tao of Agency:
+pós-ruptura contra o baseline T03 (150 ciclos).
+Determinismo bit-a-bit   com 0 alloc (auditável, reproduzível).
+Logo  eq-t/s = cycles/s × 128 .
+Sobre "14 MB roda na L3":   em capacidade, sim (14,34 < 24 MB).
+--features affinity  corta   −95% no p99.9  .
+Ordem sugerida:   E1 → E2 → E3 → E4 → E5  .
+Resposta lógica com   certificado de factibilidade verificável   e abstenção
+-   F3:   E3 mostrar que a geometria transplantada   não   preserva relações
+(2022) — survey de VSA/HDC.
+Propostas deste dossiê (ainda inexistentes):
+O PROBLEMA DOS 3 CORPOS — NÃO · Volume II
+Estado:   das seis objeções,   nenhuma foi fechada   — todas foram  precificadas .
+Registo de risco atualizado ( 8-registo-de-risco-atualizado)
+A versão original desta seção estimava
+de   1–8%   (p99: 311,2 vs 311,7 µs; eq-t/s: 811,8k vs 804,7k).
+84,0% → 90,9% → 95,3%   do quadro em  steps = 60 → 120 → 240 , e entregava
+potências de dois   de N — 24 deixa cauda em N=64, 32 derrama registradores.
+O penhasco de cache é N≈256, não 512.
+"caber em 60 Hz" é resolver um problema que não existe; o que existe é o kernel
+o AETHER gasta ~1,46 mJ/ciclo para 128 eq-tokens ⇒   ~11 µJ/eq-token  .
+O paper é explícito: restrições apertadas viram   apenas penalidades  , e penalidades
+toca o Módulo 1 — e agora recebe instâncias que cabem no L1 (N≤64 ⇒  J  = 16 KB).
+O presolve é sound por construção e validado.
+Isso é E2b pagando o E3b: menos variáveis,
+n=14 ,  J  ±1 simétrico, viés plantado em  plant·n  variáveis:
+Conclusão do E2c v1:   a persistência de primeira ordem é o análogo QUBO da
+O Hamiltoniano vai para a posiform quadrática
+Tudo em buffers fixos ( MAX_N = 64 ):
+Medido por força bruta: o número de
+a jusante é um presolve ruim.
+Gates:   G1 soundness ✅ · G2 alcance ✅ (≥ dominância; estrito em 25%/45%;
+M_max ∝ N²    — capacidade cresce   quadraticamente   com a dimensionalidade,
+ciclo-limite   e nunca converge, mesmo com iterações infinitas.
+Capacidade e localidade são a mesma moeda
+Regra nova:   profundidade máxima declarada por consulta; ao exceder, o resultado
+vale para   fatoração por ressonador com codebook conhecido  , não para
+E1b-2 — varredura densa  M ∈ {4, 8, 16, 24, 32, 40, 48} .
+Com  reset_phases(0)  antes de cada consulta e
+fatoração por ressonador   deixam de ser otimização e passam a ser   requisito
+- Binarização de embeddings preserva semântica com perda pequena:   ~2%   de degradação
+o ruído do banco estava em  0,25    por coordenada
+correto é   certificado de factibilidade   — e a resposta deve carregar a proveniência
+14 ms por verificação (ReGA, CPU) contra   146,5 µs   de ciclo  M  =   95 ciclos   de
+Por que falha:   em otimização   não restrita  ,  todo  mínimo local é coerente —
+de energia" deve ser lido como  prova de consistência , nunca como  prova de
+5.2 O sensorium mínimo viável, em três estágios
+O próprio preprint do OLM (SSRN 7431978  C ) reporta o achado mais útil:
+Para o AETHER ( n = 64 ), DEER rende ~25%.
+Nenhuma decisão de arquitetura   se apoia em  C .
+-   Sim   assumir JL+binarização como transporte de geometria — e só isso.
+O Volume II mostra que   as seis objeções eram corretas — e todas têm preço tabelado  :
+84,4%   do quadro e entrega   7,5 GFLOP/s   (~19% do pico AVX2 f64).
+Este volume é também o   hub de integração   da série: registro mestre de
+O ciclo de vida e onde ele quebra ( 2-o-ciclo-de-vida-e-onde-ele-quebra)
+O que ainda precisa ser atacado ( 12-o-que-ainda-precisa-ser-atacado)
+Três mudanças concretas que este volume introduz:
+1.1 Onde cada tipo vive (ou deveria viver)
+O bridge converte, nunca assume.
+É exatamente o desenho T1/T2 de §4.
+Diagnóstico:   todas são   L3 operacionais   — infraestrutura do  projeto , não
+certo — gestão de conhecimento é, por natureza, assíncrona.
+Nenhum dos dois, sozinho, evita alucinação.
+Sem os dois campos, a resposta é inválida por construção.
+Espelha o  TransducerIo  (borda única, zero-alloc, sem  String  no sinal).
+MiniLM é 384-d; FHRR é 160 complexo.
+target/aether_profile_e6.json ,  docs/HW_TARGET.md  §8 · fórum   MSG 0098  .
+24 shards de  ≤ 48  fatos (75% do teto de 64), roteados pelo par
+projetado) com  cos/sin  do codebook pré-computados.
+O que isso muda:   o gargalo da "linguagem em fase" não era a dimensão nem a
+Placar: 7 respondidas, 0 abertas.
+I disse:  o AETHER não tem três problemas, tem um com três faces.
+conviver com um motor de fase sem corrompê-lo.
+BGE-M3 ~245 samp/s batch16 Arc): comunidade Meteor Lake
+multivetor/cross no gate; E1 precisa   passar   o donor, não só o bag.
+Classe do bug 0567:  zip  silencioso truncando/deslocando.
+- Proxy ONNX INT8 ~  2,07×   vs ONNX fp (30k docs, comunidade).
+Teto A3 0,90 ainda exige rerank float (B2).
+Contrato formal:   GATE_B2_BITS_F32_RERANK.md  (GATE_B2_BITS_F32_RERANK.md).
+- CURSOR (0673):  --dry-check  n=5000 balance 2500/2500 OK; claim D1   não   tocado.
+de sono, piso 6,5 txt/s, veredito em  measure_window_verdict.json .
+Não importar LLM externo no T0.
+Organismo Basal (60 passos), 2.5 s por modo; carga em 16 núcleos lógicos no
+-  HardwareNoise  atrás de  --features hw-entropy , usando o  SiliconEntropy
+unbinding vetorizáveis) com API em radianos:
+Entropia:   default determinístico;  hw-entropy  só em experimentos.
+arquivo de  phase_memory / morphogenesis /organismo foi tocado.
+O exemplo  bam_probe  mantém a comparação lado a lado e o breakdown
+Conclusão:   a indireção por tabela quebra a vetorização; o laço fixo de 10
+Veredito medido: para  N ∈ {512, 1024, 4096}  e 80 passos,   todos   caem em
+Encerramento da Fase 5 —  benches/hardware_extremus.rs  e CI
+622 µs / 3,88 ns ≈ 160 mil avaliações ≈ 0,8 ms  — mesma conclusão: o JIT só
+interrupções/DPC; o ganho de pinning aparece em escala maior no   ciclo Basal
+cfg(feature = "jit")  assert!(jit_compiled_in() && compiles   0)  em
+quebravam a matriz 1 (aviso para a CURSOR).
+Destravar B2/B-G0 pelo   embed   (GPU + shards + seed/T0).
+-   Lit:   ST efficiency — bf16 no CPU é anti-otimização
+-   Dono embed round:   CURSOR/OPENCODE após A1/A2
+-   Lei E1B (OPENCODE 0520):   capacidade ≈ 0,4 × D →   4096   @ 10240 bits; 100k =   25×~4k
+-   Dono:   OPENCODE · arquivo próprio  tests/cic_abstain_gate.rs
+-   Lit:    2606.24948 (https://arxiv.org/abs/2606.24948)
+Vantagem de composição só se ganhar do donor.
+- P3 GHRR · P4 VaCoAL · P10 CASEL — só com gate NC / HITL existente
+A3/E1 parafrase após embed ordenado (PAWS) — não baixar teto
+Chat LLM, MSI/auth/cloud, CAN/CSI (Produtos A/B), BAM/JIT/governor no CLI.
+Para  h = 0 ,  H(s) = −½·sᵀJs  é invariante por  s → −s .
+n=1    ( H=−s , bound +1, ótimo −1).
+pass_into  devolve bits   0/1  ; o estado interno usa   0=livre, ±1  .
+REPO_SYNC — ciclo de sincronizacao (5 min)
+Nenhum token e gravado em arquivo do repo.
+- Ciclo   verde   (gate  cargo check , ou  cargo test --release  com  -Full ), com
+Concorrencia (3+ agentes no mesmo diretorio)
+com  scope=app:AETHER  para serem recuperados por qualquer agente.
+checkpoint (Gemma 4 e EmbeddingGemma 2   são   Apache-2.0).
+JSON estrito com descarte auditado, NFKC, dedup  s o , authority 60–120,
+E1 no corpus inteiro ficou em   0,5983   (abaixo do piso
+- GLiNER2/GLiNER2.5 (fastino, Apache): github.com/fastino-ai/GLiNER2 · arXiv 2507.18546
+papel: transporte, formato, outbox, leitura de fase, CLI e gates.
+Chamar o banco no  T0  seria uma catástrofe de jitter.
+Fase não é nenhum deles; usamos
+recall  filtrado por  entities  +  scope_app  +  scope_run  (k ≤ 20, limite
+- Sem  outbox , a fila fica em memória ( pending ) e o processo ainda tenta de
+A CLI é a mesma porta de entrada para humano e para script:   toda   saída
+API HTTP ( aether-api ) também usa o SGDB
+Retries + backoff são automáticos em  SgdbError::is_transient() ; o ledger
+O AETHER não começa em texto: começa em um   campo contínuo  .
+excesso de erro que o preditor não absorve eleva  F .
+coletor Windows no   binário    aether_daemon  ( m8 ):  GetSystemTimes ,
+Artefato:  target/aether_transplant_uso.json  · Hub: painel   Doação · ETL · Transplante  .
+O executor sai no  Err    antes   de chamar
+LAN ) entram marcados; o executor exige  Risk::High  + HITL   antes   da
+-   timeout não significa que não aconteceu  : reconciliar o estado remoto
+( docs/V01_DELIVERY_PLAN.md  §3.2): "checklist documentado apontando gates
+o smoke às 13:03 durante o desenvolvimento; lição de parser 0567 aplicada:
+Proposta registrada no forum (MSG 0449, 2026-11-17).
+Resultado esperado agregado (north star)
+Falta de fato para fechar US0  : U1 (roteiro de onboarding medido),
+Artefato consolidado:  target/ia_usabilidade_stats_0.1.0.json .
+O AETHER hoje é um   motor cognitivo pós-token maduro em bancada   com demos
+~~ aether-organism  sem  --help  /  --tui ~~ →  --help  exit 0;  --tui  +  features tui  = Ratatui.
+(2) operar um escudo de host com linguagem clara; (3) plugar um sensor real
+Resultado:   um operador vê o host “respirar” e um enxame acoplar, sem IDE.
+PR-U0b / (5)   —   dashboard Windows   ( aether-dashboard ) com hover/tooltips.
+Próximo:   B-G0   (labels reais / paráfrase) +   SGDB-remember
+Layout: abas   Lab       Console IA  ;   centro   = medidores da aba (ou chat na Console);   direita   = Detalhe (chip glossário/hover/ficha + gráficos).
+Tabela canônica:  DASHBOARD_METRICS.md (DASHBOARD_METRICS.md).
+Test drive agente   — Brasil (não abstém) · Atlântida (abstém).
+9) 5 minutos IA (fora do hub — coprocessador)
+Este documento congela o que a   v0.1   promete como IA usável: coerência de
+Integrador de agente   — monta Goals ou fala dialeto OpenAI/llama.cpp e precisa
+Rodar em  --release , host preferencialmente  contended_false .
+-  x  F1.1 mapa US→gates:   USABILITY_TESTS.md  (USABILITY_TESTS.md) + agregador  tests/usability_gate.rs
+-  x  Pedido humano + bump  Cargo.toml  + tag  v0.1.0  (MSG 0666)
+Este arquivo é a ordem de execução.
+Corrigir só o que este comando apontar.
+Cada passo grava uma linha em  target/v01_freeze/g0_g9.json :
+- Repo: github.com/NandhaKishorM/vegaml (Apache-2.0; 311 stars; vegaml 0.16.3, 2026-11-15)
+Um prompt formatado:  Observation: {state} Measurement ({type}): {instr} Possible outcomes:   ...
+ao poço mais próximo), fração do orçamento de passos usada, log(nº de opções) .
+vega-U vs concorrentes (para o nosso caso: RTX 3050 6GB, PT/EN, Apache-2.0)
+-   vega-U  : zero-shot modesto (0.534 @0.8B) mas ECE 0.010 e   acc@50% cobertura 0.956
+com gate) — mesma arquitetura de integração que já usamos com o neural-sgdb
+versões +  audit_decision  hash-chain; (b) triagem de quarentena —  noul  "passou na
+- O "physics engine" é mecanismo de inferência, não modelo do mundo — os próprios autores
+act/cite/propose/abstain  que o core já executa.
+recall ,  health ,  curate ,  decide ).
+Se o cliente MCP   ignorar    initialize.instructions , a user rule + este
+health(view=staleness)  — o que envelheceu (TTL / Decayed / contradicts);   não   auto-forget.
+O core não adivinha o caminho.
+— grava fatos L3/L4, anti-patterns, opcional supersede/TTL, arquiva episódicos  /ts/  do run.
+Fato   idêntico   já existe →  curate(op=reinforce|feedback)  na storage key completa ( md/L4/… ).
+Ops úteis:  explain ,  reinforce ,  feedback ,  forget ,  supersede ,
+- Tratar  DemoEmbedder  /  NEURAL_SGDB_EMBEDDER=demo  como semântica real.
+- Dois  mcp_server  a escrever no mesmo FileStorage.
+Protocolos de referência no repo:  examples/agent_protocol.rs ,
+The internal API lives in  crates/k_ai/src/sgdb/  of the
+entities / Embedder : quem fornece usa as mesmas strings na escrita e na
+-  remember(author="agent"|"system", layer=)  —  system  is an   operational
+-  curate(op=forget_purge, key=, reason=)  — tombstone → delete →  AUDIT_OP_FORGET
+-  curate(op=set_authority, key=, authority=0..=255)  — MDM1 v8  authority
+-  remember(key=)    rejects raw keys starting with  md/    (contract v1.4.6):
+key_rejected  |  not_found , plus  retryable .
+-  Sgdb::set_tie_margin(&mut self, Option<u32 )  /  tie_margin_of()  —
+capacity_bytes()  /  used_bytes()  (default  None );  validate  §7.
+validate  reported a legitimate write as corruption.
+-  Sgdb::scope_dim_descriptors() -  Vec<ScopeDimDescriptor   —  {label, user,
+contract_json_is_pinned ; unknown-tool error carries  stable_aliases ,
+-    MemorySnapshot  (MSNP)   — N records + TODAS as versões conhecidas:
+put_operational  — cada  put  criaria uma autoria causal nova.
+-   Semantics:   append-log, power-loss safe.
+recall_weighted / recall_temporal / recall_lexical / recall_entities  de
+set_content_type  (rótulo estável persistido em  MemoryMeta , MDM1 v6);
+carrega a key do primário  /L4 L3/  e  payload_type  (o datum real);
+content_type  (a projeção) não mudou.
+v1.0 method changed; crate version   1.5.0   in  Cargo.toml .
+// Contract: whoever supplies embeddings uses the SAME model on write and
+pub fn scope_distribution(&mut self) -  Result<ScopeDistribution, SgdbError ;
+// scoped recall NEVER competes for slots of another scope; global recall
+// MemoryMeta.entities: Vec<String  = MDM1 v5.
+// ---- Retrieval temporal (v1.1.4 item 9) ----
+pub fn feedback(&mut self, key: &str, positive: bool, amount: f32) -  Result<(), SgdbError ;
+pub fn set_content_type(&mut self, key: &str, ct: ContentType) -  Result<(), SgdbError ;
+// ---- Resolução canônica (v1.1.2) ----
+// importance decays exponentially with age (since last_reinforced or
+// timestamped L2 episodics with the SAME normalized text (BM25 tokenize)
+pub fn deprecate_run(&mut self, filter: &ScopeFilter, archive_episodic: bool,
+pub struct ScoreBreakdown { pub semantic: Option<f32 , pub recency: Option<f32 ,
+pub fn audit_checkpoint(&mut self, now: u64) -  Result<u64, SgdbError ;
+// memories created AFTER the checkpoint; PAYLOADS are NOT reverted (ADD-only;
+// FP32 rescore ranks the union.
+// do BQ e floats; o fingerprint resolve id → storage_key e hasheia a CHAVE.
+// divergência/corrupção/ausência → full rebuild (mesma garantia).
+// v1.2.0 (c) IDX2: snapshot PAGINADO — header 32B na key primária + chunks de
+pub fn recall_adaptive(&mut self, query: & f32 , k: usize, max_oversample: usize)
+// O  scope  legado (MDM1 v4) é o ESPELHO de  scope_dims.user  (MDM1 v7):
+// validate() §6: "legacy scope disagrees with scope_dims.user" quando os dois
+pub struct AbsenceEntry { pub query: String, pub scope: String,
+pub fn absence_count(&mut self) -  Result<usize, SgdbError ;
+O  recall  default NÃO tem efeito
+-  x   FileStorage  roundtrip: put → reopen → get, survives a simulated crash
+recover() ) + InMemory parity.
+The two compatibility points are:   NMD1 document format   (byte-identical) and
+Regras (checklist de qualquer bench/example que reporte recall/task)
+Estratificar por modelo  : se medir com 2 backbones, reportar separado e
+NSGDB é memória   agêntica   (MCP  remember / recall /
+Complementa  docs/adr/0008-local-embedder.md  Other uses e  crates/nsgdb-wasm .
+Fonte:   relatório de um agente AI que fez ingestão real de 6 papers técnicos
+MORRA sem o fix; contrato MCP 1.4.5 →   1.4.6   (pins:  contract.json ,
+-  src/sgdb.rs:1590-1605  — ordem atual:  set_state(old, Superseded)?
+examples/audit.rs:248    pinou a meia-mutação como design
+Core:   pré-validar que AMBAS as keys resolvem para doc existente ANTES da
+ISSUE 2 — Key com prefixo duplicado ( md/L3/md/L3/… ) —   ACEITO (P0)
+A doutrina regra 4 fala em "full storage key
+-  recall  comum JÁ sinaliza: sentinela  need = off+size+1
+recall_entities / recall_temporal ;  total  (candidatos do pool) e
+vale para  recall_temporal  (2296-2307).
+format=json só é checado no branch não-vazio.
+semântico; "GPU" não achar "placa de vídeo" é a consequência documentada de
+Confirmado:    if_exists  default  add  ( examples/mcp_server.rs:870 ) —
+aparece em nenhum  parent_ids  de doc ativo;
+bateram com o corpus (6 papers → 6 proveniências).
+bare-metal (kernel  no_std  + mesh 2 nós + forget HITL).
+nó  0  implícito via  counter_of  — hazard real p/ consumidor.
+ISSUE 3 —  compact()  OOB na media —   DESLOCADO (parcialmente aceito)
+política do TickvLite do OS.
+tombstoned, deleted, audit_seq}  — sequência atômica num call-site canônico.
+ISSUE 7 — Audit não cobre o ciclo cognitivo —   ACEITO (M)
+code() -  ErrorCode  com enum    non_exhaustive   derivado da variante +
+wire type MSNP (já no crate, fuzzado) cobre o caso do mesh; se não,
+explícita do que gera companion lexical hoje.
+O alinhamento 512 é   contrato TKLV byte-idêntico com o OS   (regra 5 do
+open_with_snapshot  ainda diz "BQ vazio até rebuild" —   corrigir a string  .
+O que falta: job de CI dedicado com budget
+ISSUE 20 —  CognitiveOps  trait —   ADIADO (direção correta)
+ISSUE 22 —  explain_hit  —   ADIADO (composição de peças existentes)
+Contexto por arquivo:  recall(path="src/x/mod.rs")  ativa os namespaces das regras gravadas com  curate(op=set_trigger) .
+YOU choose what enters the prompt and what to write.
+Entities are caller-supplied identical strings on write and recall_entities.
+are append-history: archive (forget) the old ones, don't consolidate them.
+MOM entity roles on write/recall: mom/constraint, mom/decision, mom/fact, mom/pattern, mom/anti-pattern, mom/learning, mom/pref (identical strings).
+O que já é estudado/implanta   em outros SGDB (estado da arte).
+Superfícies (WASM/servidor) seguem fora do crate (ADR-0008).
+episódicos em conhecimento semântico,   adaptive forgetting   com 3 critérios
+ciclo; Always-On survey: rollback = 27/435 trabalhos):
+(PRE/POST/FILT, exposição no retrieval vs disclosação na resposta).
+- 6 classes de ataque de envenenamento;   defesas de prompt injection NÃO
+é a competência que ninguém domina), MemoryArena (recall passivo cai para
+-   Retrieval causal, não por similaridade   — "por que essa memória levou àquela",
+-   Gestão de memória aprendida end-to-end   — RL/GRPO treina o agente a gerir a
+-   Memória como substrate de identidade   — o agente continua quem é entre
+( recall_weighted_full  +  Hit.score_breakdown : sem/rec/imp/conf/src).
+implementando  Embedder  (ADR-0008); bundled embedder é a norma no ecossistema.
+para anti-patterns e “implementar” capacidades já shipped.
+Hot SGDB Test — Auditoria do Experimento
+-  x   tools/list  → 23 tools ( era_report ,  health  onboarding,  validate )
+-  x   resources/list  +  resources/read  + paginação (2 páginas)
+side-table targets missing doc  — ORFÃOS criados
+-  health  inicial: backend=file, doc_count=2 (persistidos de sessões anteriores
+-  supersede  → memória antiga  state: Superseded  (linhagem causal).
+doc vive em  md/L4/mcp/...
+trigrama em posições diferentes caía em bins diferentes: query
+sem  recall(100)  interno (custo linear no nº de docs)
+retorno do  remember  recebia "no memory at key".
+Eu (agente) caço bugs na primeira rodada   — o teste a quente falhou 6x e
+, e eu uso o  h.key  do recall como fonte de
+Follow-up 2026-08-14 — Audit Cognitivo ( examples/audit.rs )
+-  remember  com chave crua  h/imp  NÃO resolvia para  md/L4/h/imp  —
+o custo da segurança é perder records após o ponto de bit-rot; docs
+Follow-up v1.1.3 — Co-author ergonomics (S1–S5)
+tools  ; hot test 84/0 exit 0; matriz   225+1 / 271+1 / 177+1  .
+e custo estimado; MCP  era_report  =   tool 23  .
+PRÓPRIO doc L5 e projetava floats como prosa lossy, o bug exato do pedido).
+Memória MCP:  md/L4/mcp/1787197395227000  ( scope=project/neural-sgdb ).
+examples/mcp_server.rs  ( mcp_actionable_error(&e)  →  mcp_actionable_error(e) ,
+DISTINTO por chamada (senão as chaves  md/L2/ts/<hex   colidem no mesmo ms e o
+match  usado como teste de igualdade e  manual_contains  em  src/harness.rs ,
+(1.1.20) estava a falar com um  target/release/examples/mcp_server.exe
+Matriz desta auditoria (HEAD  0674018 , v1.1.20)
+(2 asserções novas:  health view=index  e o  data  do erro de tool desconhecida).
+que   resolvem para uma storage key viva  .
+f64  incremental e a recomputada pelo rebuild   não são bit-idênticas   (adição
+recuperação do volume append-only entra na conta e cresce com o número de
+A fronteira do top-k comparada por BUCKET, não pelo score cru.
+O segundo achado, no bench e não no teste
+5.9e-2   (x=1.85) — três ordens de grandeza pior.
+v1.1.23 — revisão de documentação + fix do schema anunciado (2026-09-21)
+Resultado: uma feature entregue, testada e
+ALIAS_SURFACE  faz para os nomes de tool.
+(v1.1.15:  scope_dims  +  model_id ) — contradizendo o próprio
+no doc do módulo e nos 4 lugares que repetiam o número.
+Hot test 110/0   (+6 asserções, fase nova
+Ou seja: eu ia "consertar" uma assimetria de leitura que não existia e deixar
+o BM25 casa por sobreposição parcial e o token  banco  existia num doc do
+mcp_server  e o  alias_count  do erro de tool desconhecida — no teste unitário
+A regra em uso era a do  index_doc  ( len % 4 == 0 && len  = 4 )
+-   Nada mudou   na regra de indexação do BQ, no  validate  §2 nem na era
+Achado do ritual de fim de tarefa (flush do harness contra o banco real), nao da
+Antes respondia 0 hits com  isError:false .
+recall(scope_user=, scope_run=)  acha o doc — a invariante do ADR-0013
+-   Regra duplicada e regra que vai divergir.
+classification +  nsgdb://contract ; P1.1 docs gate; P1.2 cold-start
+Pre-v0.6 records decode with safe defaults ( scope="" , empty
+Default recall:   lexical   sem vetor;   hybrid   com
+( merge_strategy=fail theirs ) +  remember(key=)  (v1.2.1).
+{old,new,state} ,  remember(key=)  recusa prefixo  md/ , recall family SEMPRE
+A convenção de aprendizado por trajetória
+no_std core   — verified on  x86_64-unknown-none .
+implementação proibida e forma aderente:   transporte autenticado   (proibido
+Update when a capability moves from REMAINING → IMPLEMENTED (code + tests
+Conclusão (2026-10-21):   o   fio NMD1   continua o contrato com o OS e o
+OS — não era um commit do repositório do OS):
+É a mesma disciplina "todo campo avança off"
+um leitor v7 recusava a meta v8 ( decode  validava  1..=8 ).
+vermelho — o OS simplesmente recusava as metas novas.
+nos   dois   repos no mesmo release train.
+Jev (TypeSafe AI) e Laya — modelos de decisão tipados, não generativos.
+determinístico, sem geração, microssegundos por decisão.
+É o input exato de  𝒥  para julgar relação —
+Budget por relação   (Eq.
+e c_d (contradição não-resolvida) como sinais de stop — o core JÁ tem
+Status:   análise (2026-10-16)   — feita lendo o código como fonte da verdade
+A camada   não é escolhida   pelo agente ( author=agent  +  layer=  é
+em L4/L5   apaga o texto   (payload vira bytes f32, sem companion) e
+O  layer  existe em  MemoryExplanation
+formatação  :  remember  escolhe a camada pelo tipo do payload
+sobrepostos derivados de  layer + entities  ( sgdb.rs:271 ), nunca
+retrieval, e L6 não guarda docs.
+-   A1 — camada não é filtrável.
+-   A3 — escrita operacional descarta parâmetros em silêncio.
+O comentário do próprio código
+-   A6 — nenhum caminho de recall toca L0/L1.
+O  health / HealthReport  expõe
+src/codemap.md  já manda reusar
+O que eu (LLM) preciso vs.
+roda no mesmo ponto onde o scope já filtra o pool.
+não exclusivas: (a) aceitar  author=agent  +  layer=L7    quando    entities
+M5 —  procedural  de verdade.
+payload_content_type / key_carries_embedding  no v1.1.25.
+- Não persistir  layer  de novo em lugar nenhum:  type_scores  continua
+e o lexical voltam a enxergar a escrita operacional.
+Estado em 2026-10-26 — ativação por contexto + trajetória (v1.5.0)
+sendo L3/L4/L5 via entidade declarada; o que muda é que o host não precisa
+trigger_rules_persist_across_reopen  (lib), a fase nova do hot test
+-  build_git  corresponde ao commit local ( git rev-parse --short HEAD )
+Global: use caminho absoluto para  scripts/mcp-server.ps1 .
+L3;  recall(entities all_scopes=true)  → 1-hop /
+proveniência completa —  authority  (MDM1 v8),  clock  causal,  audit_refs
+Aliases  deprecated  (20):  audit_checkpoint ,  audit_verify ,  close_event ,  commit_run ,  contradicts ,  deprecate_run ,  expire_ttl ,  forget_absence ,  gc ,  merge_memories ,  note_absence ,  promote_run ,  recall_absences ,  recall_ann ,  recall_candidates ,  recall_ledger ,  rollback_to ,  set_event ,  set_ttl ,  timeline
+O  recall  passou a HONRAR
+múltiplo de 4 (25% delas) — um consumidor máquina tentaria reusar um vetor
+O JSON do ledger é   shape próprio   ( {query,scope,probes,first_tick,last_tick} ) —
+o exercitava — mas  tools/list  anunciava o  enum  sem ele, e o modelo só lê o
+escalar quase sempre (ver  BENCHMARKS.md  §Recall adaptativo).
+O resource    nsgdb://session    inclui  cold_start :
+core; unset  NEURAL_SGDB_EMBEDDER  = lexical.
+Preferir install em path fixo (não conflita com MCP rodando no Windows):
+Fallback: desligue o MCP no Cursor e rebuild normal em  target/release .
+era_report ); use o   mesmo   embedder/dimensão em  remember  e  recall .
+Configure  NEURAL_SGDB_EMBEDDER  conforme o exemplo MCP ou forneça
+expire_old  invalida por janela temporal.
+-   Regras só via  curate   :  recall(path=...)    NÃO   cria regras nem extrai entidades de texto.
+- Sem regra que case,  recall(path=…)  devolve   vazio   — não é o recall
+- Hot test:   docs/hot_test.md  (hot_test.md)
+Recusa nao e erro: a resposta traz  written: false  e
+- Estado, nao log: reescrever a mesma memoria duas vezes antes da sync devolve
+Cada  sys/deltomb/<storage_key   fica no banco ate a
+forget / supersede / invalidate  (invalidar-nao-
+Sgdb::delete  (ex.: GC de TTL,  reclaim_bq_orphans  de indice derivado),
+-   Scoping em 4 dimensões   ( user_id / agent_id / app_id / run_id ): isola
+-   Estrutura espacial   (method of loci): wings (pessoas/projetos) → rooms
+-   Hierarquia OS  : core memory (RAM) → recall (histórico pesquisável) →
+cognee — ciclo de vida de memória + feedback
+O primeiro banco (não camada) do landscape mirando o MESMO público:
+Sandbox por scope run com
+fora do round trip, TickvFile buffered) em  seekdb-analysis.md  §Plano.
+entidades): o multi-hop (grafo semântico completo) permanece fora de escopo.
+_scoped_historical ), rank por overlap desc → importância desc → key asc.
+it is the main reason to trust the positive numbers.
+stored bitvecs are already fixed by the era contract (ADR-0007).
+references): post-RRF frequency+decay and off-the-shelf cross-encoder
+Recorded so nobody "fixes" the
+memory ( md/L4/<id  ) and its text companion ( md/L2/<id  , the one the
+-   Why (from  --dump ):   before, the top-5 mixed  md/L2  and  md/L4  of the
+-   Follow-up (1.5.12) — measured with a REAL embedder:   the same harness,
+Artifacts:  evals/runs/1.5.12-hybrid-real.json  and
+- Release line:   v1.5.11   (crate  version  in  Cargo.toml , MCP contract
+-   Phase 1 (Contract reliability)   is   implemented  : recall failures are no
+-   Phase 2 (Functional onboarding)   is   implemented  : cold-start ritual
+evolution; compares lexical/semantic/hybrid/path; records latency and
+-   Phase 5 (Distribution)   is   addressed/documented  : distribution gaps
+storage failure including  rag_context , tool counts and MCP/cold-start
+conflicting evidence, scopes and temporal evolution; compare lexical,
+Distribution (only if a product requirement)   —   addressed/documented  :
+the host can refuse cross-scope recall and warn in vulnerable contexts.
+nem a paridade byte-exata, e o gate prova que falham quando devem falhar.
+- Pin de contrato no   mesmo commit   quando a superfície MCP muda:
+whether the MCP contract was changed (pins move together:
+dual-mode  no_std  +  std , MIT OR Apache-2.0  .
+-   MCP server   —  remember / recall / rag_context  for AI agents
+OS-written deletes no longer come back as live data
+recovered_records()  (recovery observable); feature split
+-  cargo test  — 31+1 tests (default), 35+1 with  p2p
+seekdb (OceanBase) — análise de aderência e viabilidade (2026-09-25)
+o write path comita e retorna SEM esperar o índice; um pipeline
+O que o neural-sgdb JÁ cobre (sobreposição)
+( ScopeDims.run  = "branch"), supersede/DAG, CRDT delta,  sys/validity/ .
+Estimativa: S–M, tudo no MCP/core existente.
+Two-level index (delta + snapshot) para o BQ (valor médio, custo M)
+Estimativa: M, condicionada a medição.
+-   SQL/MySQL protocol   — o protocolo do nsgdb é MCP por design (o
+seekdb valida o mercado que o nsgdb escolheu (agent state store) e traz
+Ordenação por valor/custo, respeitando a lição da casa:   mede antes de
+serializa tudo (o single-writer é arquitetural, não incidental); (b)
+só seria possível com sharding por scope — não existe hoje.
+flat sob escrita concorrente — e isso é um achado honesto que define se
+mapéa no nsgdb com primitivos que já existem:  ScopeDims.run  = branch,
+P2 — levar o resultado do Gap 0 ao BENCHMARKS.md e ao landscape
+o reclaim de threshold 64 dispara sozinho no caminho do  delete ).
+bench_long_db mediu 30k deletes em 265 s (8,8 ms/delete @ N=60k) — o
+Resultado: 30k deletes @ 60k docs caíram de 265 s para 43 s
+identify vulnerable subjects, or guarantee protection for third-party data.
+- decide whether consent exists or was revoked
+- deciding whether the product can store the memory at all
+If your agent might read a memory in a context where another person’s data matters,
+sem ordenação global, conflitos preservados), e (d) como uma IA na raiz do
+O fluxo da telepatia — duas instâncias convergem
+idempotente, chaveado por storage key.
+Antes da ronda 1 da demo, A só conhece  {m1}  e B só conhece  {m2}  — uma query
+Duas escritas em nós diferentes   não têm   um antes/depois
+Se A escreve  "user prefere dark mode"  e B escreve  "user prefere light
+A versão mais nova/importante outranqueia   no uso  , não na gravação.
+Arbitragem — uma IA na raiz do processo
+4.2 Contexto — arbitrar com a memória episódica
+A resolução não é local: a raiz grava o resultado e chama  record_change()  →
+sys/validity/  propaga via telepatia → B também para de oferecer  light
+Quando usar 2-DB vs DB partilhado (MCP Cursor):   mesmo
+with versioning, causality and conflict preservation — no central server.
+before they meet → both sides log  CONFLITO preservado (concorrente) .
+Transport  (in the demo, an in-memory pipe; in the real world,
+3.1 Eventual consistency — "they diverge temporarily"
+case is divergence lasting longer; never lost or resurrected data.
+CRDT knows causality, not time.
+The CRDT must not  lose  a version; deciding is the caller's job.
+The philosophical difference: the traditional model resolves at   write   (the
+versions  :  layer ,  clock  (causality), payload, and the real recency
+-   Recency   ( recall_weighted ,  w_rec ): newer wall-clock  ts .
+Root reads both plus the causal L2 chain → discovers  dark mode  has a newer
+clock  , and the verdict   becomes CRDT state that converges  .
+Read  codemap.md  (atlas),  docs/api.md  (contract) and
+( remember / recall / health / curate ;   40   alias names live in
+Unset  NEURAL_SGDB_EMBEDDER  = none;
+ADC-lite dual-path + state-first ranking ( corpus_mean ,  bq_top_k_f32_dual );
+triggers  +  recall(path=) , side-table  sys/trigger/ ,   não   é wire type) e
+P0.2  ALIAS_SURFACE  classificada em
+Release 1.5.6 — o que o uso real apontou (2026-11-10)
+provada ( Some(scope) → None  falha o teste de lib).
+default, com  scope  por pergunta — e o filtro tem de estar NO recall, não
+com o scope de origem ( scopes_scanned ,  scopes_with_hits ,  errors ).
+Duas dores do agente que USA o DB, ambas vindas do uso real (levantamento
+Três decisões que valem registro:
+trajetória (ADR-0019,  examples/trajectory_learning.rs )  :  remember_episodic
+Triagem do consumidor  2 — P0 de dados + verificabilidade (2026-10-08)
+nunca erra em fantasma) →  Ok(())  com old escondido do recall e a sucessora
+recall + entities    respondia só  content 0 .text ) e  format=json  →      no vazio;
+TIE_MARGIN_OVERRIDE  global com doc "por instância") + 3 divergências de
+= pool global por construção (isolar antes de ponderar).
+arquivada via  examples/dedupe_l3_mcp.rs  (guarda de conteudo).
+O achado:   o job de dependencia de ordem que
+O  scripts/docs-version-gate.sh  pega esse tipo de coisa
+só o enum  view  do health.
+sys/meta/  de um doc do tier RAM
+é CRLF — mutações por índice/sem assert eram no-op e davam "verde" falso).
+MCP:  recall(mode=causal)  +  causal_depth  (default 4).
+seja total linear e gargalo no vetor em RAM.
+µs/doc vs ≈10 do rebuild) — o 1,2x→1,6x é constante menor, não tempo
+-   a prima do FNV-64  : escrevi  0x1000_0000_01b3  (um zero a mais) e o hash
+de versão no offset 4), que é exatamente o que um golden existe pra pegar.
+(recorrência v1.1.15/v1.2.1): teste novo com  std::fs  precisa de
+pagination + RAG size caps, ART prefix-key rejection ( has_prefix_conflict ).
+Post-audit v1.1.2 (guinea-pig plan, 2026-08-14)
+layer default ( layer_importance ).
+whoever supplies embeddings uses the SAME model on write and query (4-dim
+indexed_embedding_dims() ), not silent hamming garbage — the P4 contract
+all  /L2/  companions in one deduplicated pass (payload only, no
+nextCursor ) instead of a hard-coded top-100 with an artificial ceiling.
+Resolução de conflito é questão de retrieval-time
+recentes primeiro (keys  ts/{:016x}  sortable — reverter).
+candidatos do  recall_impl : memória escopada nunca compete por vagas de
+L2/L3, SEM embedding) |  hybrid  (semântico + lexical não-duplicados).
+recall_temporal(query, k, at, w_sem, w_time)  re-ranqueia o pool
+v1–v4 decodificam com lista vazia; NMD1/TKLV intocados).
+MCP  remember(entities=)  +
+embeddings da era, código, binários).
+{…} /  …   delimitado; código = keyword ( fn  / impl  / return  / =   …) +
+String   (companion  /L2/  → key do primário  /L4 L3/ ).
+PRÓPRIO doc L5 e projetava floats como prosa lossy (o bug exato que o
+hit semântico L4/L5 (com ou sem companion) é  Embedding(dim)  do payload; o
+k)  = pool AMPLIADO ( recall_oversampled  oversample 8, top-4k) + rerank por
+rag_context  ganhou  mode  (semantic/lexical/hybrid) devolvendo hits
+Em  rag_context  semantic +  format=json  usa  recall  (hits) em vez do
+detector heurístico (a saga type=Code era adivinhação).
+máquina→máquina, ponta a ponta (16 auto-checks): IA-A (writer) grava JSON de
+Post-audit v1.1.10 (cognitive metadata, 2026-08-20)
+(mesmo ponteiro de  sqrt_f32 / ln_f32 );  f32::round  NÃO existe no core
+Normalização colide  ONDE / onde  e pontuação — sem extração de entidade.
+audit_checkpoint(now)  → elo  sys/audit/<seq:016x   com
+( u64::from_str_radix , não  parse ).
+episódicos precisam de  now  DISTINTO por chamada (senão as chaves
+( recall_weighted  com w_imp forte puxa memória confiável antes de legada),
+agent_protocol.rs  agora tem   23
+-   P2 — write-path filter  :  remember_fact_checked  prova pelo 1-hop de
+abertura (FSFM/Ebbinghaus); "qual era o estado em T?" vira
+timestamp) vs Config B (protocolo v2).
+-   no_std gate broken (v1.1.15 regression)  :  examples/wasm_backend.rs  had
+last_asst, o caminho mais quente) crescia O(turns²): 68 KB de meta aos 2k
+(TKCK) — falta o mesmo para ART/BQ (persistir snapshot do índice + delta).
+Post-audit v1.1.17 (recall quality, 2026-09-16)
+comportamento de recall  .
+(b)   órfãos do BQ   — hashear  bq.len()  contava os inertes e quebrava a
+o caminho incremental e o recompute — comparar critérios diferentes seria
+nomes, pinada por teste); a contagem documentada era 23 (rework v1.1.8) e
+Sem mudança de formato (NMD1/TKLV);
+5.9e-2   (x=1.85) — 3 ordens pior.
+Duas armadilhas que os testes pegaram: (a) comparar pelo   bucket
+recall_impl  virou wrapper sobre
+Post-audit v1.1.23 (revisão de documentação + superfície anunciada)
+-   Lição de processo, e agora regra: docs fazem parte de fechar o release.
+do código: contagem de aliases (23 vs 34, v1.1.21), precisão do  ln_f32
+Sem mudança de formato; contrato
+era exposta por superfície nenhuma  .
+-   Procedência viaja, porque forma não carrega informação.
+recall(scope_run="x")  respondia   igual   a  recall()  — 0 hits,
+Mesma postura do S1 (dim mismatch).
+Terceiro bug do mesmo dia nessa
+-    Hit.payload_type  declarava  Embedding(dim)  para prosa L3.
+payload, has_bitvec)  +  key_carries_embedding(key) .
+Matriz   370+1 / 416+1 / 307+1  ; hot test   150/0   (fase 6e fork/merge).
+delete) e  sk_ids  (sk → ids; overwrites podem ter  1 id).
+OP-TIME (lock-wait ~0,2 µs); refactor de lock seria esforço perdido.
+o gate só não tinha rodado depois).
+Key nova → escreve re-escopada (run vazio); texto igual →
+agora só L4/L5 copiam companion (com  cd.layer  setado); (3) o handler
+Quatro commits da sessão s410 (kernel/neural-os-core) pousados no remote e
+-    feat(s410m-b)    —  AUDIT_OP_FORGET  (op=2):  Sgdb::audit_forget(sk, ts,
+cargo test --no-default-features  não.
+362+1 / 408+1 / 300+1  ; hot test   146/0   (fases 7c batch/dedup/decide
+tipadas TAMBÉM no  content 0 .text  (JSON na 2ª linha) — o consumidor
+-   (c) IDX2 — snapshot paginado   — o teto MAX_VLEN (1 MiB, ~7k writes)
+off persiste quando writes desde o último persist ≥  MAX(8,
+build  ANTES de prosseguir — o código parcial no disco pode compilar
+Matriz   408+2 / 424+2 / 345+2  ; clippy  -D warnings  verdes; no_std target
+(indexa, NÃO ticka o relógio — sem inflação causal por overwrite de
+-   ISSUE 8   —  SgdbError::code() -  ErrorCode
+KEY no lexical — busca por NOME de key acha o que o payload não tem.
+Documentado em  docs/api.md  — NÃO criar FrameWriter novo.
+-   ISSUE 23   —  Sgdb::export_delta(node, since, max) : pull DIRECIONADO
+Sem mudança de formato (NMD1/TKLV
+legacy scope disagrees with scope_dims.user  (só alcançável por meta montada
+Escopado (ausência de um tenant nunca é
+"vazio" se NENHUM token existir (a primeira versão do teste usou
+cognitive layer L0–L7, semantic recall BQ + FP32 rescore (no FAISS/HNSW), O(k)
+deny(warnings)  in no_std elevates
+Formats are contracts   — NMD1 ( memory_doc.rs ) and TKLV ( tickv.rs ) are
+sai != 0 se qualquer uma falhar.
+MCP server as a local server ( NEURAL_SGDB_DB=.nsgdb/memory.db , gitignored),
+-   no_std test matrix  :  cargo test --no-default-features  (host) é o gate de
+--tests / --all-targets  no target bare-metal: dev-deps ( serde_json  →
+tools/call  ( stable / deprecated  em  contract.json , resource
+CLIENT mas resolve o SERVER por caminho — rode
+-   Wire-codec fuzz harness   ( src/wire_fuzz.rs , P2-4): the single LCG
+scan_volume  MUST skip in-place tombstones ( hdr 3 ==0 ) before
+on first sync at now=0);  UdpTransport  is an unauthenticated demo — use a
+-   Recall   ( src/sgdb.rs ): sort by the raw u32 score (FP32 0..10000 vs ham
+flat — entradas órfãs ficam inertes: o recall pula candidatos cujo doc
+load + store , NOT  SELECTED.swap(true)  (locked RMW on every  hamming  was
+cargo check --no-default-features --target x86_64-unknown-none .
+-   Model = era invariant (ADR-0007)  : o S1 checa DIMENSÃO, não identidade do
+são a rede embedding-free do passado;  recall_temporal  NÃO é (re-ranqueia o
+largura do BQ, cobertura  /L2/  e o CUSTO ESTIMADO (fórmula BENCHMARKS §Era
+~6µs/put (L2/L3 tokenizados no  index_doc ).
+(memory_id 32-hex, source, confidence, importance, created_tick,
+O NMD1 serializa SÓ 72B — overflow persiste em
+send_crdt );  pending_deltas()  mede.
+reimporta (Applied) para propagar supersede/validade; clocks concorrentes →
+peer em  local_version  (senão um nó fresh re-broadcasta versão alheia como
+do clock   pré-ronda   do destino — medir a faixa faltante com o
+ConflictRecord  é evidência LOCAL do merge   (onde o merge
+número de docs por write lógico exige revisar esse acoplamento.
+-   AUDIT set_state (1.1)   ( engine.rs ):  set_state  com estado ≠ Active
+ghost_key_no_orphan_side_table ; exemplo  examples/audit.rs  (battery 1:
+( Hit.provenance.importance , penalty  1−imp ); sem meta, cai para a
+pré-v0.6) + relação  derived_from .
+readOnlyHint / destructiveHint / idempotentHint .
+resolve_conflict  importa o winner via evidência e sobrescreve
+-    MemoryRecord  encode/decode  : cada flag (vflag/metaflag) avança  off
+Vale como checklist para a proxima.
+Seguimento 1.5.12:   a queda 0.932 -  0.840 do hybrid com  demo  NAO era a
+mas   fortaleca   a assercao (sem duplicata, dois votos no mesmo hit) e diga
+do LongMemEval sao lexicais: nenhuma mudanca no RRF aparece ali.
+CRLF e  str_replace  falha por detalhe invisivel;  pub struct X {  casa dentro
+pagina do commit NAO provam a run corrente (badge pode refletir a anterior, e a
+Measured, reproducible numbers for  neural-sgdb .
+-  recall@k  measures the BQ coarse filter vs the   true FP32 cosine   over the
+Numbers are tied to this environment.
+recall@5 — BQ coarse vs true FP32 cosine (correlated clusters)
+For exact k-NN use the FP32 path (full-sort column above) or raise oversample.
+two paths are parity (both must read every record).
+invocation + allocation); a real model's inference/network cost is external
+Open cost — cold start do agente (v1.1.21)
+Ambos os efeitos sao o alvo do ADR-0009 §3 — e o numero que decide e este,
+fp(rebuild) == fp(coleta)  e sai 1 se algum divergir.
+- O ganho do fast-mount é   ~1.5×  , não 10×: o mount ainda paga a
+( MAX_VLEN  = 1 MiB) e ~7k writes encostavam no teto.
+mesmo harness dos números acima (mesmos dados correlacionados, mesmos queries):
+destrói o sign-BQ — ver o comentário no  bench.rs ); o que se mede ali é o CUSTO
+-   MCP server throughput   — stdio JSON-RPC; host embedder unset = none
+BENCH_READERS=4 BENCH_SECS=8; TickvFile, ONE engine under a Mutex — the
+ADD-only architecture DOES buy (and this bench confirms): write→search
+within noise at N=2k/20k/60k (60k: P50 697µs vs 694µs vs 701µs).
+sk → Vec<(node, counter)   filled in  index_doc  (the clock is already
+(overwrites can hold  1 id per sk, so it is a Vec).
+Measured on durable backends to inform the snapshot default decision.
+o processo ocupou   ~6% de CPU   e   ~0,6 MB de RAM  .
+nova ( /proc/self/statm  no Linux,  GetProcessMemoryInfo  no Windows).
+lock), 4 writers + 4 readers, 8 s, TickvFile legacy:
+Same TKLV bytes, same order;
+mesmo ground truth   (top-5 por cosseno FP32 exato): ADC-lite dual-path
+de top-5 a ~1343 µs/query —   50× a latência do ADC-lite para recall
+natural a remoção, ou a reimplementação com a rotação — mas só com demanda
+Por fatia ( component ): knowledge-update 1.000 · multi-session 0.977 ·
+sessões de resposta — 1.000 ali não vale como manchete.
+single-session-preference 0.633 -  0.267; single-session-user 0.943 -  0.814;
+Aqui o MESMO harness roda o stream semantico com um
++2.4 pp de hit@5 e +3.7 pp de recall@5 sobre o lexical puro, e +13.4 pp de hit@5
+Bench compare — v1.1.10 stable vs 1.1.11 (host + micro-ganhos)
+O único ganho estatisticamente visível é ART insert P99 caindo de 14→5µs (menos realoc por inline/dedup) — reproduzido 2/2 runs após.
+Agora é  ./backfill_helper  com  rebuild_indices() .
+-    changes_since  reporta AUSENCIA: delecao vira tombstone  deleted=true
+upsert ) derrubam o teste.
+fusao por memoria ajuda quando o sinal semantico presta.
+Mede lib, p2p, no_std, multi_agent, hot test, bare-metal, clippy e as duas checagens de docs, grava  docs/generated/gate-matrix.json  e (no modo  check ) falha se a matriz divergir da medicao.
+- Construido sobre o  clock_index  que ja existia ( Engine::changes_since_clock
+que existe mudou", nao "o que deixou de existir"; quem replica tem de cruzar com
+Achado na 1.5.8, quando o  explain  mostrou um stream por vez.
+component / pipeline  sao lexicais e nao passam pelo RRF.
+Candidatos: RRF ponderado por stream, ou so fundir quando o
+nao custar uma segunda leitura a quem perdeu.
+No L4 a versao depende do vetor, entao "casar
+1.5.8  — 2026-11-12 (explain por stream no recall híbrido)
+devolver hits sem o campo pedido — a família de bug do anunciado≠servido
+prática a "fusão" é união.
+dataset com sha256 pinado (278 MB, fora do repo —  evals/datasets/  é
+dataset se sobrepõem por prefixo ( ..._1  ×  ..._10 ) e a ART recusa prefix-key,
+-   Gate de build do hot test.
+-   Phase 1 (Contract reliability)  : erros de recall sem conversão silenciosa para vazio; erros MCP uniformes e estruturados com  structuredContent ;  recall / rag_context  propagam falhas de storage/corrupção; respostas distinguem vazio vs filtro aplicado vs rota/modalidade ( status / mode / route / filter_applied / filter ); cobertura de contrato para todos os modos e falhas de storage.
+terceiro, não decide consentimento e não bloqueia recall por sensibilidade.
+repassado pelo connector, nunca interpretado pelo core.
+de revogação de consentimento e fim de prazo de retenção.
+-   8.3/P0  : matriz de rastreabilidade por subsistema + julgamento de
+trajetória é disciplina de uso de duas APIs que já existiam
+sys/trigger/<fnv1a64(pattern):016x  , largura fixa 16 hex — regra 4/ART).
+a convenção do HOST:  remember_episodic  guarda a trajetória   verbatim
+- MCP contract   1.4.6 → 1.5.0   (superfície aditiva: 3 ops de  curate  +
+MemoryDoc  com o texto e logo SOBRESCREVIA  payload  com os f32 do vetor —
+RememberOutcome    ecoava    content_type  — o consumidor não tinha como
+Sgdb::check_era_dims , chamada pelos DOIS caminhos.
+scope/entities/type/companion reais, hit tipado e verbatim, 1-hop,
+antiga marcava old e reportava sucesso sem sucessora — perda de conteúdo).
+HygieneReport : superseded sem sucessora, keys  md/  malformadas, entities
+(mutação provada contra aresta pendurada;  validate  §3 não cobre
+integração   21  , goldens   4  , hot test   185/0  ; clippy/rustdoc
+e observabilidade ( enumerate  mantem o  i  das mensagens de assert), e as
+primeira) e sai != 0 se alguma falhar;  SKIP_HOT=1  pula o hot test.
+-   O conector host estava pinado no contrato de 4 tools desde o 1.4.3  :
+--shuffle  e instavel no libtest e exige  -Z unstable-options , e o libtest
+Documentacao corrigida (prosa que divergia do codigo)
+-   recall@5  : ADC-lite 35–40% a oversample 1,   89–93% a 16   — o recall e
+-   B1  :  curate op=explain full=true  —  version_dag  +  audit_refs  +
+acionavel foi fechado:   duplicata  md/L3/mcp/1790975709980000  arquivada
+runs no runner GitHub Actions, que ninguem tinha lido (sem gh CLI), foi
+index_key  estava literalmente  false  fixo no handler.
+Sha256Trunc  eleva a tamper-evidence;
+storage     not_found , com  retryable ), e os
+regra copiada em N lugares diverge; a N-ésima foi o  validate .
+4) — exatamente o que ele existe para pegar.
+-    Sgdb::recall_causal(emb, k, max_ancestry)  +  CausalHit    (Lote D): o hit
+null-scoping é doutrina, não opção.
+-   Lote F — as três medições que faltavam, agora com número:
+candidatos , não de quantização (é o que o  recall_adaptive  paga caro para
+bug conhecido e que a paginação era "o próximo passo" —   já era IDX2 desde o
+1.4.3  — 2026-10-02 (honestidade do decide + TTL honrado no open)
+o DB não decide, apenas cumpre o  expires_at ).
+lia  args "seq"  / args "now"   (herança do  rollback_to ) e IGNORAVA
+supersede DAG, auditoria, curadoria, reopen.
+Exemplo + docs (PATCH; sem mudança de API).
+-  docs/research-2026-10.md : achado  4 (auto-evolutiva) atualizado com o
+-    Sgdb::recall_graph(entity_label, hops, k)    (F2 no core): BFS multi-hop a
+-   Testes  : lib  recall_graph_multi_hop_finds_distant_fact ; integração
+MemDelta (2606.29914): trocar SÓ o embedding =   +6.2pp   (p=0.004);
+auto-declarar  model_id  do embedder de host ativo).
+Teste do mapeamento no exemplo.
+embedding=  → B in-process → lexical; sem via C).
+( run=release-v1.1.24 ,  user=nsgdb/release+run=adr );  label()  canônico
+testado COMO SE várias IAs dividissem o mesmo banco — isolamento por escopo
+Fecha as maiores dores de um consumidor-IA (memória semântica dormente,
+Erro de  mode=semantic|hybrid  cita TODAS as rotas de vetor.
+descritores estruturados no  scopes_to_probe_dims .
+-  nsgdb://session.cold_start.next_actions : o que fazer AGORA (sondar escopos,
+1.2.2  — 2026-09-29 (lote consumer-triage s413)
+-  Sgdb::conflicts_open()  /  Sgdb::conflicts_count_open() .
+- (nada ainda;  Sgdb::put  p/ writes operacionais será marcado quando o
+ADR-0010 + seekdb-analysis item 1): PROMOVE as memórias ATIVAS de um
+preservada; o core reporta, nunca decide.
+single delega ao MESMO  remember_one  do batch (regra copiada divergia
+overwrites podem ter  1 id).
+op-time: o tail P99 é OP-TIME (lock-wait P99 ~0,2 µs) — a fila do
+Helper  remember_one  fatora a lógica single — batch reusa, sem duplicação.
+-   Stale candidates (REPORT)  :  health(view=tensions)  lista pares de
+Blob IDX1 intocado; mount junta
+-   Fast-mount do índice derivado (IDX1)  : novo wire type (10º do fuzz
+-   MCP seam  :  NEURAL_SGDB_INDEX_SNAPSHOT=off always  (default off);
+−13..−17 pp recall@5 vs ADC-lite em todos os oversamples; custo ~25–45×
+1.1.28  — 2026-09-23 (linguagem de máquina, ADR-0017)
+DECOMPOSTOS ( sim_vec ,  lex_overlap ,  shared_entities ,  recency ,  rrf ).
+Matrix   347+1 / 393+1 / 291+1  ; hot test   135/0   (+16 asserções);
+-    TypeScores  (ADR-0016)  : os quatro eixos do Jev-Mem (arXiv 2609.23986) —
+fluxo end-to-end no recall lexical; teste de mutação prova que morre sem a
+natural do ADR-0010 — grava  ScopeDims{user:"",run:"release-x"} ; como o
+scope  legado pode conter  / ); e  nsgdb://session  publica
+modelo lê o schema, não o código.
+clobberava o write-through do  set_scope .
+health.scope_labels , que faz  truncate(8)  por EXIBIÇÃO — o 9º escopo mais
+-D warnings  e no_std bare-metal verdes;  agent_protocol  25/0,
+tentaria reusar um vetor que não existe — exatamente o erro que os hits
+-  payload_type_honors_the_layer_not_the_byte_count  (ctype): L3/L2 de prosa de
+-D warnings  e no_std bare-metal verdes; hot test   110/0  .
+note_absence  (reforça em vez de duplicar),  forget_absence ,
+recall_absences ,  note_absence ,  forget_absence  (JSON   próprio  , o shape
+Agora  set_scope  faz   write-through   nos dois campos, o storage
+autoritativo;  scope_of  como sua projeção  user .
+3 de ledger + 3 do codec em  src/negative.rs ).
+o enum anunciado deve listar TODO view que o handler serve   (asserção nova,
+agora cobre até  v1.1.22  e documenta de fato o  index_fingerprint ,
+-   Números de teste   alinhados ao estado corrente nos 4 lugares onde apareciam
+formato, isso é o defeito mais alto da auditoria depois do schema do MCP.
+RecallProbe  (ADR-0012, item 8)   — o esforço de recall passa a ser
+dos docs válidos"   ( survivors <= k  só é decisivo se  !saturated() ): sem
+16× fixo) a 338.6 candidatos/query contra ~160 de uma passada única;
+exp_f32  saíram de  sgdb.rs / lexical.rs  para um módulo único (o  sgdb.rs
+-   Gate  --no-default-features  quebrado pela mudança de math  : os testes de
+-    Sgdb::index_fingerprint()  + ADR-0011   — oráculo canônico do estado
+-    Sgdb::validate()  §5 — invariante de  corpus_mean  (ADR-0011 §float)  : a
+-   Métricas de  open  (ADR-0009 §4 — contrato de medição)  :
+enriquecido  : tool desconhecida continua sendo erro  -32602 , mas com
+-D warnings  verdes; bare-metal ok; hot test   102/0   (2 asserções novas).
+-    consolidate_recurrences :   L3 consolidado herda  ScopeDims  do grupo
+Embedder host default permanece unset/ none .
+Ver   docs/hot_test.md  (docs/hot_test.md) §2026-09-21.
+1.1.18  — 2026-09-16 (telepathy 2-DB + host harvest + MCP 1.1.18)
+auto-config, cold-start, pacote de memória, mapa de capacidade, snippets
+MCP_CONTRACT_VERSION → 1.1.17  .
+score, key)  — margem  SCORE_TIE_MARGIN=50  (≈0.005 cosseno); versão
+Avaliação agêntica completa (gates + stress/bench + protocolos + simulação de
+lixo aos 20k (OOM no stress), 22.5 ms/op.
+Medição de gap (roadmap, não bug):
+-   Parked (browser):   extensão / Chrome Web Store   não   são produto nem
+Fix example  p2p_telepathy : key  rev_of_m1
+-   Temporal/GC  :  sys/ttl/  ( set_ttl/ttl_of/expire_ttl ),  sys/event/
+1.1.13  — 2026-08-21 (chrome web store obrigatório)
+-  examples/backfill_helper.rs  — migra L3 lexical → L4 semântico via re-embed do texto preservado em  md/L2/<id   +  rebuild_indices()  (caminho explícito de era migration, não  remember_semantic  guarded).
+-    connectors/    — adapters claw —  mcp_server  without touching  src/ ,
+clippy  -D warnings ,  no_std  bare-metal,  cargo doc -D warnings , hot test
+( md/L3/consolidated/<fnv1a  ) VERBATIM do episódio mais antigo, com
+-   Item 5 — Auditoria hash-chain + rollback    src/audit.rs  (wire  AUD1 ):
+scope/entidade com path traversal ( ..
+does not open a fake BQ era.
+-    docs/doctrine.md  /  src/doctrine.rs   : compact protocol for the LLM above
+-   Windows Cursor launchers  : PowerShell 5.1 rejects   &2  (parse error → MCP
+-    Sgdb::scope_distribution   ,    Sgdb::recall_empty_hint    — diagnóstico multi-tenant quando recall
+{…} /  …   delimitado; código = keyword + um segundo sinal estrutural;
+o consumidor vê  type=Embedding(4)  e sabe que o datum é o payload binário
+-    rag_context_reranked  (item 4 — lição P1/P5)  : o gargalo é ESCOLHER o
+parseia JSON verbatim, segue  rel=  e re-lê o payload do primário, consome o
+-   MCP  health  onboarding  : JSON com  db_path ,  embedder , dims indexadas,
+-   MCP  fmt_hit    unificado p/ recall (todos os modes) + temporal +
+Unreleased  — v1.1.5 (era guard + era_report)
+Deliberate migration uses the raw path
+The MODEL-side cost is external: the report hands over
+append-only — new facts accumulate and confront the existing pool via
+for top-k slots of another scope, and the unscoped global recall does not
+Companion  /L2/  docs resolve their effective
+-   1-hop entity recall   (item 10, low-cost/low-risk port): named entities
+importance desc → key asc.
+evidence survives truncation without reranking); exact facts stay VERBATIM
+belief ( Contradicts  — anti self-reinforcing-error).
+append with timestamps) vs Config B (protocol v2).
+undetectable, and  BqFlatIndex  locks  words_per_vec  on the first insert
+after reading the u64 — harmless while it was the last field, but the v4
+scope_persists_across_reopen_and_rebuild  proves  MemoryMeta.scope  (MDM1
+positive feedback, periodic  expire_old ) and a two-pass protocol
+std::net  + the existing  serde_json  dev-dep).
+Sgdb::delete  now recompacts on the spot
+detection (they're noise, not a dimension).
+Deterministic top-k (score, key) means each lazy page slices
+validates BOTH sides exist (ghost key →  Err , no orphan  sys/rel/ ).
+-    Sgdb::resolve_known_key    (P1): raw keys now resolve to the existing
+the penalty space ( 1 − imp ); records without meta fall back to the layer
+mid-file cut reopen cleanly;  rebuild_indices  reconciles.
+as the hot-test MCP bughunt.
+New public types  HealthReport ,  ValidateIssue .
+created (caught by  validate !); now returns the full  md/L4/...
+meshes (ring spine + random edges) converge to byte-identical content
+-   Health/validate + signed-transport reference (P2-3)  :  ready()  (hardcoded
+real Ed25519/HMAC at the boundary (ADR-0006).
+layered_ai_telepathy_mesh  + runnable  examples/mesh_simulation.rs
+truncation safety on every prefix of a valid encoding, and
+is the documentary "where to plug real crypto" runnable — proves the full
+-   Clippy zero-warnings   across all targets/features (P0-5): 13 files
+pageSize  can no longer panic the server.
+differential_scalar_vs_all_kernels  proves scalar == AVX2 == AVX-512 over
+returning a structured  ArbitrationDecision  (winner, action, reasons).
+duplicate ,  clock_changes ,  storage_recoveries ,  index_rebuilds ;
+-    resolve_conflict(cid, winner_vid)    — decisão EXPLÍCITA da camada superior: importa o record do vencedor (via evidência), vira versão corrente do slot, perdedores viram  parent_ids ; conflito marcado  Resolved  (idempotente).
+-    merge_memories(a, b, target)    — C nasce com  parent_ids= A,B  , payload concatenado, importance/confidence = max.
+causes / supports / contradicts / derived_from ) — topologia cognitiva
+superseded nunca se finge de ativa (item 13).
+automática (HITL), decay configurável (Decayed, nunca delete) e archive
+Matriz: default   136+1  ,
+Versões e docs atravessam nós intermediários (gossip/relay); entrega
+cada put tickava o relógio e o contador do doc divergia da versão do CRDT
+v0.7 — Causal DAG (per-version identity) (Phase 3)
+-    Sgdb::version_of(key)    e    Sgdb::lineage(key) -  Vec<LineageEntry
+features   86+1  ,  x86_64-unknown-none  ok.
+receptor nunca vira "escritor" de memória alheia — sem inflação causal) e
+Consultada em  apply_remote_version_with_policy  e no
+ignorada — antes, um relay que só publica heartbeat virava "concorrente"
+-    examples/p2p_telepathy.rs    — pull agora via  export_record  +
+sys/meta/  e é re-fundido no  get ).
+layer, key), determinístico, independente de node_id, nunca re-derivado.
+created_tick, parent_ids) em  recall   e  recall_lexical ; memórias
+contrato importance/confidence, parents no supersede, proveniência no
+Testes: consistência de índices, persistência
+discordam (A hamming 7/cos 0.869 vs B hamming 0/cos 0.243): prova que o
+CRDT version sync + diff pull ( Sgdb::get  →  Sgdb::put ): A and B converge
+weighted/lexical/validity/MIH —  cargo doc --open .
+-    1  MihIndex    ( bq.rs ) — Multi-Index Hashing (Norouzi) sobre os bitvecs
+importância da camada  md/LX/ .
+magic 3   do record anterior vira 0 ( TKL\0 ) antes do append (parity OS);
+Testes: parse de URI + paginação por cursor.
+rejects it and   truncates the file   — every record written after it was
+16 words unconditionally even when  words_per_vec  was already another
+-    encode_ckpt  count mismatch  : entries skipped in the body (key   65535
+raising the oversample recovers it   without any format change  .
+ScanResult  gains  offsets  +  append_off .
+leaves and shrinks nodes 256→48→16→4 when  n  drops below threshold instead
+-   Honest BQ benchmark  : bench recall@5 now uses correlated cluster data
+Plus  crc32_parts  computes
+and is closed before  compact() 's atomic rename (reopened lazily) — writes
+independent),  happens_before  (causal),  concurrent  (excludes equality),
+k==0/k =len/empty handled; deterministic (dist,id); bench heap(k=5)=320µs vs
+via Storage cru;  Sgdb::get_state/set_state/supersede ;  MemoryLayer::from_u8
+-   CRDT  : has_other_state usava local_version (adotado de peers) — sucessor
+-  Sgdb::open  propaga erro de rebuild (P1);  recovered_records()  expõe contagem
+-   clamp   truncates at a char boundary — no panic on mid multi-byte cut (bughunt  7).
+-  scan_volume  bounds checks run before the record-size check, matching the OS
+Hamming top-k),  hamming_dispatch  (scalar/AVX2/AVX-512,    target_feature  ),
+TKL\0  tombstone skip, last-wins),  encode_ckpt ,  fnv1a64  — byte-exact
+- Initial scaffold: dual license (MIT OR Apache-2.0), README,  .gitignore ,
+Interop with neural-os-core via byte-identical NMD1 and
+8 memory layers L0–L7, semantic recall BQ + FP32 rescore,
+-   NMD1   ( src/memory_doc.rs ): memory document — magic  NMD1 , layer u8,
+/L5/  is the bug that returned twice (see  src/codemap.md  §Gotchas).
+-  recall  requires caller-supplied embeddings (the crate does not generate
+Cada bugfix/regressão com teste quando fizer sentido
+backward-decodable (old bytes still decode), (2) covered by a golden test
+0..4) e  decode  aceita   todas as oito   versões — sempre com migração
+Os bugs reais do v4/v5/v6 foram
+New metadata is added via   side-tables  , not in-record:
+bounds-checked em todo campo (truncado/corrompido/namespace vazio →  None ).
+estado derivado em RAM — reconstruídos no  rebuild_indices , nunca
+mudança de layout, nenhuma mudança de versão, nenhum byte reinterpretado   — a
+Uma memória gravada com  scope_run / agent / app  sem
+gravado pelo caminho antigo tem metas com a divergência:  validate()  §6
+Adds  last_reinforced  (importance reinforcement timestamp).
+v1–v4 records decode with an
+model_id = ""  — nenhum byte antigo é reinterpretado.
+byte   do bloco meta — 1 byte, sem comprimento.
+ler  o campo antes do 1.4.4, e o  merge_remote  já desempata por  authority
+prefix-key with  SgdbError::Invalid  BEFORE writing.
+Update  docs/api.md  §Format versioning and this file.
+-   Storage key  :  sys/resolution/<memory_id   — each entry is a ResolutionRecord
+The existing record remains (append-only design), and the new ResolutionRecord documents which version is best/most current.
+-   ResolutionRecord in changes_since   — 🔜 PENDING: add optional  include_resolution: bool  parameter
+- When  embedding=  is provided, this is the recommended default for semantic queries
+- Policy: highest tick wins; record lost_votes and reason
+- Uses adaptive recall starting at 1× oversample when embedding provided
+fields; add ADR for ResolutionRecord integration pattern
+- ✅ Auto-resolution on put_inner — code complete, compiles, all gates pass
+Born inside  neural-os-core (https://github.com/msrovani/neural-os-core), a
+-   O(k) key/fact lookup:   ART (Adaptive Radix Tree) index Node4→16→48→256,
+ADR-0020) +   aprendizado por trajetória   ( remember_episodic  +  feedback
+batch write + dedup guard   ( memories   ,  if_exists ) e   write path
+- Playbooks:   docs/agent-self-program.md  (docs/agent-self-program.md),
+declared wins  sobre o detector.
+persistent lazy handle ~38x, durability levels, atomic compaction) +
+byte-identical), CRDT sync with conflict preservation + delta sending
+active only; historical opt-in) and a   deterministic  MemoryLifecycle
+recall_entities , ServerInfo v1.5.7, curate ops de metadado cognitivo:  decay / consolidate / audit_checkpoint / audit_verify / rollback_to , +  set_trigger / forget_trigger / triggers  e  recall(path=)  —   ativação por contexto  , ADR-0020) +   write-side era guard   (S1 no
+- Full API contract in   docs/api.md  (docs/api.md)
+cargo run --release --example p2p_telepathy --features p2p  exchanges
+No Windows, use  scripts\mcp-server.ps1  no lugar do  .sh .
+Default  recall / rag_context :
+Host adapters for claw-like apps (Hermes provider, OpenClaw skeleton, shared
+Recarregue MCP se rebuildar o binário.
+cargo run --release --example bench  — deterministic, reproducible numbers.
+-   API contract   —   docs/api.md  (docs/api.md) (Storage trait, seams,
+-   AI agent guides   —  AGENTS.md ,  CLAUDE.md ,  codemap.md  (atlas),
+ROADMAP.md  (ROADMAP.md) (honest status + non-goals),
+If your product writes memories about other people —   minors, parental or
+full list of insufficient-by-itself cases and the minimum protective setup,
+P50/P99, BQ top-k, recall BQ vs FP32) —  BENCHMARKS.md  +  BENCH_STABLE_1.1.10.txt  +  BENCH_COMPARE_1.1.10_vs_1.1.11.md
+-  x    v1.1.12 security hardening 11→1   —  engine.put_inner  choke central,  WasmStorage  bounds,  LocalEmbedder::new()- Result ,  MCP -32601 ,  try_encode  limites
+-  x    v1.1.24 escopo unificado + ledger de negativos   —  ScopeDims  autoritativo (o  scope  legado vira espelho de  user , write-through canônico +  validate  §6; ADR-0013); ledger  sys/negative/  do que já foi procurado e não estava lá, com self-healing e 4 aliases MCP (ADR-0014)
+TickvLite format ( crates/k_nano/src/storage/tickv.rs ) — a volume written on
+1.5.0  ; histórico v1.1.2–v1.5.0 no  CHANGELOG.md .
+proveniência, recall_graph + tiebreak, medidos no bench_graph).
+nsgdb://contract ; P1.1  docs-version-gate.sh  no CI; P1.2
+( bench_concurrent : P50 sub-ms, P99 é op-time, não lock-wait);
+TypeScores  (ADR-0016) fecha o memory typing sobreposto.
+servido pelo handler mas   não   aparecia no  enum  anunciado em
+separando "store acabou" de "pool faminto" — opt-in, default intacto.
+✅   v1.1.24 — unificação de escopo + ledger de negativos (2026-09-22)   —
+self-healing (achou ⇒ remove a ausência) e 4 aliases MCP.
+ADR-0011 (docs/adr/0011-derived-index-integrity-oracle.md) é exatamente o
+host-side / oversample / ANN, não deps no core.
+✅   Ativação por contexto (v1.5.0, ADR-0020)   — trigger rules por caminho de
+✅   v1.1.21 — integridade do índice derivado + medição de open (2026-09-21)
+(global exige  dims.is_global() );  recall_ _dims  pool unfiltered;
+ranking state-first ( SCORE_TIE_MARGIN ); bitvecs/era/S1 intactos.
+( consolidate_recurrences , linhagem causal), (3)  recall_weighted_full
+truncation sweep test, SAFETY comments on all unsafe sites, differential
+is proven end-to-end in  trust.rs  via the existing  Signer / Transport /
+✅   P2-5 — Layered multi-AI telepathy mesh   (delivered 2026-08-13): 8 agents
+( indexed_embedding_dims ),  examples/embedder_http.rs ,  get_texts_batch ,
+✅   v1.1.6 — Hits TIPADOS p/ consumidor máquina   (itens 1–5):  src/ctype.rs
+✅   v1.1.9 — Lexical-first (ADR-0008 Accepted)  : MCP default  mode=lexical ;
+- Oversampling auto-tuning feedback loop (raise candidate pool on collision,
+entrada)  : RaBitQ (Gao & Long, SIGMOD'24; Extended-RaBitQ 2024-25;
+bench.rs  (clusters densos + espalhado) mostrar recall@5 do filtro
+per-bit com clamp/branching não vetORIZA como o Hamming AVX2, e a
+int8) ou dataset onde sign-BQ comprovadamente degrada.
+é layout próprio de 72B fixos pinado byte-exato com o OS (ADR-0004);
+- Signed transport reference impl (see P2-3).
+- Repetition/similarity-density consolidation   signals   (the mechanism —
+Next: wire OpenClaw Node MCP transport in host
+-   No global engine statics   — seams, not globals (clock/SIMD/log).
+- New  include_resolution: bool  parameter on changes_since
+Please report security issues privately —   not   in a public issue.
+-   Denial of service  : malformed/malicious wire or storage input must fail
+-   Wire security   (integrity/authentication/confidentiality) is the
+-   Arbitration is policy-pluggable  : the core detects/preserves conflicts
+-  MemoryMeta.memory_id  is stable per key and author-derived on replication;
+P2 series: CRDT convergence in random topologies
+Format versioning is separate from crate versioning.
+-   Zero dependencies in the lib   — only  alloc  (no_std) /  std .
+Verify the full matrix (above) on the commit to tag.
+-    contract.json  is the machine-readable source of truth   for the tools,
+examples/mcp_client.rs  moves in the SAME commit (the hot test asserts it).
+migrations in  MIGRATIONS.md  and never silently reinterpreted old bytes
+P1.2 cold-start  next_actions , P1.3 negative-results, P2.2 this policy).
+host crates — um  cargo check  local pode migrar um lock de  v1.3.2  para
+dated note)   without   bumping  Cargo.toml  unless the core/MCP contract

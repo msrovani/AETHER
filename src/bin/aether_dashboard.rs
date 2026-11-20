@@ -773,10 +773,7 @@ mod aether_dashboard_win {
 
         fn program_lines(&self) -> Vec<(String, Color32)> {
             let mut lines = vec![
-                (
-                    format!("versão {}", env!("CARGO_PKG_VERSION")),
-                    theme::TEXT,
-                ),
+                (format!("versão {}", env!("CARGO_PKG_VERSION")), theme::TEXT),
                 (
                     "LLM gera; AETHER cita, certifica ou abstem.".into(),
                     theme::BRAND,
@@ -803,7 +800,11 @@ mod aether_dashboard_win {
             if self.api_eval.present {
                 let n = self.api_eval.cases.len();
                 let ok = self.api_eval.cases.iter().filter(|c| c.pass).count();
-                let color = if ok == n && n > 0 { theme::OK } else { theme::WARN };
+                let color = if ok == n && n > 0 {
+                    theme::OK
+                } else {
+                    theme::WARN
+                };
                 lines.push((format!("API eval {ok}/{n} casos"), color));
             } else {
                 lines.push(("API eval ainda não rodou".into(), theme::MUTED));
@@ -817,10 +818,7 @@ mod aether_dashboard_win {
                     .map(|a| format!("{}→{}", a.subject, a.action))
                     .collect::<Vec<_>>()
                     .join(" · ");
-                lines.push((
-                    format!("agente {n} asks · {summary}"),
-                    theme::TEXT,
-                ));
+                lines.push((format!("agente {n} asks · {summary}"), theme::TEXT));
             } else {
                 lines.push(("test drive do agente ainda não rodou".into(), theme::MUTED));
             }
@@ -861,10 +859,7 @@ mod aether_dashboard_win {
                 ("SGDB não apontado (stdio/url vazios)".into(), theme::WARN)
             };
             let host_line = match &self.host {
-                None => (
-                    "sonda ausente — use Sondar hardware".into(),
-                    theme::WARN,
-                ),
+                None => ("sonda ausente — use Sondar hardware".into(), theme::WARN),
                 Some(h) => {
                     let livre = h
                         .ram_available_mb

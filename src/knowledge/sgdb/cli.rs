@@ -220,8 +220,7 @@ impl Invocation {
             }
         }
         Err(SgdbError::Config(
-            "informe --mock, --url ou --stdio (ou AETHER_SGDB_URL / .env)"
-                .to_string(),
+            "informe --mock, --url ou --stdio (ou AETHER_SGDB_URL / .env)".to_string(),
         ))
     }
 }
@@ -314,7 +313,8 @@ fn discover_aether_root() -> Option<PathBuf> {
         let manifest = dir.join("Cargo.toml");
         if manifest.is_file() {
             if let Ok(text) = std::fs::read_to_string(&manifest) {
-                if text.contains("name = \"aether_engine\"") || text.contains("name = 'aether_engine'")
+                if text.contains("name = \"aether_engine\"")
+                    || text.contains("name = 'aether_engine'")
                 {
                     return Some(dir);
                 }

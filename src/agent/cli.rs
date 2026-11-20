@@ -17,6 +17,7 @@ use std::path::PathBuf;
 use crate::core::logic_pipeline::Clause3;
 use crate::json::Json;
 
+use super::language::{GoalSchema, LanguageError, ParserPort};
 use super::{
     Action, AetherAgent, AgentConfig, Claim, ExpertId, Feedback, Goal, Outcome, Task, ToolAgent,
 };
@@ -47,6 +48,7 @@ USO
 
 COMANDOS
   ask                     consulta um fato relacional
+  chat [frase]            borda conversacional: linguagem natural com certificado (sem frase = REPL)
   sat <arquivo.dimacs>    resolve 3-SAT e devolve certificado
   solve <arquivo.json>    resolve QUBO {n, j, h}
   memory <consulta>       consulta a memória durável (SGDB)
@@ -78,6 +80,8 @@ OPÇÕES
 
 EXEMPLOS
   aether-agent ask --subject Brasil --relation capital
+  aether-agent chat \"qual e a capital do Brasil\"
+  aether-agent chat
   aether-agent ask --subject Lua --relation orbita --json
   aether-agent tools
   aether-agent plan --facts data/agent_facts.jsonl --subject AETHER --relation proibe
@@ -228,6 +232,7 @@ pub fn run(argv: &[String], out: &mut dyn Write) -> i32 {
             EXIT_OK
         }
         "ask" | "query" => ask(&args, out),
+        "chat" => chat(&args, out),
         "sat" => sat(&args, out),
         "solve" | "qubo" => solve(&args, out),
         "memory" | "recall" => memory(&args, out),
@@ -263,6 +268,123 @@ fn ask(args: &Args, out: &mut dyn Write) -> i32 {
     } else {
         EXIT_OK
     }
+}
+
+/// Memória durável com fallback do `.env` do repo (a flag `--sgdb` vence).
+fn sgdb_fallback(cfg: &mut AgentConfig) {
+    if cfg.sgdb.is_some() {
+        return;
+    }
+    for key in ["AETHER_SGDB_STDIO", "AETHER_SGDB_URL"] {
+        if let Ok(spec) = std::env::var(key) {
+            if !spec.trim().is_empty() {
+                cfg.sgdb = Some(spec);
+                return;
+            }
+        }
+    }
+}
+
+/// Borda conversacional (C-G0): linguagem natural → [`ParserPort`] → Goal →
+/// AETHER com certificado. Sem absorção silenciosa: token fora do léxico
+/// abstém com o resíduo visível — nunca vira prompt do motor.
+fn chat(args: &Args, out: &mut dyn Write) -> i32 {
+    let mut cfg = args.config();
+    if let Some(path) = &args.policy {
+        cfg.tool_policy_path = Some(path.clone());
+    }
+    sgdb_fallback(&mut cfg);
+    let mut agent = build_agent(&cfg);
+
+    let one_shot = args.positional.join(" ");
+    if !one_shot.trim().is_empty() {
+        return chat_turn(&mut agent, &one_shot, out);
+    }
+
+    // REPL: uma frase por turno; 'sair' ou EOF encerra. Entrada injetável
+    // (`dyn BufRead`) para o gate testar o laço sem processo.
+    let stdin = std::io::stdin();
+    let mut input = stdin.lock();
+    chat_repl(&mut agent, &mut input, out)
+}
+
+/// Laço do REPL de chat. `'sair'`/EOF encerra; abstenção é resposta, não erro.
+fn chat_repl(agent: &mut ToolAgent, input: &mut dyn std::io::BufRead, out: &mut dyn Write) -> i32 {
+    let _ = writeln!(
+        out,
+        "AETHER chat — a borda entende fatos/memória do léxico; 'sair' encerra."
+    );
+    loop {
+        let _ = write!(out, "você> ");
+        let _ = out.flush();
+        let mut line = String::new();
+        match input.read_line(&mut line) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if line.eq_ignore_ascii_case("sair") || line.eq_ignore_ascii_case("exit") {
+            break;
+        }
+        let _ = chat_turn(agent, line, out);
+    }
+    EXIT_OK
+}
+
+/// Um turno de conversa. Devolve o código de saída do turno (abstenção NÃO é
+/// erro de conversa — é resposta honesta).
+fn chat_turn(agent: &mut ToolAgent, text: &str, out: &mut dyn Write) -> i32 {
+    let _ = writeln!(out, "você: {text}");
+    let mut parser = ParserPort::new();
+    let report = parser.analyze(text, &GoalSchema::agent_default());
+    if report.is_oov() {
+        let erro = match report.error {
+            Some(LanguageError::Empty) => "texto vazio",
+            Some(LanguageError::Ambiguous) => "ambíguo",
+            Some(LanguageError::Schema) => "fora do schema",
+            Some(LanguageError::Oov) | None => "fora do léxico",
+        };
+        let _ = writeln!(
+            out,
+            "ação: abstain | confiança {:.2} | motivo: a borda de linguagem não entendeu ({erro})",
+            report.confidence
+        );
+        let residuo = report.unconsumed.join(" ");
+        if !residuo.is_empty() {
+            let _ = writeln!(out, "resíduo: {residuo}");
+        }
+        let _ = writeln!(
+            out,
+            "dica: fatos do léxico (\"qual e a capital do Brasil\"), memória (\"o que e o AETHER\") ou comandos sat/solve/memory"
+        );
+        return EXIT_OK;
+    }
+    let Some(goal) = report.goal else {
+        return EXIT_OK;
+    };
+    let intent = report.intent.unwrap_or("?");
+    let _ = writeln!(
+        out,
+        "borda: intent={intent} confiança={:.2}",
+        report.confidence
+    );
+    if goal.n.is_some() && goal.clauses.is_empty() && goal.j.is_empty() {
+        let _ = writeln!(
+            out,
+            "ação: abstain | motivo: SAT/QUBO conversacional exige cláusulas/matrix estruturadas"
+        );
+        let _ = writeln!(
+            out,
+            "dica: aether-agent sat <arquivo.dimacs> | aether-agent solve <qubo.json>"
+        );
+        return EXIT_OK;
+    }
+    let outcome = agent.solve(&goal);
+    print_goal_outcome(out, &outcome, false);
+    EXIT_OK
 }
 
 fn sat(args: &Args, out: &mut dyn Write) -> i32 {
@@ -1251,5 +1373,45 @@ mod tests {
         assert!(text.contains("COMANDOS"));
         let (code, _) = run_capture(&["nada"]);
         assert_eq!(code, EXIT_USAGE);
+    }
+
+    #[test]
+    fn chat_fato_do_lexico_age_com_certificado() {
+        let (code, text) = run_capture(&["chat", "qual e a capital do Brasil"]);
+        assert_eq!(code, EXIT_OK, "{text}");
+        assert!(text.contains("borda: intent=ask"), "{text}");
+        assert!(text.contains("ação=act"), "{text}");
+        assert!(text.contains("Brasília"), "{text}");
+    }
+
+    #[test]
+    fn chat_fora_do_lexico_abste_com_residuo_visivel() {
+        let (code, text) = run_capture(&["chat", "quem escreveu Dom Casmurro?"]);
+        assert_eq!(code, EXIT_OK, "{text}");
+        assert!(text.contains("ação: abstain"), "{text}");
+        assert!(text.contains("confiança 0."), "{text}");
+        assert!(text.contains("dica:"), "{text}");
+        // Doutrina: o resíduo NUNCA entra no motor (não vira prompt).
+        assert!(!text.contains("Dom Casmurro (fonte"), "{text}");
+    }
+
+    #[test]
+    fn chat_repl_sai_com_sair_sem_erro() {
+        let mut input = std::io::Cursor::new("sair\n".to_string());
+        let mut out = Vec::new();
+        let cfg = AgentConfig::default();
+        let mut agent = build_agent(&cfg);
+        let code = chat_repl(&mut agent, &mut input, &mut out);
+        assert_eq!(code, EXIT_OK);
+        let text = String::from_utf8_lossy(&out);
+        assert!(text.contains("AETHER chat"), "{text}");
+    }
+
+    #[test]
+    fn chat_sat_sem_clausulas_abste_com_dica() {
+        let (code, text) = run_capture(&["chat", "sat 3"]);
+        assert_eq!(code, EXIT_OK, "{text}");
+        assert!(text.contains("ação: abstain"), "{text}");
+        assert!(text.contains("sat <arquivo.dimacs>"), "{text}");
     }
 }

@@ -45,8 +45,8 @@ pub struct ConsolePane {
 
 impl Default for ConsolePane {
     fn default() -> Self {
-        let base = std::env::var("AETHER_API_URL")
-            .unwrap_or_else(|_| "http://127.0.0.1:8787".into());
+        let base =
+            std::env::var("AETHER_API_URL").unwrap_or_else(|_| "http://127.0.0.1:8787".into());
         Self {
             base_url: base.trim_end_matches('/').to_string(),
             organism: 1,
@@ -204,10 +204,13 @@ pub fn draw_console(ui: &mut egui::Ui, pane: &mut ConsolePane) {
                 .desired_rows(2)
                 .hint_text("Pergunte um fato… (Enter envia; Shift+Enter quebra linha)"),
         );
-        let enter = te.has_focus()
-            && ui.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.shift);
+        let enter =
+            te.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.shift);
         let send = ui
-            .add_enabled(!pane.busy && !pane.input.trim().is_empty(), egui::Button::new("Enviar"))
+            .add_enabled(
+                !pane.busy && !pane.input.trim().is_empty(),
+                egui::Button::new("Enviar"),
+            )
             .clicked();
         if enter || send {
             pane.submit();
@@ -247,7 +250,11 @@ fn parse_chat_reply(raw: &str) -> ChatMsg {
             };
         }
     };
-    if let Some(err) = v.get("error").and_then(|e| e.get("message")).and_then(|m| m.as_str()) {
+    if let Some(err) = v
+        .get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(|m| m.as_str())
+    {
         return ChatMsg {
             role: ChatRole::System,
             text: err.to_string(),
@@ -269,9 +276,7 @@ fn parse_chat_reply(raw: &str) -> ChatMsg {
         .and_then(|x| x.as_str())
         .map(str::to_string)
         .unwrap_or_else(|| {
-            if finish == "content_filter"
-                || content.contains("\"abstain\":true")
-            {
+            if finish == "content_filter" || content.contains("\"abstain\":true") {
                 "abstain".into()
             } else {
                 "cite".into()
@@ -304,19 +309,14 @@ fn parse_chat_reply(raw: &str) -> ChatMsg {
 /// POST JSON mínimo (localhost) sem dependência HTTP.
 fn http_post_json(url: &str, body: &str) -> Result<String, String> {
     let (host, port, path) = parse_http_url(url)?;
-    let mut stream = TcpStream::connect(format!("{host}:{port}"))
-        .map_err(|e| {
-            format!(
-                "API inacessível em {host}:{port} ({e}). \
+    let mut stream = TcpStream::connect(format!("{host}:{port}")).map_err(|e| {
+        format!(
+            "API inacessível em {host}:{port} ({e}). \
 Suba: cargo run --release --bin aether-api --features api"
-            )
-        })?;
-    stream
-        .set_read_timeout(Some(Duration::from_secs(20)))
-        .ok();
-    stream
-        .set_write_timeout(Some(Duration::from_secs(10)))
-        .ok();
+        )
+    })?;
+    stream.set_read_timeout(Some(Duration::from_secs(20))).ok();
+    stream.set_write_timeout(Some(Duration::from_secs(10))).ok();
     let req = format!(
         "POST {path} HTTP/1.1\r\nHost: {host}:{port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
@@ -335,7 +335,10 @@ Suba: cargo run --release --bin aether-api --features api"
     let (head, body) = text.split_at(idx + 4);
     if !head.contains("200") && !head.contains("201") {
         let status = head.lines().next().unwrap_or("HTTP ?");
-        return Err(format!("{status}\n{}", body.chars().take(400).collect::<String>()));
+        return Err(format!(
+            "{status}\n{}",
+            body.chars().take(400).collect::<String>()
+        ));
     }
     Ok(body.to_string())
 }

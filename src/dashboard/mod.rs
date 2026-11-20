@@ -21,11 +21,11 @@ pub use ai_view::{
     agent_ask_detail, api_case_detail, collect_wave_gaps, load_agent_drive, load_api_eval,
     AgentAskRow, AgentDriveReport, ApiEvalCase, ApiEvalReport,
 };
-pub use console::{draw_console, ConsolePane};
 pub use catalog::{
     dimension_ficha, dimension_tooltip, global_tooltip, glossary_entries, throughput_tooltip,
     DimFicha,
 };
+pub use console::{draw_console, ConsolePane};
 pub use demo_trace::{DemoSample, DemoTrace};
 pub use fmt::fmt_compact;
 pub use gaps::{Gap, GapSeverity};

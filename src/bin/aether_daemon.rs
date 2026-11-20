@@ -946,11 +946,8 @@ fn append_float_log(path: &std::path::Path, cols: &[f32]) -> std::io::Result<()>
             let _ = std::fs::rename(path, rotated);
         }
     }
-    let needs_header = !path.exists()
-        || path
-            .metadata()
-            .map(|meta| meta.len() == 0)
-            .unwrap_or(true);
+    let needs_header =
+        !path.exists() || path.metadata().map(|meta| meta.len() == 0).unwrap_or(true);
     let mut line = String::with_capacity(cols.len() * 12 + 48);
     if needs_header {
         line.push_str("cycles,R_lan,peers,F,S\n");
@@ -971,9 +968,15 @@ fn append_float_log(path: &std::path::Path, cols: &[f32]) -> std::io::Result<()>
 }
 
 fn print_human_banner(host: bool, alert: f32) {
-    println!("AETHER Produto C — escudo de host (v{})", env!("CARGO_PKG_VERSION"));
+    println!(
+        "AETHER Produto C — escudo de host (v{})",
+        env!("CARGO_PKG_VERSION")
+    );
     println!("  multicast {MULTICAST_GROUP}:{MULTICAST_PORT}");
-    println!("  estados: CALMO → ALERTA (S≥{:.2}) → SONHANDO (S>--alert)", alert * 0.5);
+    println!(
+        "  estados: CALMO → ALERTA (S≥{:.2}) → SONHANDO (S>--alert)",
+        alert * 0.5
+    );
     println!("  S = surpresa  |  R = coerência LAN entre peers (0..1)");
     if host {
         println!("  u(t) = telemetria do SO (--host)");
@@ -1003,7 +1006,9 @@ fn main() -> Result<()> {
     if human {
         print_human_banner(host, alert);
     } else {
-        println!("AETHER daemon — organismo encarnado (multicast {MULTICAST_GROUP}:{MULTICAST_PORT})");
+        println!(
+            "AETHER daemon — organismo encarnado (multicast {MULTICAST_GROUP}:{MULTICAST_PORT})"
+        );
     }
     let mut daemon = AetherDaemon::new(cfg)?;
     daemon.run(|t| {
