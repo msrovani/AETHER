@@ -296,21 +296,29 @@ fn chat(args: &Args, out: &mut dyn Write) -> i32 {
     }
     sgdb_fallback(&mut cfg);
     let mut agent = build_agent(&cfg);
+    // F1: o chat fala com a trait, nunca com o Python. Default = StubPort:
+    // degrada honestamente e nao faz chamada externa alguma (Eixo C).
+    let port = StubPort;
 
     let one_shot = args.positional.join(" ");
     if !one_shot.trim().is_empty() {
-        return chat_turn(&mut agent, &one_shot, out);
+        return chat_turn(&mut agent, &port, &one_shot, out);
     }
 
     // REPL: uma frase por turno; 'sair' ou EOF encerra. Entrada injetável
     // (`dyn BufRead`) para o gate testar o laço sem processo.
     let stdin = std::io::stdin();
     let mut input = stdin.lock();
-    chat_repl(&mut agent, &mut input, out)
+    chat_repl(&mut agent, &port, &mut input, out)
 }
 
 /// Laço do REPL de chat. `'sair'`/EOF encerra; abstenção é resposta, não erro.
-fn chat_repl(agent: &mut ToolAgent, input: &mut dyn std::io::BufRead, out: &mut dyn Write) -> i32 {
+fn chat_repl(
+    agent: &mut ToolAgent,
+    port: &dyn DecisionPort,
+    input: &mut dyn std::io::BufRead,
+    out: &mut dyn Write,
+) -> i32 {
     let _ = writeln!(
         out,
         "AETHER chat — a borda entende fatos/memória do léxico; 'sair' encerra."

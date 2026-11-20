@@ -3,6 +3,25 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.1.5] - 2026-11-20
+
+### Changed
+
+- Ciclo automatico: 11 arquivo(s) (.:2, aether-decision:5, data:1, src:1, tools:2).
+- Gate: ok (18s).
+
+- `Cargo.lock`
+- `Cargo.toml`
+- `aether-decision/src/config.rs`
+- `aether-decision/src/gate.rs`
+- `aether-decision/src/port.rs`
+- `aether-decision/src/pyo3_impl.rs`
+- `aether-decision/src/types.rs`
+- `src/agent/cli.rs`
+- `tools/research_harness.py`
+- `tools/research_reliability.py`
+- `data/research_tool_contract.json`
+
 ## [0.1.3] - 2026-11-19
 
 ### Changed

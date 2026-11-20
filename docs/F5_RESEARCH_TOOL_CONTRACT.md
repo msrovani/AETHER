@@ -1,0 +1,76 @@
+# F5 — Contrato da tool própria de pesquisa (draft)
+
+Data: 2026-11-20 · Dono draft: **CURSOR** · Plano:
+`docs/VEGA_F3_PLANO_CONSOLIDADO.md` F5 · Depende de F2/F2.5 (DONE) e F1 wired.
+
+## Posicionamento
+
+| Fase | Quem busca | Onde mora |
+|---|---|---|
+| F2 | fixtures offline / harness IDE (opcional) | `tools/research_harness.py` |
+| F5 | tool `research.query` no `aether-agent` | registry + executor (não este draft) |
+
+Este doc é **contrato**, não implementação no agent (F1/OPENCODE ainda fia
+`DecisionPort`; tool F5 entra depois).
+
+## Schema de entrada
+
+```json
+{
+  "tool": "research.query",
+  "args": {
+    "question": "string",
+    "abstain_reason": "unknown",
+    "state_digest": "string ≤320 tokens",
+    "allow_network": false,
+    "ampliar": null
+  }
+}
+```
+
+Regras:
+- `abstain_reason` ≠ `unknown` → recusa (mesma doutrina F2)
+- `ampliar` só se objeto `{ "hitl_ack": "SIM", "actions": [...] }`
+- `allow_network=true` exige allowlist de hosts (a definir na implementação)
+
+## Schema de saída
+
+```json
+{
+  "verdict": "settled|weak|open",
+  "authority": 60,
+  "sources": [
+    {
+      "tier": "primary|secondary|aggregator|seo_llm_farm",
+      "origin": "string",
+      "independence_cluster": 0,
+      "url": "string|null",
+      "excerpt": "string"
+    }
+  ],
+  "n_independent": 1,
+  "numeric": null,
+  "semantic": {"label": "agree|conflict|insufficient"},
+  "quarantine": true,
+  "hitl_required_for_255": true,
+  "ampliacao_mark": null
+}
+```
+
+Invariantes: `authority ≤ 120`; nunca 255; cópias → 1 origem (Jaccard /
+`origin` em `data/source_tier.json`).
+
+## Eval tiers (contínuos na F5)
+
+| Tier | O que mede |
+|---|---|
+| T0 | selftest fixtures (já: `research_harness.py selftest`) |
+| T1 | unknown→quarentena em laço agent (pós-wire DecisionPort) |
+| T2 | híbrido com rede allowlist |
+| T3 | suite externa / regressão hit@k (com F4) |
+
+## Fora de escopo deste draft
+
+- Código em `src/agent/*` / `cli.rs`
+- Crate `aether-decision`
+- Push / rede default on

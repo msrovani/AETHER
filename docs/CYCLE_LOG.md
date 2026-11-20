@@ -264,3 +264,4 @@
 | 2026-11-19T02:11:37Z | 0.1.3 | 2 | src:2 | ok (33s) | - | sim |
 | 2026-11-19T02:16:14Z | wip | 2 | .:1, docs:1 | ok (11s) | - | sim |
 | 2026-11-20T14:28:01Z | wip | 10 | .:2, aether-decision:1, data:2, docs:3, tools:2 | ok (19s) | - | sim |
+| 2026-11-20T14:31:21Z | 0.1.5 | 11 | .:2, aether-decision:5, data:1, src:1, tools:2 | ok (18s) | - | sim |

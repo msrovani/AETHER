@@ -30,8 +30,21 @@ unknown → buscar fontes → tier (camada 0) → independência → convergênc
          → remember autoridade ≤120 (nunca 255)
 ```
 
-Implementação executável: `tools/research_reliability.py`.
+Implementação executável:
+- `tools/research_reliability.py` — Eixo F (tier/convergência/ampliar)
+- `tools/research_harness.py` — tomada F2: só `unknown` → evaluate → quarentena ≤120
+
 Casos de régua: `data/research_cases.json`.
+
+```bash
+python tools/research_harness.py selftest
+python tools/research_harness.py --reason unknown --case terra_lua \
+  --write-quarantine target/research_quarantine.jsonl
+```
+
+Rede default **OFF** (socket fora do inventário). `--allow-network` = reserva F5.
+WebSearch do harness Cursor pode validar fixtures (ex.: Terra–Lua ≈384400 km) mas
+não entra no caminho feliz offline.
 
 ## Ampliar (HITL only)
 
