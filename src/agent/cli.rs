@@ -301,20 +301,67 @@ fn chat(args: &Args, out: &mut dyn Write) -> i32 {
     }
     sgdb_fallback(&mut cfg);
     let mut agent = build_agent(&cfg);
-    // F1: o chat fala com a trait, nunca com o Python. Default = StubPort:
-    // degrada honestamente e nao faz chamada externa alguma (Eixo C).
-    let port = StubPort;
+    // F1: o chat fala com a trait, nunca com o Python. Default = StubPort
+    // (Eixo C). `--vega` (A-1b) tenta o engine real e cai no stub com aviso.
+    let port = open_chat_port(args.vega, out);
 
     let one_shot = args.positional.join(" ");
     if !one_shot.trim().is_empty() {
-        return chat_turn(&mut agent, &port, &one_shot, out);
+        return chat_turn(&mut agent, port.as_ref(), &one_shot, out);
     }
 
     // REPL: uma frase por turno; 'sair' ou EOF encerra. Entrada injetável
     // (`dyn BufRead`) para o gate testar o laço sem processo.
     let stdin = std::io::stdin();
     let mut input = stdin.lock();
-    chat_repl(&mut agent, &port, &mut input, out)
+    chat_repl(&mut agent, port.as_ref(), &mut input, out)
+}
+
+/// A-1b: constrói o `DecisionPort` do chat.
+///
+/// - default / falha / sem feature `decision-pyo3` → `StubPort` + aviso explícito
+/// - `--vega` + feature + ambiente ok → `VegaPort` (engine real)
+fn open_chat_port(want_vega: bool, out: &mut dyn Write) -> Box<dyn DecisionPort> {
+    if !want_vega {
+        let _ = writeln!(
+            out,
+            "decisor: port=stub (default Eixo C; use --vega para o engine real)"
+        );
+        return Box::new(StubPort);
+    }
+
+    #[cfg(feature = "decision-pyo3")]
+    {
+        use aether_decision::pyo3_impl::VegaPort;
+        use aether_decision::EngineConfig;
+        let cfg = EngineConfig::from_env();
+        match VegaPort::new(&cfg) {
+            Ok(port) => {
+                let _ = writeln!(
+                    out,
+                    "decisor: port=vega engine={} (A-1b opt-in)",
+                    cfg.engine
+                );
+                Box::new(port)
+            }
+            Err(err) => {
+                let _ = writeln!(
+                    out,
+                    "decisor: port=stub aviso=vega_indisponivel ({err}) — degradacao honesta"
+                );
+                Box::new(StubPort)
+            }
+        }
+    }
+
+    #[cfg(not(feature = "decision-pyo3"))]
+    {
+        let _ = writeln!(
+            out,
+            "decisor: port=stub aviso=build_sem_decision-pyo3 — recompile com --features decision-pyo3"
+        );
+        Box::new(StubPort)
+    }
 }
 
 /// Laço do REPL de chat. `'sair'`/EOF encerra; abstenção é resposta, não erro.

@@ -19,11 +19,11 @@ hash MSG 0862).
 
 ```bash
 python tools/f5_t3_eval.py selftest
-python tools/f5_t3_eval.py contract
-python tools/f5_t3_eval.py eval --rankings data/f5_t3_rankings_fixture.json
+python tools/f5_t3_eval.py prepare
 ```
 
-Fixture sintética: `data/f5_t3_rankings_fixture.json` (não é o hash F4).
+`prepare` confere freeze MSG 0862 (722/142, sha `f868…`) sem inventar hit@k.
+Contrato: `data/f5_t3_contract.json`.
 
 ## Relação com F4
 

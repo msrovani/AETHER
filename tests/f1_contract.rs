@@ -80,6 +80,31 @@ fn chat_nao_chama_o_python_e_nao_faz_chamada_externa() {
         !text.contains("engine=vega"),
         "o default não pode carregar o engine real: {text}"
     );
+    assert!(
+        text.contains("port=stub"),
+        "A-1b: default deve anunciar stub: {text}"
+    );
+}
+
+#[test]
+fn chat_vega_flag_sem_feature_cai_no_stub_com_aviso() {
+    // Sem `decision-pyo3` o --vega NÃO inventa engine: aviso + StubPort.
+    let mut out: Vec<u8> = Vec::new();
+    let argv = vec![
+        "chat".to_string(),
+        "--vega".to_string(),
+        "qual e a capital do Brasil".to_string(),
+    ];
+    let _ = aether_engine::agent::cli::run(&argv, &mut out);
+    let text = String::from_utf8_lossy(&out).to_string();
+    assert!(
+        text.contains("port=stub"),
+        "sem pyo3 o --vega degrada para stub: {text}"
+    );
+    assert!(
+        text.contains("decisor:"),
+        "fatia 3: port ainda emite em todo turno: {text}"
+    );
 }
 
 // ---------------------------------------------------------------------------
