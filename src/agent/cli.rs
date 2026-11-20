@@ -77,11 +77,13 @@ OPÇÕES
   --seed <u64>            semente do roteador
   --json                  saída JSON
   --quiet                 só o essencial
+  --vega                  F1 A-1b: tenta VegaPort (feature decision-pyo3); default StubPort
   --help                  esta ajuda
 
 EXEMPLOS
   aether-agent ask --subject Brasil --relation capital
   aether-agent chat \"qual e a capital do Brasil\"
+  aether-agent chat --vega \"qual e a capital do Brasil\"
   aether-agent chat
   aether-agent ask --subject Lua --relation orbita --json
   aether-agent tools
@@ -111,6 +113,8 @@ struct Args {
     seed: Option<u64>,
     json: bool,
     quiet: bool,
+    /// A-1b (MSG 0874): opt-in ao engine real; default permanece StubPort (Eixo C).
+    vega: bool,
     help: bool,
 }
 
@@ -181,6 +185,7 @@ fn parse(argv: &[String]) -> Result<Args, String> {
             "-h" | "--help" => args.help = true,
             "--json" => args.json = true,
             "--quiet" => args.quiet = true,
+            "--vega" => args.vega = true,
             "--subject" => args.subject = Some(value(&mut i)?),
             "--relation" => args.relation = Some(value(&mut i)?),
             "--value" => args.value = Some(value(&mut i)?),

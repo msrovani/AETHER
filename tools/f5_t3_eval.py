@@ -2,8 +2,8 @@
 # F5 T3 prep — contrato hit@k offline. Não baixa modelo e não liga rede.
 """Mede hit@k quando já existe um ranking. Sem ranking, o prep só confere o freeze.
 
-O MiniLM e o run F4 continuam com o AGENT-A. Este arquivo não altera o teto
-0.974 e não compara com BM25 (isso entra quando o ranking lexical existir).
+O MiniLM e o run F4 continuam com o AGENT-A. A linha lexical (BM25) só
+estabelece o piso que o embedder terá de igualar. O teto 0.974 não baixa.
 
 Uso:
   python tools/f5_t3_eval.py selftest
@@ -56,6 +56,68 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+_TOKEN = re.compile(r"[a-z0-9]{2,}")
+
+
+def _tokens(text: str) -> list[str]:
+    return _TOKEN.findall(text.lower())
+
+
+def load_eval(path: Path = EVAL_SET) -> tuple[list[dict], list[dict]]:
+    docs: list[dict] = []
+    queries: list[dict] = []
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            if row.get("type") == "doc":
+                docs.append(row)
+            elif row.get("type") == "query":
+                queries.append(row)
+    return docs, queries
+
+
+def bm25_hit5(docs: list[dict], queries: list[dict], k: int = K) -> dict:
+    """Ranking lexical puro. Não lê embedding e não abre socket."""
+    tokenized = [_tokens(str(doc.get("text") or "")) for doc in docs]
+    df: Counter[str] = Counter()
+    lengths: list[int] = []
+    for tokens in tokenized:
+        lengths.append(len(tokens))
+        df.update(set(tokens))
+    n_docs = len(docs)
+    avgdl = (sum(lengths) / n_docs) if n_docs else 0.0
+    k1, b = 1.2, 0.75
+    rows: list[dict] = []
+    for query in queries:
+        q_tokens = _tokens(str(query.get("q") or ""))
+        scores: list[tuple[float, str]] = []
+        for idx, tokens in enumerate(tokenized):
+            if not tokens or not q_tokens:
+                scores.append((0.0, str(docs[idx].get("id"))))
+                continue
+            tf = Counter(tokens)
+            dl = lengths[idx]
+            score = 0.0
+            for term in q_tokens:
+                freq = tf.get(term, 0)
+                if freq == 0:
+                    continue
+                n_q = df.get(term, 0)
+                idf = math.log(1.0 + (n_docs - n_q + 0.5) / (n_q + 0.5))
+                score += idf * (freq * (k1 + 1.0)) / (freq + k1 * (1.0 - b + b * dl / avgdl))
+            scores.append((score, str(docs[idx].get("id"))))
+        scores.sort(key=lambda item: (-item[0], item[1]))
+        ranked = [doc_id for _, doc_id in scores[:k]]
+        rows.append({"gold": list(query.get("gold") or []), "ranked": ranked})
+    out = aggregate(rows, k)
+    out["ranker"] = "bm25"
+    out["embeds"] = False
+    return out
+
+
 def prepare(path: Path = EVAL_SET) -> dict:
     """Confere o freeze. Sem ranking não há hit@k — abstenção, não invento número."""
     if not path.is_file():
@@ -95,7 +157,8 @@ def selftest() -> int:
     easy = aggregate(
         [
             {"gold": ["a"], "ranked": ["a", "b", "c", "d", "e", "f"]},
-            {"gold": ["z"], "ranked": ["a", "b", "c", "d", "e", "z"]},
+            # z na 5ª posição — dentro de k=5
+            {"gold": ["z"], "ranked": ["a", "b", "c", "d", "z", "e"]},
         ]
     )
     if not easy["gate_pass"] or easy["hits"] != 2:
@@ -103,6 +166,7 @@ def selftest() -> int:
     hard = aggregate(
         [
             {"gold": ["a"], "ranked": ["a"]},
+            # z na 6ª posição — fora de k=5 → miss
             {"gold": ["z"], "ranked": ["a", "b", "c", "d", "e", "z"]},
         ]
     )

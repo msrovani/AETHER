@@ -23,6 +23,7 @@ CHECKS = [
     ("mf2_gate_regression", [sys.executable, str(ROOT / "tools" / "mf2_gate_regression.py")]),
     ("f5_t1_agent_loop", [sys.executable, str(ROOT / "tools" / "f5_t1_agent_loop.py"), "selftest"]),
     ("f5_t2_allowlist", [sys.executable, str(ROOT / "tools" / "f5_t2_allowlist.py"), "selftest"]),
+    ("f5_t3_eval", [sys.executable, str(ROOT / "tools" / "f5_t3_eval.py"), "selftest"]),
 ]
 
 
