@@ -55,9 +55,6 @@ mod parking_lot_mutex {
     #[derive(Debug, Default)]
     pub struct Mutex<T>(std::sync::Mutex<T>);
     impl<T> Mutex<T> {
-        pub fn new(v: T) -> Self {
-            Self(std::sync::Mutex::new(v))
-        }
         pub fn lock(&self) -> std::sync::MutexGuard<'_, T> {
             self.0.lock().expect("scripted port poisoned")
         }
