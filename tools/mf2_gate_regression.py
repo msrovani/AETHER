@@ -100,6 +100,15 @@ def check_harness_gates() -> list[str]:
 
 
 def main() -> int:
+    # Windows: o console default e cp1252; os textos do contrato tem setas
+    # (U+2192). Sem isto, o print estoura UnicodeEncodeError (achado do
+    # review multi-agente 2026-11-20).
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):
+            pass
+
     ap = argparse.ArgumentParser(description="MF2 gate regression F1_3 × harness F2")
     ap.add_argument("--smoke", default=str(DEFAULT_SMOKE))
     args = ap.parse_args()

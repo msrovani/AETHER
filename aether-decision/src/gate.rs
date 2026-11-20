@@ -92,7 +92,7 @@ fn decision_key(a: &Answer) -> Option<String> {
         if let Some(obj) = v.as_object() {
             let mut best: Option<(&String, f64)> = None;
             for (k, val) in obj {
-                let Some(p) = val.as_f64() else { return None };
+                let p = val.as_f64()?;
                 if best.map_or(true, |(_, bp)| p > bp) {
                     best = Some((k, p));
                 }
@@ -153,7 +153,10 @@ mod tests {
     #[test]
     fn sentinel_ood_overrides_a_confident_primary() {
         // T2 OOD: o 0.8B erra e responde, a sentinela abstém ⇒ unknown (pesquisa).
-        let a = combine(&answer("area", "billing"), &abstain("area", AbstainReason::Unknown));
+        let a = combine(
+            &answer("area", "billing"),
+            &abstain("area", AbstainReason::Unknown),
+        );
         assert!(a.abstain);
         assert_eq!(a.abstain_reason, Some(AbstainReason::Unknown));
         assert!(a.abstain_reason.unwrap().admits_research());
@@ -161,7 +164,10 @@ mod tests {
 
     #[test]
     fn primary_ood_keeps_its_reason() {
-        let a = combine(&abstain("area", AbstainReason::Unknown), &answer("area", "billing"));
+        let a = combine(
+            &abstain("area", AbstainReason::Unknown),
+            &answer("area", "billing"),
+        );
         assert!(a.abstain);
         assert_eq!(a.abstain_reason, Some(AbstainReason::Unknown));
     }

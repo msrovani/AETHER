@@ -17,8 +17,6 @@ use aether_decision::{
     AbstainReason, AndGatePort, Answer, DecisionMeta, DecisionPort, DecisionRequest,
     DecisionResponse, ScriptedPort,
 };
-use std::io::Write as _;
-
 // ---------------------------------------------------------------------------
 // 1. Caminho de produto: o chat fala com o port e degrada honesto.
 // ---------------------------------------------------------------------------
@@ -29,9 +27,7 @@ fn chat_consulta_o_port_e_degrada_sem_inventar() {
     // Com o StubPort (default) o veredito é `engine_unavailable` — degradação
     // honesta, nunca uma resposta inventada.
     //
-    // NOTA DA AUDITORIA (A-1, `docs/F1_AUDIT.md`): este é o **único** ramo
-    // que consulta o port. O teste `chat_consulta_o_port_em_TODO_turno`
-    // (ignorado até a fatia 3) exige o port em todo turno.
+    // F1 fatia 3: o port também fala em turnos in-lexicon (ver teste abaixo).
     let mut out: Vec<u8> = Vec::new();
     let argv = vec![
         "chat".to_string(),
@@ -56,20 +52,14 @@ fn chat_consulta_o_port_e_degrada_sem_inventar() {
 }
 
 #[test]
-#[ignore = "F1 fatia 3 (A-1): hoje o port so e consultado no ramo OOV — o gate \
-            AND nunca fala nos turnos em que a decisao importa"]
-fn chat_consulta_o_port_em_TODO_turno() {
+fn chat_port_em_todo_turno_inclui_in_lexicon() {
     // Turno DENTRO do léxico: a borda entende e o core age. O port tem de
     // falar também — é ele que carrega o head `route` (escalar/reformular/
     // responder, medido 0.97+ no fórum MSG 0758) e o gate AND.
     //
-    // Evidência da auditoria: hoje a saída deste turno NÃO tem linha
-    // `decisor:` nenhuma. O core decide; o vega é evidência que nunca chega.
+    // F1 fatia 3 (MSG 0838/0866): linha `decisor:` em todo turno de produto.
     let mut out: Vec<u8> = Vec::new();
-    let argv = vec![
-        "chat".to_string(),
-        "qual e a capital do Brasil".to_string(),
-    ];
+    let argv = vec!["chat".to_string(), "qual e a capital do Brasil".to_string()];
     let _ = aether_engine::agent::cli::run(&argv, &mut out);
     let text = String::from_utf8_lossy(&out).to_string();
     assert!(
@@ -83,10 +73,7 @@ fn chat_nao_chama_o_python_e_nao_faz_chamada_externa() {
     // Eixo C: default = StubPort, zero chamada externa. Se um dia o default
     // passar a carregar o engine, este teste acusa.
     let mut out: Vec<u8> = Vec::new();
-    let argv = vec![
-        "chat".to_string(),
-        "qual e a capital do Brasil".to_string(),
-    ];
+    let argv = vec!["chat".to_string(), "qual e a capital do Brasil".to_string()];
     let _ = aether_engine::agent::cli::run(&argv, &mut out);
     let text = String::from_utf8_lossy(&out).to_string();
     assert!(
@@ -124,6 +111,7 @@ fn choice(question: &str, c: &str) -> Answer {
         readout: Some("engine".into()),
         confidence: Some(0.9),
         conformal_set: None,
+        cv_accuracy: None,
     }
 }
 
@@ -155,9 +143,10 @@ fn schema_da_resposta_e_estavel() {
     assert!(a.get("choice").is_none(), "campo ausente é omitido");
     assert_eq!(a["abstain_reason"], "unknown");
     // `motivo` é alias aceito na leitura (Eixo B).
-    let alt: Answer =
-        serde_json::from_value(serde_json::json!({"question":"x","abstain":true,"motivo":"ambiguous"}))
-            .unwrap();
+    let alt: Answer = serde_json::from_value(
+        serde_json::json!({"question":"x","abstain":true,"motivo":"ambiguous"}),
+    )
+    .unwrap();
     assert_eq!(alt.abstain_reason, Some(AbstainReason::Ambiguous));
 }
 
@@ -194,8 +183,14 @@ fn and_gate_acordo_escala_e_ood_sao_distintos() {
 
     // Margem fina → ambiguous: escala HITL e NÃO abre pesquisa.
     let gate = AndGatePort::new(
-        Box::new(scripted(Answer::abstained("passou", AbstainReason::Ambiguous))),
-        Box::new(scripted(Answer::abstained("passou", AbstainReason::Ambiguous))),
+        Box::new(scripted(Answer::abstained(
+            "passou",
+            AbstainReason::Ambiguous,
+        ))),
+        Box::new(scripted(Answer::abstained(
+            "passou",
+            AbstainReason::Ambiguous,
+        ))),
     );
     let r = gate.decide(&req("passou")).unwrap();
     assert_eq!(r.answers[0].abstain_reason, Some(AbstainReason::Ambiguous));
@@ -243,13 +238,19 @@ fn baseline_da_f1_existe_fora_de_target_e_e_coerente() {
     let v: serde_json::Value = serde_json::from_str(&raw).expect("baseline é JSON");
 
     assert_eq!(v["schema"], "aether.f1_gate_baseline/v1");
-    assert_eq!(v["abstain"], false, "o baseline medido não pode ser um abstain");
+    assert_eq!(
+        v["abstain"], false,
+        "o baseline medido não pode ser um abstain"
+    );
     let n = v["n"].as_u64().expect("n");
     assert!(n >= 30, "Eixo D: re-probe n=30, veio n={n}");
     assert!(v["boot_s"].as_f64().unwrap_or(0.0) > 0.0, "boot medido");
     let p50 = v["latency_ms"]["p50"].as_f64().expect("p50");
     let p95 = v["latency_ms"]["p95"].as_f64().expect("p95");
-    assert!(p50 > 0.0 && p95 >= p50, "latência incoerente: p50={p50} p95={p95}");
+    assert!(
+        p50 > 0.0 && p95 >= p50,
+        "latência incoerente: p50={p50} p95={p95}"
+    );
     assert_eq!(v["contract"]["ok"], true, "F1-1: choice em toda resposta");
     assert_eq!(
         v["degraded"], false,

@@ -1,0 +1,8 @@
+{
+  "schema": "aether.f5_t3_fixture/v1",
+  "network": false,
+  "dim": 32,
+  "note": "sintetico_selftest_nao_substitui_F4",
+  "n_docs": 20,
+  "n_queries": 8
+}

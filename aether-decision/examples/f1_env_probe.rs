@@ -18,13 +18,15 @@ use pyo3::prelude::*;
 use pyo3::types::{PyList, PyString};
 
 fn main() {
-    let venv_site =
-        std::env::var("AETHER_VEGA_SITE_PACKAGES").unwrap_or_else(|_| "target/vega/Lib/site-packages".into());
+    let venv_site = std::env::var("AETHER_VEGA_SITE_PACKAGES")
+        .unwrap_or_else(|_| "target/vega/Lib/site-packages".into());
 
     Python::attach(|py| {
         let sys = py.import("sys").expect("sys");
         let str_of = |v: &Bound<'_, PyAny>| -> String {
-            v.str().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+            v.str()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default()
         };
         let attr = |k: &str| -> String {
             sys.getattr(k)

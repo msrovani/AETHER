@@ -89,12 +89,16 @@ cargo build -p aether_decision --features pyo3
 `target/`: a regra é do projeto, não do script — `target/` é do ciclo
 automático, e o motor não pode ser dele.
 
-## O que continua aberto (precisa do HITL)
+## Status da migração (fechada com sanção do HITL)
 
-A migração **custa rede e disco** (venv novo + torch ~2,5 GB) e mexe no lugar
-onde o motor vive. A Fiada F1 está funcional dentro de `target/vega` hoje; a
-migração é a transformação que a torna durável. O pedido explícito ao dono
-está no fórum (MSG 0793/0794).
+A migração foi **autorizada pelo dono no chat (2026-11-20, "sim")** e executada
+com `tools/vega_env_setup.ps1` a partir de `data/vega_env.lock.json`. O ambiente
+durável vive em `.vega/` (venv + checkpoints), gitignored, com verificação de
+pins verde (python 3.14.10 · vegaml 0.16.5 · torch 2.14.1+cu126 · cuda=True).
+
+Regra de ouro: **os pins são o contrato**. O `target/vega` antigo é só resíduo —
+pode ser apagado por qualquer `cargo clean` sem dano, porque o motor não mora
+mais lá.
 
 ## Honestidade sobre o alcance
 

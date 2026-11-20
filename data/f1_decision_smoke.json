@@ -1,0 +1,46 @@
+{
+  "abstain": false,
+  "answers": [
+    {
+      "abstain": true,
+      "abstain_reason": "ambiguous",
+      "choice": "False",
+      "confidence": 0.6738819616236172,
+      "conformal_set": [
+        false
+      ],
+      "probs": {
+        "False": 0.6738819616236172,
+        "True": 0.3261180383763828
+      },
+      "question": "passou",
+      "readout": "and_gate"
+    },
+    {
+      "abstain": false,
+      "choice": "reformular",
+      "confidence": 0.5467802286148071,
+      "cv_accuracy": 0.7419354838709677,
+      "probs": {
+        "escalar": 0.20252910256385803,
+        "reformular": 0.5467802286148071,
+        "responder": 0.25069066882133484
+      },
+      "question": "route",
+      "readout": "and_gate"
+    }
+  ],
+  "boot_s": 77.7,
+  "conformal_set": {
+    "passou": [
+      false
+    ]
+  },
+  "conformal_set_present": true,
+  "degraded": false,
+  "engine": "vega-u-0.8b AND gemma-prose",
+  "latency_ms": 492.3614,
+  "n_abstain": 1,
+  "n_answers": 2,
+  "schema": "aether.f1_smoke/v1"
+}

@@ -126,10 +126,7 @@ mod contract_tests {
     #[test]
     fn boolean_without_choice_derives_argmax() {
         // Caso medido (MSG 0793): boolean 0.6125, sem chave `choice`.
-        assert_eq!(
-            derive_choice(None, Some(0.6125)).as_deref(),
-            Some("True")
-        );
+        assert_eq!(derive_choice(None, Some(0.6125)).as_deref(), Some("True"));
         assert_eq!(derive_choice(None, Some(0.3875)).as_deref(), Some("False"));
         // 0.5 exato cai em True (reader empata: abstain e quem decide).
         assert_eq!(derive_choice(None, Some(0.5)).as_deref(), Some("True"));
@@ -274,8 +271,7 @@ mod tests {
 
     #[test]
     fn error_becomes_typed_abstain_never_panics() {
-        let a = DecisionError::EngineUnavailable("VRAM > 5GB".into())
-            .into_abstain("winner");
+        let a = DecisionError::EngineUnavailable("VRAM > 5GB".into()).into_abstain("winner");
         assert!(a.abstain);
         assert_eq!(a.abstain_reason, Some(AbstainReason::EngineUnavailable));
 

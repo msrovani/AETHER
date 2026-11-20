@@ -15,9 +15,9 @@
 //! (`Python::detach` em torno do forward torch) fica para a fatia de azeite
 //! (Eixo D), medida com re-probe n=30 antes/depois.
 
-use crate::types::{Answer, DecisionError, DecisionMeta, DecisionRequest, DecisionResponse};
-use crate::port::DecisionPort;
 use crate::config::EngineConfig;
+use crate::port::DecisionPort;
+use crate::types::{Answer, DecisionError, DecisionMeta, DecisionRequest, DecisionResponse};
 use pyo3::prelude::*;
 use pyo3::IntoPyObjectExt;
 
@@ -97,14 +97,14 @@ impl DecisionPort for VegaPort {
     fn decide(&self, req: &DecisionRequest) -> Result<DecisionResponse, DecisionError> {
         let t0 = std::time::Instant::now();
         let (primary_answers, sentinel_answers) = Python::attach(|py| {
-            let p = Self::decide_reader(
-                py,
-                self.primary.bind(py),
-                &req.state,
-                &req.questions,
-            )?;
+            let p = Self::decide_reader(py, self.primary.bind(py), &req.state, &req.questions)?;
             let s = match &self.sentinel {
-                Some(s) => Some(Self::decide_reader(py, s.bind(py), &req.state, &req.questions)?),
+                Some(s) => Some(Self::decide_reader(
+                    py,
+                    s.bind(py),
+                    &req.state,
+                    &req.questions,
+                )?),
                 None => None,
             };
             Result::<_, DecisionError>::Ok((p, s))
@@ -142,6 +142,39 @@ impl DecisionPort for VegaPort {
                 vram_used_mb: None,
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod ffi_contract_tests {
+    use super::*;
+    use crate::types::{AbstainReason, Answer};
+
+    /// F1-2 (1/2): `prediction_set` e uma sequencia do Python. Sem o braco de
+    /// iteravel a conversao devolvia `None` em silencio — este teste tranca o
+    /// caminho que perdeu o dado (lista de criterios, nao de bools).
+    #[test]
+    fn prediction_set_sequence_becomes_conformal_array() {
+        pyo3::Python::attach(|py| {
+            let list = pyo3::types::PyList::empty(py);
+            list.append("reformular").unwrap();
+            list.append("responder").unwrap();
+            let v = json_from_py(py, list.as_any()).expect("sequencia deve converter");
+            assert_eq!(v, serde_json::json!(["reformular", "responder"]));
+        });
+    }
+
+    /// F1-2 (2/2): o conjunto do lote e chaveado por pergunta e nao inventa
+    /// entrada para quem nao produziu conjunto.
+    #[test]
+    fn conformal_map_is_keyed_by_question_and_skips_absent() {
+        let mut com_set = Answer::abstained("passou", AbstainReason::Ambiguous);
+        com_set.conformal_set = Some(serde_json::json!([false, true]));
+        let sem_set = Answer::abstained("route", AbstainReason::Ambiguous);
+
+        let map = conformal_map(&[com_set, sem_set]).expect("um conjunto presente");
+        assert_eq!(map["passou"], serde_json::json!([false, true]));
+        assert!(map.get("route").is_none(), "nao inventamos conjunto");
     }
 }
 
@@ -251,9 +284,10 @@ fn py_answer_to_answer(
     // Confiança do readout = probabilidade da melhor opção (Eixo B: campo
     // auditável). `abstain` sem probs ⇒ None.
     let confidence = probs.as_ref().and_then(|p| {
-        p.as_object()?.values().filter_map(|v| v.as_f64()).fold(None::<f64>, |acc, f| {
-            Some(acc.map_or(f, |a: f64| a.max(f)))
-        })
+        p.as_object()?
+            .values()
+            .filter_map(|v| v.as_f64())
+            .fold(None::<f64>, |acc, f| Some(acc.map_or(f, |a: f64| a.max(f))))
     });
 
     Ok(Answer {

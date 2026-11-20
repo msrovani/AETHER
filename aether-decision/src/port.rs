@@ -75,7 +75,9 @@ impl DecisionPort for ScriptedPort {
     fn decide(&self, _req: &DecisionRequest) -> Result<DecisionResponse, DecisionError> {
         match self.queue.lock().pop() {
             Some(resp) => resp,
-            None => Err(DecisionError::EngineUnavailable("fila scripted vazia".into())),
+            None => Err(DecisionError::EngineUnavailable(
+                "fila scripted vazia".into(),
+            )),
         }
     }
 }

@@ -1,0 +1,14 @@
+{
+  "schema": "aether.f5_t3_eval_contract/v0",
+  "ref": "MSG_0866 CURSOR_LIVRE_MISSAO T3_PREP · MSG_0862 freeze",
+  "dataset": "data/embed_eval_set.jsonl",
+  "dataset_sha256_gestor": "f868244256ee75a896f39cf4092ccfbf3bdf915002c451a1dcf450255d416bf0",
+  "k": 5,
+  "gate": {
+    "hit_at_k_min": 0.974,
+    "must_beat_or_tie_lexical": true
+  },
+  "network": false,
+  "phase": "T3_PREP",
+  "note": "Prep offline: valida freeze + baseline lexical. Medicao MiniLM = F4 (AGENT_A), fora deste stub."
+}

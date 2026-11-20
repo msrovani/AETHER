@@ -1,0 +1,101 @@
+{
+  "schema": "aether.f5_t3_rankings_fixture/v1",
+  "k": 5,
+  "dataset_sha256": "fixture_offline_not_f4",
+  "queries": [
+    {
+      "id": "q1",
+      "gold": [
+        "d1"
+      ],
+      "kind": "lexical"
+    },
+    {
+      "id": "q2",
+      "gold": [
+        "d2",
+        "d9"
+      ],
+      "kind": "semantic"
+    },
+    {
+      "id": "q3",
+      "gold": [
+        "d3"
+      ],
+      "kind": "hard"
+    }
+  ],
+  "systems": {
+    "lexical_bm25": {
+      "q1": [
+        "d1",
+        "d8",
+        "d7",
+        "d6",
+        "d5"
+      ],
+      "q2": [
+        "d9",
+        "d2",
+        "d4",
+        "d5",
+        "d6"
+      ],
+      "q3": [
+        "d3",
+        "d1",
+        "d2",
+        "d4",
+        "d5"
+      ]
+    },
+    "embed_minilm": {
+      "q1": [
+        "d1",
+        "d8",
+        "d7",
+        "d6",
+        "d5"
+      ],
+      "q2": [
+        "d9",
+        "d2",
+        "d4",
+        "d5",
+        "d6"
+      ],
+      "q3": [
+        "d3",
+        "d1",
+        "d2",
+        "d4",
+        "d5"
+      ]
+    },
+    "hybrid_rrf60": {
+      "q1": [
+        "d1",
+        "d8",
+        "d7",
+        "d6",
+        "d5"
+      ],
+      "q2": [
+        "d9",
+        "d2",
+        "d4",
+        "d5",
+        "d6"
+      ],
+      "q3": [
+        "d3",
+        "d1",
+        "d2",
+        "d4",
+        "d5"
+      ]
+    }
+  },
+  "note": "sintético para selftest; run real usa hash F4 congelado"
+}

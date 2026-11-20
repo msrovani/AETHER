@@ -273,3 +273,4 @@
 | 2026-11-20T15:03:27Z | wip | 4 | .:1, aether-decision:2, examples:1 | ok (37s) | - | sim |
 | 2026-11-20T15:08:06Z | 0.1.7 | 19 | data:2, docs:6, src:2, tests:1, tools:8 | ok (102s) | - | sim |
 | 2026-11-20T15:12:07Z | wip | 6 | .:1, aether-decision:1, data:2, docs:1, scripts:1 | ok (45s) | - | sim |
+| 2026-11-20T15:20:19Z | 0.1.8 | 37 | aether-decision:8, data:9, docs:10, examples:1, src:1, tests:1, tools:7 | ok (2s) | - | sim |

@@ -15,13 +15,16 @@ use std::time::{Duration, Instant};
 /// Medidor de VRAM: devolve os bytes usados, ou `None` se não souber.
 pub type Probe = Arc<dyn Fn() -> Option<u64> + Send + Sync>;
 
+/// Cache da última medição: (quando foi medida, quanto foi medido).
+type Cache = Arc<Mutex<Option<(Instant, Option<u64>)>>>;
+
 /// Freio de VRAM com orçamento fixo.
 #[derive(Clone)]
 pub struct VramWatchdog {
     budget_bytes: u64,
     probe: Probe,
     ttl: Duration,
-    cache: Arc<Mutex<Option<(Instant, Option<u64>)>>>,
+    cache: Cache,
 }
 
 impl std::fmt::Debug for VramWatchdog {
@@ -36,7 +39,10 @@ impl std::fmt::Debug for VramWatchdog {
 impl VramWatchdog {
     /// Watchdog com o orçamento em MiB e a sonda padrão (`nvidia-smi`).
     pub fn new(budget_mb: u64) -> Self {
-        Self::with_probe(budget_mb.saturating_mul(1024 * 1024), Arc::new(probe_nvidia_smi))
+        Self::with_probe(
+            budget_mb.saturating_mul(1024 * 1024),
+            Arc::new(probe_nvidia_smi),
+        )
     }
 
     /// Watchdog com sonda injetada (teste determinístico, sem GPU).
@@ -144,7 +150,11 @@ mod tests {
         let _ = w.used_bytes();
         let _ = w.used_bytes();
         let _ = w.used_bytes();
-        assert_eq!(calls.load(Ordering::SeqCst), 1, "a sonda não pode correr a cada decisão");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "a sonda não pode correr a cada decisão"
+        );
     }
 
     #[test]

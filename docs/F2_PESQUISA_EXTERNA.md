@@ -24,6 +24,11 @@ Só `AbstainReason::Unknown` admite pesquisa (`admits_research()`). Demais motiv
 mais de 1 candidato → `ambiguous` (não dispara harness). Regressão:
 `python tools/mf2_gate_regression.py` (usa `target/f1_decision_smoke.json`).
 
+**F1-5 (MSG 0853, pedido do BUFFY):** pergunta respondida pelo head `ttt`
+(`readout=ttt` ou `cv_accuracy` sem `conformal_set`) **não** tem
+`prediction_set`. A F2 não exige conjunto conformal nesse caminho e não abre
+pesquisa por ausência de set. `admits_research_answer` no harness cobre isso.
+
 Na F2 a tomada usa **websearch do harness**. Tool própria no `aether-agent` é F5.
 
 ## Pipeline

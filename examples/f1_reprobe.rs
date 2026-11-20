@@ -61,26 +61,25 @@ fn main() {
         cfg.calibration = Some("data/vega_calibration_starter.json".into());
     }
 
-    let questions: serde_json::Value = match std::fs::read_to_string(
-        "data/vega_calibration_starter.json",
-    )
-    .ok()
-    .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-    {
-        Some(v) => serde_json::json!({
-            "passou": v["questions"]["passou"],
-            "route": v["questions"]["route"],
-        }),
-        None => {
-            write_baseline(serde_json::json!({
-                "schema": "aether.f1_gate_baseline/v1",
-                "abstain": true,
-                "reason": "corpus_ilegivel",
-                "n": n,
-            }));
-            std::process::exit(3);
-        }
-    };
+    let questions: serde_json::Value =
+        match std::fs::read_to_string("data/vega_calibration_starter.json")
+            .ok()
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        {
+            Some(v) => serde_json::json!({
+                "passou": v["questions"]["passou"],
+                "route": v["questions"]["route"],
+            }),
+            None => {
+                write_baseline(serde_json::json!({
+                    "schema": "aether.f1_gate_baseline/v1",
+                    "abstain": true,
+                    "reason": "corpus_ilegivel",
+                    "n": n,
+                }));
+                std::process::exit(3);
+            }
+        };
 
     // 1. boot: load + fit(124) nos dois readers.
     let t_boot = Instant::now();

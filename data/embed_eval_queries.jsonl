@@ -1,0 +1,142 @@
+{"id": "f01", "q": "O que o AETHER proíbe de usar no treino?", "gold": ["fact:agent_facts.jsonl:0"], "kind": "semantic"}
+{"id": "f02", "q": "backpropagation é permitida dentro do AETHER?", "gold": ["fact:agent_facts.jsonl:0"], "kind": "lexical"}
+{"id": "f03", "q": "O AETHER usa fase?", "gold": ["fact:agent_facts.jsonl:1"], "kind": "lexical"}
+{"id": "f04", "q": "O AETHER tem transplante?", "gold": ["fact:agent_facts.jsonl:2"], "kind": "lexical"}
+{"id": "f05", "q": "Em que camada o AETHER roda?", "gold": ["fact:agent_facts.jsonl:3"], "kind": "semantic"}
+{"id": "f06", "q": "Qual algoritmo de seleção o aether-agent usa?", "gold": ["fact:agent_facts.jsonl:4"], "kind": "semantic"}
+{"id": "f07", "q": "O que o aether-agent produz quando responde?", "gold": ["fact:agent_facts.jsonl:5"], "kind": "semantic"}
+{"id": "f08", "q": "O que o aether-agent faz com o que não conhece?", "gold": ["fact:agent_facts.jsonl:6"], "kind": "semantic"}
+{"id": "f09", "q": "Com que tipo de feedback o agente aprende?", "gold": ["fact:agent_facts.jsonl:7"], "kind": "semantic"}
+{"id": "f10", "q": "O que o neural-sgdb guarda?", "gold": ["fact:agent_facts.jsonl:8"], "kind": "lexical"}
+{"id": "f11", "q": "Por que o neural-sgdb não vaza memória entre escopos?", "gold": ["fact:agent_facts.jsonl:9"], "kind": "semantic"}
+{"id": "f12", "q": "Em quais fases o aether-agent está planejado?", "gold": ["fact:agent_facts.jsonl:10"], "kind": "semantic"}
+{"id": "f13", "q": "O aether-agent mede o quê?", "gold": ["fact:agent_facts.jsonl:11"], "kind": "lexical"}
+{"id": "f14", "q": "Qual é a capital do Brasil?", "gold": ["fact:facts.jsonl:0"], "kind": "lexical"}
+{"id": "f15", "q": "São Paulo é um estado?", "gold": ["fact:facts.jsonl:1"], "kind": "lexical"}
+{"id": "f16", "q": "H2O é o quê?", "gold": ["fact:facts.jsonl:3"], "kind": "lexical"}
+{"id": "f17", "q": "O que é o sol?", "gold": ["fact:facts.jsonl:4"], "kind": "lexical"}
+{"id": "f18", "q": "O que orbita a Terra?", "gold": ["fact:facts.jsonl:5"], "kind": "lexical"}
+{"id": "f19", "q": "Python é uma linguagem?", "gold": ["fact:facts.jsonl:6"], "kind": "lexical"}
+{"id": "f20", "q": "Rust é uma linguagem?", "gold": ["fact:facts.jsonl:7"], "kind": "hard"}
+{"id": "f21", "q": "O algoritmo Ising faz o quê?", "gold": ["fact:facts.jsonl:9"], "kind": "semantic"}
+{"id": "d01", "q": "qual adr trata de custo risco e pré-condições de tool", "gold": ["doc:docs/ADR_AGENT.md#adr-006-toda-tool-declara-custo-risco-e"], "kind": "lexical"}
+{"id": "d02", "q": "por que toda ferramenta precisa declarar o que pode quebrar antes de rodar", "gold": ["doc:docs/ADR_AGENT.md#adr-006-toda-tool-declara-custo-risco-e"], "kind": "semantic"}
+{"id": "d03", "q": "memória pode virar instrução de sistema?", "gold": ["doc:docs/ADR_AGENT.md#adr-003-memoria-e-prior-nao-instrucao"], "kind": "semantic"}
+{"id": "d04", "q": "quem pode subir autoridade até 255", "gold": ["doc:docs/ADR_AGENT.md#adr-010-autoridade-em-escada-e-quarentena"], "kind": "semantic"}
+{"id": "d05", "q": "avaliação em tiers e escala com gate é qual adr", "gold": ["doc:docs/ADR_AGENT.md#adr-011-avaliacao-em-tiers-e-escala-com"], "kind": "lexical"}
+{"id": "d06", "q": "o AETHER é um chatbot?", "gold": ["doc:docs/ADR_AGENT.md#adr-009-aether-e-coprocessador-cognitivo-nao-llm"], "kind": "semantic"}
+{"id": "d07", "q": "aprender exige o quê segundo os adrs", "gold": ["doc:docs/ADR_AGENT.md#adr-004-aprendizado-exige-feedback-verificado"], "kind": "semantic"}
+{"id": "d08", "q": "undo registra a intenção antes de qual adr", "gold": ["doc:docs/ADR_AGENT.md#adr-014-undo-registra-a-intencao-antes-do"], "kind": "lexical"}
+{"id": "d09", "q": "linguagem é porta ou dependência?", "gold": ["doc:docs/ADR_AGENT.md#adr-013-linguagem-e-uma-porta-nao-uma", "doc:docs/LANGUAGE_PORT.md#8-adr-013-linguagem-e-uma-porta-nao"], "kind": "hard"}
+{"id": "d10", "q": "como o agente escolhe sem gradiente entre especialistas", "gold": ["doc:docs/AETHER_AGENT.md#moe-sem-gradiente"], "kind": "semantic"}
+{"id": "d11", "q": "onde o agente admite honestamente o que ainda não está pronto", "gold": ["doc:docs/AETHER_AGENT.md#o-que-nao-esta-pronto-honesto"], "kind": "semantic"}
+{"id": "d12", "q": "coerência matriz 2d", "gold": ["doc:docs/AETHER_AGENT.md#coerencia-matriz-2d"], "kind": "lexical"}
+{"id": "d13", "q": "o agente aprende sozinho como?", "gold": ["doc:docs/AETHER_AGENT.md#autoaprendizado"], "kind": "semantic"}
+{"id": "d14", "q": "qual rota http expõe o agente", "gold": ["doc:docs/AETHER_AGENT.md#api-http"], "kind": "hard"}
+{"id": "d15", "q": "quais gates F1 a F7 entram no freeze", "gold": ["doc:docs/V01_DELIVERY_PLAN.md#5-gates-de-freeze-f1-f7"], "kind": "lexical"}
+{"id": "d16", "q": "para quem é a v0.1, quem é a persona do produto", "gold": ["doc:docs/V01_DELIVERY_PLAN.md#3-persona"], "kind": "semantic"}
+{"id": "d17", "q": "o que não entra no freeze 0.1", "gold": ["doc:docs/V01_DELIVERY_PLAN.md#7-entra-nao-entra-no-freeze-0-1"], "kind": "semantic"}
+{"id": "d18", "q": "checklist da tag 0.1.0", "gold": ["doc:docs/V01_DELIVERY_PLAN.md#9-checklist-de-tag-0-1-0"], "kind": "lexical"}
+{"id": "d19", "q": "qual o maior risco de vender a v0.1 como produto", "gold": ["doc:docs/V01_DELIVERY_PLAN.md#10-risco-principal"], "kind": "hard"}
+{"id": "d20", "q": "mapa de G para F do freeze", "gold": ["doc:docs/V01_G0_G9_IMPL.md#mapa-g-f"], "kind": "lexical"}
+{"id": "d21", "q": "qual a ordem de execução dos gates do freeze 0.1", "gold": ["doc:docs/V01_G0_G9_IMPL.md#ordem"], "kind": "semantic"}
+{"id": "d22", "q": "como faço para não perder fatos quando o banco cai", "gold": ["doc:docs/SGDB_INTEGRATION.md#offline-o-outbox"], "kind": "semantic"}
+{"id": "d23", "q": "formato do fato no sgdb", "gold": ["doc:docs/SGDB_INTEGRATION.md#formato-do-fato"], "kind": "lexical"}
+{"id": "d24", "q": "como escrever vários fatos de uma vez", "gold": ["doc:docs/SGDB_INTEGRATION.md#escrita-remember-em-lote"], "kind": "semantic"}
+{"id": "d25", "q": "o recall reacende memória como?", "gold": ["doc:docs/SGDB_INTEGRATION.md#leitura-recall-que-reacende"], "kind": "hard"}
+{"id": "d26", "q": "cli aether-sgdb comandos disponíveis", "gold": ["doc:docs/SGDB_INTEGRATION.md#cli-aether-sgdb"], "kind": "lexical"}
+{"id": "d27", "q": "como usar o sgdb pelo daemon", "gold": ["doc:docs/SGDB_INTEGRATION.md#como-usar-daemon"], "kind": "semantic"}
+{"id": "d28", "q": "qual a receita para adicionar um especialista ao agente", "gold": ["doc:docs/LESSONS_AETHER_AGENT.md#4-receita-adicionar-um-especialista"], "kind": "semantic"}
+{"id": "d29", "q": "invariantes que não podem regredir", "gold": ["doc:docs/LESSONS_AETHER_AGENT.md#3-invariantes-que-nao-podem-regredir"], "kind": "lexical"}
+{"id": "d30", "q": "o que conta como aprendizado de verdade", "gold": ["doc:docs/LESSONS_AETHER_AGENT.md#9-definicao-de-aprendido"], "kind": "semantic"}
+{"id": "d31", "q": "o que ainda não sabemos sobre o agente", "gold": ["doc:docs/LESSONS_AETHER_AGENT.md#8-o-que-ainda-nao-sabemos"], "kind": "hard"}
+{"id": "d32", "q": "o que a métrica T0 não mede", "gold": ["doc:docs/EVAL_AGENT.md#escopo-t0-o-que-este-numero-nao-e"], "kind": "semantic"}
+{"id": "d33", "q": "métricas e limiares do eval do agente", "gold": ["doc:docs/EVAL_AGENT.md#metricas-e-limiares"], "kind": "lexical"}
+{"id": "d34", "q": "como rodar a suíte de avaliação do agente", "gold": ["doc:docs/EVAL_AGENT.md#como-rodar"], "kind": "semantic"}
+{"id": "d35", "q": "qual o resultado esperado agregado dos testes de usabilidade", "gold": ["doc:docs/USABILITY_TESTS.md#resultado-esperado-agregado-north-star"], "kind": "semantic"}
+{"id": "d36", "q": "estatísticas da v0.1.0 em 2026-11-18", "gold": ["doc:docs/USABILITY_TESTS.md#estatisticas-v0-1-0-2026-11-18"], "kind": "lexical"}
+{"id": "d37", "q": "em que tier medimos a usabilidade", "gold": ["doc:docs/USABILITY_TESTS.md#tier-de-medicao"], "kind": "hard"}
+{"id": "d38", "q": "rotas da api externa do aether", "gold": ["doc:docs/EXTERNAL_API.md#2-rotas"], "kind": "lexical"}
+{"id": "d39", "q": "como subir o servidor http do aether", "gold": ["doc:docs/EXTERNAL_API.md#1-subir"], "kind": "semantic"}
+{"id": "d40", "q": "a api promete prosa livre gerada?", "gold": ["doc:docs/EXTERNAL_API.md#4-semantica-o-que-honestamente-se-promete"], "kind": "semantic"}
+{"id": "d41", "q": "a api autentica e isola escopo?", "gold": ["doc:docs/EXTERNAL_API.md#5-2-auth-e-escopo-r8"], "kind": "hard"}
+{"id": "d42", "q": "qual feature ativa o solver termodinâmico", "gold": ["doc:docs/API_CONTRACT.md#m1-src-core-thermodynamic_solver-rs-feature-m1"], "kind": "lexical"}
+{"id": "d43", "q": "onde mora o bloco fourier do motor", "gold": ["doc:docs/API_CONTRACT.md#m2-src-core-wave_interference-rs-feature-m2"], "kind": "semantic"}
+{"id": "d44", "q": "como o campo de kuramoto se comunica em rede", "gold": ["doc:docs/API_CONTRACT.md#m3-src-core-kuramoto_field-rs-feature-m3"], "kind": "semantic"}
+{"id": "d45", "q": "quem é o dono do organismo em loop fechado", "gold": ["doc:docs/API_CONTRACT.md#m4-src-simulation-closed_loop_organism-rs-feature-m4-dono"], "kind": "hard"}
+{"id": "d46", "q": "o que pode substituir o llm na borda", "gold": ["doc:docs/LANGUAGE_PORT.md#3-familias-de-alternativas-com-evidencia"], "kind": "semantic"}
+{"id": "d47", "q": "matriz de decisão do languageport", "gold": ["doc:docs/LANGUAGE_PORT.md#4-matriz-de-decisao-para-o-aether"], "kind": "lexical"}
+{"id": "d48", "q": "por que apareceu llm de borda no plano", "gold": ["doc:docs/LANGUAGE_PORT.md#1-por-que-a-borda-llm-apareceu-no"], "kind": "semantic"}
+{"id": "d49", "q": "o parser c1 lida com palavra fora do vocabulário", "gold": ["doc:docs/LANGUAGE_PORT.md#5-1-parser-c1-lexico-confianca-e-oov"], "kind": "hard"}
+{"id": "d50", "q": "quantas coisas o conhecimento é na taxonomia do volume 3", "gold": ["doc:docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md#1-taxonomia-conhecimento-sao-seis-coisas"], "kind": "semantic"}
+{"id": "d51", "q": "cinco pedidos ao sgdb", "gold": ["doc:docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md#8-cinco-pedidos-ao-sgdb"], "kind": "lexical"}
+{"id": "d52", "q": "onde o ciclo de vida do conhecimento quebra", "gold": ["doc:docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md#2-o-ciclo-de-vida-e-onde-ele"], "kind": "semantic"}
+{"id": "d53", "q": "o que o sgdb não resolve", "gold": ["doc:docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md#9-o-que-o-sgdb-nao-resolve"], "kind": "hard"}
+{"id": "d54", "q": "roadmap f1 a f3 do volume 3", "gold": ["doc:docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL3.md#13-roadmap-f1-f3"], "kind": "lexical"}
+{"id": "d55", "q": "quem pode gravar autoridade 255", "gold": ["doc:docs/BUILD_MULTI_AGENT.md#regra-de-autoridade-rigida"], "kind": "semantic"}
+{"id": "d56", "q": "mapa de posse de arquivos do build multi-agente", "gold": ["doc:docs/BUILD_MULTI_AGENT.md#mapa-de-posse-de-arquivos-zero-conflito-de"], "kind": "lexical"}
+{"id": "d57", "q": "o que um agente entrega para considerar a tarefa pronta", "gold": ["doc:docs/BUILD_MULTI_AGENT.md#definition-of-done-por-entrega-de-agente"], "kind": "semantic"}
+{"id": "d58", "q": "os agentes podem dar push em main?", "gold": ["doc:docs/BUILD_MULTI_AGENT.md#integracao-e-release"], "kind": "hard"}
+{"id": "d59", "q": "qual integração entre rust e python foi escolhida", "gold": ["doc:docs/VEGA_F3_PLANO_CONSOLIDADO.md#decisoes-hitl-irreversiveis-no-ciclo"], "kind": "semantic"}
+{"id": "d60", "q": "critérios de aceite das fases f1 a f5", "gold": ["doc:docs/VEGA_F3_PLANO_CONSOLIDADO.md#criterios-de-aceite"], "kind": "lexical"}
+{"id": "d61", "q": "quais são as fases do build do híbrido", "gold": ["doc:docs/VEGA_F3_PLANO_CONSOLIDADO.md#fases-sequencia-de-build"], "kind": "semantic"}
+{"id": "d62", "q": "o que já estava pronto quando o plano f2 f3 começou", "gold": ["doc:docs/VEGA_F3_PLANO_CONSOLIDADO.md#estado-herdado-linha-de-partida"], "kind": "hard"}
+{"id": "d63", "q": "quem pode mandar ampliar a busca por fontes", "gold": ["doc:docs/F2_5_SOURCE_TIER_AMPLIAR.md#camada-3-ampliar-hitl-only", "doc:docs/F2_PESQUISA_EXTERNA.md#ampliar-hitl-only"], "kind": "semantic"}
+{"id": "d64", "q": "tier de fonte camada 0", "gold": ["doc:docs/F2_5_SOURCE_TIER_AMPLIAR.md#camada-0-tier"], "kind": "lexical"}
+{"id": "d65", "q": "como funciona o pipeline de pesquisa externa", "gold": ["doc:docs/F2_PESQUISA_EXTERNA.md#pipeline"], "kind": "semantic"}
+{"id": "d66", "q": "quais são as quatro condições para aceitar gpu", "gold": ["doc:docs/GPU_PLAN.md#criterio-de-admissao-as-quatro-condicoes"], "kind": "semantic"}
+{"id": "d67", "q": "resultado do g0 e g1 em 2026-11-17", "gold": ["doc:docs/GPU_PLAN.md#resultado-2026-11-17-g0-executado-g1-implementado"], "kind": "lexical"}
+{"id": "d68", "q": "que invariantes o plano de gpu não pode quebrar", "gold": ["doc:docs/GPU_PLAN.md#invariantes-que-este-plano-nao-pode-quebrar"], "kind": "hard"}
+{"id": "d69", "q": "qual contrato garante que cpu e gpu dão o mesmo número", "gold": ["doc:docs/HW_TARGET.md#4-contrato-de-determinismo-cpu-gpu"], "kind": "semantic"}
+{"id": "d70", "q": "matriz de teste obrigatória de hardware", "gold": ["doc:docs/HW_TARGET.md#7-matriz-de-teste-obrigatoria"], "kind": "lexical"}
+{"id": "d71", "q": "o que fica fora do escopo v1 de hardware", "gold": ["doc:docs/HW_TARGET.md#6-o-que-fica-explicitamente-fora-do-escopo"], "kind": "hard"}
+{"id": "d72", "q": "qual o papel de quem só extrai triplas", "gold": ["doc:docs/DONOR_CATALOG.md#2-ranking-escriba-extrator-triplas"], "kind": "semantic"}
+{"id": "d73", "q": "doutrina não negociar da doação", "gold": ["doc:docs/DONOR_CATALOG.md#0-doutrina-nao-negociar"], "kind": "lexical"}
+{"id": "d74", "q": "quantos estágios tem o etl de doação", "gold": ["doc:docs/DOACAO_PLAYBOOK.md#4-processo-etl-6-estagios-o-que-o"], "kind": "semantic"}
+{"id": "d75", "q": "o que entra e o que não entra na doação", "gold": ["doc:docs/DOACAO_PLAYBOOK.md#12-origem-doacao-o-que-entra"], "kind": "hard"}
+{"id": "d76", "q": "como clonar uma nova rodada de aprendizado", "gold": ["doc:docs/DOACAO_PLAYBOOK.md#5-como-clonar-nova-rodada-de-aprendizado"], "kind": "semantic"}
+{"id": "d77", "q": "por que só registrar a escrita não basta para desfazer", "gold": ["doc:docs/UNDO_MEMORY.md#1-por-que-effect-memorywrite-key-nao-basta"], "kind": "semantic"}
+{"id": "d78", "q": "regras do undo de memória", "gold": ["doc:docs/UNDO_MEMORY.md#3-regras"], "kind": "lexical"}
+{"id": "d79", "q": "por que o root fixa zero no vidro puro", "gold": ["doc:docs/Q4_RESOLUTION.md#1-por-que-o-root-fixa-0-no"], "kind": "semantic"}
+{"id": "d80", "q": "bound implementado do roof dual", "gold": ["doc:docs/Q4_RESOLUTION.md#3-o-bound-implementado"], "kind": "lexical"}
+{"id": "d81", "q": "que bug foi corrigido no caminho do q4", "gold": ["doc:docs/Q4_RESOLUTION.md#5-bug-corrigido-no-caminho"], "kind": "hard"}
+{"id": "d82", "q": "o que o transducer expõe como contrato", "gold": ["doc:docs/TRANSDUCER_IO.md#1-contrato"], "kind": "semantic"}
+{"id": "d83", "q": "invariantes transducer_invariants.rs", "gold": ["doc:docs/TRANSDUCER_IO.md#5-invariantes-tests-transducer_invariants-rs"], "kind": "lexical"}
+{"id": "d84", "q": "qual o schema real devolvido pelo vegaml.decide", "gold": ["doc:docs/F1_CONTRATO_MEDIDO.md#2-schema-real-medido"], "kind": "semantic"}
+{"id": "d85", "q": "divergências entre aether-decision e o contrato medido", "gold": ["doc:docs/F1_CONTRATO_MEDIDO.md#3-divergencias-com-aether-decision-no-estado-de"], "kind": "lexical"}
+{"id": "d86", "q": "por que o embed não enxerga o venv", "gold": ["doc:docs/F1_ENV_DURAVEL.md#a-segunda-armadilha-o-embed-nao-enxerga-o"], "kind": "lexical"}
+{"id": "d87", "q": "por que o script recusa gravar em target", "gold": ["doc:docs/F1_ENV_DURAVEL.md#por-que-o-script-recusa-target"], "kind": "hard"}
+{"id": "d88", "q": "o que é o vega-u", "gold": ["doc:docs/VEGA_U_ANALISE.md#o-que-e"], "kind": "semantic"}
+{"id": "d89", "q": "quais flags de saída do vega-u seguem a doutrina", "gold": ["doc:docs/VEGA_U_ANALISE.md#flags-de-saida-gemeas-da-doutrina-aether"], "kind": "semantic"}
+{"id": "d90", "q": "o vega-u cabe em rtx 3050 de 6gb", "gold": ["doc:docs/VEGA_U_ANALISE.md#cabimento-no-hardware-rtx-3050-laptop-6gb"], "kind": "hard"}
+{"id": "d91", "q": "qual o gargalo da taxa de embedding", "gold": ["doc:docs/EMBED_THROUGHPUT_ANALYSIS.md#1-diagnostico-do-gargalo"], "kind": "semantic"}
+{"id": "d92", "q": "plano de implementação sugerido para embed", "gold": ["doc:docs/EMBED_THROUGHPUT_ANALYSIS.md#4-plano-de-implementacao-sugerido"], "kind": "lexical"}
+{"id": "d93", "q": "quais alavancas têm roi decrescente", "gold": ["doc:docs/EMBED_THROUGHPUT_ANALYSIS.md#2-alavancas-roi-decrescente"], "kind": "semantic"}
+{"id": "d94", "q": "o que o f7 do smoke faz", "gold": ["doc:docs/CYCLE_CLOSE_V01_FREEZE.md#f7-smoke"], "kind": "semantic"}
+{"id": "d95", "q": "quantas dimensões a auditoria cognitiva mediu", "gold": ["doc:docs/COGNITIVE_AUDIT_FINAL.md#2-dimensoes-todas-measured-nota-100"], "kind": "semantic"}
+{"id": "d96", "q": "como reproduzir a auditoria cognitiva", "gold": ["doc:docs/COGNITIVE_AUDIT_FINAL.md#6-reproducao"], "kind": "lexical"}
+{"id": "d97", "q": "como funciona a concorrência com três agentes no mesmo diretório", "gold": ["doc:docs/REPO_SYNC.md#5-concorrencia-3-agentes-no-mesmo-diretorio"], "kind": "semantic"}
+{"id": "d98", "q": "regras de pr do repositório", "gold": ["doc:docs/REPO_SYNC.md#3-regras-de-pr"], "kind": "lexical"}
+{"id": "d99", "q": "os jobs do hub rodam em paralelo?", "gold": ["doc:docs/HUB_DASHBOARD.md#jobs-single-flight"], "kind": "semantic"}
+{"id": "d100", "q": "qual o contrato de usabilidade do hub", "gold": ["doc:docs/HUB_DASHBOARD.md#contrato-usabilidade-msg-0449"], "kind": "hard"}
+{"id": "d101", "q": "o que é o escudo de host", "gold": ["doc:docs/PRODUTO_C.md#o-que-e"], "kind": "semantic"}
+{"id": "d102", "q": "flags úteis do produto c", "gold": ["doc:docs/PRODUTO_C.md#flags-uteis"], "kind": "lexical"}
+{"id": "d103", "q": "o que não fazer na entrega ao usuário", "gold": ["doc:docs/USER_DELIVERY_PLAN.md#5-o-que-nao-fazer-na-entrega-ao"], "kind": "semantic"}
+{"id": "d104", "q": "métricas de sucesso por onda", "gold": ["doc:docs/USER_DELIVERY_PLAN.md#6-metricas-de-sucesso-por-onda"], "kind": "lexical"}
+{"id": "d105", "q": "como abrir o hub em cinco minutos", "gold": ["doc:docs/USER_GUIDE.md#1-abrir-o-hub"], "kind": "semantic"}
+{"id": "d106", "q": "onde fica o console de chat manual", "gold": ["doc:docs/USER_GUIDE.md#7b-console-ia-chat-manual"], "kind": "hard"}
+{"id": "d107", "q": "por que bits com re-rank em f32", "gold": ["doc:docs/B2_BITS_F32_RERANK.md#1-evidencia-acumulada-por-que-bits-f32-e"], "kind": "semantic"}
+{"id": "d108", "q": "gate proposto b2_rerank_gate.rs", "gold": ["doc:docs/B2_BITS_F32_RERANK.md#3-gate-proposto-tests-b2_rerank_gate-rs"], "kind": "lexical"}
+{"id": "d109", "q": "como é o header do bank.bin", "gold": ["doc:docs/INTAKE_PLAN.md#header-bank-bin-128-b-little-endian"], "kind": "lexical"}
+{"id": "d110", "q": "o que o transplante hv entregou", "gold": ["doc:docs/TRANSPLANT_HV.md#o-que-foi-entregue"], "kind": "semantic"}
+{"id": "d111", "q": "quais gates medidos no probe de transplante", "gold": ["doc:docs/TRANSPLANT_HV.md#gates-medidos-probe-2026-11-16"], "kind": "hard"}
+{"id": "d112", "q": "que defeito a avaliação da api encontrou", "gold": ["doc:docs/API_EVALUATION.md#4-o-defeito-que-a-avaliacao-encontrou-e"], "kind": "semantic"}
+{"id": "d113", "q": "nove gates de integridade da api", "gold": ["doc:docs/API_EVALUATION.md#5-integridade-9-gates-tests-api_integrity-rs"], "kind": "lexical"}
+{"id": "d114", "q": "o que foi contradito na auditoria das afirmações", "gold": ["doc:docs/AUDIT_CLAIMS_VOL3.md#3-nao-verificado-ou-contradito"], "kind": "semantic"}
+{"id": "d115", "q": "comandos usados na auditoria do volume 3", "gold": ["doc:docs/AUDIT_CLAIMS_VOL3.md#5-comandos-usados"], "kind": "lexical"}
+{"id": "d116", "q": "quais são os três corpos do problema", "gold": ["doc:docs/O_PROBLEMA_DOS_3_CORPOS_NAO.md#os-tres-nao-e-a-tese"], "kind": "semantic"}
+{"id": "d117", "q": "por que ising não é oráculo", "gold": ["doc:docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL2.md#2-risco-1-ising-nao-e-oraculo"], "kind": "lexical"}
+{"id": "d118", "q": "o que mudou do volume i para o volume ii", "gold": ["doc:docs/O_PROBLEMA_DOS_3_CORPOS_NAO_VOL2.md#11-o-que-mudou-desde-o-volume-i"], "kind": "hard"}
+{"id": "d119", "q": "o que foi proposto na revalidação após o reboot", "gold": ["nsgdb:md/L3/mcp/1795054522678000"], "kind": "semantic"}
+{"id": "d120", "q": "as cinco tools do nsgdb", "gold": ["nsgdb:md/L2/nsgdb/doctrine"], "kind": "lexical"}
+{"id": "d121", "q": "como ativar regras de contexto por arquivo no recall", "gold": ["nsgdb:md/L2/nsgdb/doctrine"], "kind": "semantic"}

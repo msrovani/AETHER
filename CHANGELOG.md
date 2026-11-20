@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.1.8] - 2026-11-20
+
+### Changed
+
+- Ciclo automatico: 37 arquivo(s) (aether-decision:8, data:9, docs:10, examples:1, src:1, tests:1, tools:7).
+- Gate: ok (2s).
+
+- `aether-decision/examples/f1_env_probe.rs`
+- `aether-decision/src/bootstrap.rs`
+- `aether-decision/src/config.rs`
+- `aether-decision/src/gate.rs`
+- `aether-decision/src/port.rs`
+- `aether-decision/src/pyo3_impl.rs`
+- `aether-decision/src/types.rs`
+- `aether-decision/src/watchdog.rs`
+- `docs/F1_AUDIT.md`
+- `docs/F1_CONTRATO_MEDIDO.md`
+- `docs/F1_ENV_DURAVEL.md`
+- `docs/F2_PESQUISA_EXTERNA.md`
+
 ## [0.1.7] - 2026-11-20
 
 ### Changed

@@ -130,8 +130,21 @@ def _nsgdb_docs(path: Path) -> list[tuple[str, str]]:
     return out
 
 
+_SUFFIX_RE = re.compile(r"_\d+$")
+
+
+def canon_fact(text: str) -> str:
+    """Canônico de fato sintético: `Brasil_1 capital Brasília_1` == base.
+
+    `data/facts.jsonl` é fixture com repetição `_1.._19`; sem isto a consulta
+    teria 20 golds idênticos e o recall@5 seria artefato, não qualidade.
+    """
+    return " ".join(_SUFFIX_RE.sub("", tok) for tok in text.split())
+
+
 def build_corpus() -> list[dict]:
     seen: set[str] = set()
+    seen_fact: set[str] = set()
     docs: list[dict] = []
     for path in sorted((ROOT / "docs").glob("*.md")):
         for did, text in _sections(path):
@@ -145,7 +158,11 @@ def build_corpus() -> list[dict]:
             for did, text in _fact_docs(p):
                 if did in seen:
                     continue
+                canon = canon_fact(text)
+                if canon in seen_fact:
+                    continue
                 seen.add(did)
+                seen_fact.add(canon)
                 docs.append({"id": did, "text": text})
     for did, text in _nsgdb_docs(NSGDB_DUMP):
         if did in seen:
@@ -296,7 +313,7 @@ def rrf(rankings: list[list[int]]) -> list[int]:
         for pos, i in enumerate(rank):
             scores[i] = scores.get(i, 0.0) + 1.0 / (K_RRF + pos + 1)
     ordered = sorted(scores.items(), key=lambda x: (-x[1], x[0]))
-    return [i for _, i in ordered]
+    return [i for i, _ in ordered]
 
 
 # --------------------------------------------------------------------------- #
@@ -387,6 +404,42 @@ def cmd_run(expect_sha: str, embed_url: str, out: Path) -> int:
     return 0 if gate["embed_pass"] and gate["hybrid_pass"] else 2
 
 
+def cmd_bm25_only(expect_sha: str, out: Path) -> int:
+    """T3 prep (MSG 0870): baseline lexical no dataset congelado, sem MiniLM/rede."""
+    meta, docs, queries = load_set(expect_sha)
+    t0 = time.time()
+    bm25 = BM25(docs)
+    lex_rank = [bm25.rank(q["q"]) for q in queries]
+    t_lex = time.time() - t0
+    systems = {"lexical_bm25": score(queries, lex_rank, docs)}
+    kinds = {"lexical_bm25": per_kind(queries, lex_rank, docs)}
+    hit5 = systems["lexical_bm25"]["hit5"]
+    result = {
+        "schema": "aether.embed_eval_bm25_baseline/v1",
+        "tier": "T3_prep",
+        "sha256_set": expect_sha,
+        "n_docs": len(docs),
+        "n_queries": len(queries),
+        "meta_note": meta.get("note") if isinstance(meta, dict) else None,
+        "latency": {"bm25_s": round(t_lex, 2)},
+        "systems": systems,
+        "per_kind": kinds,
+        "gate": {
+            "hit5_min": GATE_HIT5,
+            "bm25_hit5": hit5,
+            "bm25_pass_as_lexical_floor": True,
+            "note": "baseline lexical; MiniLM/híbrido = AGENT-A --run",
+        },
+        "network": False,
+        "ref": "MSG_0862_0870",
+    }
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(f"artefato: {out.relative_to(ROOT).as_posix()}")
+    return 0
+
+
 # --------------------------------------------------------------------------- #
 # selftest (sem rede, sem modelo)
 # --------------------------------------------------------------------------- #
@@ -419,6 +472,11 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="eval de recall F4")
     ap.add_argument("--freeze", action="store_true")
     ap.add_argument("--run", action="store_true")
+    ap.add_argument(
+        "--bm25-only",
+        action="store_true",
+        help="T3 prep: só BM25 no set congelado (sem embedder/rede)",
+    )
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--sha256", default=os.environ.get("AETHER_EVAL_SET_SHA256", ""))
     ap.add_argument("--embed-url", default=os.environ.get("AETHER_EMBED_URL", "http://127.0.0.1:8788"))
@@ -429,6 +487,11 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_selftest()
     if args.freeze:
         return cmd_freeze()
+    if args.bm25_only:
+        if not args.sha256:
+            raise SystemExit("--sha256 obrigatório (hash publicado no fórum)")
+        out = args.out if args.out != OUT_PATH else (ROOT / "target" / "embed_eval_bm25_baseline.json")
+        return cmd_bm25_only(args.sha256.lower(), out)
     if args.run:
         if not args.sha256:
             raise SystemExit("--sha256 obrigatório (hash publicado no fórum antes da medição)")

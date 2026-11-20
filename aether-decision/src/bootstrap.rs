@@ -65,7 +65,8 @@ impl Bootstrap {
     }
 
     pub fn set_calibrating(&self) {
-        self.phase.store(Phase::Calibrating as u8, Ordering::Relaxed);
+        self.phase
+            .store(Phase::Calibrating as u8, Ordering::Relaxed);
     }
 
     pub fn set_ready(&self) {

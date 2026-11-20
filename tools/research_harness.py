@@ -34,6 +34,36 @@ from research_reliability import (  # noqa: E402
 
 ALLOWED_REASON = "unknown"
 MAX_DIGEST_TOKENS = 320
+
+
+def admits_research_answer(answer: dict) -> dict:
+    """F1-5 (MSG 0853): o head ttt não emite prediction_set.
+
+    `conformal_set` ausente nesse caminho não é `unknown` e não abre a F2.
+    Pesquisa só com abstain_reason unknown fora do head.
+    """
+    if not isinstance(answer, dict):
+        return {"open_research": False, "why": "answer_invalido", "conformal_required": False}
+    reason = answer.get("abstain_reason")
+    readout = str(answer.get("readout") or "")
+    head_ttt = readout == "ttt" or (
+        answer.get("cv_accuracy") is not None and answer.get("conformal_set") is None
+    )
+    if head_ttt:
+        return {
+            "open_research": False,
+            "why": "head_ttt_sem_conformal_nao_abre_f2",
+            "conformal_required": False,
+        }
+    if reason == ALLOWED_REASON and answer.get("abstain") is True:
+        return {"open_research": True, "why": "unknown", "conformal_required": False}
+    return {
+        "open_research": False,
+        "why": str(reason or "not_unknown"),
+        "conformal_required": False,
+    }
+
+
 _TOKEN_RE = re.compile(r"\S+")
 
 
@@ -206,6 +236,39 @@ def selftest() -> int:
     if code != 2:
         failures.append("conflict should exit 2")
 
+    # F1-5 (MSG 0853): head ttt não tem conformal; ausência não abre F2.
+    route_ttt = {
+        "abstain": False,
+        "abstain_reason": None,
+        "choice": "reformular",
+        "readout": "ttt",
+        "cv_accuracy": 0.7419,
+        "conformal_set": None,
+    }
+    gate = admits_research_answer(route_ttt)
+    if gate.get("open_research") or gate.get("conformal_required"):
+        failures.append(f"head ttt nao pode abrir F2: {gate}")
+    passou = admits_research_answer(
+        {
+            "abstain": True,
+            "abstain_reason": "ambiguous",
+            "readout": "and_gate",
+            "conformal_set": [False],
+        }
+    )
+    if passou.get("open_research"):
+        failures.append("ambiguous com set nao abre F2")
+    unbound = admits_research_answer(
+        {
+            "abstain": True,
+            "abstain_reason": "unknown",
+            "readout": "sentinel",
+            "conformal_set": None,
+        }
+    )
+    if not unbound.get("open_research"):
+        failures.append("unknown fora do head ttt abre F2")
+
     # MF2 (MSG 0802/0808): regressão F1_3 — só unknown abre pesquisa
     mf2 = subprocess.run(
         [sys.executable, str(ROOT / "tools" / "mf2_gate_regression.py")],
@@ -219,7 +282,7 @@ def selftest() -> int:
     report = {
         "ok": not failures,
         "failures": failures,
-        "n_checks": 3 + 3 + 2 + 2 + 1,  # + MF2
+        "n_checks": 3 + 3 + 2 + 2 + 3 + 1,  # + F1-5 ttt + MF2
         "quarantine_path": str(qpath),
         "mf2": "PASS" if mf2.returncode == 0 else "FAIL",
     }

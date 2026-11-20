@@ -24,9 +24,9 @@ exige (watchdog de VRAM, warmup em thread, GIL liberado) **não existem**.
 
 ## As divergências
 
-### A-1 · ALTA · O gate AND nunca fala nos turnos que importam
+### A-1 · ALTA · ~~O gate AND nunca fala nos turnos que importam~~ — **RESOLVIDO (fatia 3)**
 
-**Evidência** (produto, não exemplo):
+**Evidência (produto, não exemplo):**
 
 ```
 $ aether-agent chat "zzz qqq xxx nao esta no lexico"
@@ -34,9 +34,11 @@ ação: abstain | ... (fora do léxico)
 decisor: abstain motivo=engine_unavailable | engine=stub | degrado=true   <- port consultado
 
 $ aether-agent chat "qual e a capital do Brasil"
+decisor: q=passou abstain motivo=engine_unavailable | engine=stub | degrado=true
+decisor: q=route  abstain motivo=engine_unavailable | engine=stub | degrado=true
 borda: intent=ask confiança=1.00
 sucesso=true ação=act | ...
-resposta: Brasília (fonte transplant)                                     <- SEM linha "decisor:"
+resposta: Brasília (fonte transplant)
 ```
 
 O port é consultado **só** no ramo `report.is_oov()` de `src/agent/cli.rs`.
@@ -54,6 +56,32 @@ pronto para virar verde quando a fatia 3 cair.
 
 **Dono.** OPENCODE, fatia 3 (`src/agent/cli.rs`).
 
+**Fechado.** A fatia 3 (a outra instância do OPENCODE) landed no mesmo dia:
+o port agora fala em **todo** turno e o teste que a auditoria deixou
+`#[ignore]` virou **ativo e verde** — o gate da auditoria passa a exigir o
+comportamento novo. Evidência: as duas linhas `decisor: q=passou` /
+`decisor: q=route` acima, e `tests/f1_contract.rs` → 7 pass / 0 fail /
+0 ignored.
+
+### A-1b · ALTA · O engine real ainda é inalcançável do produto
+
+**Evidência.** `src/agent/cli.rs` (`chat()`): `let port = StubPort;` — literal,
+sem flag, sem leitura de ambiente. Toda linha `decisor:` do produto sai com
+`engine=stub | degrado=true`.
+
+**Impacto.** A trait está certa e o port é consultado, mas **o veredito real
+nunca existe no produto**: o AND gate, o head `route` e o `fit(124)` só rodam
+no `example`. O aceite da F1 ("primeira decisão via DecisionPort") continua
+sendo do exemplo, não do chat — com a degradação honesta aparecendo em todo
+turno, o que é correto mas é um produto sem decisor.
+
+**Correção.** Uma flag (`--vega`) que constrói o `VegaPort` quando o
+ambiente está disponível (`PYO3_PYTHON` + `PYTHONPATH` + modelos) e cai no
+`StubPort` com um aviso explícito quando não está. Nada de "sempre engine":
+o default continua sendo o stub (Eixo C).
+
+**Dono.** OPENCODE, fatia 4 (ou BUFFY, se preferirem).
+
 ### A-2 · ALTA · O watchdog de VRAM não está ligado a nada
 
 **Evidência.** `VramWatchdog` só aparece no próprio módulo e nos testes dele;
@@ -63,27 +91,45 @@ pronto para virar verde quando a fatia 3 cair.
 cumprido. VRAM acima de 5GB não vira `engine_unavailable`: vira OOM do
 processo, exatamente o que o plano proibia (*"nunca travа"*).
 
-**Medido durante a auditoria** (o probe da auditoria rodando com os DOIS
-leitors do AND gate, no mesmo processo):
+**Medição isolada durante a auditoria** (probe da auditoria rodando com os DOIS
+leitors do AND gate, no mesmo processo; `nvidia-smi` amostrado a cada 2 s
+durante toda a corrida):
 
 ```
-nvidia-smi --query-gpu=memory.used  ->  5757 MiB
-orçamento do plano (Eixo E)         ->  5120 MiB (5 GB)
+pico do probe sozinho = 4393 MiB   (1 reader ≈ 2342 MiB, 2 readers ≈ 4393 MiB)
+orçamento do plano (Eixo E) = 5120 MiB (5 GB)   -> folga de ~727 MiB
 ```
 
-Ou seja: **o gate AND, como está, estoura o orçamento que o próprio plano
-fixou** — em 637 MiB. O plano previa *"4 a 4,5 GB de 6 GB"* (MSG 0757) para os
-dois readers; o medido é 5,76 GB.
+**Retratação honesta.** A primeira medição da auditoria, por amostragem
+esporádica, deu **5757 MiB** — acima do orçamento. Era **contaminação**: outro
+agente tinha o engine na GPU ao mesmo tempo (as amostras do sampler mostram
+4366–4380 MiB *antes* do probe começar, e ~190 MiB — GPU ociosa — entre
+corridas). O número confiável é o **pico de 4393 MiB, isolado**.
 
-**Consequência para quem ligar o watchdog**: ligado como está, ele abortaria
-*sempre* — o port passaria a abstener em toda decisão. Ligar o watchdog
-(A-2) e decidir o orçamento de VRAM (A-2b) é **um** trabalho, não dois.
+**Consequência**: o orçamento de 5 GB **cabe** o gate AND como está. Ligar o
+watchdog (A-2) não abortaria toda decisão — ele Abateria de verdade. O plano
+não precisa ser mudado nesse ponto.
 
-**A-2b · MÉDIA-ALTA · O orçamento de 5 GB é incompatível com o gate AND.**
-Opções, para o dono decidir: (i) subir o orçamento para ~6 GB (a carta tem
-6 GB e o boot já mede 90 s — o risco é OOM, não slow); (ii) carregar um reader
-por vez (o sentinela é quem pega o OOD; dá para recarregar sob demanda);
-(iii) manter os dois, mas com o orçamento medido e publicado em vez de 5 GB.
+### A-2c · MÉDIA · A GPU é compartilhada por agentes sem coordenação
+
+**Evidência.** A auditoria e o BUFFY rodaram engines na mesma RTX 3050 (6 GB)
+ao mesmo tempo, sem que nenhum dos dois soubesse do outro. Com um reader
+(2342 MiB) e outro processo com o engine carregado (4366 MiB), a soma estoura
+a carta.
+
+**Impacto.** O watchdog do plano mede a VRAM **da caixa** (`nvidia-smi`), não
+do processo: com dois agents com engine no ar, o watchdog de um aborta o
+outro — e, sem watchdog, o segundo engine morre de OOM. É a mesma classe de
+problema do motor em `target/`: um agente pode apagar o trabalho do outro sem
+avisar.
+
+**Correção (proposta).** Um **lock de engine** no fórum (quem tem a GPU) ou um
+arquivo de lock em disco, ou — mais simples — o `EngineConfig` ganha um campo
+`gpu_lock` e o port **abste** (`engine_unavailable`) se outro engine já está
+carregado. Alternativa mais barata: o watchdog passa a medir a VRAM **do
+processo** (torch) em vez da caixa.
+
+**Dono.** dono do orçamento + BUFFY (medição).
 **Correção (A-2).** O port mede **antes** do `decide`; acima do orçamento
 devolve `EngineUnavailable` e preenche `vram_used_mb` no `meta`.
 
@@ -173,19 +219,22 @@ comparar.
 
 **Dono.** auditoria (entregue).
 
-### A-7 · BAIXA · O port do chat pergunta "abstention" (booleano genérico)
+### A-7 · BAIXA · ~~O port do chat pergunta "abstention" (booleano genérico)~~ — **RESOLVIDO (fatia 3)**
 
-**Evidência.** `decision_port_line` monta `{"abstention":{"type":"boolean"}}`;
+**Evidência (antes).** `decision_port_line` montava `{"abstention":{"type":"boolean"}}`;
 o corpus calibrado tem `passou` e `route`.
 
-**Impacto.** O gate não usa as perguntas medidas; um booleano genérico não tem
-calibração — a confiança que sair é ruido, e ela aparece na linha de
+**Impacto.** O gate não usava as perguntas medidas; um booleano genérico não tem
+calibração — a confiança que sairia é ruido, e ela aparece na linha de
 evidência.
 
 **Correção.** Usar as perguntas do corpus (`data/vega_calibration_starter.json`
 → `questions`), como o smoke e o probe já fazem.
 
 **Dono.** OPENCODE, fatia 3.
+
+**Fechado.** A fatia 3 trocou pelas perguntas calibradas: a saída do produto
+passou a ser `decisor: q=passou` / `decisor: q=route`.
 
 ### A-8 · INFO · O `site-packages` do venv precisa ser explícito
 
@@ -218,8 +267,11 @@ gate de regressão e contrato escrito.
 
 ## Ordem sugerida
 
-1. **A-1** (fatia 3 do chat) — sem isso a F1 não é do produto.
-2. **A-2** (watchdog) — é o aceite literal do plano e é o que impede o OOM.
-3. **A-3** (warmup em thread) — sem isso o port não sobe em serviço nenhum.
-4. **A-4** (GIL) — só importa depois de 1–3, quando houver concorrência real.
-5. **A-5/A-6** (evidência) — já cobertos pela auditoria.
+1. ~~**A-1** (fatia 3 do chat)~~ — **fechado** (o port fala em todo turno).
+2. **A-1b** (engine real alcançável do produto) — sem isto o produto tem
+   degradação honesta, mas não tem decisor.
+3. **A-2** (watchdog) — é o aceite literal do plano e é o que impede o OOM.
+4. **A-3** (warmup em thread) — sem isso o port não sobe em serviço nenhum.
+5. **A-4** (GIL) — só importa depois de 2–4, quando houver concorrência real.
+6. **A-5/A-6** (evidência) — cobertos pela auditoria.
+7. **A-2c** (GPU compartilhada) — antes que dois agents se matem na GPU.

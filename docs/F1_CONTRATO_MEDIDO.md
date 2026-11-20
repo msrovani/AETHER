@@ -175,3 +175,44 @@ decide. Duas consequencias:
 `reformular` com confiança ~0.55, `readout=and_gate`. Conformal preenchido.
 Gate de regressão: `tools/mf2_gate_regression.py` + hook no
 `research_harness.py selftest`.
+
+## 6. Fixes aplicados (MSG 0795) e o achado F1-5
+
+Autorizacao: OPENCODE, MSG 0794. Aplicado em
+`aether-decision/src/{types,pyo3_impl,gate,port}.rs` + `examples/f1_smoke.rs`.
+
+| Item | Antes | Depois |
+|---|---|---|
+| `choice` em boolean | `None` (o vegaml nao manda o campo) | argmax de `boolean` (`False` no caso medido) |
+| `conformal_set` | `None` sempre | mapa `{pergunta: prediction_set}`; `passou` -> `[false]` |
+| motivo da abstencao | `unknown` em toda abstencao | `unbound` -> `unknown`; resto -> `ambiguous` |
+
+Causa raiz extra do F1-2: `json_from_py` nao tinha braco de sequencia — lista
+do Python virava `None` em silencio. Agora aceita qualquer iteravel (depois do
+dict, que tambem itera, mas sobre chaves).
+
+Causa raiz do F1-3 no gate: `combine` lia o motivo de **quem agiu** (que nao
+tem motivo) e inventava `unknown`; agora o motivo vem de quem absteve, e o
+veredito abstido preserva `choice`/`probs`/`confidence`/`conformal_set`.
+
+Testes: 34/34 no build default (sem pyo3), incluindo 5 `contract_tests` novos;
+`check --features pyo3` limpo.
+
+### 6.1 Achado F1-5: o head TTT nao tem contrato de abstencao
+
+Com `fit(124)` o `route` passa a ser respondido pelo head (`readout=ttt`) e o
+answer dele tem **so** `probs, confidence, cv_accuracy, readout, choice`.
+Nao existem `abstain`, `unbound`, `prediction_set`, `settle_steps` nem `energy`.
+
+Consequencias:
+
+1. `get("abstain").unwrap_or(false)` transforma "sem sinal" em "agiu".
+2. `conformal_set` e impossivel nesse caminho: nao ha `prediction_set`.
+3. A protecao OOD do AND gate fica inteira na sentinela — o head nunca abste.
+
+Mitigacao aplicada, sem inventar politica: `Answer.cv_accuracy` expoe a
+qualificacao do head, para a ausencia ficar visivel em vez de parecer
+confianca. Threshold de abstain para head e decisao da F3.
+
+Reproducao: `scripts/f1_contract_probe.py --fit-n 124` (40 exemplos nao ligam
+os heads; 124 liga).

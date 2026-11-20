@@ -70,7 +70,7 @@ Invariantes: `authority ≤ 120`; nunca 255; cópias → 1 origem (Jaccard /
 | T0 | selftest fixtures (`tools/f5_t0_eval.py`) |
 | T1 | unknown→quarentena em laço agent — **DONE** `tools/f5_t1_agent_loop.py` / `docs/F5_T1_AGENT_LOOP.md` |
 | T2 | híbrido com rede allowlist — stub deny-by-default `tools/f5_t2_allowlist.py` (MSG 0823); HITL ainda não sancionou hosts |
-| T3 | suite externa / regressão hit@k (com F4) |
+| T3 | suite externa / regressão hit@k — **PREP** `tools/f5_t3_eval.py` (MSG 0866): freeze + BM25 lexical offline; MiniLM = F4 AGENT_A |
 
 ## Fora de escopo deste draft
 

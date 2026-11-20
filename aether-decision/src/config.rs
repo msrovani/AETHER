@@ -84,7 +84,10 @@ impl EngineConfig {
     /// porque é a variável que o próprio Python lê.
     pub fn from_env() -> Self {
         let mut cfg = Self::default();
-        if let Some(v) = std::env::var("VEGA_MODEL").ok().filter(|s| !s.trim().is_empty()) {
+        if let Some(v) = std::env::var("VEGA_MODEL")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+        {
             cfg.model_primary = Some(v);
         }
         if let Some(v) = std::env::var("VEGA_PROSE_MODEL")
@@ -99,13 +102,20 @@ impl EngineConfig {
         {
             cfg.calibration = Some(v);
         }
-        if let Some(v) = std::env::var("VEGA_PYTHON").ok().filter(|s| !s.trim().is_empty()) {
+        if let Some(v) = std::env::var("VEGA_PYTHON")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+        {
             cfg.python = Some(v);
         }
         let site = std::env::var("VEGA_SITE_PACKAGES")
             .ok()
             .filter(|s| !s.trim().is_empty())
-            .or_else(|| std::env::var("PYTHONPATH").ok().filter(|s| !s.trim().is_empty()));
+            .or_else(|| {
+                std::env::var("PYTHONPATH")
+                    .ok()
+                    .filter(|s| !s.trim().is_empty())
+            });
         cfg.python_site_packages = site;
         cfg
     }
@@ -130,9 +140,7 @@ impl EngineConfig {
             } else {
                 root.join("lib").join("python3.14").join("site-packages")
             };
-            cand
-                .exists()
-                .then(|| cand.to_string_lossy().to_string())
+            cand.exists().then(|| cand.to_string_lossy().to_string())
         })
     }
 
