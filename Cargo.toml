@@ -7,7 +7,7 @@ name = "aether_engine"
 version = "0.1.6"
 edition = "2021"
 rust-version = "1.78"
-description = "AETHER ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â motor de computacao pos-token baseado em fisica continua (Ising continuo, interferencia espectral, Kuramoto UDP)"
+description = "AETHER — motor de computação pós-token baseado em física contínua (Ising contínuo, interferência espectral, Kuramoto UDP)"
 license = "MIT OR Apache-2.0"
 publish = false
 
@@ -94,6 +94,9 @@ gpu = ["dep:wgpu", "dep:bytemuck"]
 sgdb = ["m1"]
 # Agente: especialistas (FHRR, fase, lÃƒÂ³gica, solver, SGDB) + MoE + coerÃƒÂªncia.
 agent = ["m1", "m5", "sgdb", "dep:serde_json"]
+# F1: liga o binding PyO3 do crate aether-decision (embed do interpretador).
+# Opt-in: o build default NAO precisa de Python (Eixo C do plano).
+decision-pyo3 = ["aether_decision/pyo3"]
 
 [dependencies]
 # F1: unica face do vega no Rust. Sem a feature pyo3 o port default e StubPort
@@ -168,6 +171,12 @@ required-features = ["m1"]
 name = "sgdb_roundtrip"
 path = "examples/sgdb_roundtrip.rs"
 required-features = ["sgdb"]
+
+# F1: re-probe n=30 do gate (Eixo D) + baseline congelado com hash.
+[[example]]
+name = "f1_reprobe"
+path = "examples/f1_reprobe.rs"
+required-features = ["decision-pyo3"]
 
 [[example]]
 name = "transplant_hv_probe"
