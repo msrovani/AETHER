@@ -93,9 +93,12 @@ gpu = ["dep:wgpu", "dep:bytemuck"]
 # Sem dependencia nova: JSON-RPC/HTTP/1.1 e JSON minimo vivem no crate.
 sgdb = ["m1"]
 # Agente: especialistas (FHRR, fase, lÃƒÂ³gica, solver, SGDB) + MoE + coerÃƒÂªncia.
-agent = ["m1", "m5", "sgdb"]
+agent = ["m1", "m5", "sgdb", "dep:serde_json"]
 
 [dependencies]
+# F1: unica face do vega no Rust. Sem a feature pyo3 o port default e StubPort
+# (degradacao honesta, nenhuma chamada externa - Eixo C do plano).
+aether_decision = { path = "aether-decision" }
 ndarray = { version = "0.16", features = ["rayon"] }
 rayon = "1.10"
 rustfft = "6.2"

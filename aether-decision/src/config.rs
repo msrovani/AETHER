@@ -16,8 +16,11 @@ pub const PRIMARY_HUB: &str = "nandakishorm/vega-U";
 /// Rótulo do gate completo (primário AND sentinela).
 pub const ENGINE_LABEL: &str = "vega-u-0.8b AND gemma-prose";
 
+/// Orçamento de VRAM do watchdog (MiB) — o plano fixa >5GB → abstain.
+pub const VRAM_BUDGET_MB: u64 = 5 * 1024;
+
 fn default_vram_threshold_mb() -> u64 {
-    crate::watchdog::VramWatchdog::DEFAULT_THRESHOLD_MB
+    VRAM_BUDGET_MB
 }
 
 /// Configuração serializável do gate (arquivo JSON da cadeira).
@@ -77,7 +80,7 @@ mod tests {
     fn defaults_match_the_approved_design() {
         let c = EngineConfig::default();
         assert_eq!(c.engine, "vega-u-0.8b AND gemma-prose");
-        assert_eq!(c.vram_threshold_mb, 5 * 1024);
+        assert_eq!(c.vram_threshold_mb, VRAM_BUDGET_MB);
         assert!(c.model_primary.is_none());
     }
 

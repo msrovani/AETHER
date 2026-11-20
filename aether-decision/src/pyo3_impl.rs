@@ -17,20 +17,9 @@
 
 use crate::types::{AbstainReason, Answer, DecisionError, DecisionMeta, DecisionRequest, DecisionResponse};
 use crate::port::DecisionPort;
+use crate::config::EngineConfig;
 use pyo3::prelude::*;
 use pyo3::IntoPyObjectExt;
-
-/// Configuração do gate completo (primário + sentinela no MESMO processo).
-#[derive(Debug, Clone, Default)]
-pub struct VegaGateConfig {
-    /// Caminho do checkpoint primário (None = hub default 0.8B calibrado).
-    pub model_primary: Option<String>,
-    /// Caminho do checkpoint sentinela (gemma-prose). None = sem sentinela
-    /// (AND degrada para decisão simples — modo transitório da F1).
-    pub model_sentinel: Option<String>,
-    /// Caminho do corpus de calibração JSON (124 → 500 rótulos, F3).
-    pub calibration: Option<String>,
-}
 
 /// Port real: primário (+ sentinela quando configurada), single interpreter.
 pub struct VegaPort {
@@ -42,7 +31,7 @@ pub struct VegaPort {
 impl VegaPort {
     /// Carrega os readers no interpreter embutido. O fit de calibração é
     /// executado aqui (determinístico, ~1–2 min no start — bootstrap).
-    pub fn new(cfg: &VegaGateConfig) -> PyResult<Self> {
+    pub fn new(cfg: &EngineConfig) -> PyResult<Self> {
         Python::attach(|py| {
             let vegaml = py.import("vegaml")?;
             let primary = match &cfg.model_primary {
@@ -132,17 +121,24 @@ impl DecisionPort for VegaPort {
             Some(senti) => primary_answers
                 .into_iter()
                 .zip(senti)
-                .map(|(p, s)| crate::gate::and_gate(&p.question.clone(), p, s))
+                .map(|(p, s)| {
+                    debug_assert_eq!(p.question, s.question, "zip por índice: mesma ordem");
+                    crate::gate::combine(&p, &s)
+                })
                 .collect(),
             None => primary_answers,
         };
 
         Ok(DecisionResponse {
             answers,
+            // O head ttt não produz conjunto conformal (ver types.rs); quando o
+            // vegaml expõe `prediction_set`, o mapeamento entra aqui.
+            conformal_set: None,
             meta: DecisionMeta {
                 latency_ms: t0.elapsed().as_secs_f64() * 1000.0,
                 engine: self.engine_label.clone(),
                 degraded: false,
+                vram_used_mb: None,
             },
         })
     }
@@ -174,7 +170,10 @@ fn fit_from_file(py: Python<'_>, reader: &Bound<'_, PyAny>, path: &str) -> PyRes
 
 fn json_to_py(py: Python<'_>, v: &serde_json::Value) -> PyResult<Py<PyAny>> {
     match v {
-        serde_json::Value::Null => Ok(py.none()),
+        serde_json::Value::Null => {
+            // Python None — PyNone::get é o caminho no PyO3 0.30 (Python::none saiu).
+            pyo3::types::PyNone::get(py).to_owned().into_py_any(py)
+        }
         serde_json::Value::Bool(b) => b.into_py_any(py),
         serde_json::Value::Number(n) => {
             if let Some(i) = n.as_i64() {
@@ -216,6 +215,13 @@ fn py_answer_to_answer(
     // readers discordam. Classificação fina (question_kind) entra na F2.
     let abstain_reason = if abstain { Some(AbstainReason::Unknown) } else { None };
     let probs = get("probs").and_then(|p| json_from_py(py, &p));
+    // Confiança do readout = probabilidade da melhor opção (Eixo B: campo
+    // auditável). `abstain` sem probs ⇒ None.
+    let confidence = probs.as_ref().and_then(|p| {
+        p.as_object()?.values().filter_map(|v| v.as_f64()).fold(None::<f64>, |acc, f| {
+            Some(acc.map_or(f, |a: f64| a.max(f)))
+        })
+    });
 
     Ok(Answer {
         question: qid.to_string(),
@@ -224,6 +230,7 @@ fn py_answer_to_answer(
         abstain,
         abstain_reason,
         readout: get("readout").and_then(|v| v.extract::<String>().ok()),
+        confidence,
     })
 }
 

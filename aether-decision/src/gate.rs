@@ -75,11 +75,11 @@ fn decision_key(a: &Answer) -> Option<String> {
     if let Some(v) = &a.probs {
         // Fallback: a opção com maior probabilidade.
         if let Some(obj) = v.as_object() {
-            let mut best: Option<(&String, &f64)> = None;
+            let mut best: Option<(&String, f64)> = None;
             for (k, val) in obj {
-                let p = val.as_f64()?;
-                if best.map_or(true, |(_, bp)| p > *bp) {
-                    best = Some((k, &p));
+                let Some(p) = val.as_f64() else { return None };
+                if best.map_or(true, |(_, bp)| p > bp) {
+                    best = Some((k, p));
                 }
             }
             if let Some((k, _)) = best {
@@ -200,6 +200,7 @@ mod tests {
             latency_ms: 0.0,
             engine: "and_gate".into(),
             degraded: false,
+            vram_used_mb: None,
         };
     }
 }

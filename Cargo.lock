@@ -127,6 +127,7 @@ dependencies = [
 name = "aether_engine"
 version = "0.1.4"
 dependencies = [
+ "aether_decision",
  "bytemuck",
  "core_affinity",
  "cranelift-codegen",

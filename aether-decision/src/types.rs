@@ -97,6 +97,20 @@ pub struct DecisionMeta {
     pub engine: String,
     /// true quando o port respondeu por degradação (stub, fallback).
     pub degraded: bool,
+    /// VRAM em uso no momento da decisão (MiB), quando o watchdog mediu.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vram_used_mb: Option<f64>,
+}
+
+impl Default for DecisionMeta {
+    fn default() -> Self {
+        Self {
+            latency_ms: 0.0,
+            engine: "stub".into(),
+            degraded: true,
+            vram_used_mb: None,
+        }
+    }
 }
 
 /// Erro do port. Exceção Python / engine morto NUNCA sobe como panic —
