@@ -12,7 +12,7 @@
       "dst": "data/embed_eval_last.json",
       "sha256": "794a1f7ebb3a9332a5f2d5e90f91beacb34bf6231dcfa2be0d71db53375e394e",
       "bytes": 3790,
-      "promoted_at_utc": "2026-11-20T20:59:05.461130+00:00",
+      "promoted_at_utc": "2026-11-20T21:07:48.864551+00:00",
       "ok": true
     },
     {
@@ -22,7 +22,7 @@
       "dst": "data/embed_eval_bm25_baseline.json",
       "sha256": "773dc1cd362d22c9b13545ea03f8c6df536df7561ec49dba1e08b49bd6c53937",
       "bytes": 1558,
-      "promoted_at_utc": "2026-11-20T20:59:05.463337+00:00",
+      "promoted_at_utc": "2026-11-20T21:07:48.866642+00:00",
       "ok": true
     },
     {
@@ -32,7 +32,7 @@
       "dst": "data/mf2_gate_regression.json",
       "sha256": "6a4b2b922a891371d64a4fc86e0ab0b4138c441bfacf028500b8fb7a6b1c2303",
       "bytes": 550,
-      "promoted_at_utc": "2026-11-20T20:59:05.465076+00:00",
+      "promoted_at_utc": "2026-11-20T21:07:48.868019+00:00",
       "ok": true
     }
   ]
