@@ -607,6 +607,17 @@ pub struct MemoryCitations {
     scope: ScopeId,
 }
 
+/// `Debug` manual: o cliente embute `Box<dyn Transport>`, que não é `Debug`
+/// (o derive do cliente exige `T: Debug`). O lint do crate
+/// (`missing_debug_implementations`) exige que todo tipo público o implemente.
+impl std::fmt::Debug for MemoryCitations {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MemoryCitations")
+            .field("scope", &self.scope)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Um hit pronto para citação na borda.
 #[derive(Debug, Clone)]
 pub struct RecallCitation {

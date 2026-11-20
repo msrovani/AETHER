@@ -310,7 +310,10 @@ fn normalize_transport_spec(spec: &str) -> String {
     if s.is_empty() {
         return s.to_string();
     }
-    if s == "mock" || s.starts_with("http://") || s.starts_with("https://") || s.starts_with("stdio:")
+    if s == "mock"
+        || s.starts_with("http://")
+        || s.starts_with("https://")
+        || s.starts_with("stdio:")
     {
         return s.to_string();
     }
@@ -409,7 +412,10 @@ fn chat(args: &Args, out: &mut dyn Write) -> i32 {
         Some(spec) => match MemoryCitations::new(spec) {
             Ok(m) => Some(m),
             Err(e) => {
-                let _ = writeln!(out, "decisor: memoria=off aviso={e} — chat segue sem citações");
+                let _ = writeln!(
+                    out,
+                    "decisor: memoria=off aviso={e} — chat segue sem citações"
+                );
                 None
             }
         },
@@ -421,14 +427,26 @@ fn chat(args: &Args, out: &mut dyn Write) -> i32 {
 
     let one_shot = args.positional.join(" ");
     if !one_shot.trim().is_empty() {
-        return chat_turn(&mut agent, port.as_ref(), memory_agent.as_mut(), &one_shot, out);
+        return chat_turn(
+            &mut agent,
+            port.as_ref(),
+            memory_agent.as_mut(),
+            &one_shot,
+            out,
+        );
     }
 
     // REPL: uma frase por turno; 'sair' ou EOF encerra. Entrada injetável
     // (`dyn BufRead`) para o gate testar o laço sem processo.
     let stdin = std::io::stdin();
     let mut input = stdin.lock();
-    chat_repl(&mut agent, port.as_ref(), memory_agent.as_mut(), &mut input, out)
+    chat_repl(
+        &mut agent,
+        port.as_ref(),
+        memory_agent.as_mut(),
+        &mut input,
+        out,
+    )
 }
 
 /// A-1b: constrói o `DecisionPort` do chat.
@@ -622,7 +640,7 @@ fn f2_research_notice(text: &str) -> String {
 fn chat_turn(
     agent: &mut ToolAgent,
     port: &dyn DecisionPort,
-    mut memory: Option<&mut MemoryCitations>,
+    memory: Option<&mut MemoryCitations>,
     text: &str,
     out: &mut dyn Write,
 ) -> i32 {
@@ -657,17 +675,14 @@ fn chat_turn(
         // memória durável. Hit = CITAÇÃO com score/authority na tela
         // (evidência, não afirmação — o core não decide). Sem sgdb ou sem
         // hit, o abstain permanece honesto.
-        if let Some(mem) = memory.as_deref_mut() {
+        if let Some(mem) = memory {
             match mem.recall(text, 8) {
                 Ok(citations) if !citations.is_empty() => {
                     let _ = writeln!(out, "memória (citação, não afirmação):");
                     for c in citations.iter().take(3) {
                         let snippet: String = c.text.chars().take(110).collect();
-                        let _ = writeln!(
-                            out,
-                            "  [{:.2} auth={}] {}",
-                            c.score, c.authority, snippet
-                        );
+                        let _ =
+                            writeln!(out, "  [{:.2} auth={}] {}", c.score, c.authority, snippet);
                     }
                     return EXIT_OK;
                 }
@@ -1823,9 +1838,8 @@ mod tests {
 
     #[test]
     fn dotenv_le_comentarios_e_aspas() {
-        let parsed = parse_dotenv(
-            "# comentario\nA=1\nB=\"dois\"\nC='tres'\nlinha sem igual\n=orphan\n\n",
-        );
+        let parsed =
+            parse_dotenv("# comentario\nA=1\nB=\"dois\"\nC='tres'\nlinha sem igual\n=orphan\n\n");
         let map: Vec<(String, String)> = parsed;
         assert_eq!(
             map,

@@ -96,14 +96,16 @@ fn decision_abstém_com_schema_do_crate_sem_engine() {
 fn decision_rejeita_state_fora_do_orcamento() {
     let addr = start();
     let big = "x".repeat(320 * 4 + 1);
-    let body = format!(
-        "{{\"state\":\"{big}\",\"questions\":{{\"q\":{{\"type\":\"boolean\"}}}}}}"
-    );
+    let body = format!("{{\"state\":\"{big}\",\"questions\":{{\"q\":{{\"type\":\"boolean\"}}}}}}");
     let (status, payload) = request(addr, &body);
     assert_eq!(status, 400, "{payload}");
     let doc = json_of(&payload);
     let err = doc.get("error").expect("error");
-    assert_eq!(err.get("type").and_then(Json::as_str), Some("bad_request"), "{payload}");
+    assert_eq!(
+        err.get("type").and_then(Json::as_str),
+        Some("bad_request"),
+        "{payload}"
+    );
 }
 
 #[test]

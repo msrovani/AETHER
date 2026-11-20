@@ -60,6 +60,7 @@ Smoke F7: `.\scripts\v01_freeze_smoke.ps1` → `target/v01_smoke.json`
 | `POST` | `/v1/aether/forget` | apaga um fato (exige `authority ≥ 128`) e grava túmulo |
 | `POST` | `/v1/aether/solve` | QUBO/Ising → estado + certificado (`energy`, `gap`, `violations`) |
 | `POST` | `/v1/aether/agent` | Goal estruturado → `action` + `answer` + autoridade/certificado |
+| `POST` | `/v1/aether/decision` | `DecisionRequest` → `DecisionResponse` do híbrido (port é evidência, não veredito) |
 | `POST` | `/v1/chat/completions` | dialeto OpenAI; devolve evidência certificada ou abstenção |
 | `POST` | `/completion` | dialeto llama.cpp; mesmo motor |
 
@@ -71,6 +72,7 @@ Smoke F7: `.\scripts\v01_freeze_smoke.ps1` → `target/v01_smoke.json`
 | `/v1/aether/cue` | hit com `key`+`authority`+escopo **ou** `abstain` + `reason` tipada; escopo alheio → `empty_scope` | paráfrase semântica (hash/fase) |
 | `/v1/aether/solve` | `energy`/`gap`/`violations` + decisão tipada | otimalidade global sem bound |
 | `/v1/aether/agent` | `action` ∈ {act,cite,propose,abstain}; OOD → abstain; false-act = 0 nos gates | NL open-domain |
+| `/v1/aether/decision` | schema `decision/1` do crate; default `StubPort` → `engine_unavailable`, `degraded=true`; `state` ≤320 tokens | veredito do port (é evidência); chamada externa por default |
 | `/v1/chat/completions` | evidência em `x_aether` **ou** abstain (`content_filter`) | chatbot / geração fluente |
 | `/v1/aether/forget` | authority gate + túmulo; 255 sem store → erro | purge cego |
 

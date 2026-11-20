@@ -266,12 +266,7 @@ fn aceite_da_f1_no_produto_existe_fora_de_target_e_e_verdadeiro() {
     let v: serde_json::Value = serde_json::from_str(&raw).expect("artefato é JSON");
 
     assert_eq!(v["schema"], "aether.f1_prod_decision/v1");
-    assert_eq!(
-        v["abstain"],
-        false,
-        "o aceite falhou: {}",
-        v["checks"].to_string()
-    );
+    assert_eq!(v["abstain"], false, "o aceite falhou: {}", v["checks"]);
     let checks = v["checks"].as_object().expect("checks");
     assert!(
         !checks.is_empty(),
@@ -282,7 +277,7 @@ fn aceite_da_f1_no_produto_existe_fora_de_target_e_e_verdadeiro() {
             ok,
             &serde_json::json!(true),
             "check do aceite falhou: {name} ({})",
-            v["output_head"].to_string()
+            v["output_head"]
         );
     }
     assert_eq!(
