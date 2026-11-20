@@ -38,6 +38,19 @@ pub struct EngineConfig {
     pub vram_threshold_mb: u64,
     /// Rótulo de proveniência no meta da resposta.
     pub engine: String,
+    /// Interpretador Python pinado do engine (`VEGA_PYTHON`).
+    ///
+    /// O embed do PyO3 (`auto-initialize`) resolve o **Python base** da
+    /// máquina, não o venv: medido, `prefix=...Python314` e o
+    /// `site-packages` do venv some do `sys.path`. Por isso o interpretador
+    /// pinado é declarado aqui — é ele que diz onde está o motor.
+    pub python: Option<String>,
+    /// `site-packages` do venv (`VEGA_SITE_PACKAGES`).
+    ///
+    /// Precisa entrar no `sys.path` **antes** do `import vegaml`; sem isso o
+    /// port degrada honesto para `engine_unavailable` (medido: `ModuleNotFound
+    /// Error: No module named 'vegaml'`).
+    pub python_site_packages: Option<String>,
 }
 
 impl Default for EngineConfig {
@@ -48,6 +61,8 @@ impl Default for EngineConfig {
             calibration: None,
             vram_threshold_mb: default_vram_threshold_mb(),
             engine: ENGINE_LABEL.to_string(),
+            python: None,
+            python_site_packages: None,
         }
     }
 }

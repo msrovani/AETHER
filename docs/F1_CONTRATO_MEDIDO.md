@@ -129,3 +129,46 @@ o gate mede "não quebrou", não "decidiu".
 O motor também não está ligado a ninguém: `aether_engine` não depende de
 `aether_decision`, então nenhum caminho de chat usa o porto. Fiação é passo
 seguinte (posse: `src/agent/cli.rs` = OPENCODE), atrás de feature própria.
+
+## 5. Smoke real do porto (medido 2026-11-20)
+
+`aether-decision/examples/f1_smoke.rs` roda o `VegaPort` de verdade, sem chat:
+`VegaPort::new(EngineConfig::gate_f1(corpus))` com o primario no checkpoint
+local, e duas perguntas (booleana `passou`, escolha `route`).
+Artefato: `target/f1_decision_smoke.json`.
+
+| Medida | Valor |
+|---|---|
+| boot (`load` 2 readers + `fit(124)`) | **99.3 s** |
+| latencia do lote (2 perguntas x 2 readers) | **596.0 ms** |
+| engine | `vega-u-0.8b AND gemma-prose`, `degraded=false` |
+| `passou` | `abstain=true`, `abstain_reason=unknown` |
+| `route` | `abstain=false`, `choice=reformular`, `readout=and_gate` |
+| `conformal_set_present` | **false** (F-2 no artefato) |
+
+### 5.1 O pin que faltava: `PYTHONPATH` e runtime, `PYO3_PYTHON` e build
+
+`PYO3_PYTHON` so escolhe o interpretador de **link**. O interpretador embutido
+nao descobre o `pyvenv.cfg` (o executavel e o nosso `.exe`), entao
+`Lib/site-packages` do venv **nao** entra em `sys.path`:
+
+```
+abstain=true, reason=engine_unavailable,
+error="ModuleNotFoundError: No module named 'vegaml'"
+```
+
+Com `PYTHONPATH=target/vega/Lib/site-packages` o mesmo binario (sem rebuild)
+decide. Duas consequencias:
+
+1. A degradacao e honesta e tipada (exit 3, sem panic) - criterio do plano ok.
+2. Sem o pin, o chat com `DecisionPort` fiado abste **para sempre** e parece
+   "engine fora do ar". O caminho robusto e `EngineConfig.python_site_packages`
+   e o bootstrap fazer `sys.path` append antes do `import vegaml`, porque o
+   venv vive em `target/` e o caminho nao pode ser implicito.
+
+### 5.2 Leitura do resultado
+
+`passou` e do lexico do projeto (gate de 176 testes) e abste por margem 0.61 -
+mesmo assim sai como `unknown` (F-3). `route` age: `reformular` com confianca
+0.55, `readout=and_gate`. O porto funciona; o que falta e **tipar o motivo** e
+**preencher o conformal**, os dois fixes acima.

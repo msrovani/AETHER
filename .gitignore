@@ -29,6 +29,9 @@ FORUM.txt.lock
 # Sidecar de modelos / venv local (pesos fora do crate)
 /target/hf-cache/
 /target/py-embed/
+# Motor do vega FORA de target/ (o cargo clean nao pode levar o engine).
+# Layout e pins: data/vega_env.lock.json + tools/vega_env_setup.ps1
+/.vega/
 /tools/__pycache__/
 **/__pycache__/
 *.pyc

@@ -266,3 +266,4 @@
 | 2026-11-20T14:28:01Z | wip | 10 | .:2, aether-decision:1, data:2, docs:3, tools:2 | ok (19s) | - | sim |
 | 2026-11-20T14:31:21Z | 0.1.5 | 11 | .:2, aether-decision:5, data:1, src:1, tools:2 | ok (18s) | - | sim |
 | 2026-11-20T14:36:07Z | 0.1.6 | 9 | .:1, aether-decision:2, data:1, docs:3, src:1, tools:1 | ok (1s) | - | sim |
+| 2026-11-20T14:41:26Z | wip | 8 | .:2, aether-decision:3, data:1, docs:1, tools:1 | ok (13s) | - | sim |

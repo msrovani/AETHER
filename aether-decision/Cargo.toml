@@ -27,3 +27,8 @@ pyo3 = { version = "0.30", optional = true, features = ["auto-initialize"] }
 [[example]]
 name = "f1_smoke"
 required-features = ["pyo3"]
+
+# Diagnostico do interpretador embutido (sys.path / venv / torch).
+[[example]]
+name = "f1_env_probe"
+required-features = ["pyo3"]
