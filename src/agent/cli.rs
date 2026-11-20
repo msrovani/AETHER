@@ -282,14 +282,112 @@ fn sgdb_fallback(cfg: &mut AgentConfig) {
     if cfg.sgdb.is_some() {
         return;
     }
+    // O `.env` do repo é a configuração da memória (MSG 0746). O `aether-sgdb`
+    // carrega o seu próprio; o AGENTE não carregava — e sem isto `cfg.sgdb`
+    // ficava sempre `None`, o intent de memória nunca citava nada e o chat
+    // despejava abstain honesto sobre a própria dica que ele dava
+    // ("memória (\"o que e o AETHER\")"). Fórum MSG 1056.
+    load_repo_dotenv();
     for key in ["AETHER_SGDB_STDIO", "AETHER_SGDB_URL"] {
         if let Ok(spec) = std::env::var(key) {
             if !spec.trim().is_empty() {
-                cfg.sgdb = Some(spec);
+                cfg.sgdb = Some(normalize_transport_spec(&spec));
                 return;
             }
         }
     }
+}
+
+/// Normaliza a especificação de transporte para o formato do cliente.
+///
+/// O `aether-sgdb` (CLI) aceita `AETHER_SGDB_STDIO` como comando solto e
+/// prefixa `stdio:` ele mesmo; o cliente (`open_transport`) só entende
+/// `mock`, `http://…` ou `stdio:programa args`. Sem esta normalização, o
+/// agente recebia a especificação crua e a memória ficava sempre `off`:
+/// "especificação desconhecida: powershell -NoProfile …" (fórum MSG 1056).
+fn normalize_transport_spec(spec: &str) -> String {
+    let s = spec.trim();
+    if s.is_empty() {
+        return s.to_string();
+    }
+    if s == "mock" || s.starts_with("http://") || s.starts_with("https://") || s.starts_with("stdio:")
+    {
+        return s.to_string();
+    }
+    format!("stdio:{s}")
+}
+
+/// Carrega o `.env` da raiz do repo — **sem sobrescrever** o que já estiver
+/// definido no ambiente.
+///
+/// A raiz é descoberta subindo a partir do diretório atual até achar o
+/// `Cargo.toml` do `aether_engine` (mesma regra do `aether-sgdb`). O
+/// `src/knowledge/sgdb/` é estável e não se toca: por isso a leitura é local.
+fn load_repo_dotenv() {
+    let Some(root) = discover_aether_root() else {
+        return;
+    };
+    let Ok(text) = std::fs::read_to_string(root.join(".env")) else {
+        return;
+    };
+    for (key, val) in parse_dotenv(&text) {
+        // Não sobrescreve o que já estiver definido: o ambiente vence o `.env`.
+        if std::env::var_os(&key).is_some() {
+            continue;
+        }
+        std::env::set_var(&key, val);
+    }
+}
+
+/// Lê pares `CHAVE=valor` de um `.env` (comentários são ignorados e as aspas
+/// externas são removidas).
+///
+/// Puro e testável: o `.env` do repo é gitignored e não pode ser a fonte de
+/// um teste.
+fn parse_dotenv(text: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let key = key.trim().to_string();
+        if key.is_empty() {
+            continue;
+        }
+        let mut val = value.trim().to_string();
+        if (val.starts_with('"') && val.ends_with('"') && val.len() >= 2)
+            || (val.starts_with('\'') && val.ends_with('\'') && val.len() >= 2)
+        {
+            val = val[1..val.len() - 1].to_string();
+        }
+        out.push((key, val));
+    }
+    out
+}
+
+/// Raiz do repo (o diretório cujo `Cargo.toml` é o do `aether_engine`).
+fn discover_aether_root() -> Option<std::path::PathBuf> {
+    let mut dir = std::env::current_dir().ok()?;
+    for _ in 0..8 {
+        let manifest = dir.join("Cargo.toml");
+        if manifest.is_file() {
+            if let Ok(text) = std::fs::read_to_string(&manifest) {
+                if text.contains("name = \"aether_engine\"")
+                    || text.contains("name = 'aether_engine'")
+                {
+                    return Some(dir);
+                }
+            }
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    None
 }
 
 /// Borda conversacional (C-G0): linguagem natural → [`ParserPort`] → Goal →
@@ -1699,6 +1797,63 @@ mod tests {
         assert!(
             line.contains("q=passou") || line.contains("q=route"),
             "{line}"
+        );
+    }
+
+    /// F1 fatia 5 (fórum MSG 1056): o agente precisa falar o mesmo idioma do
+    /// cliente de memória. Sem normalizar, o `.env` do repo (comando solto)
+    /// era rejeitado e a memória ficava sempre `off`.
+    #[test]
+    fn especificacao_de_transporte_normaliza_comando_solto() {
+        assert_eq!(normalize_transport_spec("mock"), "mock");
+        assert_eq!(
+            normalize_transport_spec("http://127.0.0.1:8090/mcp"),
+            "http://127.0.0.1:8090/mcp"
+        );
+        assert_eq!(
+            normalize_transport_spec("stdio:pwsh -File server.ps1"),
+            "stdio:pwsh -File server.ps1"
+        );
+        assert_eq!(
+            normalize_transport_spec("powershell -NoProfile -File server.ps1"),
+            "stdio:powershell -NoProfile -File server.ps1"
+        );
+        assert_eq!(normalize_transport_spec("  "), "");
+    }
+
+    #[test]
+    fn dotenv_le_comentarios_e_aspas() {
+        let parsed = parse_dotenv(
+            "# comentario\nA=1\nB=\"dois\"\nC='tres'\nlinha sem igual\n=orphan\n\n",
+        );
+        let map: Vec<(String, String)> = parsed;
+        assert_eq!(
+            map,
+            vec![
+                ("A".to_string(), "1".to_string()),
+                ("B".to_string(), "dois".to_string()),
+                ("C".to_string(), "tres".to_string()),
+            ]
+        );
+    }
+
+    /// O `.env` do repo é a configuração da memória; sem ele, o chat citava
+    /// nada e despejava abstain sobre a própria dica que dava.
+    #[test]
+    fn dotenv_do_repo_traz_a_memoria() {
+        let root = discover_aether_root().expect("raiz do repo");
+        let path = root.join(".env");
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            // Sem `.env` na máquina: nada a provar (o repo não o versiona).
+            return;
+        };
+        let map = parse_dotenv(&text);
+        let has_sgdb = map
+            .iter()
+            .any(|(k, v)| (k == "AETHER_SGDB_STDIO" || k == "AETHER_SGDB_URL") && !v.is_empty());
+        assert!(
+            has_sgdb,
+            "o .env do repo precisa apontar a memória (AETHER_SGDB_STDIO ou _URL)"
         );
     }
 }

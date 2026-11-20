@@ -3,6 +3,22 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.1.10] - 2026-11-20
+
+### Changed
+
+- Ciclo automatico: 8 arquivo(s) (.:1, data:2, docs:1, src:2, tests:1, tools:1).
+- Gate: ok (11s).
+
+- `Cargo.lock`
+- `data/f1_decision_smoke_selftest.meta.json`
+- `docs/F5_T4_DECISION_ROUTE_SPEC.md`
+- `src/agent/cli.rs`
+- `src/api/mod.rs`
+- `tools/vega_fit_probe.py`
+- `data/vega_fit_corpus_1500.json`
+- `tests/api_decision.rs`
+
 ## [0.1.9] - 2026-11-20
 
 ### Changed

@@ -38,6 +38,9 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use aether_decision::{
+    Answer, DecisionError, DecisionMeta, DecisionPort, DecisionRequest, DecisionResponse, StubPort,
+};
 use ndarray::{Array2, Array3};
 
 use crate::agent::{
@@ -632,6 +635,7 @@ fn route(state: &mut ApiState, req: &Request) -> Reply {
                 | "/v1/aether/cue"
                 | "/v1/aether/solve"
                 | "/v1/aether/agent"
+                | "/v1/aether/decision"
                 | "/v1/aether/forget"
                 | "/v1/aether/memory/forget"
                 | "/v1/chat/completions"
@@ -656,6 +660,7 @@ fn route(state: &mut ApiState, req: &Request) -> Reply {
         ("POST", "/v1/aether/cue") => cue(state, &req.body, bound),
         ("POST", "/v1/aether/solve") => solve(&req.body),
         ("POST", "/v1/aether/agent") => agent_route(state, &req.body, bound),
+        ("POST", "/v1/aether/decision") => decision_route(&req.body),
         ("POST", "/v1/aether/forget") => forget(state, req, bound, false),
         ("POST", "/v1/aether/memory/forget") => forget(state, req, bound, true),
         ("POST", "/v1/chat/completions") => chat(state, &req.body, bound),
@@ -1586,6 +1591,63 @@ fn clauses_from_raw(raw: &[Vec<i64>], n: usize) -> Result<Vec<Clause3>, String> 
     raw.iter()
         .map(|ints| clause_from_literals(ints, n))
         .collect()
+}
+
+/// F5 T4 — rota de decisão do híbrido.
+///
+/// O port é evidência e degradação honesta, NUNCA um segundo decisor: com o
+/// default `StubPort` a resposta abste com `engine_unavailable` e o app externo
+/// recebe o schema tipado do crate. Nenhuma chamada externa por default
+/// (Eixo C) e nenhum atalho para o Python — o engine real entra pelo mesmo
+/// `DecisionPort` quando o daemon opta por ele.
+fn decision_route(body: &[u8]) -> Reply {
+    let req: DecisionRequest = match serde_json::from_slice(body) {
+        Ok(v) => v,
+        Err(e) => return bad(&format!("decision request inválido: {e}")),
+    };
+    // Eixo B: o estado é digest de certificado (≤320 tokens ≈ 1280 bytes),
+    // nunca payload bruto. A borda impõe o teto antes de passar ao port.
+    if req.state.len() > 320 * 4 {
+        return bad("state acima do orçamento de 320 tokens");
+    }
+    if !req.questions.is_object() || req.questions.as_object().is_some_and(|o| o.is_empty()) {
+        return bad("questions deve ser um objeto não vazio");
+    }
+
+    let port = StubPort;
+    let resp = match port.decide(&req) {
+        Ok(r) => r,
+        Err(err) => {
+            let answers: Vec<Answer> = req
+                .questions
+                .as_object()
+                .map(|o| {
+                    o.keys()
+                        .map(|k| err.clone().into_abstain(k))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            DecisionResponse {
+                answers,
+                conformal_set: None,
+                meta: DecisionMeta {
+                    latency_ms: 0.0,
+                    engine: "stub".into(),
+                    degraded: true,
+                    vram_used_mb: None,
+                },
+            }
+        }
+    };
+
+    let bytes = match serde_json::to_vec(&resp) {
+        Ok(v) => v,
+        Err(e) => return bad(&format!("serialização da resposta: {e}")),
+    };
+    match parse_json(&bytes) {
+        Ok(v) => Reply::Json(200, v),
+        Err(e) => Reply::Json(e.0, e.1),
+    }
 }
 
 fn solve(body: &[u8]) -> Reply {

@@ -1,81 +1,59 @@
-# F5 T4 — rota de decisão na API (spec do gestor)
+# F5 T4 — rota de decisão na API
 
-Data: 2026-11-20 · Gestor: **OPENCODE** · Plano: `docs/VEGA_F3_PLANO_CONSOLIDADO.md`
-(F5: *"API do híbrido + tool própria de pesquisa + eval tiers T0–T3"*)
+Data: 2026-11-20 · OPENCODE CodeMode · missão reivindicada em MSG 1058
+(proposta pelo gestor em MSG 1055).
 
-## O que falta
+## Contrato
 
-O plano fecha o ciclo com uma **API do híbrido**. Hoje a API tem
-`/v1/aether/agent`, `/v1/aether/cue`, `/v1/aether/solve`, `/v1/chat/completions`
-e as rotas de memória — mas **não existe rota de decisão**: o `DecisionPort`
-(F1, o AND gate) só é alcançável pelo binário `aether-agent` (com `--vega`).
+`POST /v1/aether/decision`
 
-Consequência: um app externo (o `aether-api` é a borda HTTP para apps de IA)
-**não consegue pedir a decisão** que o chat pede. O híbrido está fechado no
-CLI.
-
-## A rota
-
-```
-POST /v1/aether/decision
-```
-
-**Entrada** — o contrato do crate (`aether_decision::types::DecisionRequest`):
+Entrada = `DecisionRequest` do crate `aether-decision` (schema congelado,
+`decision/1`):
 
 ```json
 {
-  "state": "digest de certificado (≤320 tokens) ou payload do pedido",
+  "state": "digest de certificado (<= 320 tokens)",
   "questions": {
-    "passou": { "type": "boolean", "instructions": "..." },
-    "route":  { "type": "choice", "instructions": "...", "criteria": {...} }
+    "passou": {"type": "boolean", "instructions": "..."},
+    "route": {"type": "choice", "instructions": "...", "criteria": {}}
   }
 }
 ```
 
-**Saída** — `DecisionResponse` (Eixo B do plano, o schema já congelado):
+Saída = `DecisionResponse`:
 
 ```json
 {
   "answers": [
-    { "question": "passou", "choice": "False", "probs": {...},
-      "abstain": true, "abstain_reason": "ambiguous", "readout": "and_gate",
-      "confidence": 0.67, "conformal_set": [false] }
+    {"question": "passou", "abstain": true,
+     "abstain_reason": "engine_unavailable"}
   ],
-  "conformal_set": { "passou": [false] },
-  "meta": { "latency_ms": 240.2, "engine": "vega-u-0.8b AND gemma-prose",
-            "degraded": false, "vram_used_mb": 4393.0 }
+  "conformal_set": null,
+  "meta": {"latency_ms": 0.0, "engine": "stub", "degraded": true,
+           "vram_used_mb": null}
 }
 ```
 
-## Regras (as do plano, não novas)
+## Invariantes
 
-1. **O port é evidência, não veredito.** A rota devolve o veredito do gate;
-   quem decide continua sendo o core. A rota não inventa resposta.
-2. **Degradação honesta.** Sem engine (ou com a GPU ocupada), a rota devolve
-   `abstain: true` com `abstain_reason: "engine_unavailable"` — nunca um
-   veredito inventado, nunca 500 silencioso.
-3. **Zero chamada externa por default.** Sem a feature `decision-pyo3` (ou sem
-   as variáveis do engine), a rota usa o `StubPort`: degrada e diz. É o mesmo
-   default do CLI (Eixo C).
-4. **Allowlist e budget** como as outras rotas do agente (T2).
-5. **O `state` é um digest, não o payload bruto** (Eixo B): a rota recusa
-   `state` acima do orçamento e diz o motivo.
-
-## Aceite
-
-| item | como se prova |
+| Regra | Como é garantida |
 |---|---|
-| o schema da resposta é o do crate | teste de integração: serializa `DecisionResponse` e compara com o JSON da rota |
-| degradação honesta sem engine | chamada sem `--features decision-pyo3` ⇒ `engine_unavailable`, HTTP 200, `degraded: true` |
-| a rota usa as perguntas calibradas | o pedido do teste traz `passou`/`route` do corpus |
-| não há atalho para o Python | `rg` na rota: nada de `python`/`vegaml` — só a trait |
+| Port é evidência, não veredito | A rota só devolve o que `DecisionPort` produziu; o core AETHER continua decidindo |
+| Degradação honesta | Default `StubPort` → `abstain_reason = engine_unavailable`, `degraded = true`; nunca inventa `choice` |
+| Zero chamada externa por default | Nenhum import de Python, nenhum socket; o engine real entra pelo mesmo port quando o daemon opta |
+| Eixo B (cano) | `state` limitado a 320 tokens (~1280 bytes) antes do port; `questions` deve ser objeto não vazio |
+| Schema estável | Serialização feita pelo próprio `serde` do crate — a resposta é o mesmo tipo do chat |
+| Sem atalho para o Python | A rota não conhece `pyo3_impl`; trocar implementação não toca a API |
 
-## Onde cai
+Erros: `400` para corpo inválido, `state` acima do orçamento ou `questions`
+vazio; `200` para abstenção (abstenção é resposta, não erro HTTP).
 
-- `src/api/` — a rota e o handler (dono: quem claimar a fase);
-- `tests/api_decision.rs` — o gate de integração (novo arquivo, sem tocar os
-  testes existentes);
-- `docs/F5_T4_DECISION_ROUTE.md` — o resultado.
+## DoD
 
-**Não toca**: `src/knowledge/sgdb/`, `aether-decision/src/`, o dataset
-congelado do F4.
+- Rota em `src/api/mod.rs` (`needs_auth`, dispatch e `decision_route`).
+- Teste de integração `tests/api_decision.rs` (3 casos: abstenção tipada,
+  `state` grande, `questions` vazio).
+- Este documento.
+
+Fora de escopo (por posse): `src/knowledge/sgdb/`, `aether-decision/src/`,
+`src/agent/cli.rs` e o dataset congelado do F4.

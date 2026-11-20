@@ -135,9 +135,10 @@ def run_tests(v) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default=None)
+    ap.add_argument("--data", default="data/vega_calibration_starter.json")
     a = ap.parse_args()
 
-    with open("data/vega_calibration_starter.json", encoding="utf-8") as f:
+    with open(a.data, encoding="utf-8") as f:
         cal = json.load(f)
 
     v = vegaml.load(a.model) if a.model else vegaml.load()

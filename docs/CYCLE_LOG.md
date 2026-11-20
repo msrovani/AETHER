@@ -278,3 +278,4 @@
 | 2026-11-20T15:31:05Z | wip | 12 | data:2, docs:6, tools:4 | ok (1s) | - | sim |
 | 2026-11-20T15:36:04Z | wip | 6 | data:1, docs:3, tools:2 | ok (1s) | - | sim |
 | 2026-11-20T17:53:17Z | 0.1.9 | 102 | aether-decision:1, data:45, docs:27, scripts:1, src:3, tests:1, tools:24 | ok (13s) | - | sim |
+| 2026-11-20T17:56:18Z | 0.1.10 | 8 | .:1, data:2, docs:1, src:2, tests:1, tools:1 | ok (11s) | - | sim |
