@@ -85,8 +85,15 @@ pub use tool::{
 };
 pub use tool_agent::{GoalOutcome, ToolAgent, VerifyTool};
 pub use tools::{
-    resolve_sandbox_path, FsReadTool, FsWriteTool, HttpGetTool, McpCallTool, MemoryWriteTool,
-    ShellTool,
+    claims_from_research_json, code_generate_mode, code_lm_caps, coder_t3_generator_declared,
+    default_coder_t3_path, extract_json_object, grammar_parse_rate, parse_constrained, pass_at_k,
+    rasp_resolve_anchor, research_network_enabled, resolve_sandbox_path, run_coder_t3,
+    shell_kill_switch, shell_mode, CodeApplyProposalTool, CodeAstGrepTool, CodeCheckTool,
+    CodeEvalTool, CodeGenerateTool, CodeGenMode, CodeGrammarTool, CodeLmCaps, CodeLmTool,
+    CodeLoopTool, CodePatchTool, CodeTestTool, CoderT3Report, FsReadTool, FsWriteTool,
+    HttpGetTool, McpCallTool, MemoryWriteTool, PatchOp, PatchProposal, ResearchExpandTool,
+    ResearchQueryTool, ShellMode, ShellTool, CODE_AUTH_CAP, CODER_T3_PILOT, RESEARCH_AUTH_CAP,
+    SHELL_AUTH_CAP,
 };
 pub use undo_sgdb::SgdbUndoBackend;
 

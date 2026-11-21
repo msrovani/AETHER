@@ -302,7 +302,7 @@ fn injecao_em_memoria_nao_altera_escolha_de_tool() {
         }
     }
     registry.register(Box::new(Factish)).unwrap();
-    registry.register(Box::new(ShellTool)).unwrap();
+    registry.register(Box::new(ShellTool::default())).unwrap();
     let agent = ToolAgent::with_registry(registry, SelfModel::new(None), scope);
     let goal = Goal::fact("Brasil", "capital");
     let clean = agent.plan(&goal);

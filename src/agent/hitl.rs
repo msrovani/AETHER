@@ -19,6 +19,8 @@ pub enum HitlKind {
     ExpandResearch,
     /// Aprovar merge/patch (coder).
     ApproveMerge,
+    /// Shell/build sob K8 (nunca default).
+    ShellExec,
     /// Escalação genérica (`ask.human`).
     Ask,
 }
@@ -31,6 +33,7 @@ impl HitlKind {
             Self::Deny => "deny",
             Self::ExpandResearch => "expand_research",
             Self::ApproveMerge => "approve_merge",
+            Self::ShellExec => "shell_exec",
             Self::Ask => "ask",
         }
     }
@@ -220,6 +223,28 @@ pub fn apply_hitl(
             action: Action::Propose,
             detail: format!("hitl {} aprovado (auth≤120)", req.kind.label()),
         },
+        HitlKind::ShellExec => {
+            if !token_ok {
+                return HitlDecision {
+                    request_id: req.request_id,
+                    approved: false,
+                    token_present: false,
+                    timed_out: false,
+                    authority: req.from_authority.min(120),
+                    action: Action::Abstain,
+                    detail: "shell.exec exige token HITL (K8)".into(),
+                };
+            }
+            HitlDecision {
+                request_id: req.request_id,
+                approved: true,
+                token_present: true,
+                timed_out: false,
+                authority: req.to_authority.min(120),
+                action: Action::Act,
+                detail: "hitl shell_exec aprovado (auth≤120; nunca 255 auto)".into(),
+            }
+        }
     }
 }
 

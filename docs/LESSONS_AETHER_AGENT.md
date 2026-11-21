@@ -47,6 +47,10 @@
 | Orçamento não contava tempo real nem passos | `charge(cost)` e `max_steps` sem uso | `charge(max(est,medido))` + `spent_steps` em `can_spend` | `executor.rs`, `tool.rs` |
 | HITL vazava sucesso | `needs_human` só trocava `action` | zera `success`, claims, `answer` e `outcome` | `tool_agent.rs` |
 | Journal perdia linha parcial de outro processo | contagem por linhas | sync por bytes até o último `\n` | `undo_sgdb.rs` |
+| Shell HITL nunca era escolhido (K8) | `Risk::High.penalty=1.5` zera score; `escalation=true` → −1000 | Hitl/Stub: `risk=Medium` + `escalation=false`; `Effect::Irreversible` ainda exige `risk_ceiling=High` | `shell.rs`, `planner.rs` |
+| `code.eval("{}")` passava sem generator | race: outro teste setava `AETHER_CODE_GENERATE` | mutex `CODEGEN_ENV` / `SHELL_ENV` nos gates | `agent_coder_gate.rs` |
+| Proposal “ok” virava merge 255 | keep/apply sem cap | `CODE_AUTH_CAP`/`SHELL_AUTH_CAP`≤120; keep ≠ 255 | `code/*`, `shell.rs` |
+| T3 anunciável sem gerador | HumanEval implícito | `coder_t3_pilot` + `generator` obrigatório; D-G2 no artefato | `eval_t3.rs` |
 
 ## 3. Invariantes que não podem regredir
 
@@ -63,6 +67,10 @@
 6. **Nada se perde.** Falha de rede → outbox → replay idempotente.
 7. **`Task` antiga continua.** O agente novo não pode quebrar `ask/sat/solve`
    já documentados.
+8. **Shell nunca default.** `AETHER_SHELL` off; kill switch vence token; argv
+   allowlist sem metachar; cwd = sandbox (`shell.rs`, G-A4/K8).
+9. **Coder = borda gera, core verifica.** `code.generate`/`code.lm` propõem;
+   apply/loop/shell sob sandbox + auth≤120 (`CODER_AETHER` K1–K8).
 
 ## 4. Receita: adicionar um especialista
 

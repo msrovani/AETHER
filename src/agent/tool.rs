@@ -124,7 +124,8 @@ impl SuccessCriteria {
                 relation,
                 value,
             } => outcome.claims.iter().any(|claim| {
-                claim.subject.eq_ignore_ascii_case(subject)
+                // subject vazio = wildcard (ex.: code.loop keep em qualquer path).
+                (subject.is_empty() || claim.subject.eq_ignore_ascii_case(subject))
                     && claim.relation.eq_ignore_ascii_case(relation)
                     && value.as_ref().map_or(true, |want| {
                         claim.value.trim().eq_ignore_ascii_case(want.trim())
@@ -378,6 +379,301 @@ impl Goal {
             url: None,
             mcp_name: Some(name.into()),
             success: SuccessCriteria::Any,
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// `code.check` (K1).
+    pub fn code_check(path: impl Into<String>) -> Self {
+        let path = path.into();
+        Self {
+            id: 0,
+            kind: GoalKind::Verify,
+            subject: None,
+            relation: Some("code.check".into()),
+            query: None,
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: Some(path.clone()),
+            url: None,
+            mcp_name: None,
+            success: SuccessCriteria::Claim {
+                subject: path,
+                relation: "code.check".into(),
+                value: None,
+            },
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// `code.ast_grep` (K1).
+    pub fn code_ast_grep(path: impl Into<String>, pattern: impl Into<String>) -> Self {
+        Self {
+            id: 0,
+            kind: GoalKind::Retrieve,
+            subject: None,
+            relation: Some("code.ast_grep".into()),
+            query: Some(pattern.into()),
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: Some(path.into()),
+            url: None,
+            mcp_name: None,
+            success: SuccessCriteria::NonEmpty,
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// `code.test` (K1).
+    pub fn code_test(path: impl Into<String>) -> Self {
+        let path = path.into();
+        Self {
+            id: 0,
+            kind: GoalKind::Verify,
+            subject: None,
+            relation: Some("code.test".into()),
+            query: None,
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: Some(path.clone()),
+            url: None,
+            mcp_name: None,
+            success: SuccessCriteria::Claim {
+                subject: path,
+                relation: "code.test".into(),
+                value: Some("pass".into()),
+            },
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// `code.patch` com JSON `PatchProposal` (K2).
+    pub fn code_patch(proposal_json: impl Into<String>) -> Self {
+        Self {
+            id: 0,
+            kind: GoalKind::Act,
+            subject: None,
+            relation: Some("code.patch".into()),
+            query: Some(proposal_json.into()),
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: None,
+            url: None,
+            mcp_name: None,
+            success: SuccessCriteria::NonEmpty,
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// `code.generate` — brief → `PatchProposal` (K3; sem auto-merge).
+    pub fn code_generate(brief: impl Into<String>) -> Self {
+        Self {
+            id: 0,
+            kind: GoalKind::Transform,
+            subject: None,
+            relation: Some("code.generate".into()),
+            query: Some(brief.into()),
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: None,
+            url: None,
+            mcp_name: None,
+            success: SuccessCriteria::NonEmpty,
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// `code.apply_proposal` — aplica proposal do blackboard (K4 bridge).
+    pub fn code_apply_proposal() -> Self {
+        Self {
+            id: 0,
+            kind: GoalKind::Act,
+            subject: None,
+            relation: Some("code.apply_proposal".into()),
+            query: None,
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: None,
+            url: None,
+            mcp_name: None,
+            success: SuccessCriteria::NonEmpty,
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// `code.eval` — suíte T3 coder com generator declarado (K7).
+    pub fn code_eval(query_json: impl Into<String>) -> Self {
+        Self {
+            id: 0,
+            kind: GoalKind::Verify,
+            subject: None,
+            relation: Some("code.eval".into()),
+            query: Some(query_json.into()),
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: None,
+            url: None,
+            mcp_name: None,
+            success: SuccessCriteria::Claim {
+                subject: String::new(),
+                relation: "code.eval".into(),
+                value: Some("ok".into()),
+            },
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// `shell.exec` — build/shell sob HITL (K8; nunca default).
+    ///
+    /// `query_json`: `{"argv":["stub"],"hitl_token":"..."}`. Exige
+    /// `risk_ceiling=High` + `AETHER_SHELL=hitl|stub` + token casando
+    /// `AETHER_HITL_TOKEN`. Kill switch: `AETHER_SHELL_KILL=1`.
+    pub fn shell_exec(query_json: impl Into<String>) -> Self {
+        Self {
+            id: 0,
+            kind: GoalKind::Act,
+            subject: None,
+            relation: Some("shell.exec".into()),
+            query: Some(query_json.into()),
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: None,
+            url: None,
+            mcp_name: None,
+            success: SuccessCriteria::Claim {
+                subject: String::new(),
+                relation: "shell.exec".into(),
+                value: Some("ok".into()),
+            },
+            budget: Budget::default(),
+            risk_ceiling: Risk::High,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// `code.lm` — small code LM local offline (K6).
+    pub fn code_lm(brief: impl Into<String>) -> Self {
+        Self {
+            id: 0,
+            kind: GoalKind::Transform,
+            subject: None,
+            relation: Some("code.lm".into()),
+            query: Some(brief.into()),
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: None,
+            url: None,
+            mcp_name: None,
+            success: SuccessCriteria::NonEmpty,
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// `code.grammar` — prosa/JSON → `PatchProposal` tipado (K5).
+    pub fn code_grammar(raw: impl Into<String>) -> Self {
+        Self {
+            id: 0,
+            kind: GoalKind::Transform,
+            subject: None,
+            relation: Some("code.grammar".into()),
+            query: Some(raw.into()),
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: None,
+            url: None,
+            mcp_name: None,
+            success: SuccessCriteria::Claim {
+                subject: String::new(),
+                relation: "code.grammar".into(),
+                value: Some("ok".into()),
+            },
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// `code.loop` — generate→apply→test→keep|rollback (K4).
+    pub fn code_loop(brief: impl Into<String>) -> Self {
+        let brief = brief.into();
+        Self {
+            id: 0,
+            kind: GoalKind::Act,
+            subject: None,
+            relation: Some("code.loop".into()),
+            query: Some(brief),
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: None,
+            url: None,
+            mcp_name: None,
+            success: SuccessCriteria::Claim {
+                subject: String::new(),
+                relation: "code.loop".into(),
+                value: Some("keep".into()),
+            },
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// Pesquisa externa A5 / T-NET (`research.query`).
+    pub fn research(query: impl Into<String>) -> Self {
+        Self {
+            id: 0,
+            kind: GoalKind::Retrieve,
+            subject: None,
+            relation: Some("research.query".into()),
+            query: Some(query.into()),
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: None,
+            url: None,
+            mcp_name: None,
+            success: SuccessCriteria::NonEmpty,
             budget: Budget::default(),
             risk_ceiling: Risk::Medium,
             pipeline: Vec::new(),

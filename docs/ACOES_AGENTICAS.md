@@ -24,7 +24,7 @@ Sem **verificação** (SuccessCriteria / certificado / rollback), é só roteado
 |---|---|
 | P0–P2 verdes; P3 parcial | A4 mundo sandbox + A5 research-tool + A6 aprendizado |
 | Chat pesquisa via hook F2 | research como **tool** do `ToolAgent` |
-| Shell desligado | shell só com HITL explícito (se um dia ligar) |
+| Shell desligado | shell só com HITL explícito (K8: `AETHER_SHELL`+token; kill switch) |
 
 Invariantes (inegociáveis):
 
@@ -60,8 +60,9 @@ A6←P4 · A8←P5.
 | P0 / P1 / G-A1 | verde |
 | P2 / G-A2 / G-A3 | verde (pipeline, undo, EFE pragmática) |
 | P3 parser / undo SGDB / stage / HTTP caps / HITL | parcial–verde (ver tabela no ROADMAP) |
-| G-A4 completo (fs+http+MCP no loop do agent) | **verde** — `tests/agent_safety_gate.rs` (7/7); shell off |
-| Research no chat (`f2_chat_hook` + cascata) | vivo; **não** é ainda tool do planner |
+| G-A4 completo (fs+http+MCP no loop do agent) | **verde** — `tests/agent_safety_gate.rs`; shell off |
+| A5 `research.query` no planner | **verde** — `tests/agent_research_gate.rs` (5/5); rede opt-in; auth≤120 |
+| Research no chat (`f2_chat_hook` + cascata) | vivo; agora também tool do planner (A5) |
 | P4 / G-A5 | backlog |
 | P5 mundo preditivo | pesquisa, fora do v1 sem gates |
 
@@ -80,9 +81,8 @@ A6←P4 · A8←P5.
 
 ## 5. Ordem de implementação sugerida (produto)
 
-1. Fechar **A4 / G-A4** — fs/http/MCP no `ToolAgent` com `agent_safety_gate`.
-2. **A5** — registrar pesquisa externa como tool (mesmo contrato F2: opt-in rede,
-   tier, independência, auth ≤120).
+1. ~~Fechar **A4 / G-A4**~~ — feito (0.5.0).
+2. ~~**A5** research tool~~ — feito (`research.query` / `research.expand` HITL).
 3. **A6 / P4** — LinUCB + episódios verificados (não treinar em reward fake).
 4. Ampliar **A7** só com matriz de risco publicada e kill switch.
 5. **A8** só após valor medido (não entra no v1 por default).
@@ -93,6 +93,7 @@ Aceite de produto (autonomia **verificada**, não total):
 
 - [ ] Em goals sintéticos do inventário, G-A1/G-A2/G-A3 verdes em artefato versionado.
 - [x] G-A4: 0 fora de sandbox/allowlist; 0 shell sem HITL; injeção em memória não altera ação.
+- [x] A5: `research.query` no allowlist; rede off não inventa; auth≤120; expand só HITL.
 - [ ] Toda `act` traz trace (tool, args, custo, claims) e passa no SuccessCriteria.
 - [ ] OOD / risco alto → abstain ou `ask.human`, nunca false-act.
 - [ ] Research (se ligada) persiste ≤120 e não promove 255.

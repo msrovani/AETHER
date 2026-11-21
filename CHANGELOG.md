@@ -3,6 +3,33 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando aplicável.
 
+## [0.5.1] - 2026-11-21
+
+### Added
+
+- **T-CODE K1–K8** completo (`src/agent/tools/code/*` + `shell.rs`):
+  check/ast_grep/test, `PatchProposal`/`code.patch`, `code.generate` (opt-in),
+  `code.loop` keep\|rollback, grammar/RASP, `code.lm` offline, `code.eval`
+  (`coder_t3_pilot` + D-G2), `shell.exec` HITL + kill switch + allowlist.
+- **A5 research** no planner: `research.query` / `research.expand` HITL
+  (`research.rs`; `agent_research_gate`).
+- Gate `tests/agent_coder_gate.rs` (17/17).
+- Borda: `tools/code_generate.py`, `tools/code_lm_local.py`.
+- Docs: `RELEASE_0_5_1.md`; CODER/CORE/ACOES/EVAL/LESSONS atualizados.
+
+### Changed
+
+- `shell.exec`: de always-deny para deny-default com canal HITL (`AETHER_SHELL`,
+  `AETHER_HITL_TOKEN`, `AETHER_SHELL_KILL`).
+- `HitlKind::ShellExec`; `Goal::shell_exec`; auth caps `CODE_AUTH_CAP` /
+  `SHELL_AUTH_CAP` ≤120.
+
+### Fixed
+
+- Planner: High.penalty / `escalation` não selecionavam shell sob HITL
+  (Medium+Irreversible com ceiling High).
+- Race de env nos gates coder (`CODEGEN_ENV` / `SHELL_ENV`).
+
 ## [0.5.0] - 2026-11-21
 
 ### Added

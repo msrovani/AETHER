@@ -1,18 +1,32 @@
 //! Tools reais do P1 + mundo A4: fatos, SAT, QUBO, memória, HITL, fs/http/mcp.
 //!
 //! Mundo (G-A4): `fs.*` sob sandbox, `http.get` allowlist, `mcp.call` tipado,
-//! `shell.exec` sempre deny. Sem efeito externo até A4; memória é leitura;
-//! `ask.human` apenas sinaliza.
+//! `shell.exec` off default (K8: HITL + kill switch + allowlist). Sem efeito
+//! externo até A4; memória é leitura; `ask.human` apenas sinaliza.
 
+pub mod code;
 pub mod fs;
 pub mod http;
 pub mod mcp;
+pub mod research;
 pub mod shell;
 
+pub use code::{
+    code_generate_mode, code_lm_caps, coder_t3_generator_declared, default_coder_t3_path,
+    extract_json_object, grammar_parse_rate, parse_constrained, pass_at_k, rasp_resolve_anchor,
+    run_coder_t3, CodeApplyProposalTool, CodeAstGrepTool, CodeCheckTool, CodeEvalTool,
+    CodeGenerateTool, CodeGenMode, CodeGrammarTool, CodeLmCaps, CodeLmTool, CodeLoopTool,
+    CodePatchTool, CodeTestTool, CoderT3Report, PatchOp, PatchProposal, CODE_AUTH_CAP,
+    CODER_T3_PILOT,
+};
 pub use fs::{resolve_sandbox_path, FsReadTool, FsWriteTool};
 pub use http::HttpGetTool;
 pub use mcp::McpCallTool;
-pub use shell::ShellTool;
+pub use research::{
+    claims_from_research_json, research_network_enabled, ResearchExpandTool, ResearchQueryTool,
+    RESEARCH_AUTH_CAP,
+};
+pub use shell::{shell_kill_switch, shell_mode, ShellMode, ShellTool, SHELL_AUTH_CAP};
 
 use super::experts::{make_logic, make_memory, make_solver, make_transplant, Expert};
 use super::tool::{
@@ -503,6 +517,20 @@ pub fn default_tools(cfg: &AgentConfig) -> Vec<Box<dyn Tool>> {
     tools.push(Box::new(FsWriteTool::new(&cfg.world)));
     tools.push(Box::new(HttpGetTool::new(&cfg.world)));
     tools.push(Box::new(McpCallTool::new(&cfg.world)));
-    tools.push(Box::new(ShellTool));
+    tools.push(Box::new(ShellTool::new(&cfg.world)));
+    // A5 / T-NET — pesquisa no planner (rede opt-in).
+    tools.push(Box::new(ResearchQueryTool));
+    tools.push(Box::new(ResearchExpandTool));
+    // K1–K8 / T-CODE — …/lm/eval + shell HITL.
+    tools.push(Box::new(CodeCheckTool::new(&cfg.world)));
+    tools.push(Box::new(CodeAstGrepTool::new(&cfg.world)));
+    tools.push(Box::new(CodeTestTool::new(&cfg.world)));
+    tools.push(Box::new(CodePatchTool::new(&cfg.world)));
+    tools.push(Box::new(CodeGenerateTool::new(&cfg.world)));
+    tools.push(Box::new(CodeApplyProposalTool::new(&cfg.world)));
+    tools.push(Box::new(CodeLoopTool::new(&cfg.world)));
+    tools.push(Box::new(CodeGrammarTool::new(&cfg.world)));
+    tools.push(Box::new(CodeLmTool::new(&cfg.world)));
+    tools.push(Box::new(CodeEvalTool::new(&cfg.world)));
     tools
 }

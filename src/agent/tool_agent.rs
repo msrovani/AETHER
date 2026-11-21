@@ -487,10 +487,13 @@ impl Tool for VerifyTool {
     }
 
     fn affordance(&self, goal: &Goal, _state: &WorldState) -> f32 {
-        if goal.kind == GoalKind::Verify {
-            1.0
-        } else {
-            0.0
+        if goal.kind != GoalKind::Verify {
+            return 0.0;
+        }
+        // Não rouba goals tipados (code.check/test, fs.*, …).
+        match goal.relation.as_deref() {
+            None | Some("verify") => 1.0,
+            Some(_) => 0.0,
         }
     }
 
@@ -579,5 +582,17 @@ fn tools_allowlist() -> Vec<&'static str> {
         "http.get",
         "mcp.call",
         "shell.exec",
+        "research.query",
+        "research.expand",
+        "code.check",
+        "code.ast_grep",
+        "code.test",
+        "code.patch",
+        "code.generate",
+        "code.apply_proposal",
+        "code.loop",
+        "code.grammar",
+        "code.lm",
+        "code.eval",
     ]
 }

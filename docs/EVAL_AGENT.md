@@ -51,7 +51,7 @@ Tiers de `src/agent/eval.rs` (ADR-011) não se misturam:
 | **T0 self-suite** | cobertura do próprio escopo do agente | **é isto** |
 | T1 coprocessador | recall/abstenção/latência/RAM vs LLM | não mede |
 | T2 híbrido | LanguagePort na borda + AETHER | não mede |
-| T3 externo | MMLU/GSM8K/HumanEval/Arena | **N/A** (sem gerador de linguagem) |
+| T3 externo | MMLU/GSM8K/HumanEval/Arena | **parcial**: suíte própria `coder_t3_pilot` via `code.eval` (K7) com **gerador declarado**; HumanEval/Arena continuam N/A até escopo externo |
 
 Disclaimer do próprio código (`EvalTier::T0SelfSuite`): *“ACQ/self-suite mede
 cobertura do próprio escopo; não é MMLU/GSM8K/Arena”*.

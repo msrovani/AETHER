@@ -119,7 +119,7 @@ impl EvalReport {
                 note: "sem gerador de linguagem; MMLU/GSM8K/HumanEval = N/A".into(),
             },
         ];
-        Self {
+        let mut report = Self {
             schema: "aether_agent_eval/d0",
             version: env!("CARGO_PKG_VERSION").to_string(),
             host,
@@ -128,6 +128,26 @@ impl EvalReport {
             profile,
             tiers,
             self_suite_not_external: true,
+        };
+        report.apply_coder_t3_generator();
+        report
+    }
+
+    /// K7: se houver gerador coder declarado, T3 fica *parcialmente* ready
+    /// (suíte `coder_t3_pilot` — ainda ≠ HumanEval).
+    pub fn apply_coder_t3_generator(&mut self) {
+        let gen = super::coder_t3_generator_declared();
+        if let Some(g) = gen {
+            if let Some(t3) = self
+                .tiers
+                .iter_mut()
+                .find(|t| t.tier == EvalTier::T3External)
+            {
+                t3.ready = true;
+                t3.note = format!(
+                    "gerador declarado={g}; medir so coder_t3_pilot (code.eval); HumanEval/Arena ainda N/A sem escopo externo"
+                );
+            }
         }
     }
 

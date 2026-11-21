@@ -55,7 +55,7 @@ escada de produto, estado.
 |---|---|---|---|---|---|
 | **T-NL-IN** | `LanguagePort::parse` | texto → `Goal` + confidence | OOV / conf &lt;0.50 → abstain | P0, A0–A1 | **vivo** (C1) |
 | **T-PACK** | ETL doação (Python) | corpus → `facts.jsonl` + manifest | licença / auth&gt;120 sem HITL | M1–M6 | **vivo** (playbook) |
-| **T-NET** | research (F2) | pergunta → evidência tierada | rede off; waste fontes=0 | A5, P0/P2 | **vivo** (opt-in) |
+| **T-NET** | `research.query` (F2/A5) | pergunta → claims tieradas auth≤120 | rede off; waste=0 | A5, P0/P2 | **vivo** (planner + chat; opt-in) |
 | **T-STT** | speech→text | áudio → texto UTF-8 **ou** `Goal` | sem motor STT; PII; offline policy | — | **reservada** |
 | **T-VIS** | vision→struct | imagem/frame → `VisionObs` tipado | sem motor visão; sem pixels no core | — | **reservada** |
 
@@ -77,7 +77,7 @@ escada de produto, estado.
 | ID | Nome | Contrato | Disjuntor | Escada | Estado |
 |---|---|---|---|---|---|
 | **T-NL-OUT** | `LanguagePort::generate` / template | Concept/claims → texto + cite auth | sem evidência → Empty | P1–P6 | **vivo (P1)** |
-| **T-CODE** | `code.generate` + patch/test | Goal→diff→sandbox→teste | falso merge; sandbox G-A4 | K0–K8 | **spec** (K0 desbloqueado) |
+| **T-CODE** | `code.*` …/lm/eval + `shell.exec` | Goal→sandbox→verify/patch; T3; shell HITL | falso merge; G-A4; auth≤120; shell never default | K0–K8 | **vivo K1–K8** (`agent_coder_gate`) |
 | **T-FS** | `fs.read` / `fs.write` | path relativo → bytes sob `sandbox_root` | traversal / escape | A4 | **vivo** (`tests/agent_safety_gate`) |
 | **T-HTTP** | `http.get` | URL → body/claim; GET only | host fora allowlist; POST | A4 | **vivo** (fetch opt-in) |
 | **T-MCP** | `mcp.call` | nome allowlist → `ToolOutcome` | nome fora; args inválidos | A4 | **vivo** (proxy tipado) |

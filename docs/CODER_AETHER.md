@@ -49,9 +49,17 @@ Dependência: K0 ← [`ACOES_AGENTICAS.md`](ACOES_AGENTICAS.md) A4. K3 ← trilh
 | Item | Estado |
 |---|---|
 | Agent P0–P2 | verde |
-| P3 / G-A4 (fs+http+MCP no loop) | parcial — **pré-requisito K0** |
-| `code.generate` / patch schema | **não implementado** |
-| Shell | desligado |
+| P3 / G-A4 (fs+http+MCP no loop) | **verde** (`tests/agent_safety_gate`) — K0 |
+| **K1** `code.check` / `code.ast_grep` / `code.test` | **vivo** (`src/agent/tools/code/`) |
+| **K2** `PatchProposal` + `code.patch` + undo `FsWrite` | **vivo** (`code/patch.rs`) |
+| **K3** `code.generate` → proposal | **vivo** (`code/generate.rs`; opt-in `AETHER_CODE_GENERATE`) |
+| **K4** `code.loop` keep\|rollback + `code.apply_proposal` | **vivo** (`code/loop_tool.rs`) |
+| **K5** `code.grammar` + RASP-lite `anchor_hint` | **vivo** (`code/grammar.rs`; ≥95% parse) |
+| **K6** `code.lm` / `AETHER_CODE_GENERATE=small_lm` | **vivo** (`code/small_lm.rs`; offline + RAM) |
+| **K7** `code.eval` + artefato `coder_t3_pilot` | **vivo** (`code/eval_t3.rs`; D-G2; ≠ HumanEval) |
+| **K8** `shell.exec` HITL + kill switch | **vivo** (`tools/shell.rs`; off default; `AETHER_SHELL`+token; `AETHER_SHELL_KILL`) |
+| Auth coder | ≤120 (`CODE_AUTH_CAP` / `SHELL_AUTH_CAP`); keep ≠ 255 |
+| Gate | `tests/agent_coder_gate` |
 | Research F2 | evidência, não coder |
 | Prosa / LanguagePort generate | escada P* em `PROSA_FLUENTE` — paralela |
 
@@ -70,20 +78,26 @@ Dependência: K0 ← [`ACOES_AGENTICAS.md`](ACOES_AGENTICAS.md) A4. K3 ← trilh
 
 ## 5. Ordem de implementação sugerida
 
-1. Fechar **A4 / G-A4** (`ACOES_AGENTICAS`).
-2. **K1 + K2** — AETHER como cirurgião de patch (maior valor / menor risco).
-3. **K3 + K4** — ligar gerador como tool cara; loop com `cargo test` (ou equiv.).
-4. **K5** se proposals soltas demais.
-5. **K6** se privacidade/offline exigir.
-6. **K7/K8** só com escopo e HITL explícitos.
+1. ~~Fechar **A4 / G-A4**~~ — feito.
+2. ~~**K1 + K2**~~ — feito (`code/*`, `agent_coder_gate`).
+3. ~~**K3 + K4**~~ — feito (`code.generate` + `code.loop` keep\|rollback).
+4. ~~**K5**~~ — feito (`code.grammar` / RASP-lite; ≥95% parseável).
+5. ~~**K6**~~ — feito (`code.lm` offline; `pass_at_k`; RAM budget).
+6. ~~**K7**~~ — feito (`code.eval` / `coder_t3_pilot`; gerador obrigatório).
+7. ~~**K8**~~ — feito (`shell.exec` HITL + kill switch; never default).
 
 ## 6. Critério de “temos coder”
 
-- [ ] G-A4 verde.
-- [ ] Proposal → sandbox → teste → keep **ou** rollback; falso merge ≤5%.
-- [ ] Toda proposal traz backend, custo, auth ≤120, `trace_id`.
-- [ ] OOD / falha de teste → abstain; não inventa “quase passou”.
-- [ ] Shell/build só com HITL quando ligados.
+- [x] G-A4 verde.
+- [x] K1+K2: proposal tipada → sandbox → apply **ou** abort; rollback via `Effect::FsWrite`.
+- [x] K3: `code.generate` propõe (`code.proposal`) auth≤120; `applied=false`; opt-in stub/live.
+- [x] K4: `code.loop` generate→apply→test→keep|rollback; keep permanece ≤120.
+- [x] K5: grammar/RASP → proposal; taxa parse ≥95% no gate.
+- [x] K6: small LM local offline; RAM budget; pass@k no gate.
+- [x] K7: suíte T3 própria com generator+scope no artefato (D-G2); HumanEval ainda N/A.
+- [x] K8: `shell.exec` off default; HITL+token+allowlist; kill switch; auth≤120.
+- [x] Auth ≤120 (`CODE_AUTH_CAP`); claims em quarentena.
+- [ ] OOD / falha de teste → abstain; não inventa “quase passou” (parcial em `code.test`).
 
 ## 7. Referências para implementação futura
 
