@@ -21,6 +21,10 @@ pub enum HitlKind {
     ApproveMerge,
     /// Shell/build sob K8 (nunca default).
     ShellExec,
+    /// T-DEC: autorizar fetch HF do candidate (rede opt-in).
+    DecUpgradeDownload,
+    /// T-DEC: cutover candidate → active (último passo; desarma fallback).
+    DecUpgradeCutover,
     /// Escalação genérica (`ask.human`).
     Ask,
 }
@@ -34,6 +38,8 @@ impl HitlKind {
             Self::ExpandResearch => "expand_research",
             Self::ApproveMerge => "approve_merge",
             Self::ShellExec => "shell_exec",
+            Self::DecUpgradeDownload => "dec_upgrade_download",
+            Self::DecUpgradeCutover => "dec_upgrade_cutover",
             Self::Ask => "ask",
         }
     }
@@ -184,7 +190,10 @@ pub fn apply_hitl(
             action: Action::Abstain,
             detail: "hitl kind=deny".into(),
         },
-        HitlKind::Promote | HitlKind::ApproveMerge => {
+        HitlKind::Promote
+        | HitlKind::ApproveMerge
+        | HitlKind::DecUpgradeDownload
+        | HitlKind::DecUpgradeCutover => {
             if req.to_authority >= AUTHORITY_HITL && !token_ok {
                 return HitlDecision {
                     request_id: req.request_id,
@@ -193,7 +202,7 @@ pub fn apply_hitl(
                     timed_out: false,
                     authority: req.from_authority.min(120),
                     action: Action::Abstain,
-                    detail: "promote 255 exige token HITL".into(),
+                    detail: "promote/cutover 255 exige token HITL".into(),
                 };
             }
             let authority = if token_ok {
@@ -209,8 +218,11 @@ pub fn apply_hitl(
                 authority,
                 action: Action::Act,
                 detail: format!(
-                    "hitl promote {}→{} token={}",
-                    req.from_authority, authority, token_ok
+                    "hitl {} {}→{} token={}",
+                    req.kind.label(),
+                    req.from_authority,
+                    authority,
+                    token_ok
                 ),
             }
         }

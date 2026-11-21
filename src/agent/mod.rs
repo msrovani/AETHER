@@ -39,7 +39,9 @@ pub mod bus;
 pub mod cli;
 pub mod coherence;
 pub mod dec_status;
+pub mod dec_upgrade;
 pub mod embed;
+pub mod gemma_scribe;
 pub mod hitl_queue;
 pub mod eval;
 pub mod executor;
@@ -79,6 +81,12 @@ pub use self::experts::{MemoryCitations, RecallCitation};
 use self::router::MoERouter;
 
 pub use dec_status::DecTomadaStatus;
+pub use dec_upgrade::{
+    abort_rollback, active_model_paths, apply_smoke_result, begin_upgrade, cutover_promote,
+    detail_block, engine_label_from_ids, hw_compat_for, load_active_lock, load_catalog,
+    mark_download_approved, revert_previous, CatalogReader, DecLamps, DecSlot, DecUpgradePhase,
+    DecUpgradeState, LampColor, ACTIVE_LOCK, CATALOG_PATH, STATE_PATH as DEC_UPGRADE_STATE_PATH,
+};
 pub use a8_v1::{
     a8_v1_flag, criteria as a8_v1_criteria, enter_v1_allowed, enter_v1_default,
     write_criteria_artifact as write_a8_v1_criteria, A8V1Criterion, A8_V1_CRITERIA_PATH,
@@ -97,9 +105,15 @@ pub use hier_moe::{lsh_route_refuse, HierMoeStatus, HIER_MOE_STATUS_PATH};
 pub use hitl::{apply_hitl, HitlDecision, HitlKind, HitlRequest};
 pub use language::{
     adapt_text, GoalSchema, LanguageCaps, LanguageError, LanguageParseTool, LanguagePort,
-    ParserPort, Style as LanguageStyle,
+    ParserPort, Style, Style as LanguageStyle,
 };
-pub use nl_out::{certify_utterance, judge_claim_text, CertifiedUtterance};
+pub use gemma_scribe::{
+    active_scribe_path, ensure_scribe_fields_on_active_lock, scribe_opt_in, scribe_runtime_policy,
+    vram_free_from_host_report, GemmaScribePort, ScribeRuntime, DEFAULT_AND_PEAK_MB, ENV_SCRIBE,
+};
+pub use nl_out::{
+    certify_utterance, certify_utterance_template, judge_claim_text, CertifiedUtterance,
+};
 pub use ocr::{DocRef, OcrPort, OcrResult};
 pub use predict::PredictExpert;
 pub use speech::{SttPort, SttResult, TtsPort, TtsResult};

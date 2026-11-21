@@ -3,9 +3,9 @@
 //! High sem prova bloqueado; com token promove. 0 auto-255. Um outbox para todos.
 
 use crate::agent::{
-    agent_kill_switch, append_decision, apply_hitl, class_for_tool, hitl_load_pending,
-    hitl_token_ok, promote_key_255, requirement_for, Goal, HitlDecision, HitlKind, HitlRequest,
-    HitlRequirement, Risk, RISK_MATRIX,
+    abort_rollback, agent_kill_switch, append_decision, apply_hitl, class_for_tool, cutover_promote,
+    hitl_load_pending, hitl_token_ok, mark_download_approved, promote_key_255, requirement_for,
+    DecUpgradeState, Goal, HitlDecision, HitlKind, HitlRequest, HitlRequirement, Risk, RISK_MATRIX,
 };
 
 /// Banda visual da matriz A7.
@@ -72,15 +72,13 @@ impl HitlView {
         let mut queue: Vec<HitlQueueItem> = hitl_load_pending()
             .into_iter()
             .map(|request| {
-                let risk = if matches!(request.kind, HitlKind::Promote | HitlKind::ShellExec) {
-                    Risk::High
-                } else {
-                    Risk::High
-                };
+                let risk = Risk::High;
                 let tool = match request.kind {
                     HitlKind::Promote => "memory.promote",
                     HitlKind::ShellExec => "shell.exec",
                     HitlKind::ExpandResearch => "research.expand",
+                    HitlKind::DecUpgradeDownload => "dec.upgrade.download",
+                    HitlKind::DecUpgradeCutover => "dec.upgrade.cutover",
                     _ => "goal.propose",
                 };
                 HitlQueueItem {
@@ -187,9 +185,16 @@ impl HitlView {
         }
         let approved = !matches!(kind, HitlKind::Deny);
         let mut req = item.request.clone();
-        // Preserve promote kind when approving memory key.
-        if matches!(item.request.kind, HitlKind::Promote) && approved {
-            req.kind = HitlKind::Promote;
+        // Preserve promote / T-DEC upgrade kinds on Approve.
+        if approved
+            && matches!(
+                item.request.kind,
+                HitlKind::Promote
+                    | HitlKind::DecUpgradeDownload
+                    | HitlKind::DecUpgradeCutover
+            )
+        {
+            req.kind = item.request.kind;
         } else {
             req.kind = kind;
         }
@@ -209,8 +214,36 @@ impl HitlView {
             }
         }
 
-        if matches!(kind, HitlKind::Promote | HitlKind::Ask | HitlKind::ApproveMerge)
-            && req.to_authority >= 255
+        // T-DEC dual-bank: download → job; cutover → promote; deny → rollback.
+        if matches!(
+            item.request.kind,
+            HitlKind::DecUpgradeDownload | HitlKind::DecUpgradeCutover
+        ) {
+            let mut st = DecUpgradeState::load();
+            if decision.approved && matches!(item.request.kind, HitlKind::DecUpgradeDownload) {
+                if let Err(e) = mark_download_approved(&mut st) {
+                    self.last_error = Some(e.clone());
+                    return Err(e);
+                }
+            } else if decision.approved && matches!(item.request.kind, HitlKind::DecUpgradeCutover)
+            {
+                if let Err(e) = cutover_promote(&mut st) {
+                    self.last_error = Some(e.clone());
+                    return Err(e);
+                }
+            } else if !decision.approved {
+                let _ = abort_rollback(&mut st, format!("HITL deny: {}", decision.detail));
+            }
+        }
+
+        if matches!(
+            kind,
+            HitlKind::Promote
+                | HitlKind::Ask
+                | HitlKind::ApproveMerge
+                | HitlKind::DecUpgradeDownload
+                | HitlKind::DecUpgradeCutover
+        ) && req.to_authority >= 255
             && !decision.approved
         {
             let msg = decision.detail.clone();

@@ -91,8 +91,10 @@ Não basta “o modelo fala bonito”. Aceite de produto:
   `https://search.lumy.live`; `multi_provider_confirm` → auth 80.
 - Parser C1 + `bus` trio: Console/API chat → `CertifiedUtterance` (P2);
   `LanguageCaps` declara backend **template** (P3 caps; sem LM).
-- Vega gemma-prose = sentinela de OOD, **não** adotada como geradora de prosa
-  de produto (cosine de attach &lt; 0,8).
+- Gemma (mesmo artefato da sentinela AND) = escriba opt-in T-NL-OUT
+  (`AETHER_SCRIBE=gemma`); default ainda template. Dois plugues, um download —
+  ver [`GEMMA_SENTINEL_SCRIBE.md`](GEMMA_SENTINEL_SCRIBE.md). Nunca
+  `vegaml.decide` no escriba; juíz P2 + auth ≤120.
 
 ## 8. Referências internas
 

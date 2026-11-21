@@ -65,6 +65,8 @@
 | Chat com canal paralelo ao agente | ledger fase lossy vs parser | um fio `run_trio_turn` no API/Console | `bus.rs` (0.5.4) |
 | HITL so demo / learn sem sanção | fila fake; 255 automatico | outbox vivo + promote HITL; learn≤120 | `hitl_queue`, hub |
 | Segundo DB ou filtro por tomada | stacks paralelos | lei fio/disjuntor/filtros/DB unicos | CORE §2.5 |
+| Upgrade Vega/gemma silencioso | troca path sem re-probe | dual-bank candidate + smoke T1/T2/C1 + HITL cutover; active intacto | `dec_upgrade`, `T_DEC_UPGRADE` |
+| Candidate no Console/API | bus lia modelo novo cedo | produto só `profiles/active`; fallback até OK geral | `EngineConfig::apply_active_lock` |
 
 ## 3. Invariantes que não podem regredir
 
@@ -85,6 +87,11 @@
    allowlist sem metachar; cwd = sandbox (`shell.rs`, G-A4/K8).
 9. **Coder = borda gera, core verifica.** `code.generate`/`code.lm` propõem;
    apply/loop/shell sob sandbox + auth≤120 (`CODER_AETHER` K1–K8).
+10. **T-DEC dual-bank.** Candidate nunca atende bus; cutover só HITL após
+    smoke verde; upgrade silencioso proibido (`T_DEC_UPGRADE.md`).
+11. **Gemma = sentinela ∧ escriba.** Um artefato, dois plugues; nunca
+    `vegaml.decide` no T-NL-OUT; `AETHER_SCRIBE=gemma` opt-in
+    (`GEMMA_SENTINEL_SCRIBE.md`).
 
 ## 4. Receita: adicionar um especialista
 

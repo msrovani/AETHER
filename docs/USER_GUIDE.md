@@ -78,6 +78,25 @@ Na aba **Console IA**: digite uma pergunta e **Enviar**. O hub chama a API local
 
 Pré-requisito: `cargo run --release --bin aether-api --features api` (URL default `http://127.0.0.1:8787`, ou `AETHER_API_URL`).
 
+## 7c) T-DEC — o AETHER **não** fica preso a um único modelo
+
+No Lab, o bloco **T-DEC (DecisionPort)** é a tomada de *decisão* (rotear / abster), **não** um chatbot.
+
+Leia assim:
+
+| Peça | O que é | O que **não** é |
+|---|---|---|
+| **Core AETHER** | certifica, cita, abstém | um LLM |
+| **Tomada T-DEC** | encaixe (`DecisionPort`) | “o modelo do AETHER” |
+| **Motor Vega-U** | motor fixo pequeno + API decide/abstain | família tipo Gemma 3→4 |
+| **Readers** | LMs congelados plugáveis (0.8B, 4B, gemma…) | o núcleo do AETHER |
+| **AND** | primário (rota) ∧ sentinela (OOD) | um único cérebro |
+| **Gemma** | **sentinela** no AND **e** **escriba** na prosa (1 download) | chatbot solto / verdade 255 |
+
+**Economia:** o mesmo Gemma no disco serve OOD (T-DEC) e fluência (T-NL-OUT). Opt-in escriba: `AETHER_SCRIBE=gemma` (default do chat continua template). Ver [GEMMA_SENTINEL_SCRIBE.md](GEMMA_SENTINEL_SCRIBE.md).
+
+**Upgrades no hub** (botões *Up primário* / *Up sentinela*) trocam o **reader** com catálogo, HW, smoke e HITL; cutover atualiza sentinela **e** path da escriba. Guia: [T_DEC_UPGRADE.md](T_DEC_UPGRADE.md).
+
 ## Recarregar
 
 **Recarregar** relê scorecard + host + doação + artefatos da aba Testes IA.

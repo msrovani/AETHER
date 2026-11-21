@@ -114,9 +114,14 @@ impl VegaPort {
                 }
                 None => None,
             };
-            let engine_label = match sentinel {
-                Some(_) => "vega-u-0.8b AND gemma-prose".to_string(),
-                None => "vega-u-0.8b".to_string(),
+            // Label dinâmico: EngineConfig (lock active / env), sem hardcode único.
+            let engine_label = if !cfg.engine.trim().is_empty() {
+                cfg.engine.clone()
+            } else {
+                match sentinel {
+                    Some(_) => "vega-u-0.8b AND gemma-prose".to_string(),
+                    None => "vega-u-0.8b".to_string(),
+                }
             };
             Ok(Self {
                 primary: primary.into(),
@@ -411,24 +416,27 @@ import sys; print('[G1] cache instalado:', _c.stats(), flush=True)",
 /// Fingerprint do motor para o cache de respostas (G1, camada 2): muda o
 /// checkpoint ou o corpus → cache invalidado. Barato: sizes+mtimes.
 fn engine_fingerprint(cfg: &EngineConfig) -> String {
+    use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
+    // Inclui label dinâmico do lock active (dual-bank) — candidate nunca entra.
+    cfg.cache_fingerprint().hash(&mut h);
     for p in [
         cfg.model_primary.as_deref().unwrap_or("hub-default"),
         cfg.model_sentinel.as_deref().unwrap_or(""),
         cfg.calibration.as_deref().unwrap_or(""),
     ] {
-        std::hash::Hash::hash(&p, &mut h);
+        p.hash(&mut h);
         if let Ok(meta) = std::fs::metadata(p) {
-            std::hash::Hash::hash(&meta.len(), &mut h);
+            meta.len().hash(&mut h);
             if let Ok(m) = meta.modified() {
                 if let Ok(d) = m.duration_since(std::time::UNIX_EPOCH) {
-                    std::hash::Hash::hash(&d.as_secs(), &mut h);
+                    d.as_secs().hash(&mut h);
                 }
             }
         }
-        std::hash::Hash::hash(&0u8, &mut h);
+        0u8.hash(&mut h);
     }
-    format!("{:016x}", std::hash::Hasher::finish(&h))
+    format!("{:016x}", h.finish())
 }
 
 /// Instala o cache de RESPOSTAS do engine (G1 camada 2) — a leitura 2 do fit.

@@ -24,7 +24,7 @@ Single-flight global: um job por vez em Lab/Testes IA. Console IA usa HTTP próp
 |---|---|
 | Barra superior | **AETHER** + versão + frase de fronteira (*LLM gera; AETHER cita, certifica ou abstem.*) + seletor Lab \| Testes IA \| Console IA + jobs da aba ativa + status |
 | Centro (Lab e Testes IA) | Faixa **Situação**: cartão Programa (versão, fronteira, ACQ, API eval, agente) e cartão Online (job, demo, SGDB, última sonda de CPU/RAM) |
-| Centro (Lab) | ACQ, cobertura, hot-path, **F4** (congelada), **T-DEC**, **T-HITL** (outbox `target/aether_hitl_queue.jsonl` → Approve/Deny/Ampliar + `hitl_token` + kill; promote n-sgdb → 255; High sem prova bloqueado; 0 auto-255), T01–T12, vazão, doação, gaps, host |
+| Centro (Lab) | ACQ, cobertura, hot-path, **F4** (congelada), **T-DEC** (Vega + readers; Gemma = sentinela ∧ escriba, 1 artefato; dual-bank; [`USER_GUIDE.md`](USER_GUIDE.md) §7c · [`GEMMA_SENTINEL_SCRIBE.md`](GEMMA_SENTINEL_SCRIBE.md)), **T-HITL**, T01–T12, vazão, doação, gaps, host |
 | Centro (Console IA) | Chat → API `/v1/chat/completions` no **fio trio** (`bus`: T-NL-IN parse → solve → CertifiedUtterance); abstain = “não sei”; learn ≤120 enfileira promote HITL |
 | Centro (Testes IA) | Grade U1–U6, tabela API eval, painel ask/cite/abstain, contrato usabilidade |
 | Centro (Console IA) | Histórico chat + campo pergunta + escopo (org/run/app) + URL API (`AETHER_API_URL` ou `http://127.0.0.1:8787`) |
@@ -44,6 +44,7 @@ Tema: slate + teal (lab). Host report é relido do JSON após o job (sem re-sond
 | Demo organismo | **in-process** 15 s @ 30 Hz; telemetria → anel `DemoTrace` |
 | Demo daemon | processo `aether-daemon --duration 10s`; parse de linhas → mesmo anel |
 | Probe doação HV | ETL dry-run (se faltar bank) + probe + gate + `transplant_uso` → `data/rounds/hub_<epoch>/` |
+| T-DEC upgrade | Após HITL download: `tools/dec_upgrade_run.py` fetch→attach→fit→smoke no **candidate**; active intacto até cutover |
 
 ### Testes IA
 

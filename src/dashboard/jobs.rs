@@ -30,6 +30,8 @@ pub enum JobKind {
     ApiEval,
     /// Test drive `aether-agent ask` Brasil/Atlântida.
     AgentDrive,
+    /// T-DEC dual-bank: fetch/attach/fit/smoke no candidate.
+    DecUpgrade,
 }
 
 impl JobKind {
@@ -45,6 +47,7 @@ impl JobKind {
             Self::UsoRegen => "Regenerar USO",
             Self::ApiEval => "Usabilidade API",
             Self::AgentDrive => "Test drive agente",
+            Self::DecUpgrade => "T-DEC upgrade",
         }
     }
 }
@@ -212,6 +215,7 @@ impl JobRunner {
                 JobKind::UsoRegen => run_uso_regen(&shared),
                 JobKind::ApiEval => run_api_eval(&shared),
                 JobKind::AgentDrive => run_agent_drive(&shared),
+                JobKind::DecUpgrade => run_dec_upgrade(&shared),
             };
             if let Ok(mut t) = trace.lock() {
                 t.end();
@@ -607,6 +611,45 @@ fn run_agent_drive(shared: &Shared) -> Result<String, String> {
     );
     std::fs::write(&path, json).map_err(|e| format!("gravar agent_drive: {e}"))?;
     Ok(format!("AgentDrive OK → {}", path.display()))
+}
+
+/// Orquestra `tools/dec_upgrade_run.py` (fetch/attach/fit/smoke no candidate).
+/// Cancel → AbortRollback via script `--abort` se marcado.
+fn run_dec_upgrade(shared: &Shared) -> Result<String, String> {
+    use crate::agent::{apply_smoke_result, DecUpgradeState};
+    use crate::json::Json;
+
+    let root = workspace_root();
+    set_log(shared, "T-DEC upgrade: fetch→attach→fit→smoke (candidate)…");
+    let mut cmd = Command::new("python");
+    cmd.args(["tools/dec_upgrade_run.py", "--state", "target/aether_dec_upgrade.json"])
+        .current_dir(&root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let out = wait_cmd(cmd, Duration::from_secs(3600), shared, "dec_upgrade")?;
+    if shared.cancel.load(Ordering::SeqCst) {
+        let _ = Command::new("python")
+            .args([
+                "tools/dec_upgrade_run.py",
+                "--abort",
+                "--reason",
+                "job_cancel",
+            ])
+            .current_dir(&root)
+            .status();
+        return Err("T-DEC upgrade cancelado — active intacto".into());
+    }
+    // Aplica smoke no estado Rust (enfileira HITL cutover se verde).
+    let smoke_path = root.join("target/aether_dec_upgrade_smoke.json");
+    let smoke_text = std::fs::read_to_string(&smoke_path)
+        .map_err(|e| format!("smoke ausente após job: {e}"))?;
+    let smoke = Json::parse(&smoke_text).map_err(|e| format!("smoke JSON: {e}"))?;
+    let mut st = DecUpgradeState::load();
+    apply_smoke_result(&mut st, &smoke).map_err(|e| format!("apply_smoke: {e}"))?;
+    Ok(format!(
+        "T-DEC upgrade fase={} — {out}",
+        st.phase.label()
+    ))
 }
 
 fn run_agent_ask(shared: &Shared, subject: &str, relation: &str) -> Result<String, String> {

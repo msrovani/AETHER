@@ -27,14 +27,15 @@ mod aether_dashboard_win {
 
     use aether_engine::dashboard::{
         agent_ask_detail, api_case_detail, collect_wave_gaps, dest_detail, dimension_ficha,
-        dec_detail, dec_program_line, dimension_tooltip, draw_console, f4_detail, f4_program_line,
-        fmt_compact, gates_detail, global_tooltip, glossary_entries, hitl_detail, hitl_program_line,
-        load_agent_drive, load_api_eval, load_dec_view, load_f4_view, load_hitl_view,
-        load_host_report, load_scorecard, load_transplant_view, origin_detail, throughput_tooltip,
+        dec_detail, dec_lamps_line, dec_program_line, dimension_tooltip, draw_console, f4_detail,
+        f4_program_line, fmt_compact, gates_detail, global_tooltip, glossary_entries, hitl_detail,
+        hitl_program_line, load_agent_drive, load_api_eval, load_dec_view, load_f4_view,
+        load_hitl_view, load_host_report, load_scorecard, load_transplant_view, origin_detail,
+        request_revert, request_upgrade, throughput_tooltip, upgrade_job_pending,
         AgentDriveReport, ApiEvalReport, ConsolePane, DecView, DimFicha, F4View, Gap, GapSeverity,
         HostReport, HitlView, JobKind, JobPhase, JobRunner, ScorecardView, TransplantView,
     };
-    use aether_engine::agent::HitlKind;
+    use aether_engine::agent::{DecSlot, HitlKind};
 
     /// Aba superior do hub.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -282,9 +283,12 @@ mod aether_dashboard_win {
                         | Some(JobKind::UsoRegen)
                         | Some(JobKind::ApiEval)
                         | Some(JobKind::AgentDrive)
+                        | Some(JobKind::DecUpgrade)
                 ) && snap.phase == JobPhase::Done
                 {
                     self.reload();
+                    self.dec = load_dec_view();
+                    self.hitl = load_hitl_view();
                 }
             }
         }
@@ -1349,10 +1353,15 @@ mod aether_dashboard_win {
         }
 
         fn draw_dec(&mut self, ui: &mut egui::Ui) {
-            self.section_header(ui, "T-DEC (DecisionPort)");
+            self.section_header(ui, "T-DEC (tomada · readers plugáveis)");
             let detail = dec_detail(&self.dec);
             let color = if self.dec.status.degraded {
                 theme::MUTED
+            } else if self.dec.upgrade.fallback_armed
+                && self.dec.upgrade.phase.label() != "idle"
+                && self.dec.upgrade.phase.label() != "active"
+            {
+                theme::WARN
             } else {
                 theme::OK
             };
@@ -1363,8 +1372,87 @@ mod aether_dashboard_win {
                     .color(color),
             );
             if r.hovered() {
-                self.note_hover("T-DEC", detail);
+                self.note_hover("T-DEC", detail.clone());
             }
+            ui.label(
+                RichText::new(dec_lamps_line(&self.dec))
+                    .small()
+                    .color(theme::MUTED),
+            );
+            if self.dec.upgrade.fallback_armed {
+                ui.label(
+                    RichText::new("produto = active (fallback ligado)")
+                        .small()
+                        .color(theme::WARN),
+                );
+            }
+            ui.horizontal_wrapped(|ui| {
+                let busy = self.jobs.is_busy();
+                let btn = |ui: &mut egui::Ui, label: &str| {
+                    ui.add_enabled(!busy, egui::Button::new(RichText::new(label).small()))
+                };
+                if btn(ui, "Up primário (0.8B→4B NF4)")
+                    .on_hover_text("Allowlist qwen3.5-4b-attach · HITL download + HW")
+                    .clicked()
+                {
+                    match request_upgrade(DecSlot::Primary, "qwen3.5-4b-attach") {
+                        Ok(st) => {
+                            self.dec = load_dec_view();
+                            self.hitl = load_hitl_view();
+                            self.note_hover(
+                                "T-DEC upgrade",
+                                format!("fase={} · {}", st.phase.label(), st.reason),
+                            );
+                        }
+                        Err(e) => self.note_hover("T-DEC upgrade erro", e),
+                    }
+                }
+                if btn(ui, "Up sentinela (gemma 4B)")
+                    .on_hover_text("Allowlist gemma-3-4b-it · HITL + re-probe T2")
+                    .clicked()
+                {
+                    match request_upgrade(DecSlot::Sentinel, "gemma-3-4b-it") {
+                        Ok(st) => {
+                            self.dec = load_dec_view();
+                            self.hitl = load_hitl_view();
+                            self.note_hover(
+                                "T-DEC upgrade",
+                                format!("fase={} · {}", st.phase.label(), st.reason),
+                            );
+                        }
+                        Err(e) => self.note_hover("T-DEC upgrade erro", e),
+                    }
+                }
+                if btn(ui, "Catálogo HF (opt-in)")
+                    .on_hover_text("Recarrega data/dec_reader_catalog.json (rede off por default)")
+                    .clicked()
+                {
+                    self.dec = load_dec_view();
+                    self.note_hover(
+                        "T-DEC catálogo",
+                        format!("{} entradas\n{}", self.dec.catalog_lines.len(), detail),
+                    );
+                }
+                if upgrade_job_pending(&self.dec)
+                    && btn(ui, "Rodar pipeline candidate")
+                        .on_hover_text("Job DecUpgrade: fetch→attach→fit→smoke (active intacto)")
+                        .clicked()
+                {
+                    self.start_job(JobKind::DecUpgrade);
+                }
+                if btn(ui, "Reverter previous")
+                    .on_hover_text("previous/ → active (fallback 1-click)")
+                    .clicked()
+                {
+                    match request_revert() {
+                        Ok(_) => {
+                            self.dec = load_dec_view();
+                            self.note_hover("T-DEC", "revertido para previous");
+                        }
+                        Err(e) => self.note_hover("T-DEC revert erro", e),
+                    }
+                }
+            });
         }
 
         fn draw_hitl(&mut self, ui: &mut egui::Ui) {

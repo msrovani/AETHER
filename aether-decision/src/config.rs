@@ -82,6 +82,9 @@ impl EngineConfig {
     ///
     /// `VEGA_PYTHON` / `VEGA_SITE_PACKAGES`; `PYTHONPATH` é o fallback
     /// porque é a variável que o próprio Python lê.
+    ///
+    /// Se existir `.vega/profiles/active/engine.lock.json`, paths/label do
+    /// **active** sobrescrevem defaults (produto nunca lê `candidate/`).
     pub fn from_env() -> Self {
         let mut cfg = Self::default();
         if let Some(v) = std::env::var("VEGA_MODEL")
@@ -117,7 +120,63 @@ impl EngineConfig {
                     .filter(|s| !s.trim().is_empty())
             });
         cfg.python_site_packages = site;
+        cfg.apply_active_lock();
         cfg
+    }
+
+    /// Aplica só o bank `active` (nunca candidate). Env explícito ganha.
+    pub fn apply_active_lock(&mut self) {
+        const LOCK: &str = ".vega/profiles/active/engine.lock.json";
+        let Ok(text) = std::fs::read_to_string(LOCK) else {
+            return;
+        };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else {
+            return;
+        };
+        if self.model_primary.is_none() {
+            if let Some(p) = v
+                .pointer("/primary/path")
+                .or_else(|| v.pointer("/primary/id"))
+                .and_then(|x| x.as_str())
+            {
+                self.model_primary = Some(p.to_string());
+            }
+        }
+        if self.model_sentinel.is_none() {
+            if let Some(p) = v
+                .pointer("/sentinel/path")
+                .or_else(|| v.pointer("/sentinel/id"))
+                .and_then(|x| x.as_str())
+            {
+                self.model_sentinel = Some(p.to_string());
+            }
+        }
+        if let Some(label) = v.get("engine_label").and_then(|x| x.as_str()) {
+            if !label.trim().is_empty() {
+                self.engine = label.to_string();
+            }
+        } else {
+            let p = self
+                .model_primary
+                .as_deref()
+                .unwrap_or("vega-u-0.8b");
+            let s = self
+                .model_sentinel
+                .as_deref()
+                .unwrap_or("gemma-prose");
+            self.engine = format!("{p} AND {s}");
+        }
+    }
+
+    /// Fingerprint estável para caches feat/eng (paths + label).
+    pub fn cache_fingerprint(&self) -> String {
+        format!(
+            "{}|{}|{}|{}",
+            self.model_primary.as_deref().unwrap_or("-"),
+            self.model_sentinel.as_deref().unwrap_or("-"),
+            self.calibration.as_deref().unwrap_or("-"),
+            self.engine
+        )
     }
 
     /// `site-packages` efetivo: config → `PYTHONPATH` → derivado do venv.

@@ -67,7 +67,7 @@ escada de produto, estado.
 | **T-MOE** | `MoERouter` EXP3/UCB + LinUCB opt-in | `Goal` → top-k experts/tools | score &lt; min_score → abstain | M0, M5, A1–A6 | **vivo** (A6/`AETHER_LINUCB`) |
 | **T-XP-*** | experts (transplant, phase, logic, solver, memory, **predict**) | task → `ExpertOutput` | evidência fraca → None/abstain | M1–M3, A8 | **vivo** |
 | **T-PRED** | `PredictExpert` / `predict.series` | série tipada → yhat+intervalo+NRMSE | OOD/metacog → abstain; auth≤120 | A8 | **vivo** (MoE + tool; `enter_v1_default=false`) |
-| **T-DEC** | DecisionPort / Vega∧gemma-prose | Goal → route/abstain + conformal (AND opt-in) | `engine_unavailable` → stub; **não** gera prosa; **não** 255 | F1 | **vivo** (opt-in; `dec_view` + `bus` `t_dec`) |
+| **T-DEC** | DecisionPort / Vega∧readers | Goal → route/abstain + conformal (AND opt-in); upgrade dual-bank de **readers** (não “versão AETHER”) | `engine_unavailable` → stub; **só bank active**; candidate nunca no bus; **não** gera prosa; **não** 255; cutover HITL | F1 | **vivo** (opt-in; `dec_view` + `bus` `t_dec` + [`USER_GUIDE.md`](USER_GUIDE.md) §7c + [`T_DEC_UPGRADE.md`](T_DEC_UPGRADE.md)) |
 | **T-EMB** | EmbedPort | texto → `Vec<f32>`+era | dim/era mismatch; off→lexical | F4 | **vivo formal** (off; F4 congelada) |
 | **T-PLAN** | planner + executor | Goal → PlanStep* + rollback | risk_ceiling / allowlist | A0–A7 | **vivo** (mundo A4) |
 | **T-COH** | coherence | claims → Action | contradição → abstain/cite | — | **vivo** |

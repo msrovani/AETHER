@@ -29,7 +29,10 @@ pub use catalog::{
     DimFicha,
 };
 pub use console::{draw_console, ConsolePane};
-pub use dec_view::{dec_detail, dec_program_line, load_dec_view, DecView};
+pub use dec_view::{
+    dec_detail, dec_lamps_line, dec_program_line, load_dec_view, request_revert, request_upgrade,
+    upgrade_job_pending, DecView,
+};
 pub use demo_trace::{DemoSample, DemoTrace};
 pub use f4_view::{f4_detail, f4_program_line, load_f4_view, F4View};
 pub use hitl_view::{hitl_detail, hitl_program_line, load_hitl_view, HitlBand, HitlView};

@@ -84,6 +84,8 @@ fn parse_request(j: Json) -> Option<HitlRequest> {
         "expand_research" => HitlKind::ExpandResearch,
         "approve_merge" => HitlKind::ApproveMerge,
         "shell_exec" => HitlKind::ShellExec,
+        "dec_upgrade_download" => HitlKind::DecUpgradeDownload,
+        "dec_upgrade_cutover" => HitlKind::DecUpgradeCutover,
         _ => HitlKind::Ask,
     };
     Some(HitlRequest {

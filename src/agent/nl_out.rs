@@ -6,6 +6,7 @@
 use crate::json::Json;
 
 use super::language::{LanguageError, LanguagePort, ParserPort, Style};
+// ParserPort ainda usado no atalho template e nos testes.
 use super::{Action, Claim};
 
 /// Utterance certificada (texto + fontes + auth) — contrato T-TTS.
@@ -47,9 +48,9 @@ impl CertifiedUtterance {
     }
 }
 
-/// Juíz P2: gera prosa P1 e exige que slots/fontes batam no texto.
+/// Juíz P2: gera prosa (template ou GemmaScribe) e exige slots/fontes no texto.
 pub fn certify_utterance(
-    port: &mut ParserPort,
+    port: &mut dyn LanguagePort,
     claims: &[Claim],
     action: Action,
     style: Style,
@@ -79,6 +80,16 @@ pub fn certify_utterance(
         sources,
         judge_conf: conf,
     })
+}
+
+/// Atalho: template P1 (ParserPort).
+pub fn certify_utterance_template(
+    claims: &[Claim],
+    action: Action,
+    style: Style,
+) -> Result<CertifiedUtterance, LanguageError> {
+    let mut port = ParserPort::new();
+    certify_utterance(&mut port, claims, action, style)
 }
 
 /// Verifica que cada claim tem subject/relation/value (ou cite) no texto.

@@ -3,6 +3,23 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando aplicável.
 
+## [Unreleased]
+
+## [0.5.5] - 2026-11-21
+
+### Added
+
+- **T-DEC upgrade dual-bank**: catálogo `data/dec_reader_catalog.json`,
+  máquina `dec_upgrade.rs`, hub lâmpadas + Up primário/sentinela, job
+  `DecUpgrade`, HITL `dec_upgrade_download`/`dec_upgrade_cutover`, tools
+  `dec_upgrade_run.py` / `dec_upgrade_smoke.py`, gate `agent_dec_upgrade_gate`.
+- Docs: `T_DEC_UPGRADE.md`, `RELEASE_0_5_5.md`. EngineConfig lê
+  `.vega/profiles/active/engine.lock.json` (nunca candidate); label AND dinâmico.
+- **Gemma sentinela ∧ escriba**: mesmo artefato em T-DEC e T-NL-OUT
+  (`gemma_scribe.rs`, `AETHER_SCRIBE=gemma`); path `scribe_path` no lock;
+  P2 + P6; gate `agent_gemma_scribe_gate`; docs `GEMMA_SENTINEL_SCRIBE.md`.
+- UX: USER_GUIDE §7c — AETHER não é um único modelo; readers plugáveis.
+
 ## [0.5.4] - 2026-11-21
 
 ### Added
