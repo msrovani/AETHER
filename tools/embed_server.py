@@ -44,7 +44,26 @@ def load_model(name: str, allow_download: bool):
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
     from sentence_transformers import SentenceTransformer
 
-    return SentenceTransformer(name, device="cpu")
+    device = "cuda" if env_flag("AETHER_EMBED_CUDA") else "cpu"
+    # G8/V3-A: OOM medido na 3050 (6GB) com o eval mandando o corpus inteiro
+    # num request — bf16 corta pesos e buffers pela metade. Na CPU o bf16 é
+    # perigoso (sem AMX) — mantém fp32 (stall documentado do ST).
+    kwargs: dict = {"device": device}
+    if device == "cuda":
+        kwargs["model_kwargs"] = {"dtype": "bfloat16"}
+    model = SentenceTransformer(name, **kwargs)
+    # V3-A: docs de 22k chars (~4k tokens) puxam o padding do batch para 4k —
+    # atenção 32x14x4004^2 = 7.18GB (OOM medido na 3050) e 413s/batch no CPU.
+    # Cap em 512 tokens (default MTEB); MIN preserva o default menor do modelo
+    # (MiniLM = 256, baseline v2 intacta).
+    cap = int(os.environ.get("AETHER_EMBED_MAX_SEQ", "512"))
+    before = int(model.max_seq_length)
+    model.max_seq_length = min(before, cap)
+    print(
+        f"embed_server: max_seq_length {before} -> {model.max_seq_length}",
+        flush=True,
+    )
+    return model
 
 
 class State:
@@ -89,7 +108,7 @@ class Handler(BaseHTTPRequestHandler):
                     "dim": State.dim,
                     "normalized": True,
                     "offline": State.offline,
-                    "backend": "sentence_transformers/cpu",
+                    "backend": f"sentence_transformer/{('cuda' if env_flag('AETHER_EMBED_CUDA') else 'cpu')}",
                 },
             )
         return self._send(404, {"error": f"unknown path {self.path}"})
@@ -110,7 +129,14 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, {"embeddings": []})
                 if not isinstance(texts, list) or not all(isinstance(t, str) for t in texts):
                     return self._send(400, {"error": "texts deve ser lista de strings"})
-                return self._send(200, {"embeddings": embed(texts)})
+                # G8/V3-A: processa em chunks internos — o eval manda o corpus
+                # inteiro num request e o batch gigante estoura a VRAM (OOM
+                # medido: 7.1GB fp32 em 6GB de GPU). Mesmo resultado, memória
+                # plana; o chunk de 32 é o mesmo do próprio servidor.
+                embeddings: list = []
+                for s in range(0, len(texts), BATCH_SIZE):
+                    embeddings.extend(embed(texts[s : s + BATCH_SIZE]))
+                return self._send(200, {"embeddings": embeddings})
             return self._send(404, {"error": f"unknown path {self.path}"})
         except Exception as e:  # noqa: BLE001
             # Exceção do motor vira erro tipado — nunca derruba o servidor.
@@ -133,7 +159,8 @@ def main(argv: list[str] | None = None) -> int:
     State.offline = not args.allow_download
     print(f"embed_server: loading {args.model} (offline={State.offline}) ...", flush=True)
     State.model = load_model(args.model, args.allow_download)
-    State.dim = int(State.model.get_sentence_embedding_dimension())
+    # ST 5.3+ renamed get_sentence_embedding_dimension -> get_embedding_dimension.
+    State.dim = int(State.model.get_embedding_dimension())
     print(f"embed_server: model ready dim={State.dim}", flush=True)
 
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)

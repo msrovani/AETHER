@@ -24,7 +24,7 @@ Single-flight global: um job por vez em Lab/Testes IA. Console IA usa HTTP próp
 |---|---|
 | Barra superior | **AETHER** + versão + frase de fronteira (*LLM gera; AETHER cita, certifica ou abstem.*) + seletor Lab \| Testes IA \| Console IA + jobs da aba ativa + status |
 | Centro (Lab e Testes IA) | Faixa **Situação**: cartão Programa (versão, fronteira, ACQ, API eval, agente) e cartão Online (job, demo, SGDB, última sonda de CPU/RAM) |
-| Centro (Lab) | ACQ, cobertura, hot-path, T01–T12, vazão, doação (origem/destino/gates/E3 + chip USO), gaps, host |
+| Centro (Lab) | ACQ, cobertura, hot-path, **F4** (placar v2 do artefato + sanção v3 sem número inventado), T01–T12, vazão, doação (origem/destino/gates/E3 + chip USO), gaps, host |
 | Centro (Testes IA) | Grade U1–U6, tabela API eval, painel ask/cite/abstain, contrato usabilidade |
 | Centro (Console IA) | Histórico chat + campo pergunta + escopo (org/run/app) + URL API (`AETHER_API_URL` ou `http://127.0.0.1:8787`) |
 | Coluna direita **Detalhe** | Chip glossário/hover/ficha; hover sem tooltip flutuante; ficha T0x fixa; textos longos; gráficos demo |

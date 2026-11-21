@@ -10,6 +10,7 @@ mod ai_view;
 mod catalog;
 mod console;
 mod demo_trace;
+mod f4_view;
 mod fmt;
 mod gaps;
 mod host_probe;
@@ -27,6 +28,7 @@ pub use catalog::{
 };
 pub use console::{draw_console, ConsolePane};
 pub use demo_trace::{DemoSample, DemoTrace};
+pub use f4_view::{f4_detail, f4_program_line, load_f4_view, F4View};
 pub use fmt::fmt_compact;
 pub use gaps::{Gap, GapSeverity};
 pub use host_probe::{host_report_path, load_host_report, probe_and_save, HostReport};

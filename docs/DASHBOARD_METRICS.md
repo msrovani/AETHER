@@ -28,6 +28,19 @@ Fonte de verdade textual alinhada a `src/dashboard/catalog.rs`. UI e docs devem 
 | **TOP/s** | SOP/s ÷ 1e12 | TOP/s | comparar regimes | — |
 | **hot_path_allocations** | Allocs no bench | count | 0 | > 0 |
 
+## Memória semântica (F4)
+
+Lido de `data/embed_eval_last.json`. O hub não recalcula o gate.
+
+| Medidor | Campo | Leitura atual (v2, MiniLM 384d) |
+|---|---|---|
+| **BM25** | `systems.lexical_bm25.hit5` | 0,8662 |
+| **Embed** | `systems.embed_minilm.hit5` | 0,6761 |
+| **Híbrido** | `systems.hybrid_rrf60.hit5` | 0,9225 · REPROVADO |
+| **Gate** | `gate.hit5_min` | 0,974 inalterado |
+
+A linha v3 cita a sanção MSG 1088 (Qwen3-Embedding-0.6B vs `BAAI/bge-m3`, cabeça densa) e, se existir `target/embed_eval_*.json`, o hit@5 medido. Medição 2026-11-20, mesmo SHA, gate inalterado: BGE-M3 embed 0,9366 / híbrido 0,9296; Qwen3-0.6B embed 0,8451 / híbrido 0,9296. Os dois REPROVADOS.
+
 ## Gaps heurísticos (`Gap.code`)
 
 | Código | Severidade típica | Remediação curta |

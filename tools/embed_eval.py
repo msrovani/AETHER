@@ -312,7 +312,10 @@ def embed_texts(url: str, texts: list[str]) -> list[list[float]]:
         req = urllib.request.Request(
             f"{url.rstrip('/')}/embed_batch", data=body, headers={"Content-Type": "application/json"}
         )
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        # G4-v3: Qwen3-0.6B/BGE-M3 são ~10x mais lentos que o MiniLM e o
+        # eval manda o corpus inteiro num request — 120s estoura. 900s é
+        # o teto do cliente; o servidor não tem timeout de processamento.
+        with urllib.request.urlopen(req, timeout=900) as resp:
             out.extend(json.loads(resp.read())["embeddings"])
     return out
 

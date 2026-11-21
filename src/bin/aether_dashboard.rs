@@ -27,11 +27,11 @@ mod aether_dashboard_win {
 
     use aether_engine::dashboard::{
         agent_ask_detail, api_case_detail, collect_wave_gaps, dest_detail, dimension_ficha,
-        dimension_tooltip, draw_console, fmt_compact, gates_detail, global_tooltip,
-        glossary_entries, load_agent_drive, load_api_eval, load_host_report, load_scorecard,
-        load_transplant_view, origin_detail, throughput_tooltip, AgentDriveReport, ApiEvalReport,
-        ConsolePane, DimFicha, Gap, GapSeverity, HostReport, JobKind, JobPhase, JobRunner,
-        ScorecardView, TransplantView,
+        dimension_tooltip, draw_console, f4_detail, f4_program_line, fmt_compact, gates_detail,
+        global_tooltip, glossary_entries, load_agent_drive, load_api_eval, load_f4_view,
+        load_host_report, load_scorecard, load_transplant_view, origin_detail, throughput_tooltip,
+        AgentDriveReport, ApiEvalReport, ConsolePane, DimFicha, F4View, Gap, GapSeverity,
+        HostReport, JobKind, JobPhase, JobRunner, ScorecardView, TransplantView,
     };
 
     /// Aba superior do hub.
@@ -177,6 +177,7 @@ mod aether_dashboard_win {
         transplant: TransplantView,
         api_eval: ApiEvalReport,
         agent_drive: AgentDriveReport,
+        f4: F4View,
         wave_gaps: Vec<Gap>,
         tab: HubTab,
         status: String,
@@ -207,6 +208,7 @@ mod aether_dashboard_win {
             self.transplant = load_transplant_view();
             self.api_eval = load_api_eval();
             self.agent_drive = load_agent_drive();
+            self.f4 = load_f4_view();
             self.wave_gaps = collect_wave_gaps();
         }
 
@@ -343,6 +345,7 @@ mod aether_dashboard_win {
                         match self.tab {
                             HubTab::Lab => {
                                 self.draw_situation(ui);
+                                self.draw_f4(ui);
                                 self.draw_globals(ui);
                                 ui.add_space(14.0);
                                 self.draw_dimensions(ui);
@@ -822,6 +825,14 @@ mod aether_dashboard_win {
             } else {
                 lines.push(("test drive do agente ainda não rodou".into(), theme::MUTED));
             }
+            let f4_color = if !self.f4.present {
+                theme::MUTED
+            } else if self.f4.hybrid_pass {
+                theme::OK
+            } else {
+                theme::BAD
+            };
+            lines.push((f4_program_line(&self.f4), f4_color));
             lines
         }
 
@@ -1310,6 +1321,86 @@ mod aether_dashboard_win {
                     );
                 }
             });
+        }
+
+        fn draw_f4(&mut self, ui: &mut egui::Ui) {
+            self.section_header(ui, "Memória semântica (F4)");
+            let detail = f4_detail(&self.f4);
+            if !self.f4.present {
+                let msg = self
+                    .f4
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "artefato ausente".into());
+                let resp = ui.label(
+                    RichText::new(format!("sem placar v2 · {msg}"))
+                        .small()
+                        .color(theme::WARN),
+                );
+                if resp.hovered() {
+                    self.note_hover("F4", detail);
+                }
+                ui.add_space(14.0);
+                return;
+            }
+            let verdict = if self.f4.hybrid_pass {
+                "PASSOU"
+            } else {
+                "REPROVADO"
+            };
+            let verdict_c = if self.f4.hybrid_pass {
+                theme::OK
+            } else {
+                theme::BAD
+            };
+            ui.label(
+                RichText::new(format!(
+                    "v2 · {}d · set {} · {} docs · {} consultas · {}",
+                    self.f4.dim,
+                    self.f4.sha_short,
+                    self.f4.n_docs,
+                    self.f4.n_queries,
+                    verdict
+                ))
+                .small()
+                .color(verdict_c),
+            );
+            ui.add_space(6.0);
+            ui.horizontal_wrapped(|ui| {
+                if meter_card(ui, "BM25", format!("{:.4}", self.f4.bm25_hit5), theme::TEXT) {
+                    self.note_hover("F4", detail.clone());
+                }
+                if meter_card(ui, "Embed", format!("{:.4}", self.f4.embed_hit5), theme::TEXT) {
+                    self.note_hover("F4", detail.clone());
+                }
+                if meter_card(
+                    ui,
+                    "Híbrido",
+                    format!("{:.4}", self.f4.hybrid_hit5),
+                    verdict_c,
+                ) {
+                    self.note_hover("F4", detail.clone());
+                }
+                if meter_card(
+                    ui,
+                    "Gate",
+                    format!("{:.3}", self.f4.gate_hit5),
+                    theme::ACCENT,
+                ) {
+                    self.note_hover("F4", detail.clone());
+                }
+            });
+            ui.add_space(4.0);
+            let v3 = if self.f4.v3_files.is_empty() {
+                "v3 sem placar · Qwen3-0.6B vs BGE-M3 (MSG 1088, só cabeça densa)".into()
+            } else {
+                format!("v3 · {}", self.f4.v3_files.join(" · "))
+            };
+            let resp = ui.label(RichText::new(v3).small().color(theme::MUTED));
+            if resp.hovered() {
+                self.note_hover("F4", detail);
+            }
+            ui.add_space(14.0);
         }
 
         fn draw_wave_gaps(&mut self, ui: &mut egui::Ui) {
@@ -1840,6 +1931,7 @@ mod aether_dashboard_win {
             transplant: TransplantView::default(),
             api_eval: ApiEvalReport::default(),
             agent_drive: AgentDriveReport::default(),
+            f4: F4View::default(),
             wave_gaps: Vec::new(),
             tab: HubTab::Lab,
             status: String::new(),
