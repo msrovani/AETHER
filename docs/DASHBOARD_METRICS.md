@@ -39,7 +39,7 @@ Lido de `data/embed_eval_last.json`. O hub não recalcula o gate.
 | **Híbrido** | `systems.hybrid_rrf60.hit5` | 0,9225 · REPROVADO |
 | **Gate** | `gate.hit5_min` | 0,974 inalterado |
 
-A linha v3 cita a sanção MSG 1088 (Qwen3-Embedding-0.6B vs `BAAI/bge-m3`, cabeça densa) e, se existir `target/embed_eval_*.json`, o hit@5 medido. Medição 2026-11-20, mesmo SHA, gate inalterado: BGE-M3 embed 0,9366 / híbrido 0,9296; Qwen3-0.6B embed 0,8451 / híbrido 0,9296. Os dois REPROVADOS.
+A linha v3 cita a sanção MSG 1088 e os artefatos `target/embed_eval_*.json`. Medições (mesmo SHA, gate 0,974): BGE-M3 denso 0,9366; Qwen3-Emb 0,8451; BGE-rerank 0,9437; Qwen3-Reranker-0.6B **0,9577** (melhor). **HITL 2026-11-21 (MSG 1093): F4 CONGELADA REPROVADA** — V3 esgotada; cadeira fechada; sem baixar teto nem reescrever ouro.
 
 ## Gaps heurísticos (`Gap.code`)
 

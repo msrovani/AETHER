@@ -1326,6 +1326,17 @@ mod aether_dashboard_win {
         fn draw_f4(&mut self, ui: &mut egui::Ui) {
             self.section_header(ui, "Memória semântica (F4)");
             let detail = f4_detail(&self.f4);
+            let freeze = ui.label(
+                RichText::new(
+                    "CONGELADA · REPROVADA · cadeira fechada · gate 0.974 intacto (MSG 1093)",
+                )
+                .small()
+                .strong()
+                .color(theme::BAD),
+            );
+            if freeze.hovered() {
+                self.note_hover("F4", detail.clone());
+            }
             if !self.f4.present {
                 let msg = self
                     .f4
@@ -1343,24 +1354,11 @@ mod aether_dashboard_win {
                 ui.add_space(14.0);
                 return;
             }
-            let verdict = if self.f4.hybrid_pass {
-                "PASSOU"
-            } else {
-                "REPROVADO"
-            };
-            let verdict_c = if self.f4.hybrid_pass {
-                theme::OK
-            } else {
-                theme::BAD
-            };
+            let verdict_c = theme::BAD;
             ui.label(
                 RichText::new(format!(
-                    "v2 · {}d · set {} · {} docs · {} consultas · {}",
-                    self.f4.dim,
-                    self.f4.sha_short,
-                    self.f4.n_docs,
-                    self.f4.n_queries,
-                    verdict
+                    "v2 · {}d · set {} · {} docs · {} consultas · REPROVADO",
+                    self.f4.dim, self.f4.sha_short, self.f4.n_docs, self.f4.n_queries
                 ))
                 .small()
                 .color(verdict_c),
@@ -1392,9 +1390,12 @@ mod aether_dashboard_win {
             });
             ui.add_space(4.0);
             let v3 = if self.f4.v3_files.is_empty() {
-                "v3 sem placar · Qwen3-0.6B vs BGE-M3 (MSG 1088, só cabeça densa)".into()
+                "v3 esgotada · sem artefato em target/".into()
             } else {
-                format!("v3 · {}", self.f4.v3_files.join(" · "))
+                format!(
+                    "v3 esgotada · melhor 0.9577 (Qwen rerank) · {}",
+                    self.f4.v3_files.join(" · ")
+                )
             };
             let resp = ui.label(RichText::new(v3).small().color(theme::MUTED));
             if resp.hovered() {

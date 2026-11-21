@@ -11,8 +11,11 @@ use serde::Deserialize;
 /// Gate documental quando o JSON antigo não traz `hit5_min`.
 const GATE_HIT5_FALLBACK: f64 = 0.974;
 
-/// Sanção vigente (MSG 1088). Não é medição.
+/// Sanção V3 (MSG 1088). Histórico — a fila foi esgotada.
 pub const V3_SANCTION: &str = "V3-A sancionada (MSG 1088): Qwen3-Embedding-0.6B vs BAAI/bge-m3 no set v2. O harness mede só a cabeça densa.";
+
+/// Decisão HITL (MSG 1093): F4 congelada; gate intacto; cadeira fechada.
+pub const F4_FREEZE: &str = "HITL MSG 1093: F4 CONGELADA REPROVADA · gate 0.974 intacto · V3 esgotada · cadeira fechada · melhor placar Qwen3-Reranker-0.6B 0.9577 · sem nova medição sem sanção";
 
 /// Leitura do último eval F4 para o cartão do Lab.
 #[derive(Clone, Debug)]
@@ -218,12 +221,10 @@ pub fn parse_f4(text: &str) -> Result<F4View, String> {
 /// Texto da coluna Detalhe.
 pub fn f4_detail(v: &F4View) -> String {
     if let Some(err) = &v.error {
-        return format!("F4: não leu {}\n{err}", v.path.display());
+        return format!("F4: não leu {}\n{err}\n{F4_FREEZE}", v.path.display());
     }
     if !v.present {
-        return format!(
-            "Sem data/embed_eval_last.json.\n{V3_SANCTION}"
-        );
+        return format!("Sem data/embed_eval_last.json.\n{F4_FREEZE}");
     }
     let verdict = if v.hybrid_pass { "PASSOU" } else { "REPROVADO" };
     let misses = if v.misses.is_empty() {
@@ -237,7 +238,7 @@ pub fn f4_detail(v: &F4View) -> String {
         format!("Artefatos v3: {}", v.v3_files.join(", "))
     };
     format!(
-        "F4 v2 · embed {dim}d · set {sha}\n{docs} docs · {queries} consultas\nBM25 {bm:.4} · embed {em:.4} · híbrido {hy:.4}\ngate {gate:.3} · {verdict}\nmisses híbrido: {misses}\n{v3}",
+        "{F4_FREEZE}\nF4 v2 · embed {dim}d · set {sha}\n{docs} docs · {queries} consultas\nBM25 {bm:.4} · embed {em:.4} · híbrido {hy:.4}\ngate {gate:.3} · {verdict}\nmisses híbrido: {misses}\n{v3}",
         dim = v.dim,
         sha = v.sha_short,
         docs = v.n_docs,
@@ -253,16 +254,10 @@ pub fn f4_detail(v: &F4View) -> String {
 /// Uma linha para o cartão Programa.
 pub fn f4_program_line(v: &F4View) -> String {
     if !v.present {
-        return "F4 sem artefato".into();
+        return "F4 CONGELADA · sem artefato v2".into();
     }
-    let verdict = if v.hybrid_pass { "PASSOU" } else { "REPROVADO" };
-    let v3 = if v.v3_files.is_empty() {
-        "v3 sem placar".to_string()
-    } else {
-        v.v3_files.join(" · ")
-    };
     format!(
-        "F4 v2 híbrido {:.4} · gate {:.3} · {verdict} · {v3}",
+        "F4 CONGELADA · v2 híbrido {:.4} · gate {:.3} · cadeira fechada",
         v.hybrid_hit5, v.gate_hit5
     )
 }
@@ -290,9 +285,9 @@ mod tests {
         assert!((v.hybrid_hit5 - 0.9225).abs() < 1e-9);
         assert!(!v.hybrid_pass);
         assert_eq!(v.misses, vec!["f08".to_string(), "d115".to_string()]);
-        assert!(f4_program_line(&v).contains("REPROVADO"));
-        assert!(f4_program_line(&v).contains("v3 sem placar"));
-        assert!(f4_detail(&v).contains("Sem artefato"));
+        assert!(f4_program_line(&v).contains("CONGELADA"));
+        assert!(f4_program_line(&v).contains("cadeira fechada"));
+        assert!(f4_detail(&v).contains("MSG 1093"));
     }
 
     #[test]
