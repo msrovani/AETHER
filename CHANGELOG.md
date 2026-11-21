@@ -3,6 +3,17 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
 
+## [0.1.12] - 2026-11-21
+
+### Changed
+
+- F4 CONGELADA REPROVADA (HITL MSG 1093): V3-A/B esgotadas; melhor placar
+  Qwen3-Reranker-0.6B hit@5 0,9577; gate 0,974 intacto; cadeira fechada.
+- Hub Lab: faixa F4 CONGELADA (`src/dashboard/f4_view.rs`).
+- Docs: `docs/F4_CLOSE_V3_HITL.md`; placares em `data/reports/f4_v3_*.json`.
+- Harness: medição densa/CUDA + `tools/f4_rerank_v3b.py` (já em 0.1.11+/commits
+  `0a9924b` / `3f5d7e9`).
+
 ## [0.1.11] - 2026-11-20
 
 ### Changed

@@ -1,5 +1,8 @@
 # F4 — embed server + eval de recall (hit@5)
 
+> **Estado 2026-11-21:** F4 **CONGELADA REPROVADA** (HITL MSG 1093). Gate
+> `0.974` intacto. Fechamento V3 e placares: [`F4_CLOSE_V3_HITL.md`](F4_CLOSE_V3_HITL.md).
+>
 > Missão **F4** do plano F2→F3 (`docs/VEGA_F3_PLANO_CONSOLIDADO.md`) · claim
 > **MSG 0780** · aprovado com ressalva **D3** na **MSG 0772** · dataset
 > congelado na **MSG 0861** · dono: **AGENT-A**.

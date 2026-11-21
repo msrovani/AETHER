@@ -1,0 +1,131 @@
+{
+  "sha256_set": "c422a1a00fc18c9335b437f507f8bf250f8df2a1689f3ef2f2259c7fad0f3397",
+  "n_docs": 722,
+  "n_queries": 142,
+  "dim": 1024,
+  "latency": {
+    "bm25_s": 1.22,
+    "embed_s": 422.75
+  },
+  "systems": {
+    "lexical_bm25": {
+      "hit5": 0.8662,
+      "recall5": 0.1566,
+      "misses": [
+        "f01",
+        "f05",
+        "f08",
+        "f11",
+        "f12",
+        "f21",
+        "d11",
+        "d14",
+        "d24",
+        "d43",
+        "d44",
+        "d45",
+        "d57",
+        "d82",
+        "d95",
+        "d96",
+        "d99",
+        "d100",
+        "d121"
+      ]
+    },
+    "embed_minilm": {
+      "hit5": 0.8451,
+      "recall5": 0.1633,
+      "misses": [
+        "d06",
+        "d14",
+        "d22",
+        "d24",
+        "d30",
+        "d40",
+        "d42",
+        "d43",
+        "d44",
+        "d45",
+        "d54",
+        "d67",
+        "d72",
+        "d81",
+        "d85",
+        "d92",
+        "d93",
+        "d99",
+        "d105",
+        "d113",
+        "d114",
+        "d115"
+      ]
+    },
+    "hybrid_rrf60": {
+      "hit5": 0.9296,
+      "recall5": 0.1864,
+      "misses": [
+        "f08",
+        "f12",
+        "f21",
+        "d06",
+        "d14",
+        "d24",
+        "d43",
+        "d44",
+        "d92",
+        "d115"
+      ]
+    }
+  },
+  "per_kind": {
+    "lexical_bm25": {
+      "hard": {
+        "n": 23,
+        "hit5": 0.8696
+      },
+      "lexical": {
+        "n": 50,
+        "hit5": 0.98
+      },
+      "semantic": {
+        "n": 69,
+        "hit5": 0.7826
+      }
+    },
+    "embed_minilm": {
+      "hard": {
+        "n": 23,
+        "hit5": 0.8696
+      },
+      "lexical": {
+        "n": 50,
+        "hit5": 0.86
+      },
+      "semantic": {
+        "n": 69,
+        "hit5": 0.8261
+      }
+    },
+    "hybrid_rrf60": {
+      "hard": {
+        "n": 23,
+        "hit5": 0.9565
+      },
+      "lexical": {
+        "n": 50,
+        "hit5": 0.96
+      },
+      "semantic": {
+        "n": 69,
+        "hit5": 0.8986
+      }
+    }
+  },
+  "gate": {
+    "hit5_min": 0.974,
+    "embed_pass": false,
+    "hybrid_pass": false,
+    "beats_lexical": false
+  }
+}

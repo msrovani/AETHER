@@ -1,0 +1,75 @@
+{
+  "sha256_set": "c422a1a00fc18c9335b437f507f8bf250f8df2a1689f3ef2f2259c7fad0f3397",
+  "n_docs": 722,
+  "n_queries": 142,
+  "model_embed": "BAAI/bge-m3",
+  "model_rerank": "Qwen/Qwen3-Reranker-0.6B",
+  "rerank_pool": 50,
+  "max_length": 512,
+  "batch": 4,
+  "latency": {
+    "dense_s": 81.62,
+    "rerank_s": 2866.28
+  },
+  "systems": {
+    "lexical_bm25": {
+      "hit5": 0.8662,
+      "recall5": 0.1566,
+      "misses": [
+        "f01",
+        "f05",
+        "f08",
+        "f11",
+        "f12",
+        "f21",
+        "d11",
+        "d14",
+        "d24",
+        "d43",
+        "d44",
+        "d45",
+        "d57",
+        "d82",
+        "d95",
+        "d96",
+        "d99",
+        "d100",
+        "d121"
+      ]
+    },
+    "embed_minilm": {
+      "hit5": 0.9366,
+      "recall5": 0.1918,
+      "misses": [
+        "d31",
+        "d38",
+        "d43",
+        "d45",
+        "d81",
+        "d95",
+        "d96",
+        "d100",
+        "d111"
+      ]
+    },
+    "rerank": {
+      "hit5": 0.9577,
+      "recall5": 0.1961,
+      "misses": [
+        "d24",
+        "d31",
+        "d43",
+        "d95",
+        "d99",
+        "d100"
+      ]
+    }
+  },
+  "gate": {
+    "hit5_min": 0.974,
+    "embed_pass": false,
+    "rerank_pass": false,
+    "hybrid_pass": false,
+    "both_pass": false
+  }
+}
