@@ -564,6 +564,9 @@ impl ParserPort {
                     clauses: Vec::new(),
                     j: Vec::new(),
                     h: Vec::new(),
+                    path: None,
+                    url: None,
+                    mcp_name: None,
                     success: SuccessCriteria::Any,
                     budget: Budget::default(),
                     risk_ceiling: Risk::Low,
@@ -640,26 +643,42 @@ impl LanguagePort for ParserPort {
     }
 
     fn generate(&mut self, claims: &[Claim], style: Style) -> Result<String, LanguageError> {
+        // P1 template extrativo: só fala o que a claim cobre; cita auth/fonte.
+        // Sem evidência → Empty (disjuntor). Sem LLM no default.
         if claims.is_empty() {
             return Err(LanguageError::Empty);
         }
         let lines: Vec<String> = claims
             .iter()
-            .map(|c| match style {
-                Style::Factual => format!(
-                    "{} {} = {}.",
-                    c.subject.trim(),
-                    c.relation.trim(),
-                    c.value.trim()
-                ),
-                Style::Compact => format!(
-                    "{} {}={}",
-                    c.subject.trim(),
-                    c.relation.trim(),
-                    c.value.trim()
-                ),
+            .filter(|c| !c.value.trim().is_empty())
+            .map(|c| {
+                let cite = format!(
+                    "(fonte={} auth={} conf={:.2})",
+                    c.source.label(),
+                    c.authority,
+                    c.confidence
+                );
+                match style {
+                    Style::Factual => format!(
+                        "{} {} = {}. {}",
+                        c.subject.trim(),
+                        c.relation.trim(),
+                        c.value.trim(),
+                        cite
+                    ),
+                    Style::Compact => format!(
+                        "{} {}={} {}",
+                        c.subject.trim(),
+                        c.relation.trim(),
+                        c.value.trim(),
+                        cite
+                    ),
+                }
             })
             .collect();
+        if lines.is_empty() {
+            return Err(LanguageError::Empty);
+        }
         Ok(lines.join(" "))
     }
 
@@ -1047,6 +1066,12 @@ mod tests {
         );
         let t = p.generate(&[claim], Style::Compact).unwrap();
         assert!(t.contains("capital=Brasília"));
+        assert!(t.contains("auth=200"), "P1 cita autoridade: {t}");
+        assert!(t.contains("fonte=transplant"), "P1 cita fonte: {t}");
+        assert!(matches!(
+            p.generate(&[], Style::Factual),
+            Err(LanguageError::Empty)
+        ));
     }
 
     #[test]

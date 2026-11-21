@@ -1,0 +1,5 @@
+{"subject": "Vec", "relation": "metodo", "object": "push"}
+{"subject": "Vec", "relation": "metodo", "object": "pop"}
+{"subject": "ownership", "relation": "proibe", "object": "duas_mut_refs"}
+{"subject": "AETHER", "relation": "proibe", "object": "backpropagation"}
+{"subject": "AETHER", "relation": "usa", "object": "fase"}

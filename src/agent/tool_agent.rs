@@ -19,7 +19,7 @@ use super::tool::{
     UndoBackend, WorldState,
 };
 use super::tools::default_tools;
-use super::{Action, AgentConfig, Claim, ExpertId, Feedback};
+use super::{Action, AgentConfig, Claim, ExpertId, Feedback, WorldPolicy};
 use crate::core::certificate::Provenance;
 
 /// Resultado de um goal.
@@ -50,6 +50,7 @@ pub struct ToolAgent {
     planner: Planner,
     executor: ToolExecutor,
     scope: ScopeId,
+    world: WorldPolicy,
     traces: Vec<EpisodeTrace>,
     undo_backend: Option<Arc<dyn UndoBackend>>,
 }
@@ -81,6 +82,7 @@ impl ToolAgent {
             planner: Planner::default(),
             executor: ToolExecutor,
             scope: cfg.scope,
+            world: cfg.world.clone(),
             traces: Vec::new(),
             undo_backend: None,
         }
@@ -94,8 +96,25 @@ impl ToolAgent {
             planner: Planner::default(),
             executor: ToolExecutor,
             scope,
+            world: WorldPolicy::default(),
             traces: Vec::new(),
             undo_backend: None,
+        }
+    }
+
+    /// Sobrescreve a política de mundo (gates A4).
+    pub fn with_world(mut self, world: WorldPolicy) -> Self {
+        self.world = world;
+        self
+    }
+
+    fn world_state(&self) -> WorldState {
+        WorldState {
+            scope: self.scope,
+            sandbox_root: self.world.sandbox_root.display().to_string(),
+            http_hosts: self.world.http_hosts.clone(),
+            mcp_allow: self.world.mcp_allow.clone(),
+            ..WorldState::default()
         }
     }
 
@@ -150,10 +169,7 @@ impl ToolAgent {
 
     /// Ranking de tools para um goal, sem executar (diagnóstico de autoescolha).
     pub fn plan(&self, goal: &Goal) -> Vec<PlanStep> {
-        let state = WorldState {
-            scope: self.scope,
-            ..WorldState::default()
-        };
+        let state = self.world_state();
         self.planner
             .rank(goal, &state, &self.registry, &self.self_model, &[])
     }
@@ -168,10 +184,7 @@ impl ToolAgent {
             return self.solve_pipeline(goal);
         }
         let started = std::time::Instant::now();
-        let state = WorldState {
-            scope: self.scope,
-            ..WorldState::default()
-        };
+        let state = self.world_state();
         let mut ctx = self.context(
             Budget {
                 max_steps: goal.budget.max_steps.clamp(1, 16),
@@ -194,10 +207,7 @@ impl ToolAgent {
 
     fn solve_pipeline(&mut self, workflow: &Goal) -> GoalOutcome {
         let started = std::time::Instant::now();
-        let state = WorldState {
-            scope: self.scope,
-            ..WorldState::default()
-        };
+        let state = self.world_state();
         let total_steps: usize = workflow
             .pipeline
             .iter()
@@ -564,5 +574,10 @@ fn tools_allowlist() -> Vec<&'static str> {
         "verify",
         "ask.human",
         "language.parse",
+        "fs.read",
+        "fs.write",
+        "http.get",
+        "mcp.call",
+        "shell.exec",
     ]
 }

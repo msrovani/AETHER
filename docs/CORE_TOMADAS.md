@@ -6,7 +6,9 @@
 >
 > Escadas de produto: [`PROSA_FLUENTE.md`](PROSA_FLUENTE.md) ·
 > [`ACOES_AGENTICAS.md`](ACOES_AGENTICAS.md) · [`CODER_AETHER.md`](CODER_AETHER.md) ·
-> [`MOE_ETL_PACK.md`](MOE_ETL_PACK.md). Linguagem: [`LANGUAGE_PORT.md`](LANGUAGE_PORT.md).
+> [`MOE_ETL_PACK.md`](MOE_ETL_PACK.md) · [`VISAO_AETHER.md`](VISAO_AETHER.md) ·
+> [`SPEECH_AETHER.md`](SPEECH_AETHER.md). Linguagem: [`LANGUAGE_PORT.md`](LANGUAGE_PORT.md).
+> Fila próximo/médio/distante: **[`TOMADAS_FUTURO.md`](TOMADAS_FUTURO.md)**.
 
 ## 1. O que é o core (e o que não é)
 
@@ -63,17 +65,22 @@ escada de produto, estado.
 |---|---|---|---|---|---|
 | **T-MOE** | `MoERouter` EXP3/UCB | `Goal` → top-k experts/tools | score &lt; min_score → abstain | M0, M5, A1–A3 | **vivo** |
 | **T-XP-*** | experts (transplant, phase, logic, solver, memory) | task → `ExpertOutput` | evidência fraca → None/abstain | M1–M3 | **vivo** |
-| **T-PLAN** | planner + executor | Goal → PlanStep* + rollback | risk_ceiling / allowlist | A0–A7 | **parcial** (A4 aberto) |
+| **T-DEC** | DecisionPort / Vega | Goal → route/abstain + conformal | `engine_unavailable` → stub | F1/P6 | **vivo** (opt-in; hub `dec_view`) |
+| **T-EMB** | EmbedPort | texto → `Vec<f32>`+era | dim/era mismatch; off→lexical | F4 | **vivo formal** (off; F4 congelada) |
+| **T-PLAN** | planner + executor | Goal → PlanStep* + rollback | risk_ceiling / allowlist | A0–A7 | **vivo** (mundo A4) |
 | **T-COH** | coherence | claims → Action | contradição → abstain/cite | — | **vivo** |
 | **T-AUTH** | autoridade / HITL | claim auth 60…255 | ≥200/255 só HITL; LLM≤120 | todas | **vivo** |
+| **T-HITL** | `HitlRequest`→`HitlDecision` | promote/deny/ampliar + audit | timeout→abstain; 255 sem token | A7 | **vivo** (`hitl.rs`) |
 
 ### 2.3 Saída (atuação / render)
 
 | ID | Nome | Contrato | Disjuntor | Escada | Estado |
 |---|---|---|---|---|---|
-| **T-NL-OUT** | `LanguagePort::generate` / template | Concept/claims → texto | sem evidência → não gera | P1–P6 | **template parcial** |
-| **T-CODE** | `code.generate` + patch/test | Goal→diff→sandbox→teste | sem G-A4; falso merge | K0–K8 | **spec** |
-| **T-FS/HTTP** | mundo sandbox | efeitos allowlist | fora da raiz / POST | A4 | **parcial** |
+| **T-NL-OUT** | `LanguagePort::generate` / template | Concept/claims → texto + cite auth | sem evidência → Empty | P1–P6 | **vivo (P1)** |
+| **T-CODE** | `code.generate` + patch/test | Goal→diff→sandbox→teste | falso merge; sandbox G-A4 | K0–K8 | **spec** (K0 desbloqueado) |
+| **T-FS** | `fs.read` / `fs.write` | path relativo → bytes sob `sandbox_root` | traversal / escape | A4 | **vivo** (`tests/agent_safety_gate`) |
+| **T-HTTP** | `http.get` | URL → body/claim; GET only | host fora allowlist; POST | A4 | **vivo** (fetch opt-in) |
+| **T-MCP** | `mcp.call` | nome allowlist → `ToolOutcome` | nome fora; args inválidos | A4 | **vivo** (proxy tipado) |
 | **T-TTS** | text→speech | texto certificado → áudio | falar claim sem fonte; auth&lt;limiar | — | **reservada** |
 | **T-UI** | hub / API | Action → tela/SSE | — | produto hub | **vivo** |
 
@@ -134,6 +141,8 @@ Sem implementar motores agora; **contrato estável** para não refazer a fiaçã
 
 ### 5.1 `T-STT` (speech → text)
 
+Escada de produto S0→S8: **[`SPEECH_AETHER.md`](SPEECH_AETHER.md)**.
+
 ```rust
 // contrato alvo (borda)
 pub struct SttPort {
@@ -152,6 +161,8 @@ Default produto: **off** até existir backend local allowlisted.
 
 ### 5.2 `T-TTS` (text → speech)
 
+Mesma escada: **[`SPEECH_AETHER.md`](SPEECH_AETHER.md)** (S2/S5).
+
 ```rust
 pub struct TtsPort {
     // CertifiedUtterance → audio
@@ -168,6 +179,8 @@ Disjuntor: `action == abstain` ou `sources.is_empty()` em claim factual →
 silêncio ou beep “não sei”, **nunca** narração inventada.
 
 ### 5.3 `T-VIS` (vision → struct)
+
+Escada de produto V0→V8: **[`VISAO_AETHER.md`](VISAO_AETHER.md)**.
 
 ```rust
 pub struct VisionPort {
@@ -210,10 +223,11 @@ dims com era do SGDB sem `health(view=era)`.
 ## 8. Próximos plugues (ordem)
 
 1. Manter T-NL-IN + T-MOE + T-NET estáveis (já medidos).  
-2. A4 → destrava T-FS e K0.  
+2. ~~A4 / G-A4~~ **fechado** (`fs`/`http.get`/`mcp.call` + `agent_safety_gate`).  
 3. P1 template → T-NL-OUT mínimo.  
 4. Pack piloto (`MOE_ETL`) → alimenta transplant.  
-5. Spec STT/TTS/VIS atrás de feature flags (`speech`, `vision`) — **zero** no default.
+5. Speech / visão — escadas reservadas; **zero** no default.  
+6. Fila restante (T-HITL, T-EMB, T-PRED, robot…): [`TOMADAS_FUTURO.md`](TOMADAS_FUTURO.md).
 
 ## 9. Memória / recall
 

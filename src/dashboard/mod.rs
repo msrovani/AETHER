@@ -9,6 +9,7 @@
 mod ai_view;
 mod catalog;
 mod console;
+mod dec_view;
 mod demo_trace;
 mod f4_view;
 mod fmt;
@@ -27,6 +28,7 @@ pub use catalog::{
     DimFicha,
 };
 pub use console::{draw_console, ConsolePane};
+pub use dec_view::{dec_detail, dec_program_line, load_dec_view, DecView};
 pub use demo_trace::{DemoSample, DemoTrace};
 pub use f4_view::{f4_detail, f4_program_line, load_f4_view, F4View};
 pub use fmt::fmt_compact;

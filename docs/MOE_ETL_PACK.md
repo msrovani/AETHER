@@ -48,6 +48,7 @@ act | cite | abstain   + feedback → sobe peso do pack
 | **Doadoras** | [`DONOR_CATALOG.md`](DONOR_CATALOG.md) | GLiNER / Qwen escriba; auth ≤120 |
 | **LanguagePort** | [`LANGUAGE_PORT.md`](LANGUAGE_PORT.md) | texto→Goal na borda; pack não tokeniza o core |
 | **Pesquisa** | [`F2_PESQUISA_EXTERNA.md`](F2_PESQUISA_EXTERNA.md) | web ≠ transplant; pode **corroborar** triplas |
+| [`VISAO_AETHER.md`](VISAO_AETHER.md) | pack de rótulos/objetos ancora `VisionObs.entities` |
 
 Ordem mental: **Doação/ETL (M1)** → **MoE roteia (M0/M5)** → **A4 se agir no
 mundo** → **K/P só se precisar gerar**.
@@ -124,10 +125,10 @@ só com sanção.
 
 ## 7. Aceite de um pack no MoE
 
-- [ ] `manifest.json` com licença + hash + `schema_ver`.
-- [ ] Gate recall@k ≥ alvo no `questions.jsonl` (artefato `report.json`).
-- [ ] OOD (fora do domínio) → abstain ≥90%.
-- [ ] Auth ≤120 até HITL/corroboração; tag `source=transplant|llm`.
+- [x] `manifest.json` com licença + hash + `schema_ver` — piloto `data/packs/moe_etl_pilot/`.
+- [x] Gate recall@k ≥ alvo no `questions.jsonl` (artefato `report.json`) — piloto sintético rate=1.0 in-domain.
+- [ ] OOD (fora do domínio) → abstain ≥90% (medir no `aether-agent ask` com subject OOD).
+- [x] Auth ≤120 até HITL/corroboração; tag `source=transplant|llm` (`auth_default=96`).
 - [ ] Após feedback, peso EXP3 do caminho transplant sobe no cluster do pack
       (telemetria).
 

@@ -33,7 +33,7 @@ Não pular degraus: fluência antes de template/juíz vira chatbot solto.
 | Passo | Entrega | O que o usuário vê | Gate / aceite |
 |---|---|---|---|
 | **P0 — baseline** | parser C1 + memória + pesquisa F2 (Wiki∥SearX) | “evidência / não sei” | C1 verde; waste=0 na sim produto |
-| **P1 — prosa auditável** | backend `template`: slots + snippets SGDB/Wiki/SearX → frase PT fixa | “A capital da França é Paris *(fonte…)*” | 0 claim sem evidência; só fala o que a fonte cobre |
+| **P1 — prosa auditável** | backend `template`: claims → frase + `(fonte=… auth=… conf=…)` | “Brasil capital = Brasília. (fonte=transplant auth=200…)” | 0 claim sem evidência; `LanguagePort::generate` Empty se vazio |
 | **P2 — juíz textual** | overlap/slots claim↔fontes (além de convergência numérica) | auth 80–120 em fatos textuais | falso settled ≤1% no corpus-régua (Terra–Lua / Rust×C) |
 | **P3 — `LanguagePort::generate`** | trait + caps (custo/risco/latência); default ainda template | host pode pedir geração tipada | compile + selftest; T0 sem backend generativo |
 | **P4a — small_lm (L2 / C1)** | xLSTM / RWKV / Mamba / BLT 0.5–3B local | fluência offline no budget | L2: qualidade + RAM + tok/s; 3050 cabe |
@@ -104,6 +104,10 @@ Não basta “o modelo fala bonito”. Aceite de produto:
 - [`ACOES_AGENTICAS.md`](ACOES_AGENTICAS.md) — autonomia verificada (paralela à prosa)  
 - [`CODER_AETHER.md`](CODER_AETHER.md) — código: gerar na borda, patch/teste no AETHER  
 - [`MOE_ETL_PACK.md`](MOE_ETL_PACK.md) — skill pack ETL Python → MoE transplant  
+- [`VISAO_AETHER.md`](VISAO_AETHER.md) — T-VIS; prosa descreve só pós-triagem  
+- [`SPEECH_AETHER.md`](SPEECH_AETHER.md) — STT→parser; TTS só CertifiedUtterance  
+
+
 
 
  

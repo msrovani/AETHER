@@ -175,7 +175,7 @@ pub struct Goal {
     pub subject: Option<String>,
     /// Relação (fato).
     pub relation: Option<String>,
-    /// Consulta textual (memória).
+    /// Consulta textual (memória) ou corpo de escrita fs.
     pub query: Option<String>,
     /// Variáveis (SAT/QUBO).
     pub n: Option<usize>,
@@ -185,6 +185,12 @@ pub struct Goal {
     pub j: Vec<f64>,
     /// Campo QUBO.
     pub h: Vec<f64>,
+    /// Caminho relativo à sandbox (`fs.read` / `fs.write`).
+    pub path: Option<String>,
+    /// URL (`http.get`).
+    pub url: Option<String>,
+    /// Nome MCP allowlisted (`mcp.call`).
+    pub mcp_name: Option<String>,
     /// Critério de sucesso.
     pub success: SuccessCriteria,
     /// Orçamento.
@@ -215,6 +221,9 @@ impl Goal {
             clauses: Vec::new(),
             j: Vec::new(),
             h: Vec::new(),
+            path: None,
+            url: None,
+            mcp_name: None,
             budget: Budget::default(),
             risk_ceiling: Risk::Low,
             pipeline: Vec::new(),
@@ -233,6 +242,9 @@ impl Goal {
             clauses,
             j: Vec::new(),
             h: Vec::new(),
+            path: None,
+            url: None,
+            mcp_name: None,
             success: SuccessCriteria::Certificate,
             budget: Budget::default(),
             risk_ceiling: Risk::Low,
@@ -252,6 +264,9 @@ impl Goal {
             clauses: Vec::new(),
             j,
             h,
+            path: None,
+            url: None,
+            mcp_name: None,
             success: SuccessCriteria::Coherent,
             budget: Budget::default(),
             risk_ceiling: Risk::Low,
@@ -271,9 +286,100 @@ impl Goal {
             clauses: Vec::new(),
             j: Vec::new(),
             h: Vec::new(),
+            path: None,
+            url: None,
+            mcp_name: None,
             success: SuccessCriteria::NonEmpty,
             budget: Budget::default(),
             risk_ceiling: Risk::Low,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// Leitura em sandbox (`fs.read`).
+    pub fn fs_read(path: impl Into<String>) -> Self {
+        Self {
+            id: 0,
+            kind: GoalKind::Retrieve,
+            subject: None,
+            relation: Some("fs.read".into()),
+            query: None,
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: Some(path.into()),
+            url: None,
+            mcp_name: None,
+            success: SuccessCriteria::NonEmpty,
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// Escrita em sandbox (`fs.write`); corpo em `query`.
+    pub fn fs_write(path: impl Into<String>, body: impl Into<String>) -> Self {
+        Self {
+            id: 0,
+            kind: GoalKind::Act,
+            subject: None,
+            relation: Some("fs.write".into()),
+            query: Some(body.into()),
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: Some(path.into()),
+            url: None,
+            mcp_name: None,
+            success: SuccessCriteria::Any,
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// GET allowlisted (`http.get`).
+    pub fn http_get(url: impl Into<String>) -> Self {
+        Self {
+            id: 0,
+            kind: GoalKind::Retrieve,
+            subject: None,
+            relation: Some("http.get".into()),
+            query: None,
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: None,
+            url: Some(url.into()),
+            mcp_name: None,
+            success: SuccessCriteria::NonEmpty,
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
+            pipeline: Vec::new(),
+        }
+    }
+
+    /// Call MCP tipada (`mcp.call`).
+    pub fn mcp_call(name: impl Into<String>) -> Self {
+        Self {
+            id: 0,
+            kind: GoalKind::Act,
+            subject: None,
+            relation: Some("mcp.call".into()),
+            query: None,
+            n: None,
+            clauses: Vec::new(),
+            j: Vec::new(),
+            h: Vec::new(),
+            path: None,
+            url: None,
+            mcp_name: Some(name.into()),
+            success: SuccessCriteria::Any,
+            budget: Budget::default(),
+            risk_ceiling: Risk::Medium,
             pipeline: Vec::new(),
         }
     }
@@ -297,6 +403,9 @@ impl Goal {
             clauses: Vec::new(),
             j: Vec::new(),
             h: Vec::new(),
+            path: None,
+            url: None,
+            mcp_name: None,
             success: SuccessCriteria::Any,
             budget: Budget::default(),
             risk_ceiling: Risk::Low,
@@ -311,6 +420,9 @@ impl Goal {
             self.subject.as_deref(),
             self.relation.as_deref(),
             self.query.as_deref(),
+            self.path.as_deref(),
+            self.url.as_deref(),
+            self.mcp_name.as_deref(),
         ]
         .into_iter()
         .flatten()
@@ -339,6 +451,12 @@ pub struct WorldState {
     pub memory_hits: usize,
     /// Snapshot do blackboard para poda de pré-condição (A5 / P6).
     pub claims: Vec<Claim>,
+    /// Raiz da sandbox (A4); vazia = tools mundo inativas no planner.
+    pub sandbox_root: String,
+    /// Hosts HTTP allowlisted.
+    pub http_hosts: Vec<String>,
+    /// Nomes MCP allowlisted.
+    pub mcp_allow: Vec<String>,
 }
 
 impl WorldState {
@@ -419,6 +537,13 @@ pub enum Effect {
         /// Tipo do efeito.
         kind: &'static str,
     },
+    /// Escrita em arquivo sandbox; `prev` = conteúdo anterior (`None` = criado).
+    FsWrite {
+        /// Caminho absoluto canônico dentro da sandbox.
+        path: String,
+        /// Conteúdo anterior (None = arquivo não existia).
+        prev: Option<Vec<u8>>,
+    },
     /// Nenhum efeito.
     None,
 }
@@ -437,6 +562,13 @@ pub enum UndoOp {
         key: String,
         /// Snapshot.
         prev: Snapshot,
+    },
+    /// Restaura arquivo sandbox (`prev=None` → apagar).
+    FsRestore {
+        /// Caminho absoluto.
+        path: String,
+        /// Conteúdo anterior.
+        prev: Option<Vec<u8>>,
     },
     /// Descarta o outbox até a marca da transação.
     Stage {
@@ -756,6 +888,12 @@ impl ToolContext {
             Effect::Irreversible { kind } => {
                 self.undo_log.push(UndoOp::Irreversible { kind });
             }
+            Effect::FsWrite { path, prev } => {
+                self.undo_log.push(UndoOp::FsRestore {
+                    path: path.clone(),
+                    prev: prev.clone(),
+                });
+            }
             Effect::None => return,
         }
         self.effects.push(effect);
@@ -771,28 +909,47 @@ impl ToolContext {
         if self.undo_log.len() <= watermark {
             return report;
         }
-        let Some(backend) = self.undo_backend.as_ref() else {
+        let needs_backend = self.undo_log[watermark..].iter().any(|op| {
+            !matches!(
+                op,
+                UndoOp::FsRestore { .. } | UndoOp::Irreversible { .. }
+            )
+        });
+        if needs_backend && self.undo_backend.is_none() {
             report
                 .failed
                 .push("undo sem backend: efeito registrado não pode ser compensado".to_string());
             return report;
-        };
+        }
         for op in self.undo_log[watermark..].iter().rev() {
             let result = match op {
-                UndoOp::Insert { key } => backend.insert_undo(key),
-                UndoOp::Restore { key, prev } => backend.restore(key, prev),
-                UndoOp::Stage {
-                    txn,
-                    keys,
-                    outbox_len,
-                    ..
-                } => backend.stage_rewind_to(*txn, keys, *outbox_len),
+                UndoOp::FsRestore { path, prev } => apply_fs_restore(path, prev.as_deref()),
                 UndoOp::Irreversible { kind } => {
                     report
                         .failed
                         .push(format!("efeito irreversível `{kind}`: exige HITL"));
                     break;
                 }
+                UndoOp::Insert { key } => self
+                    .undo_backend
+                    .as_ref()
+                    .expect("backend")
+                    .insert_undo(key),
+                UndoOp::Restore { key, prev } => self
+                    .undo_backend
+                    .as_ref()
+                    .expect("backend")
+                    .restore(key, prev),
+                UndoOp::Stage {
+                    txn,
+                    keys,
+                    outbox_len,
+                    ..
+                } => self
+                    .undo_backend
+                    .as_ref()
+                    .expect("backend")
+                    .stage_rewind_to(*txn, keys, *outbox_len),
             };
             match result {
                 Ok(()) => report.applied += 1,
@@ -937,4 +1094,15 @@ pub fn outcome_from_expert(expert: ExpertId, output: ExpertOutput) -> ToolOutcom
     let mut outcome = ToolOutcome::from(output);
     outcome.detail = format!("expert={} {}", expert.label(), outcome.detail);
     outcome
+}
+
+fn apply_fs_restore(path: &str, prev: Option<&[u8]>) -> Result<(), String> {
+    match prev {
+        Some(bytes) => std::fs::write(path, bytes).map_err(|e| e.to_string()),
+        None => match std::fs::remove_file(path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.to_string()),
+        },
+    }
 }

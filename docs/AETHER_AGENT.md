@@ -12,7 +12,8 @@ default; small LM/concept/remote LLM opcionais) na borda, AETHER no meio para
 memória/verificação/decisão. Fiação core×tomadas (prosa/MoE/coder/agêntica/
 visão/speech): **`docs/CORE_TOMADAS.md`**. Escadas:
 `docs/PROSA_FLUENTE.md`, `docs/ACOES_AGENTICAS.md`, `docs/CODER_AETHER.md`,
-`docs/MOE_ETL_PACK.md`, `docs/LANGUAGE_PORT.md`, `docs/AETHER_AGENT_ROADMAP.md`.
+`docs/MOE_ETL_PACK.md`, `docs/VISAO_AETHER.md`, `docs/SPEECH_AETHER.md`,
+`docs/TOMADAS_FUTURO.md`, `docs/LANGUAGE_PORT.md`, `docs/AETHER_AGENT_ROADMAP.md`.
 
 ## Premissas → implementação
 

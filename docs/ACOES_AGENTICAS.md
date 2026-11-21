@@ -60,7 +60,7 @@ A6←P4 · A8←P5.
 | P0 / P1 / G-A1 | verde |
 | P2 / G-A2 / G-A3 | verde (pipeline, undo, EFE pragmática) |
 | P3 parser / undo SGDB / stage / HTTP caps / HITL | parcial–verde (ver tabela no ROADMAP) |
-| G-A4 completo (fs+http+MCP no loop do agent) | **em aberto** no que falta integrar |
+| G-A4 completo (fs+http+MCP no loop do agent) | **verde** — `tests/agent_safety_gate.rs` (7/7); shell off |
 | Research no chat (`f2_chat_hook` + cascata) | vivo; **não** é ainda tool do planner |
 | P4 / G-A5 | backlog |
 | P5 mundo preditivo | pesquisa, fora do v1 sem gates |
@@ -92,7 +92,7 @@ A6←P4 · A8←P5.
 Aceite de produto (autonomia **verificada**, não total):
 
 - [ ] Em goals sintéticos do inventário, G-A1/G-A2/G-A3 verdes em artefato versionado.
-- [ ] G-A4: 0 fora de sandbox/allowlist; 0 shell sem HITL; injeção em memória não altera ação.
+- [x] G-A4: 0 fora de sandbox/allowlist; 0 shell sem HITL; injeção em memória não altera ação.
 - [ ] Toda `act` traz trace (tool, args, custo, claims) e passa no SuccessCriteria.
 - [ ] OOD / risco alto → abstain ou `ask.human`, nunca false-act.
 - [ ] Research (se ligada) persiste ≤120 e não promove 255.
@@ -106,6 +106,8 @@ Aceite de produto (autonomia **verificada**, não total):
 | Prosa fluente | [`PROSA_FLUENTE.md`](PROSA_FLUENTE.md) | borda; não libera `act` sozinha |
 | Coder | [`CODER_AETHER.md`](CODER_AETHER.md) | K0 exige A4; gerar na borda, verificar aqui |
 | MoE + ETL pack | [`MOE_ETL_PACK.md`](MOE_ETL_PACK.md) | “download” = facts.jsonl; M8 precisa A4 |
+| Visão | [`VISAO_AETHER.md`](VISAO_AETHER.md) | tool `sense.vision` (V8); precisa A4 p/ persistir frame |
+| Speech | [`SPEECH_AETHER.md`](SPEECH_AETHER.md) | voz = borda D1; act igual; TTS pós-triagem |
 | Pesquisa externa | [`F2_PESQUISA_EXTERNA.md`](F2_PESQUISA_EXTERNA.md) | evidência para A5 / corroborar pack |
 | LanguagePort | [`LANGUAGE_PORT.md`](LANGUAGE_PORT.md) | D1 (texto→Goal), não D3 |
 

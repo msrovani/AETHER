@@ -1,0 +1,10 @@
+{
+  "schema_ver": "moe_etl_pack/v0",
+  "id": "moe_etl_pilot",
+  "license": "CC0-1.0",
+  "source": "synthetic-pilot",
+  "auth_default": 96,
+  "facts_sha256": "22daa4104c30863276ab38e1bac262f02c3c9f5060bc518e6b4dcbe188ada192",
+  "facts_count": 5,
+  "notes": "pack piloto Sprint 5 — auth<=120"
+}

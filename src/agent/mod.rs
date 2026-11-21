@@ -36,9 +36,12 @@
 
 pub mod cli;
 pub mod coherence;
+pub mod dec_status;
+pub mod embed;
 pub mod eval;
 pub mod executor;
 pub mod experts;
+pub mod hitl;
 pub mod language;
 pub mod linucb;
 pub mod planner;
@@ -63,8 +66,11 @@ use self::experts::{default_experts, Expert};
 pub use self::experts::{MemoryCitations, RecallCitation};
 use self::router::MoERouter;
 
+pub use dec_status::DecTomadaStatus;
+pub use embed::{EmbedEra, EmbedPort, EmbedVector};
 pub use eval::{default_eval_path, EvalReport, EvalTier};
 pub use executor::ToolExecutor;
+pub use hitl::{apply_hitl, HitlDecision, HitlKind, HitlRequest};
 pub use language::{
     adapt_text, GoalSchema, LanguageCaps, LanguageError, LanguageParseTool, LanguagePort,
     ParserPort, Style as LanguageStyle,
@@ -78,7 +84,10 @@ pub use tool::{
     AUTHORITY_CORROBORATED, AUTHORITY_HITL, AUTHORITY_QUARANTINE, AUTHORITY_VERIFIED,
 };
 pub use tool_agent::{GoalOutcome, ToolAgent, VerifyTool};
-pub use tools::MemoryWriteTool;
+pub use tools::{
+    resolve_sandbox_path, FsReadTool, FsWriteTool, HttpGetTool, McpCallTool, MemoryWriteTool,
+    ShellTool,
+};
 pub use undo_sgdb::SgdbUndoBackend;
 
 /// Identidade estável de um especialista (1 byte para logs).
@@ -390,6 +399,36 @@ pub struct AgentConfig {
     pub tool_policy_path: Option<PathBuf>,
     /// Escopo das tools.
     pub scope: ScopeId,
+    /// Política de mundo (A4 / G-A4).
+    pub world: WorldPolicy,
+}
+
+/// Política de acesso ao mundo (sandbox / HTTP / MCP). Deny-default.
+#[derive(Clone, Debug)]
+pub struct WorldPolicy {
+    /// Raiz da sandbox de `fs.*` (caminhos resolvidos sob esta raiz).
+    pub sandbox_root: PathBuf,
+    /// Hosts permitidos em `http.get` (lowercase, sem porta).
+    pub http_hosts: Vec<String>,
+    /// Se `false`, `http.get` valida allowlist mas **não** abre socket.
+    pub http_fetch: bool,
+    /// Nomes MCP tipados permitidos em `mcp.call`.
+    pub mcp_allow: Vec<String>,
+}
+
+impl Default for WorldPolicy {
+    fn default() -> Self {
+        Self {
+            sandbox_root: PathBuf::from("target/aether_sandbox"),
+            http_hosts: Vec::new(),
+            http_fetch: false,
+            mcp_allow: vec![
+                "memory.recall".into(),
+                "memory.write".into(),
+                "sgdb.context".into(),
+            ],
+        }
+    }
 }
 
 impl Default for AgentConfig {
@@ -406,6 +445,7 @@ impl Default for AgentConfig {
             sgdb: None,
             tool_policy_path: None,
             scope: ScopeId::new(1, 0, 1),
+            world: WorldPolicy::default(),
         }
     }
 }

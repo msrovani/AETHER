@@ -330,7 +330,7 @@ P0 parser/pesquisa → P1 template → P2 juíz textual → P3 `generate()` →
 P4 small_lm/concept → P5 remote → P6 AND Vega. Não pular degraus.
 
 Fiação com MoE/coder/agêntica/visão/speech: **[`CORE_TOMADAS.md`](CORE_TOMADAS.md)**
-(T-NL-IN/OUT; T-STT/T-TTS reservadas).
+(T-NL-IN/OUT; speech: [`SPEECH_AETHER.md`](SPEECH_AETHER.md); visão: [`VISAO_AETHER.md`](VISAO_AETHER.md)).
 
 ## 6.1 C1 — confiança calibrada no parser (código em `src/agent/language.rs`)
 
@@ -377,5 +377,5 @@ agente.
 - Reservoir LM: arXiv:2507.15779 · ESN syntax: arXiv:2503.01724
 - SpikingMamba: arXiv:2510.04595 · TTFS: arXiv:2609.05151 · BiSpikCLM: arXiv:2605.13859 · Loihi 2: arXiv:2503.18002 · scaling: arXiv:2610.15146
 - VSA: arXiv:2509.25045 · Attention as Binding: arXiv:2512.14709 · VSA-Lisp: arXiv:2511.08767
-- JEPA: V-JEPA 2 arXiv:2506.09985 · LLM-JEPA arXiv:2509.14252
+- JEPA: V-JEPA 2 arXiv:2506.09985 · LLM-JEPA arXiv:2509.14252 · escada visão produto: [`VISAO_AETHER.md`](VISAO_AETHER.md)
 - Parsing: Grammar Pruning (EMNLP 2025) · GRAMMAR-LLM (ACL Findings 2025) · RASP arXiv:2412.10207 · candidate expressions arXiv:2410.00414

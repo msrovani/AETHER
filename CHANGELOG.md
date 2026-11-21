@@ -1,7 +1,37 @@
 ﻿# Changelog
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
-Versionamento: `0.0.x` (patch incrementado pelo ciclo automatico a cada conjunto de mudancas).
+Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando aplicável.
+
+## [0.5.0] - 2026-11-21
+
+### Added
+
+- **G-A4 / mundo sandbox** no `ToolAgent`: `fs.read`/`fs.write`, `http.get`
+  (allowlist, fetch opt-in), `mcp.call` tipado, `shell.exec` always-deny.
+- Gate `tests/agent_safety_gate.rs` (9/9): traversal, allowlist, shell, injeção.
+- **T-HITL** unificado: `src/agent/hitl.rs` (`HitlRequest`→`HitlDecision`).
+- **T-EMB** formal: `src/agent/embed.rs` (`EmbedPort` off; F4 continua congelada).
+- **T-DEC** no hub: `src/agent/dec_status.rs` + `src/dashboard/dec_view.rs`.
+- Pack piloto `data/packs/moe_etl_pilot/` (manifest + facts + questions + report).
+- Docs: `CORE_TOMADAS`, `TOMADAS_FUTURO`, `VISAO_AETHER`, `SPEECH_AETHER`,
+  escadas P/A/K/M atualizadas.
+
+### Changed
+
+- `LanguagePort::generate` (P1): template cita `(fonte=… auth=… conf=…)`.
+- `tools.rs` → módulo `src/agent/tools/` (fs/http/mcp/shell).
+- Programa core×tomadas em 7 sprints fechado (ver `docs/CORE_TOMADAS.md`).
+
+### Fixed
+
+- Disjuntor sandbox (#8) operacional; K0 coder desbloqueado por G-A4.
+
+## [0.1.13] - 2026-11-21
+
+### Added
+
+- Fiação documental CORE_TOMADAS + pesquisa paralela (SearX default lumy).
 
 ## [0.1.12] - 2026-11-21
 

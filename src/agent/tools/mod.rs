@@ -1,7 +1,18 @@
-//! Tools reais do P1: fatos (FHRR), SAT, QUBO, memória durável e HITL.
+//! Tools reais do P1 + mundo A4: fatos, SAT, QUBO, memória, HITL, fs/http/mcp.
 //!
-//! Cada tool encapsula um especialista e declara schema/custo/risco. Não há
-//! efeito externo no P1: memória é leitura; `ask.human` apenas sinaliza.
+//! Mundo (G-A4): `fs.*` sob sandbox, `http.get` allowlist, `mcp.call` tipado,
+//! `shell.exec` sempre deny. Sem efeito externo até A4; memória é leitura;
+//! `ask.human` apenas sinaliza.
+
+pub mod fs;
+pub mod http;
+pub mod mcp;
+pub mod shell;
+
+pub use fs::{resolve_sandbox_path, FsReadTool, FsWriteTool};
+pub use http::HttpGetTool;
+pub use mcp::McpCallTool;
+pub use shell::ShellTool;
 
 use super::experts::{make_logic, make_memory, make_solver, make_transplant, Expert};
 use super::tool::{
@@ -460,10 +471,11 @@ impl Tool for AskHumanTool {
         true
     }
 
-    fn call(&mut self, _goal: &Goal, _ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
+    fn call(&mut self, _goal: &Goal, ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
+        let req = crate::agent::hitl::HitlRequest::ask(ctx.trace_id, "escalado para HITL");
         Ok(ToolOutcome {
             needs_human: true,
-            detail: "escalado para HITL".to_string(),
+            detail: format!("escalado para HITL request={}", req.to_json()),
             ..ToolOutcome::default()
         })
     }
@@ -486,5 +498,11 @@ pub fn default_tools(cfg: &AgentConfig) -> Vec<Box<dyn Tool>> {
     tools.push(Box::new(MemoryWriteTool));
     // C0 LanguagePort (MSG 0292 ACK_Q1): tool em language.rs, registro aqui.
     tools.push(Box::new(super::language::LanguageParseTool::new()));
+    // A4 / G-A4 — mundo sandbox (shell off).
+    tools.push(Box::new(FsReadTool::new(&cfg.world)));
+    tools.push(Box::new(FsWriteTool::new(&cfg.world)));
+    tools.push(Box::new(HttpGetTool::new(&cfg.world)));
+    tools.push(Box::new(McpCallTool::new(&cfg.world)));
+    tools.push(Box::new(ShellTool));
     tools
 }

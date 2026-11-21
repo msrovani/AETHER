@@ -27,11 +27,12 @@ mod aether_dashboard_win {
 
     use aether_engine::dashboard::{
         agent_ask_detail, api_case_detail, collect_wave_gaps, dest_detail, dimension_ficha,
-        dimension_tooltip, draw_console, f4_detail, f4_program_line, fmt_compact, gates_detail,
-        global_tooltip, glossary_entries, load_agent_drive, load_api_eval, load_f4_view,
-        load_host_report, load_scorecard, load_transplant_view, origin_detail, throughput_tooltip,
-        AgentDriveReport, ApiEvalReport, ConsolePane, DimFicha, F4View, Gap, GapSeverity,
-        HostReport, JobKind, JobPhase, JobRunner, ScorecardView, TransplantView,
+        dec_detail, dec_program_line, dimension_tooltip, draw_console, f4_detail, f4_program_line,
+        fmt_compact, gates_detail, global_tooltip, glossary_entries, load_agent_drive,
+        load_api_eval, load_dec_view, load_f4_view, load_host_report, load_scorecard,
+        load_transplant_view, origin_detail, throughput_tooltip, AgentDriveReport, ApiEvalReport,
+        ConsolePane, DecView, DimFicha, F4View, Gap, GapSeverity, HostReport, JobKind, JobPhase,
+        JobRunner, ScorecardView, TransplantView,
     };
 
     /// Aba superior do hub.
@@ -178,6 +179,7 @@ mod aether_dashboard_win {
         api_eval: ApiEvalReport,
         agent_drive: AgentDriveReport,
         f4: F4View,
+        dec: DecView,
         wave_gaps: Vec<Gap>,
         tab: HubTab,
         status: String,
@@ -209,6 +211,7 @@ mod aether_dashboard_win {
             self.api_eval = load_api_eval();
             self.agent_drive = load_agent_drive();
             self.f4 = load_f4_view();
+            self.dec = load_dec_view();
             self.wave_gaps = collect_wave_gaps();
         }
 
@@ -346,6 +349,7 @@ mod aether_dashboard_win {
                             HubTab::Lab => {
                                 self.draw_situation(ui);
                                 self.draw_f4(ui);
+                                self.draw_dec(ui);
                                 self.draw_globals(ui);
                                 ui.add_space(14.0);
                                 self.draw_dimensions(ui);
@@ -833,6 +837,12 @@ mod aether_dashboard_win {
                 theme::BAD
             };
             lines.push((f4_program_line(&self.f4), f4_color));
+            let dec_color = if self.dec.status.degraded {
+                theme::MUTED
+            } else {
+                theme::OK
+            };
+            lines.push((dec_program_line(&self.dec), dec_color));
             lines
         }
 
@@ -1321,6 +1331,25 @@ mod aether_dashboard_win {
                     );
                 }
             });
+        }
+
+        fn draw_dec(&mut self, ui: &mut egui::Ui) {
+            self.section_header(ui, "T-DEC (DecisionPort)");
+            let detail = dec_detail(&self.dec);
+            let color = if self.dec.status.degraded {
+                theme::MUTED
+            } else {
+                theme::OK
+            };
+            let r = ui.label(
+                RichText::new(dec_program_line(&self.dec))
+                    .small()
+                    .strong()
+                    .color(color),
+            );
+            if r.hovered() {
+                self.note_hover("T-DEC", detail);
+            }
         }
 
         fn draw_f4(&mut self, ui: &mut egui::Ui) {
@@ -1933,6 +1962,7 @@ mod aether_dashboard_win {
             api_eval: ApiEvalReport::default(),
             agent_drive: AgentDriveReport::default(),
             f4: F4View::default(),
+            dec: load_dec_view(),
             wave_gaps: Vec::new(),
             tab: HubTab::Lab,
             status: String::new(),
