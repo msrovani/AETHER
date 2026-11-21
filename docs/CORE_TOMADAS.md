@@ -67,7 +67,7 @@ escada de produto, estado.
 | **T-MOE** | `MoERouter` EXP3/UCB + LinUCB opt-in | `Goal` → top-k experts/tools | score &lt; min_score → abstain | M0, M5, A1–A6 | **vivo** (A6/`AETHER_LINUCB`) |
 | **T-XP-*** | experts (transplant, phase, logic, solver, memory, **predict**) | task → `ExpertOutput` | evidência fraca → None/abstain | M1–M3, A8 | **vivo** |
 | **T-PRED** | `PredictExpert` / `predict.series` | série tipada → yhat+intervalo+NRMSE | OOD/metacog → abstain; auth≤120 | A8 | **vivo** (MoE + tool; `enter_v1_default=false`) |
-| **T-DEC** | DecisionPort / Vega | Goal → route/abstain + conformal | `engine_unavailable` → stub | F1/P6 | **vivo** (opt-in; hub `dec_view`) |
+| **T-DEC** | DecisionPort / Vega∧gemma-prose | Goal → route/abstain + conformal (AND opt-in) | `engine_unavailable` → stub; **não** gera prosa; **não** 255 | F1 | **vivo** (opt-in; `dec_view` + `bus` `t_dec`) |
 | **T-EMB** | EmbedPort | texto → `Vec<f32>`+era | dim/era mismatch; off→lexical | F4 | **vivo formal** (off; F4 congelada) |
 | **T-PLAN** | planner + executor | Goal → PlanStep* + rollback | risk_ceiling / allowlist | A0–A7 | **vivo** (mundo A4) |
 | **T-COH** | coherence | claims → Action | contradição → abstain/cite | — | **vivo** |
@@ -85,6 +85,21 @@ escada de produto, estado.
 | **T-MCP** | `mcp.call` | nome allowlist → `ToolOutcome` | nome fora; args inválidos | A4 | **vivo** (proxy tipado) |
 | **T-TTS** | `TtsPort` | só `CertifiedUtterance` → speak/beep | abstain → “não sei”; sem fato inventado | S0–S2 | **vivo stub** |
 | **T-UI** | hub / API | Action → tela/SSE | — | produto hub | **vivo** |
+
+## 2.5 Lei do barramento (fio · disjuntor · filtros · DB)
+
+Infraestrutura **única** — vale para o trio NL-IN/HITL/OUT agora e para
+OCR/VIS/PRED depois (plugue, sem fork):
+
+| Camada | Uma só | Contrato |
+|---|---|---|
+| **Fio** | Goal / Claim / Action / HitlRequest / CertifiedUtterance | `src/agent/bus.rs` (`run_trio_turn`) |
+| **Disjuntor** | banda §3 abaixo | o primeiro que desarma vence — para **todas** |
+| **Filtros** | A7 + auth ≤120 + juíz P2 + T-DEC AND opt-in | sem filtro paralelo por tomada |
+| **DB** | **neural-sgdb** | learn ≤120; 255 só HITL; ADD-only; null-scoping |
+
+Tomada nova = entra no fio + obedece disjuntor/filtros/DB. Sem canal lateral,
+sem segundo HITL, sem segundo DB. Console/API chat usam o mesmo `bus`.
 
 ## 3. Disjuntores (banda de triagem)
 

@@ -1,25 +1,22 @@
-//! T-HITL no hub — fila Approve/Deny/Ampliar + token + kill switch.
+//! T-HITL no hub — fila viva (outbox) Approve/Deny/Ampliar + promote 255 n-sgdb.
 //!
-//! High sem token bloqueado; com token promove. 0 auto-255.
+//! High sem prova bloqueado; com token promove. 0 auto-255. Um outbox para todos.
 
 use crate::agent::{
-    agent_kill_switch, apply_hitl, class_for_tool, hitl_token_ok, requirement_for, Goal, HitlDecision,
-    HitlKind, HitlRequest, HitlRequirement, Risk, RISK_MATRIX,
+    agent_kill_switch, append_decision, apply_hitl, class_for_tool, hitl_load_pending,
+    hitl_token_ok, promote_key_255, requirement_for, Goal, HitlDecision, HitlKind, HitlRequest,
+    HitlRequirement, Risk, RISK_MATRIX,
 };
 
 /// Banda visual da matriz A7.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HitlBand {
-    /// Verde — Low.
     Green,
-    /// Amarelo — Medium.
     Yellow,
-    /// Vermelho — High / kill.
     Red,
 }
 
 impl HitlBand {
-    /// Rótulo UI.
     pub const fn label(self) -> &'static str {
         match self {
             Self::Green => "verde",
@@ -28,7 +25,6 @@ impl HitlBand {
         }
     }
 
-    /// A partir do risco da tool.
     pub fn from_risk(risk: Risk) -> Self {
         match risk {
             Risk::Low => Self::Green,
@@ -41,31 +37,23 @@ impl HitlBand {
 /// Item da fila HITL no hub.
 #[derive(Clone, Debug)]
 pub struct HitlQueueItem {
-    /// Pedido tipado.
     pub request: HitlRequest,
-    /// Nome da tool / affordance.
     pub tool: String,
-    /// Risco.
     pub risk: Risk,
-    /// Banda.
     pub band: HitlBand,
-    /// Classe A7.
     pub class: String,
 }
 
 /// Snapshot da borda HITL no dashboard.
 #[derive(Clone, Debug)]
 pub struct HitlView {
-    /// Fila pendente.
     pub queue: Vec<HitlQueueItem>,
-    /// Token digitado no hub (não persistido).
     pub token_input: String,
-    /// Kill switch ativo.
     pub kill: bool,
-    /// Última decisão aplicada.
     pub last_decision: Option<String>,
-    /// Erro de gate (High sem token, etc.).
     pub last_error: Option<String>,
+    /// Spec SGDB para promote 255 (env).
+    pub sgdb_spec: Option<String>,
 }
 
 impl Default for HitlView {
@@ -75,53 +63,89 @@ impl Default for HitlView {
 }
 
 impl HitlView {
-    /// Carrega estado + fila demo (goal.propose High).
+    /// Carrega outbox vivo; se vazio, mantém item demo High (economia de UX).
     pub fn load() -> Self {
-        let demo = HitlRequest {
-            request_id: 1,
-            kind: HitlKind::Ask,
-            reason: "goal.propose endógeno — sanção humana".into(),
-            from_authority: 96,
-            to_authority: 255,
-            subject: Some("goal.propose".into()),
-            timeout_ms: 0,
-        };
-        let risk = Risk::High;
-        Self {
-            queue: vec![HitlQueueItem {
-                request: demo,
+        let kill = agent_kill_switch();
+        let sgdb_spec = std::env::var("AETHER_SGDB_STDIO")
+            .or_else(|_| std::env::var("AETHER_SGDB_URL"))
+            .ok();
+        let mut queue: Vec<HitlQueueItem> = hitl_load_pending()
+            .into_iter()
+            .map(|request| {
+                let risk = if matches!(request.kind, HitlKind::Promote | HitlKind::ShellExec) {
+                    Risk::High
+                } else {
+                    Risk::High
+                };
+                let tool = match request.kind {
+                    HitlKind::Promote => "memory.promote",
+                    HitlKind::ShellExec => "shell.exec",
+                    HitlKind::ExpandResearch => "research.expand",
+                    _ => "goal.propose",
+                };
+                HitlQueueItem {
+                    tool: tool.into(),
+                    class: class_for_tool(tool, risk).to_string(),
+                    band: HitlBand::from_risk(risk),
+                    risk,
+                    request,
+                }
+            })
+            .collect();
+        if queue.is_empty() {
+            queue.push(HitlQueueItem {
+                request: HitlRequest {
+                    request_id: 1,
+                    kind: HitlKind::Ask,
+                    reason: "demo: goal.propose — aguardando outbox vivo".into(),
+                    from_authority: 96,
+                    to_authority: 255,
+                    subject: Some("goal.propose".into()),
+                    timeout_ms: 0,
+                },
                 tool: "goal.propose".into(),
-                risk,
-                band: HitlBand::from_risk(risk),
-                class: class_for_tool("goal.propose", risk).to_string(),
-            }],
+                risk: Risk::High,
+                band: HitlBand::Red,
+                class: class_for_tool("goal.propose", Risk::High).to_string(),
+            });
+        }
+        Self {
+            queue,
             token_input: String::new(),
-            kill: agent_kill_switch(),
+            kill,
             last_decision: None,
             last_error: None,
+            sgdb_spec,
         }
     }
 
-    /// Linha de programa.
     pub fn program_line(&self) -> String {
         let n = self.queue.len();
         let kill = if self.kill { "KILL" } else { "ok" };
         format!("T-HITL hub · fila {n} · {kill}")
     }
 
-    /// Detalhe hover.
     pub fn detail(&self) -> String {
         let mut lines = vec![
             self.program_line(),
             format!("kill AETHER_AGENT_KILL={}", self.kill),
             format!("token_ok={}", self.token_matches()),
-            "High sem token → bloqueado; 0 auto-255.".into(),
+            "outbox: target/aether_hitl_queue.jsonl".into(),
+            "High sem prova → bloqueado; 0 auto-255; DB=n-sgdb.".into(),
         ];
         for row in RISK_MATRIX {
             lines.push(format!(
                 "matriz {} risk={:?} hitl={:?}",
                 row.class, row.risk, row.hitl
             ));
+        }
+        if let Some(item) = self.queue.first() {
+            if let Some(key) = &item.request.subject {
+                lines.push(format!(
+                    "pendente key/subject={key} auth {}→{}",
+                    item.request.from_authority, item.request.to_authority
+                ));
+            }
         }
         if let Some(e) = &self.last_error {
             lines.push(format!("erro: {e}"));
@@ -163,8 +187,28 @@ impl HitlView {
         }
         let approved = !matches!(kind, HitlKind::Deny);
         let mut req = item.request.clone();
-        req.kind = kind;
+        // Preserve promote kind when approving memory key.
+        if matches!(item.request.kind, HitlKind::Promote) && approved {
+            req.kind = HitlKind::Promote;
+        } else {
+            req.kind = kind;
+        }
         let decision = apply_hitl(&req, approved, token_ok, false);
+        let _ = append_decision(&decision);
+
+        if decision.approved
+            && matches!(req.kind, HitlKind::Promote)
+            && decision.authority >= 255
+        {
+            if let Some(key) = &req.subject {
+                if key.starts_with("md/") {
+                    if let Err(e) = promote_key_255(self.sgdb_spec.as_deref(), key) {
+                        self.last_error = Some(format!("promote n-sgdb: {e}"));
+                    }
+                }
+            }
+        }
+
         if matches!(kind, HitlKind::Promote | HitlKind::Ask | HitlKind::ApproveMerge)
             && req.to_authority >= 255
             && !decision.approved
@@ -189,17 +233,14 @@ fn json_escape(s: &str) -> String {
     format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-/// Carrega view (API espelhando dec_view).
 pub fn load_hitl_view() -> HitlView {
     HitlView::load()
 }
 
-/// Linha de programa.
 pub fn hitl_program_line(view: &HitlView) -> String {
     view.program_line()
 }
 
-/// Texto Detalhe.
 pub fn hitl_detail(view: &HitlView) -> String {
     view.detail()
 }

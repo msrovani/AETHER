@@ -35,10 +35,12 @@
 //! ```
 
 pub mod a8_v1;
+pub mod bus;
 pub mod cli;
 pub mod coherence;
 pub mod dec_status;
 pub mod embed;
+pub mod hitl_queue;
 pub mod eval;
 pub mod executor;
 pub mod experts;
@@ -80,6 +82,13 @@ pub use dec_status::DecTomadaStatus;
 pub use a8_v1::{
     a8_v1_flag, criteria as a8_v1_criteria, enter_v1_allowed, enter_v1_default,
     write_criteria_artifact as write_a8_v1_criteria, A8V1Criterion, A8_V1_CRITERIA_PATH,
+};
+pub use bus::{
+    promote_key_255, run_trio_turn, TrioOpts, TrioTurn, LEARN_AUTH_CAP,
+};
+pub use hitl_queue::{
+    append_decision, enqueue as hitl_enqueue, enqueue_promote, load_pending as hitl_load_pending,
+    HITL_DECISIONS_PATH, HITL_QUEUE_PATH,
 };
 pub use embed::{EmbedEra, EmbedPort, EmbedVector};
 pub use eval::{default_eval_path, EvalReport, EvalTier};

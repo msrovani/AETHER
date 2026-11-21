@@ -61,7 +61,10 @@
 | Research virava 255 no write | memory.write promovia verified | `research_persist_authority` cap 120; relation `research.*` | `research.rs`, `MemoryWriteTool` |
 | STT/OCR/VIS falam com planner | affordance direta / Goal inventado | funil único T-NL-IN; conf baixa → ask | `ocr`/`speech`/`vision`, `CORE_TOMADAS` §8 |
 | TTS narra abstain | texto livre | só `CertifiedUtterance`; beep “não sei” | `nl_out.rs`, `TtsPort` |
-| Hier MoE antes do funil | LSH no caminho crítico | Fase 8 pós T-EMB+B1; `blocks_tnl_in=false` | `hier_moe.rs` |
+| Hier MoE antes do funil | LSH no caminho critico | Fase 8 pos T-EMB+B1; `blocks_tnl_in=false` | `hier_moe.rs` |
+| Chat com canal paralelo ao agente | ledger fase lossy vs parser | um fio `run_trio_turn` no API/Console | `bus.rs` (0.5.4) |
+| HITL so demo / learn sem sanção | fila fake; 255 automatico | outbox vivo + promote HITL; learn≤120 | `hitl_queue`, hub |
+| Segundo DB ou filtro por tomada | stacks paralelos | lei fio/disjuntor/filtros/DB unicos | CORE §2.5 |
 
 ## 3. Invariantes que não podem regredir
 

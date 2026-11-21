@@ -3,6 +3,24 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando aplicável.
 
+## [0.5.4] - 2026-11-21
+
+### Added
+
+- **Barramento trio** (`bus.rs`): `run_trio_turn` — T-NL-IN → solve →
+  CertifiedUtterance → learn ≤120 → HITL outbox; Caps P3 template.
+- **HITL outbox** (`hitl_queue.rs`): `aether_hitl_queue.jsonl` + decisions;
+  hub lê fila viva; promote n-sgdb → 255 com prova HITL.
+- Gates: `agent_trio_bus_gate`, `agent_learn_hitl_gate`.
+- Docs: `RELEASE_0_5_4.md`; CORE §2.5 lei fio/disjuntor/filtros/DB.
+
+### Changed
+
+- API chat/completion usa fio trio (`edge=trio-bus`) em vez do cue de fase
+  lossy para `/v1/chat/completions`.
+- Console: telemetria parse/certified/learned na bolha.
+- `hitl_view`: outbox + promote key `md/…`.
+
 ## [0.5.3] - 2026-11-21
 
 ### Added

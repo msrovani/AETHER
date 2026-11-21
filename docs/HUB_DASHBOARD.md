@@ -24,7 +24,8 @@ Single-flight global: um job por vez em Lab/Testes IA. Console IA usa HTTP próp
 |---|---|
 | Barra superior | **AETHER** + versão + frase de fronteira (*LLM gera; AETHER cita, certifica ou abstem.*) + seletor Lab \| Testes IA \| Console IA + jobs da aba ativa + status |
 | Centro (Lab e Testes IA) | Faixa **Situação**: cartão Programa (versão, fronteira, ACQ, API eval, agente) e cartão Online (job, demo, SGDB, última sonda de CPU/RAM) |
-| Centro (Lab) | ACQ, cobertura, hot-path, **F4** (congelada), **T-DEC**, **T-HITL** (fila Approve/Deny/Ampliar + `hitl_token` + kill `AETHER_AGENT_KILL`; High sem token bloqueado; 0 auto-255), T01–T12, vazão, doação, gaps, host |
+| Centro (Lab) | ACQ, cobertura, hot-path, **F4** (congelada), **T-DEC**, **T-HITL** (outbox `target/aether_hitl_queue.jsonl` → Approve/Deny/Ampliar + `hitl_token` + kill; promote n-sgdb → 255; High sem prova bloqueado; 0 auto-255), T01–T12, vazão, doação, gaps, host |
+| Centro (Console IA) | Chat → API `/v1/chat/completions` no **fio trio** (`bus`: T-NL-IN parse → solve → CertifiedUtterance); abstain = “não sei”; learn ≤120 enfileira promote HITL |
 | Centro (Testes IA) | Grade U1–U6, tabela API eval, painel ask/cite/abstain, contrato usabilidade |
 | Centro (Console IA) | Histórico chat + campo pergunta + escopo (org/run/app) + URL API (`AETHER_API_URL` ou `http://127.0.0.1:8787`) |
 | Coluna direita **Detalhe** | Chip glossário/hover/ficha; hover sem tooltip flutuante; ficha T0x fixa; textos longos; gráficos demo |

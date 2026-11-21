@@ -1776,7 +1776,7 @@ fn chat(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
         .unwrap_or(false);
     let stream = doc.get("stream").and_then(Json::as_bool).unwrap_or(false);
     let id = format!("chatcmpl-aether-{}", state.requests);
-    let content = evidence.to_text();
+    let content = evidence_content(&evidence);
 
     if stream {
         return Reply::Sse(chat_chunks(&id, &content, abstained));
@@ -1876,7 +1876,7 @@ fn completion(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
     Reply::Json(
         200,
         Json::obj([
-            ("content", Json::str(evidence.to_text())),
+            ("content", Json::str(evidence_content(&evidence))),
             ("stop", Json::Bool(true)),
             ("tokens_predicted", Json::num(0.0)),
             (
@@ -1888,44 +1888,51 @@ fn completion(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
     )
 }
 
-/// Evidência certificada para um texto, no escopo dado (ou abstenção).
+/// Evidência no fio comum T-NL-IN → MoE/coh → T-NL-OUT (P2) + learn/HITL.
+///
+/// Recicla `run_trio_turn` (parser + CertifiedUtterance + n-sgdb). O ledger de
+/// fase continua disponível em rotas `/v1/aether/*`; o chat usa o barramento.
 fn evidence_for(state: &mut ApiState, scope: ScopeId, text: &str) -> Json {
-    let query = text_to_phases(text);
-    let mut out = vec![0.0f32; query.len()];
-    match state.ledger.cue_scored(scope, &query, &mut out) {
-        Ok((hit, score)) if score >= MIN_SCORE => {
-            let (energy, gap, violations) =
-                record_cert(&state.ledger, scope, hit.key).unwrap_or((0.0, 0.0, 0));
-            let cert =
-                certificate::Certificate::new(energy, gap, violations, 1.0, Provenance::Inferred);
-            let decision = cert.decide(hit.authority, 0.05);
-            Json::obj([
-                ("abstain", Json::Bool(false)),
-                ("verdict", Json::str(decision_name(decision))),
-                ("key", Json::str(hit.key.to_string())),
-                ("authority", Json::num(f64::from(hit.authority))),
-                ("scope", scope_json(scope)),
-                (
-                    "certificate",
-                    Json::obj([
-                        ("energy", Json::num(energy)),
-                        ("gap", Json::num(gap)),
-                        ("violations", Json::num(f64::from(violations))),
-                    ]),
-                ),
-                (
-                    "phases",
-                    Json::Arr(out.iter().map(|p| Json::num(f64::from(*p))).collect()),
-                ),
-                ("hits", Json::num(hit.hits as f64)),
-                ("score", Json::num(f64::from(score))),
-                ("edge", Json::str("text-phase-hash-lossy")),
-            ])
+    use crate::agent::{run_trio_turn, TrioOpts};
+
+    let sgdb = state
+        .sgdb
+        .as_ref()
+        .map(|_| {
+            std::env::var("AETHER_SGDB_STDIO")
+                .or_else(|_| std::env::var("AETHER_SGDB_URL"))
+                .unwrap_or_else(|_| "mock".into())
+        })
+        .or_else(|| std::env::var("AETHER_SGDB_STDIO").ok())
+        .or_else(|| std::env::var("AETHER_SGDB_URL").ok());
+
+    let opts = TrioOpts {
+        sgdb,
+        agent_cfg: None,
+        learn: true,
+    };
+    let turn = run_trio_turn(text, &opts);
+    // Anexa escopo + content espelhado para a bolha / Console.
+    match turn.evidence {
+        Json::Obj(mut pairs) => {
+            pairs.push(("scope".into(), scope_json(scope)));
+            pairs.push(("content".into(), Json::str(&turn.content)));
+            pairs.push(("edge".into(), Json::str("trio-bus")));
+            // Compat: content da mensagem = prosa certificada ou “não sei”.
+            // O chat usa evidence.to_text() — sobrescrevemos com content.
+            let _ = state;
+            Json::Obj(pairs)
         }
-        Ok((_, score)) => abstain_scored("low_similarity", score),
-        Err(BridgeError::EmptyScope) => abstain("empty_scope"),
-        Err(e) => abstain(&format!("cue_failed:{e}")),
+        other => other,
     }
+}
+
+/// Conteúdo legível da evidência trio (prosa) — prefer `content` se presente.
+fn evidence_content(evidence: &Json) -> String {
+    if let Some(c) = evidence.get("content").and_then(Json::as_str) {
+        return c.to_string();
+    }
+    evidence.to_text()
 }
 
 fn record_cert(ledger: &ScopeLedger, scope: ScopeId, key: u128) -> Option<(f64, f64, u32)> {

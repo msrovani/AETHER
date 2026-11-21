@@ -289,6 +289,26 @@ fn parse_chat_reply(raw: &str) -> ChatMsg {
         content
     });
     if let Some(xa) = xa {
+        if let Some(v) = xa.get("tnl_in_version").and_then(|k| k.as_str()) {
+            lines.push(format!("tnl_in=v{v}"));
+        }
+        if let Some(c) = xa.get("parse_confidence").and_then(|c| c.as_f64()) {
+            lines.push(format!("parse_conf={c:.2}"));
+        }
+        if let Some(i) = xa.get("parse_intent").and_then(|i| i.as_str()) {
+            lines.push(format!("intent={i}"));
+        }
+        if let Some(cert) = xa.get("certified") {
+            if let Some(auth) = cert.get("auth").and_then(|a| a.as_u64()) {
+                lines.push(format!("utt_auth={auth}"));
+            }
+            if let Some(srcs) = cert.get("sources").and_then(|s| s.as_array()) {
+                lines.push(format!("sources={}", srcs.len()));
+            }
+        }
+        if let Some(k) = xa.get("learned_key").and_then(|k| k.as_str()) {
+            lines.push(format!("learned={k} (≤120; HITL→255)"));
+        }
         if let Some(k) = xa.get("key").and_then(|k| k.as_str()) {
             lines.push(format!("key={k}"));
         }

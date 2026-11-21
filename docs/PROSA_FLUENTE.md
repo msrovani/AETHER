@@ -89,8 +89,8 @@ Não basta “o modelo fala bonito”. Aceite de produto:
 
 - Pesquisa viva: cascata paralela DDG∥SearX∥Wiki; default SearX
   `https://search.lumy.live`; `multi_provider_confirm` → auth 80.
-- Parser C1 e `language.parse` entregues; `template`/`generate` ainda não são
-  o caminho default do chat.
+- Parser C1 + `bus` trio: Console/API chat → `CertifiedUtterance` (P2);
+  `LanguageCaps` declara backend **template** (P3 caps; sem LM).
 - Vega gemma-prose = sentinela de OOD, **não** adotada como geradora de prosa
   de produto (cosine de attach &lt; 0,8).
 
