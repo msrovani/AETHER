@@ -169,8 +169,14 @@ impl Tool for ResearchQueryTool {
     }
 
     fn affordance(&self, goal: &Goal, _state: &WorldState) -> f32 {
-        if goal.relation.as_deref() == Some("research.query") {
-            return 1.0;
+        // Não competir com tools de relação exclusiva (A8 predict / propose).
+        match goal.relation.as_deref() {
+            Some("research.query") => return 1.0,
+            Some("predict.series") | Some("goal.propose") | Some("fs.read") | Some("fs.write")
+            | Some("http.get") | Some("mcp.call") | Some("shell.exec") => {
+                return 0.0;
+            }
+            _ => {}
         }
         if goal.query.is_some()
             && matches!(goal.kind, GoalKind::Retrieve | GoalKind::Answer)
@@ -182,10 +188,7 @@ impl Tool for ResearchQueryTool {
             return 0.65;
         }
         // Fatos mundanos sem pack: competir com fact se query presente.
-        if goal.kind == GoalKind::Answer
-            && goal.query.is_some()
-            && goal.relation.as_deref() != Some("fs.read")
-        {
+        if goal.kind == GoalKind::Answer && goal.query.is_some() {
             return 0.25;
         }
         0.0

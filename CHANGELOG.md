@@ -3,6 +3,33 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando aplicável.
 
+## [0.5.2] - 2026-11-21
+
+### Added
+
+- **A6 / P4**: LinUCB contextual opt-in (`AETHER_LINUCB`), `learner.rs`
+  (reward só com `Feedback.correct`), features de goal no planner.
+- **A7**: `risk_policy.rs` — `RISK_MATRIX`, `AETHER_AGENT_KILL`, High always
+  HITL / Medium `AETHER_HITL_MEDIUM`; gate no executor.
+- **A8 / P5 fio**: `ExpertId::Predict`, `predict.rs`, tools `predict.series`
+  (read_local) + `goal.propose` (privileged, EFE, `execute=false`); metacog
+  self_field; demo `examples/a8_predict_demo.rs`.
+- Gates: `agent_a6_gate`, `agent_a7_gate` (6/6), `agent_a8_gate` (5/5).
+- Docs: `RELEASE_0_5_2.md`; ACOES/ROADMAP/LESSONS/CORE atualizados.
+
+### Changed
+
+- Planner: affordance ≥0.95 não some sob `Risk::High.penalty` (piso
+  `min_score+1`).
+- `research.query`: affordance 0 em relações exclusivas (`predict.series`,
+  `goal.propose`, fs/http/mcp/shell).
+- `MoERouter` SLOTS=6 (`ExpertId::Predict`).
+
+### Fixed
+
+- False-act de forecast sob OOD/surpresa (claims vazias + `ood`/`abstain`).
+- Meta endógena sem HITL token bloqueada pela matriz A7.
+
 ## [0.5.1] - 2026-11-21
 
 ### Added

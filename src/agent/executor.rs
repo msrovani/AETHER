@@ -1,7 +1,11 @@
 //! Executor: orçamento, chamada da tool, verificação e rollback.
+//!
+//! A7: `risk_policy::gate_before_call` (kill switch + HITL High/Medium) roda
+//! **antes** do dry_run/call.
 
 use super::planner::PlanStep;
 use super::registry::ToolRegistry;
+use super::risk_policy;
 use super::tool::{Cost, Goal, ToolContext, ToolError, ToolOutcome};
 
 /// Resultado da execução de um passo.
@@ -41,6 +45,8 @@ impl ToolExecutor {
         let tool = registry
             .get_mut(step.tool)
             .ok_or_else(|| ToolError::InvalidArgs(format!("tool `{}` sumiu", step.tool)))?;
+        // A7: kill switch + matriz HITL (High always / Medium optional).
+        risk_policy::gate_before_call(step.tool, tool.risk(), goal, ctx.trace_id)?;
         // SCHEMA_6: risco acima do teto ⇒ HITL **antes** da call.
         if tool.risk() > goal.risk_ceiling {
             return Err(ToolError::NeedsHuman(format!(

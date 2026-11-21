@@ -43,8 +43,11 @@ pub mod executor;
 pub mod experts;
 pub mod hitl;
 pub mod language;
+pub mod learner;
 pub mod linucb;
 pub mod planner;
+pub mod predict;
+pub mod risk_policy;
 pub mod registry;
 pub mod router;
 pub mod self_model;
@@ -75,8 +78,19 @@ pub use language::{
     adapt_text, GoalSchema, LanguageCaps, LanguageError, LanguageParseTool, LanguagePort,
     ParserPort, Style as LanguageStyle,
 };
+pub use learner::{EpisodeRecord, Learner};
+pub use linucb::{goal_features, linucb_enabled, ContextualTools, LinUcb, LINUCB_DIM};
 pub use planner::{PlanStep, Planner};
+pub use predict::{
+    forecast_series, metacog_should_abstain, parse_series_query, PredictReport, NRMSE_OOD,
+    PREDICT_AUTH_CAP, WASHOUT_MIN,
+};
 pub use registry::ToolRegistry;
+pub use risk_policy::{
+    agent_kill_switch, class_for_tool, gate_before_call, goal_hitl_token, hitl_medium_required,
+    hitl_token_ok, matrix_json, requirement_for, write_matrix_artifact, HitlRequirement, RiskRow,
+    RISK_MATRIX,
+};
 pub use self_model::SelfModel;
 pub use tool::{
     Budget, Cost, Effect, Goal, GoalKind, Risk, Snapshot, SuccessCriteria, Tool, ToolContext,
@@ -91,9 +105,9 @@ pub use tools::{
     shell_kill_switch, shell_mode, CodeApplyProposalTool, CodeAstGrepTool, CodeCheckTool,
     CodeEvalTool, CodeGenerateTool, CodeGenMode, CodeGrammarTool, CodeLmCaps, CodeLmTool,
     CodeLoopTool, CodePatchTool, CodeTestTool, CoderT3Report, FsReadTool, FsWriteTool,
-    HttpGetTool, McpCallTool, MemoryWriteTool, PatchOp, PatchProposal, ResearchExpandTool,
-    ResearchQueryTool, ShellMode, ShellTool, CODE_AUTH_CAP, CODER_T3_PILOT, RESEARCH_AUTH_CAP,
-    SHELL_AUTH_CAP,
+    GoalProposeTool, HttpGetTool, McpCallTool, MemoryWriteTool, PatchOp, PatchProposal,
+    PredictSeriesTool, ResearchExpandTool, ResearchQueryTool, ShellMode, ShellTool, CODE_AUTH_CAP,
+    CODER_T3_PILOT, RESEARCH_AUTH_CAP, SHELL_AUTH_CAP,
 };
 pub use undo_sgdb::SgdbUndoBackend;
 
@@ -110,6 +124,8 @@ pub enum ExpertId {
     Solver,
     /// Memória durável (SGDB).
     Memory,
+    /// Séries / mundo preditivo (A8 / P5).
+    Predict,
 }
 
 impl ExpertId {
@@ -121,6 +137,7 @@ impl ExpertId {
             Self::Logic => 2,
             Self::Solver => 3,
             Self::Memory => 4,
+            Self::Predict => 5,
         }
     }
 
@@ -132,6 +149,7 @@ impl ExpertId {
             Self::Logic => "logic",
             Self::Solver => "solver",
             Self::Memory => "memory",
+            Self::Predict => "predict",
         }
     }
 
@@ -143,6 +161,7 @@ impl ExpertId {
             Self::Logic => 1.0,
             Self::Solver => 1.2,
             Self::Memory => 0.8,
+            Self::Predict => 0.6,
         }
     }
 }

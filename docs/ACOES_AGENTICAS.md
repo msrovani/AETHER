@@ -63,8 +63,9 @@ A6←P4 · A8←P5.
 | G-A4 completo (fs+http+MCP no loop do agent) | **verde** — `tests/agent_safety_gate.rs`; shell off |
 | A5 `research.query` no planner | **verde** — `tests/agent_research_gate.rs` (5/5); rede opt-in; auth≤120 |
 | Research no chat (`f2_chat_hook` + cascata) | vivo; agora também tool do planner (A5) |
-| P4 / G-A5 | backlog |
-| P5 mundo preditivo | pesquisa, fora do v1 sem gates |
+| P4 / G-A5 / **A6** | **verde** — LinUCB opt-in + learner verificado; `agent_learn_gate` + `agent_a6_gate` + ECE self-model |
+| **A7** matriz risco + kill | **verde** — `risk_policy.rs`; `AETHER_AGENT_KILL`; High always HITL; Medium opcional; `agent_a7_gate` |
+| **A8** / P5 fio produto | **parcial-verde** — `predict.series` + `goal.propose` HITL + metacog; `agent_a8_gate`; **enter_v1_default=false** (sem MoE hierárquico) |
 
 ## 4. O que cada passo *não* é
 
@@ -83,9 +84,9 @@ A6←P4 · A8←P5.
 
 1. ~~Fechar **A4 / G-A4**~~ — feito (0.5.0).
 2. ~~**A5** research tool~~ — feito (`research.query` / `research.expand` HITL).
-3. **A6 / P4** — LinUCB + episódios verificados (não treinar em reward fake).
-4. Ampliar **A7** só com matriz de risco publicada e kill switch.
-5. **A8** só após valor medido (não entra no v1 por default).
+3. ~~**A6 / P4**~~ — feito (`AETHER_LINUCB`, `learner.rs`, reward só com `Feedback.correct`).
+4. ~~**A7**~~ — feito (matriz `RISK_MATRIX`, `AETHER_AGENT_KILL`, High always / Medium `AETHER_HITL_MEDIUM`).
+5. ~~**A8** fio mínimo~~ — feito (`predict.series` read_local; `goal.propose` privileged HITL; metacog self_field; `agent_a8_gate`). **Não** entra no v1 por default; Hierarchical MoE/LSH continua pesquisa.
 
 ## 6. Critério de “temos ações autônomas”
 
@@ -94,11 +95,26 @@ Aceite de produto (autonomia **verificada**, não total):
 - [ ] Em goals sintéticos do inventário, G-A1/G-A2/G-A3 verdes em artefato versionado.
 - [x] G-A4: 0 fora de sandbox/allowlist; 0 shell sem HITL; injeção em memória não altera ação.
 - [x] A5: `research.query` no allowlist; rede off não inventa; auth≤120; expand só HITL.
+- [x] A6/P4: LinUCB opt-in no planner; learner JSONL; G-A5 ECE≤0.10; ≥30% vs EXP3 (`agent_learn_gate`).
+- [x] A7: matriz publicada; kill switch; High sempre HITL; Medium opcional (`agent_a7_gate`).
+- [x] A8 fio: `predict.series` + OOD/metacog abstain; `goal.propose` HITL; artefato `aether_a8_gate/a8` (`enter_v1_default=false`).
 - [ ] Toda `act` traz trace (tool, args, custo, claims) e passa no SuccessCriteria.
-- [ ] OOD / risco alto → abstain ou `ask.human`, nunca false-act.
+- [x] OOD / risco alto → abstain ou HITL (`risk_policy` + executor), nunca false-act silencioso.
 - [ ] Research (se ligada) persiste ≤120 e não promove 255.
 
 “Autônomo total” open-world **não** é o alvo do v1.
+
+## 6.1 Matriz de risco (A7)
+
+| Classe | Risco | HITL | Exemplos |
+|---|---|---|---|
+| `read_local` | low | never | fact, sat, qubo, code.check, verify, **predict.series** |
+| `world_sandbox` | medium | optional (`AETHER_HITL_MEDIUM`) | fs.*, http.get, mcp, code.patch/generate/loop, research.query |
+| `privileged` | high | **always** (token) | shell.exec, research.expand, ask.human, **goal.propose** |
+
+Kill switch: `AETHER_AGENT_KILL=1` (vence teto e token). Token: `hitl_token` no
+JSON de `goal.query` casando `AETHER_HITL_TOKEN`. Artefato:
+`target/aether_risk_matrix.json` (`aether_risk_matrix/a7`).
 
 ## 7. Relação com prosa e pesquisa
 

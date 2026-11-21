@@ -12,6 +12,8 @@ use crate::core::knowledge_bridge_f1::ScopeId;
 use super::executor::{Execution, ToolExecutor};
 use super::planner::{PlanStep, Planner};
 use super::registry::ToolRegistry;
+use super::learner::{EpisodeRecord, Learner};
+use super::linucb::{linucb_enabled, ContextualTools};
 use super::self_model::SelfModel;
 use super::telemetry::{goal_label, EpisodeTrace, StepTrace};
 use super::tool::{
@@ -53,6 +55,10 @@ pub struct ToolAgent {
     world: WorldPolicy,
     traces: Vec<EpisodeTrace>,
     undo_backend: Option<Arc<dyn UndoBackend>>,
+    /// LinUCB contextual (A6); `None` = default Beta/UCB.
+    linucb: Option<ContextualTools>,
+    /// Replay de episódios verificados (A6).
+    learner: Learner,
 }
 
 impl std::fmt::Debug for ToolAgent {
@@ -61,6 +67,8 @@ impl std::fmt::Debug for ToolAgent {
             .field("tools", &self.registry.len())
             .field("episodes", &self.self_model.episodes())
             .field("traces", &self.traces.len())
+            .field("linucb", &self.linucb.is_some())
+            .field("learner_verified", &self.learner.verified_count())
             .finish()
     }
 }
@@ -76,7 +84,7 @@ impl ToolAgent {
         let _ = registry.register(Box::new(VerifyTool));
         let mut self_model = SelfModel::new(cfg.tool_policy_path.clone());
         self_model.load();
-        Self {
+        let mut agent = Self {
             registry,
             self_model,
             planner: Planner::default(),
@@ -85,12 +93,16 @@ impl ToolAgent {
             world: cfg.world.clone(),
             traces: Vec::new(),
             undo_backend: None,
-        }
+            linucb: None,
+            learner: Learner::from_env(),
+        };
+        agent.maybe_enable_linucb();
+        agent
     }
 
     /// Cria com registry/self-model injetados (testes/gates).
     pub fn with_registry(registry: ToolRegistry, self_model: SelfModel, scope: ScopeId) -> Self {
-        Self {
+        let mut agent = Self {
             registry,
             self_model,
             planner: Planner::default(),
@@ -99,7 +111,58 @@ impl ToolAgent {
             world: WorldPolicy::default(),
             traces: Vec::new(),
             undo_backend: None,
+            linucb: None,
+            learner: Learner::from_env(),
+        };
+        agent.maybe_enable_linucb();
+        agent
+    }
+
+    fn maybe_enable_linucb(&mut self) {
+        if !linucb_enabled() {
+            return;
         }
+        let names = self.registry.names();
+        if names.is_empty() {
+            return;
+        }
+        let mut ctx = ContextualTools::new(names, 0.4);
+        let _ = self.learner.replay(&mut ctx);
+        self.linucb = Some(ctx);
+    }
+
+    /// Liga LinUCB explicitamente (gates); ignora env.
+    pub fn with_linucb(mut self, enabled: bool) -> Self {
+        if enabled {
+            let names = self.registry.names();
+            if !names.is_empty() {
+                let mut ctx = ContextualTools::new(names, 0.4);
+                let _ = self.learner.replay(&mut ctx);
+                self.linucb = Some(ctx);
+            }
+        } else {
+            self.linucb = None;
+        }
+        self
+    }
+
+    /// Injeta learner (path/memória).
+    pub fn with_learner(mut self, learner: Learner) -> Self {
+        if let Some(ctx) = self.linucb.as_mut() {
+            let _ = learner.replay(ctx);
+        }
+        self.learner = learner;
+        self
+    }
+
+    /// LinUCB ativo?
+    pub fn linucb_active(&self) -> bool {
+        self.linucb.is_some()
+    }
+
+    /// Learner (replay).
+    pub fn learner(&self) -> &Learner {
+        &self.learner
     }
 
     /// Sobrescreve a política de mundo (gates A4).
@@ -170,8 +233,14 @@ impl ToolAgent {
     /// Ranking de tools para um goal, sem executar (diagnóstico de autoescolha).
     pub fn plan(&self, goal: &Goal) -> Vec<PlanStep> {
         let state = self.world_state();
-        self.planner
-            .rank(goal, &state, &self.registry, &self.self_model, &[])
+        self.planner.rank_with(
+            goal,
+            &state,
+            &self.registry,
+            &self.self_model,
+            &[],
+            self.linucb.as_ref(),
+        )
     }
 
     /// Executa o goal com orçamento, risco e verificação.
@@ -297,10 +366,14 @@ impl ToolAgent {
             state.claims = ctx.claims.clone();
             let mut blocked = used.clone();
             blocked.extend_from_slice(&cooled);
-            let Some(step) =
-                self.planner
-                    .select(goal, &state, &self.registry, &self.self_model, &blocked)
-            else {
+            let Some(step) = self.planner.select_with(
+                goal,
+                &state,
+                &self.registry,
+                &self.self_model,
+                &blocked,
+                self.linucb.as_ref(),
+            ) else {
                 break;
             };
             // Não marcar `used` antes da execução (causa raiz MSG 0464).
@@ -428,15 +501,31 @@ impl ToolAgent {
         }
     }
 
-    /// Aprende com feedback verificado; atualiza self-model e persiste.
+    /// Aprende com feedback; self-model sempre (compat), LinUCB **só** se
+    /// `Feedback.correct` estiver presente (A6 — sem reward fake no bandit).
     pub fn learn(&mut self, outcome: &GoalOutcome, feedback: &Feedback) {
-        let reward = feedback.correct.unwrap_or(outcome.success);
+        let intrinsic = feedback.correct.unwrap_or(outcome.success);
         for step in &outcome.steps {
             if step.executed {
-                self.self_model.update(&step.tool, &outcome.goal, reward);
+                self.self_model
+                    .update(&step.tool, &outcome.goal, intrinsic);
             }
         }
         self.self_model.persist();
+
+        let Some(correct) = feedback.correct else {
+            return;
+        };
+        for step in &outcome.steps {
+            if !step.executed {
+                continue;
+            }
+            let ep = EpisodeRecord::verified(&step.tool, &outcome.goal, correct);
+            let _ = self.learner.record(ep);
+            if let Some(ctx) = self.linucb.as_mut() {
+                ctx.update_verified(&step.tool, &outcome.goal, if correct { 1.0 } else { 0.0 });
+            }
+        }
     }
 
     /// Caminho da política de tools.
@@ -584,6 +673,8 @@ fn tools_allowlist() -> Vec<&'static str> {
         "shell.exec",
         "research.query",
         "research.expand",
+        "predict.series",
+        "goal.propose",
         "code.check",
         "code.ast_grep",
         "code.test",

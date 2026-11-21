@@ -18,7 +18,7 @@ use crate::json::Json;
 use super::ExpertId;
 
 /// Número de especialistas conhecidos.
-const SLOTS: usize = 5;
+const SLOTS: usize = 6;
 
 /// Roteador MoE.
 #[derive(Debug)]
@@ -230,7 +230,8 @@ fn expert_of(slot: usize) -> ExpertId {
         1 => ExpertId::Phase,
         2 => ExpertId::Logic,
         3 => ExpertId::Solver,
-        _ => ExpertId::Memory,
+        4 => ExpertId::Memory,
+        _ => ExpertId::Predict,
     }
 }
 
@@ -242,6 +243,7 @@ impl ExpertId {
         ExpertId::Logic,
         ExpertId::Solver,
         ExpertId::Memory,
+        ExpertId::Predict,
     ];
 }
 

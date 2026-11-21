@@ -63,14 +63,14 @@ escada de produto, estado.
 
 | ID | Nome | Contrato | Disjuntor | Escada | Estado |
 |---|---|---|---|---|---|
-| **T-MOE** | `MoERouter` EXP3/UCB | `Goal` → top-k experts/tools | score &lt; min_score → abstain | M0, M5, A1–A3 | **vivo** |
+| **T-MOE** | `MoERouter` EXP3/UCB + LinUCB opt-in | `Goal` → top-k experts/tools | score &lt; min_score → abstain | M0, M5, A1–A6 | **vivo** (A6/`AETHER_LINUCB`) |
 | **T-XP-*** | experts (transplant, phase, logic, solver, memory) | task → `ExpertOutput` | evidência fraca → None/abstain | M1–M3 | **vivo** |
 | **T-DEC** | DecisionPort / Vega | Goal → route/abstain + conformal | `engine_unavailable` → stub | F1/P6 | **vivo** (opt-in; hub `dec_view`) |
 | **T-EMB** | EmbedPort | texto → `Vec<f32>`+era | dim/era mismatch; off→lexical | F4 | **vivo formal** (off; F4 congelada) |
 | **T-PLAN** | planner + executor | Goal → PlanStep* + rollback | risk_ceiling / allowlist | A0–A7 | **vivo** (mundo A4) |
 | **T-COH** | coherence | claims → Action | contradição → abstain/cite | — | **vivo** |
 | **T-AUTH** | autoridade / HITL | claim auth 60…255 | ≥200/255 só HITL; LLM≤120 | todas | **vivo** |
-| **T-HITL** | `HitlRequest`→`HitlDecision` | promote/deny/ampliar + audit | timeout→abstain; 255 sem token | A7 | **vivo** (`hitl.rs`) |
+| **T-HITL** | `HitlRequest`→`HitlDecision` + matriz A7 | promote/deny/ampliar + audit; High always | timeout→abstain; 255/`AETHER_AGENT_KILL` | A7 | **vivo** (`hitl.rs` + `risk_policy.rs`) |
 
 ### 2.3 Saída (atuação / render)
 

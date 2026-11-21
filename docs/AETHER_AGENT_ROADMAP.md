@@ -402,12 +402,14 @@ obedecê-la.
 
 ### P5 - Mundo preditivo e aberto (pesquisa, sem prazo)
 
-- `PredictExpert` com `reservoir`/`koopman_sindy` para séries e
-  `predict` como tool (custo/risco).
-- `self_field` como metacognição (detecção de “não sei”).
-- Hierarchical MoE: router de routers + LSH para muitos especialistas.
-- Currículo e metas endógenas (`active_inference`) com HITL;
-- **não entra no v1.0** sem gates de segurança e valor medido.
+- ~~`PredictExpert` / `predict.series`~~ — fio produto A8 (2026-11-21):
+  `src/agent/predict.rs` + tool read_local; OOD/metacog abstain;
+  `goal.propose` High HITL via EFE; gate `agent_a8_gate`;
+  artefato `target/aether_a8_gate.json`; **`enter_v1_default=false`**.
+- `self_field` no caminho predict (detecção de “não sei”).
+- Hierarchical MoE: router de routers + LSH para muitos especialistas (**ainda pesquisa**).
+- Currículo e metas endógenas (`active_inference`) com HITL — `goal.propose` mínimo feito.
+- **não entra no v1.0** por default (revisão humana + gates).
 
 ### Trilha B — Conhecimento em escala
 

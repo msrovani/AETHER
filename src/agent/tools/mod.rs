@@ -8,6 +8,7 @@ pub mod code;
 pub mod fs;
 pub mod http;
 pub mod mcp;
+pub mod predict;
 pub mod research;
 pub mod shell;
 
@@ -26,6 +27,7 @@ pub use research::{
     claims_from_research_json, research_network_enabled, ResearchExpandTool, ResearchQueryTool,
     RESEARCH_AUTH_CAP,
 };
+pub use predict::{GoalProposeTool, PredictSeriesTool};
 pub use shell::{shell_kill_switch, shell_mode, ShellMode, ShellTool, SHELL_AUTH_CAP};
 
 use super::experts::{make_logic, make_memory, make_solver, make_transplant, Expert};
@@ -521,6 +523,9 @@ pub fn default_tools(cfg: &AgentConfig) -> Vec<Box<dyn Tool>> {
     // A5 / T-NET — pesquisa no planner (rede opt-in).
     tools.push(Box::new(ResearchQueryTool));
     tools.push(Box::new(ResearchExpandTool));
+    // A8 / P5 — predict.series (read_local) + goal.propose (HITL).
+    tools.push(Box::new(PredictSeriesTool));
+    tools.push(Box::new(GoalProposeTool));
     // K1–K8 / T-CODE — …/lm/eval + shell HITL.
     tools.push(Box::new(CodeCheckTool::new(&cfg.world)));
     tools.push(Box::new(CodeAstGrepTool::new(&cfg.world)));

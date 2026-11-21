@@ -51,6 +51,12 @@
 | `code.eval("{}")` passava sem generator | race: outro teste setava `AETHER_CODE_GENERATE` | mutex `CODEGEN_ENV` / `SHELL_ENV` nos gates | `agent_coder_gate.rs` |
 | Proposal “ok” virava merge 255 | keep/apply sem cap | `CODE_AUTH_CAP`/`SHELL_AUTH_CAP`≤120; keep ≠ 255 | `code/*`, `shell.rs` |
 | T3 anunciável sem gerador | HumanEval implícito | `coder_t3_pilot` + `generator` obrigatório; D-G2 no artefato | `eval_t3.rs` |
+| LinUCB “aprende” com sucesso intrínseco | `Feedback.correct=None` + `outcome.success` | bandit/learner só com `correct.is_some()`; self-model mantém intrínseco | `learner.rs`, `tool_agent.rs` |
+| `risk_ceiling=High` tratado como “HITL feito” | teto ≠ aprovação humana | A7: High sempre exige token; Medium opcional; kill global | `risk_policy.rs`, `executor.rs` |
+| `goal.propose` / High some no planner | `Risk::High.penalty=1.5` + `min_score` | affordance≥0.95 → piso `min_score+1` | `planner.rs` (0.5.2) |
+| `research.query` come `goal.propose` | affordance genérica 0.65 no `query` JSON | relação exclusiva → affordance 0 | `research.rs` |
+| Forecast inventa sob ruído | sem OOD/metacog | NRMSE>0.15 → `ood`; self_field surpresa → `abstain`; auth≤120 | `predict.rs`, `agent_a8_gate` |
+| Meta endógena vira Act no mundo | propor = executar | `goal.propose` High HITL + claim `execute=false`; host decide | `tools/predict.rs` |
 
 ## 3. Invariantes que não podem regredir
 
