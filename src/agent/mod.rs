@@ -34,6 +34,7 @@
 //!                         └─ política persiste (JSON)
 //! ```
 
+pub mod a8_v1;
 pub mod cli;
 pub mod coherence;
 pub mod dec_status;
@@ -41,10 +42,13 @@ pub mod embed;
 pub mod eval;
 pub mod executor;
 pub mod experts;
+pub mod hier_moe;
 pub mod hitl;
 pub mod language;
 pub mod learner;
 pub mod linucb;
+pub mod nl_out;
+pub mod ocr;
 pub mod planner;
 pub mod predict;
 pub mod risk_policy;
@@ -52,11 +56,14 @@ pub mod registry;
 pub mod router;
 pub mod self_model;
 pub mod semantic;
+pub mod speech;
 pub mod telemetry;
+pub mod tnl_in;
 pub mod tool;
 pub mod tool_agent;
 pub mod tools;
 pub mod undo_sgdb;
+pub mod vision;
 
 use std::path::PathBuf;
 
@@ -70,14 +77,28 @@ pub use self::experts::{MemoryCitations, RecallCitation};
 use self::router::MoERouter;
 
 pub use dec_status::DecTomadaStatus;
+pub use a8_v1::{
+    a8_v1_flag, criteria as a8_v1_criteria, enter_v1_allowed, enter_v1_default,
+    write_criteria_artifact as write_a8_v1_criteria, A8V1Criterion, A8_V1_CRITERIA_PATH,
+};
 pub use embed::{EmbedEra, EmbedPort, EmbedVector};
 pub use eval::{default_eval_path, EvalReport, EvalTier};
 pub use executor::ToolExecutor;
+pub use hier_moe::{lsh_route_refuse, HierMoeStatus, HIER_MOE_STATUS_PATH};
 pub use hitl::{apply_hitl, HitlDecision, HitlKind, HitlRequest};
 pub use language::{
     adapt_text, GoalSchema, LanguageCaps, LanguageError, LanguageParseTool, LanguagePort,
     ParserPort, Style as LanguageStyle,
 };
+pub use nl_out::{certify_utterance, judge_claim_text, CertifiedUtterance};
+pub use ocr::{DocRef, OcrPort, OcrResult};
+pub use predict::PredictExpert;
+pub use speech::{SttPort, SttResult, TtsPort, TtsResult};
+pub use tnl_in::{
+    gate_fixtures as tnl_in_gate_fixtures, tnl_in_contract_json, write_tnl_in_contract,
+    TNL_IN_CONTRACT_PATH, TNL_IN_CONTRACT_VERSION,
+};
+pub use vision::{VisionObs, VisionPort, VISION_AUTH_CAP};
 pub use learner::{EpisodeRecord, Learner};
 pub use linucb::{goal_features, linucb_enabled, ContextualTools, LinUcb, LINUCB_DIM};
 pub use planner::{PlanStep, Planner};
@@ -97,17 +118,19 @@ pub use tool::{
     ToolError, ToolOutcome, ToolSchema, UndoBackend, UndoOp, VerifiedFact, WorldState,
     AUTHORITY_CORROBORATED, AUTHORITY_HITL, AUTHORITY_QUARANTINE, AUTHORITY_VERIFIED,
 };
+pub use telemetry::{goal_label, EpisodeTrace, StepTrace};
 pub use tool_agent::{GoalOutcome, ToolAgent, VerifyTool};
 pub use tools::{
     claims_from_research_json, code_generate_mode, code_lm_caps, coder_t3_generator_declared,
-    default_coder_t3_path, extract_json_object, grammar_parse_rate, parse_constrained, pass_at_k,
-    rasp_resolve_anchor, research_network_enabled, resolve_sandbox_path, run_coder_t3,
-    shell_kill_switch, shell_mode, CodeApplyProposalTool, CodeAstGrepTool, CodeCheckTool,
-    CodeEvalTool, CodeGenerateTool, CodeGenMode, CodeGrammarTool, CodeLmCaps, CodeLmTool,
-    CodeLoopTool, CodePatchTool, CodeTestTool, CoderT3Report, FsReadTool, FsWriteTool,
-    GoalProposeTool, HttpGetTool, McpCallTool, MemoryWriteTool, PatchOp, PatchProposal,
-    PredictSeriesTool, ResearchExpandTool, ResearchQueryTool, ShellMode, ShellTool, CODE_AUTH_CAP,
-    CODER_T3_PILOT, RESEARCH_AUTH_CAP, SHELL_AUTH_CAP,
+    default_coder_t3_path, extract_json_object, grammar_parse_rate, is_research_persist_goal,
+    parse_constrained, pass_at_k, rasp_resolve_anchor, research_network_enabled,
+    research_persist_authority, resolve_sandbox_path, run_coder_t3, shell_kill_switch, shell_mode,
+    CodeApplyProposalTool, CodeAstGrepTool, CodeCheckTool, CodeEvalTool, CodeGenerateTool,
+    CodeGenMode, CodeGrammarTool, CodeLmCaps, CodeLmTool, CodeLoopTool, CodePatchTool,
+    CodeTestTool, CoderT3Report, FsReadTool, FsWriteTool, GoalProposeTool, HttpGetTool,
+    McpCallTool, MemoryWriteTool, PatchOp, PatchProposal, PredictSeriesTool, ResearchExpandTool,
+    ResearchQueryTool, ShellMode, ShellTool, CODE_AUTH_CAP, CODER_T3_PILOT, RESEARCH_AUTH_CAP,
+    SHELL_AUTH_CAP,
 };
 pub use undo_sgdb::SgdbUndoBackend;
 
@@ -202,6 +225,13 @@ pub enum Task {
         /// Consulta.
         query: String,
     },
+    /// Previsão de série tipada (T-PRED / A8) — sem bytes crus.
+    Predict {
+        /// Amostras da série.
+        series: Vec<f32>,
+        /// Horizonte (1..=5).
+        horizon: usize,
+    },
 }
 
 impl Task {
@@ -213,6 +243,7 @@ impl Task {
             Self::Satisfy { .. } => "satisfy",
             Self::Optimize { .. } => "optimize",
             Self::Memory { .. } => "memory",
+            Self::Predict { .. } => "predict",
         }
     }
 }
@@ -230,6 +261,8 @@ pub struct TaskFeatures {
     pub optimize: f32,
     /// Tipo memória.
     pub memory: f32,
+    /// Tipo previsão (T-PRED).
+    pub predict: f32,
     /// Dimensão normalizada (`log2(n+1)/8`).
     pub dims: f32,
     /// Densidade de restrições (`m/(n²)`, saturada).
@@ -256,6 +289,10 @@ impl TaskFeatures {
                 f.dims = ((*n as f32 + 1.0).log2() / 8.0).min(1.0);
             }
             Task::Memory { .. } => f.memory = 1.0,
+            Task::Predict { series, .. } => {
+                f.predict = 1.0;
+                f.dims = ((series.len().max(1) as f32).log2() / 8.0).min(1.0);
+            }
         }
         f
     }

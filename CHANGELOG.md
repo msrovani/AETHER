@@ -3,6 +3,31 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando aplicável.
 
+## [0.5.3] - 2026-11-21
+
+### Added
+
+- **T-NL-IN contrato** (`tnl_in.rs`): artefato `aether_tnl_in_contract.json` +
+  gate `agent_tnl_in_gate`.
+- **Hub T-HITL** (`dashboard/hitl_view.rs`): fila Approve/Deny/Ampliar,
+  `hitl_token`, kill switch; High sem token bloqueado.
+- **T-NL-OUT P2** (`nl_out.rs`): juíz claim↔texto + `CertifiedUtterance`.
+- **Modalidades stub**: `OcrPort`, `SttPort`/`TtsPort`, `VisionPort` → funil
+  T-NL-IN; features `ocr`/`speech`/`vision` (default off).
+- **T-EMB opt-in**: `EmbedPort::from_env` (`AETHER_EMBED=1`).
+- **T-PRED no MoE**: `PredictExpert` + `Task::Predict` + intervalo/calib.
+- **A8 v1 critérios**: `a8_v1.rs` / `aether_a8_v1_criteria.json`
+  (`enter_v1_default=false`).
+- **Hier MoE/LSH posição**: `hier_moe.rs` + feature `hier_moe` (off).
+- Gates: `agent_nl_out_p2`, `modalidades`, `emb_optin`, `tpred_moe`,
+  `a8_v1`, `hier_moe`; §6 `agent_accept_s6_gate`.
+- Docs: `RELEASE_0_5_3.md`; CORE_TOMADAS §8 plugue; HUB/PROSA/ACOES.
+
+### Changed
+
+- `dashboard` feature passa a puxar `agent` (hub HITL tipado).
+- Telemetria `StepTrace` enriquecida (cost/args/claims) — aceite §6.
+
 ## [0.5.2] - 2026-11-21
 
 ### Added

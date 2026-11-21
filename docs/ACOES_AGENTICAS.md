@@ -65,7 +65,7 @@ A6←P4 · A8←P5.
 | Research no chat (`f2_chat_hook` + cascata) | vivo; agora também tool do planner (A5) |
 | P4 / G-A5 / **A6** | **verde** — LinUCB opt-in + learner verificado; `agent_learn_gate` + `agent_a6_gate` + ECE self-model |
 | **A7** matriz risco + kill | **verde** — `risk_policy.rs`; `AETHER_AGENT_KILL`; High always HITL; Medium opcional; `agent_a7_gate` |
-| **A8** / P5 fio produto | **parcial-verde** — `predict.series` + `goal.propose` HITL + metacog; `agent_a8_gate`; **enter_v1_default=false** (sem MoE hierárquico) |
+| **A8** / P5 fio produto | **parcial-verde** — `PredictExpert` no MoE + `predict.series` + hub HITL + metacog; `agent_a8_gate` + `aether_a8_v1_criteria.json`; **enter_v1_default=false** até sanção HITL (sem MoE hierárquico) |
 
 ## 4. O que cada passo *não* é
 
@@ -92,15 +92,15 @@ A6←P4 · A8←P5.
 
 Aceite de produto (autonomia **verificada**, não total):
 
-- [ ] Em goals sintéticos do inventário, G-A1/G-A2/G-A3 verdes em artefato versionado.
+- [x] Em goals sintéticos do inventário, G-A1/G-A2/G-A3 verdes em artefato versionado (`target/aether_accept_s6.json`, `agent_accept_s6_gate`).
 - [x] G-A4: 0 fora de sandbox/allowlist; 0 shell sem HITL; injeção em memória não altera ação.
 - [x] A5: `research.query` no allowlist; rede off não inventa; auth≤120; expand só HITL.
 - [x] A6/P4: LinUCB opt-in no planner; learner JSONL; G-A5 ECE≤0.10; ≥30% vs EXP3 (`agent_learn_gate`).
 - [x] A7: matriz publicada; kill switch; High sempre HITL; Medium opcional (`agent_a7_gate`).
 - [x] A8 fio: `predict.series` + OOD/metacog abstain; `goal.propose` HITL; artefato `aether_a8_gate/a8` (`enter_v1_default=false`).
-- [ ] Toda `act` traz trace (tool, args, custo, claims) e passa no SuccessCriteria.
+- [x] Toda `act` traz trace (tool, args, custo, claims) e passa no SuccessCriteria (`StepTrace` + `aether_accept_s6`).
 - [x] OOD / risco alto → abstain ou HITL (`risk_policy` + executor), nunca false-act silencioso.
-- [ ] Research (se ligada) persiste ≤120 e não promove 255.
+- [x] Research (se ligada) persiste ≤120 e não promove 255 (`research_persist_authority` + `memory.write`).
 
 “Autônomo total” open-world **não** é o alvo do v1.
 

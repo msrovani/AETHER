@@ -254,7 +254,9 @@ fn gate_a2_real_recall_sat_verify() {
         },
         Risk::Low,
     );
-    let mut verify = Goal::fact("x", "verified");
+    // relation deve ser `verify` (ou None) — VerifyTool não compete com
+    // code.check/fs.* (0.5.1); `verified` zera affordance.
+    let mut verify = Goal::fact("x", "verify");
     verify.kind = GoalKind::Verify;
     verify.success = SuccessCriteria::Any;
     verify = verify.with_budget(

@@ -28,12 +28,13 @@ mod aether_dashboard_win {
     use aether_engine::dashboard::{
         agent_ask_detail, api_case_detail, collect_wave_gaps, dest_detail, dimension_ficha,
         dec_detail, dec_program_line, dimension_tooltip, draw_console, f4_detail, f4_program_line,
-        fmt_compact, gates_detail, global_tooltip, glossary_entries, load_agent_drive,
-        load_api_eval, load_dec_view, load_f4_view, load_host_report, load_scorecard,
-        load_transplant_view, origin_detail, throughput_tooltip, AgentDriveReport, ApiEvalReport,
-        ConsolePane, DecView, DimFicha, F4View, Gap, GapSeverity, HostReport, JobKind, JobPhase,
-        JobRunner, ScorecardView, TransplantView,
+        fmt_compact, gates_detail, global_tooltip, glossary_entries, hitl_detail, hitl_program_line,
+        load_agent_drive, load_api_eval, load_dec_view, load_f4_view, load_hitl_view,
+        load_host_report, load_scorecard, load_transplant_view, origin_detail, throughput_tooltip,
+        AgentDriveReport, ApiEvalReport, ConsolePane, DecView, DimFicha, F4View, Gap, GapSeverity,
+        HostReport, HitlView, JobKind, JobPhase, JobRunner, ScorecardView, TransplantView,
     };
+    use aether_engine::agent::HitlKind;
 
     /// Aba superior do hub.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -180,6 +181,7 @@ mod aether_dashboard_win {
         agent_drive: AgentDriveReport,
         f4: F4View,
         dec: DecView,
+        hitl: HitlView,
         wave_gaps: Vec<Gap>,
         tab: HubTab,
         status: String,
@@ -212,6 +214,10 @@ mod aether_dashboard_win {
             self.agent_drive = load_agent_drive();
             self.f4 = load_f4_view();
             self.dec = load_dec_view();
+            // Preserva token digitado entre reloads.
+            let token = self.hitl.token_input.clone();
+            self.hitl = load_hitl_view();
+            self.hitl.token_input = token;
             self.wave_gaps = collect_wave_gaps();
         }
 
@@ -350,6 +356,7 @@ mod aether_dashboard_win {
                                 self.draw_situation(ui);
                                 self.draw_f4(ui);
                                 self.draw_dec(ui);
+                                self.draw_hitl(ui);
                                 self.draw_globals(ui);
                                 ui.add_space(14.0);
                                 self.draw_dimensions(ui);
@@ -843,6 +850,14 @@ mod aether_dashboard_win {
                 theme::OK
             };
             lines.push((dec_program_line(&self.dec), dec_color));
+            let hitl_color = if self.hitl.kill {
+                theme::BAD
+            } else if self.hitl.queue.is_empty() {
+                theme::MUTED
+            } else {
+                theme::WARN
+            };
+            lines.push((hitl_program_line(&self.hitl), hitl_color));
             lines
         }
 
@@ -1349,6 +1364,64 @@ mod aether_dashboard_win {
             );
             if r.hovered() {
                 self.note_hover("T-DEC", detail);
+            }
+        }
+
+        fn draw_hitl(&mut self, ui: &mut egui::Ui) {
+            self.section_header(ui, "T-HITL (hub)");
+            let detail = hitl_detail(&self.hitl);
+            let color = if self.hitl.kill {
+                theme::BAD
+            } else if !self.hitl.queue.is_empty() {
+                theme::WARN
+            } else {
+                theme::OK
+            };
+            let r = ui.label(
+                RichText::new(hitl_program_line(&self.hitl))
+                    .small()
+                    .strong()
+                    .color(color),
+            );
+            if r.hovered() {
+                self.note_hover("T-HITL", detail.clone());
+            }
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("hitl_token").small().color(theme::MUTED));
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.hitl.token_input)
+                        .password(true)
+                        .desired_width(120.0),
+                );
+                if self.hitl.kill {
+                    ui.label(RichText::new("KILL").small().strong().color(theme::BAD));
+                }
+            });
+            if let Some(item) = self.hitl.queue.first() {
+                ui.label(
+                    RichText::new(format!(
+                        "{} · {} · {}",
+                        item.tool,
+                        item.band.label(),
+                        item.class
+                    ))
+                    .small()
+                    .color(theme::TEXT),
+                );
+                ui.horizontal(|ui| {
+                    if ui.small_button("Approve").clicked() {
+                        let _ = self.hitl.decide(0, HitlKind::Ask);
+                    }
+                    if ui.small_button("Deny").clicked() {
+                        let _ = self.hitl.decide(0, HitlKind::Deny);
+                    }
+                    if ui.small_button("Ampliar").clicked() {
+                        let _ = self.hitl.decide(0, HitlKind::ExpandResearch);
+                    }
+                });
+            }
+            if let Some(err) = &self.hitl.last_error {
+                ui.label(RichText::new(err).small().color(theme::BAD));
             }
         }
 
@@ -1963,6 +2036,7 @@ mod aether_dashboard_win {
             agent_drive: AgentDriveReport::default(),
             f4: F4View::default(),
             dec: load_dec_view(),
+            hitl: load_hitl_view(),
             wave_gaps: Vec::new(),
             tab: HubTab::Lab,
             status: String::new(),

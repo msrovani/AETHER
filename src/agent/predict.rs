@@ -30,6 +30,8 @@ pub struct PredictReport {
     pub yhat: Vec<f32>,
     /// NRMSE no holdout interno.
     pub nrmse: f32,
+    /// Intervalo ± (calibração grosseira = nrmse).
+    pub interval: f32,
     /// Motivo se abstain/ood (`None` = ok).
     pub abstain: Option<&'static str>,
 }
@@ -57,6 +59,15 @@ impl PredictReport {
                 "series",
                 "predict.nrmse",
                 format!("{:.8}", self.nrmse),
+                conf,
+                auth,
+                ExpertId::Predict,
+                Provenance::Inferred,
+            ),
+            Claim::new(
+                "series",
+                "predict.interval",
+                format!("{:.8}", self.interval),
                 conf,
                 auth,
                 ExpertId::Predict,
@@ -127,6 +138,7 @@ pub fn forecast_series(series: &[f32], horizon: usize) -> PredictReport {
         return PredictReport {
             yhat: Vec::new(),
             nrmse: f32::INFINITY,
+            interval: 0.0,
             abstain: Some("ood"),
         };
     }
@@ -136,6 +148,7 @@ pub fn forecast_series(series: &[f32], horizon: usize) -> PredictReport {
         return PredictReport {
             yhat: Vec::new(),
             nrmse: f32::INFINITY,
+            interval: 0.0,
             abstain: Some("ood"),
         };
     }
@@ -147,6 +160,7 @@ pub fn forecast_series(series: &[f32], horizon: usize) -> PredictReport {
         return PredictReport {
             yhat: Vec::new(),
             nrmse: f32::INFINITY,
+            interval: 0.0,
             abstain: Some("ood"),
         };
     }
@@ -165,6 +179,7 @@ pub fn forecast_series(series: &[f32], horizon: usize) -> PredictReport {
         return PredictReport {
             yhat: Vec::new(),
             nrmse: f32::INFINITY,
+            interval: 0.0,
             abstain: Some("ood"),
         };
     };
@@ -175,6 +190,7 @@ pub fn forecast_series(series: &[f32], horizon: usize) -> PredictReport {
             return PredictReport {
                 yhat: Vec::new(),
                 nrmse: f32::INFINITY,
+            interval: 0.0,
                 abstain: Some("ood"),
             };
         }
@@ -184,6 +200,7 @@ pub fn forecast_series(series: &[f32], horizon: usize) -> PredictReport {
         return PredictReport {
             yhat: Vec::new(),
             nrmse,
+            interval: nrmse,
             abstain: Some("ood"),
         };
     }
@@ -192,6 +209,7 @@ pub fn forecast_series(series: &[f32], horizon: usize) -> PredictReport {
         return PredictReport {
             yhat: Vec::new(),
             nrmse,
+            interval: nrmse,
             abstain: Some("abstain"),
         };
     }
@@ -207,6 +225,7 @@ pub fn forecast_series(series: &[f32], horizon: usize) -> PredictReport {
             return PredictReport {
                 yhat: Vec::new(),
                 nrmse,
+                interval: nrmse,
                 abstain: Some("ood"),
             };
         };
@@ -214,6 +233,7 @@ pub fn forecast_series(series: &[f32], horizon: usize) -> PredictReport {
             return PredictReport {
                 yhat: Vec::new(),
                 nrmse,
+                interval: nrmse,
                 abstain: Some("ood"),
             };
         }
@@ -224,6 +244,7 @@ pub fn forecast_series(series: &[f32], horizon: usize) -> PredictReport {
     PredictReport {
         yhat,
         nrmse,
+        interval: nrmse,
         abstain: None,
     }
 }
@@ -252,6 +273,40 @@ pub fn metacog_should_abstain(nrmse: f32) -> bool {
     let coherence = 1.0 / (1.0 + nrmse.max(0.0));
     let margin = (1.0 - nrmse.clamp(0.0, 1.0)).max(0.0);
     field.should_abstain(margin, SelfFrame::new(0.0, surprise, coherence, 0.0))
+}
+
+/// Especialista T-PRED no MoE (série tipada → yhat + intervalo + cert).
+#[derive(Debug, Default)]
+pub struct PredictExpert;
+
+impl PredictExpert {
+    /// Novo especialista preditivo.
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl crate::agent::experts::Expert for PredictExpert {
+    fn id(&self) -> ExpertId {
+        ExpertId::Predict
+    }
+
+    fn probe(&self, task: &crate::agent::Task, _features: &crate::agent::TaskFeatures) -> f32 {
+        match task {
+            crate::agent::Task::Predict { series, .. } if series.len() >= WASHOUT_MIN => 0.95,
+            crate::agent::Task::Predict { .. } => 0.4,
+            _ => 0.0,
+        }
+    }
+
+    fn infer(&mut self, task: &crate::agent::Task) -> ExpertOutput {
+        let crate::agent::Task::Predict { series, horizon } = task else {
+            return ExpertOutput::empty(self.id(), "tarefa não preditiva");
+        };
+        forecast_series(series, *horizon).to_expert_output()
+    }
+
+    fn learn(&mut self, _task: &crate::agent::Task, _feedback: &crate::agent::Feedback) {}
 }
 
 #[cfg(test)]

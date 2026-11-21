@@ -16,6 +16,30 @@ use crate::json::Json;
 /// Cap duro de autoridade para pesquisa (nunca 255 sem HITL).
 pub const RESEARCH_AUTH_CAP: u8 = 120;
 
+/// Autoridade ao **persistir** evidência de research (`memory.write`).
+///
+/// Sempre ≤ [`RESEARCH_AUTH_CAP`]; nunca 255. ACOES §6.
+pub fn research_persist_authority(raw: u8) -> u8 {
+    raw.min(RESEARCH_AUTH_CAP)
+}
+
+/// Goal/query indica proveniência de research (persistência capped).
+pub fn is_research_persist_goal(goal: &crate::agent::tool::Goal) -> bool {
+    if goal
+        .relation
+        .as_deref()
+        .is_some_and(|r| r.starts_with("research."))
+    {
+        return true;
+    }
+    goal.query.as_deref().is_some_and(|q| {
+        let t = q.trim();
+        t.contains("\"source\":\"research\"")
+            || t.contains("\"source\": \"research\"")
+            || t.contains("source=research")
+    })
+}
+
 /// Rede de pesquisa habilitada? (opt-in HITL / Eixo C).
 pub fn research_network_enabled() -> bool {
     match std::env::var("AETHER_RESEARCH_NETWORK") {

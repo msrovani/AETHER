@@ -66,6 +66,8 @@ pub fn default_experts(cfg: &AgentConfig) -> Vec<Box<dyn Expert>> {
             Err(e) => eprintln!("aviso: memoria SGDB indisponível ({e})"),
         }
     }
+    // T-PRED cheio no MoE (A8 / Fase 6) — probe 0 fora de Task::Predict.
+    experts.push(Box::new(super::predict::PredictExpert::new()));
     experts
 }
 

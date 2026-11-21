@@ -69,6 +69,26 @@ impl EmbedPort {
         Self::default()
     }
 
+    /// Opt-in: `AETHER_EMBED=1` declara era MiniLM 384 (sidecar host).
+    /// F4 permanece congelada — hybrid só após `health(view=era)` no host.
+    pub fn from_env() -> Self {
+        let on = match std::env::var("AETHER_EMBED") {
+            Ok(v) => matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            ),
+            Err(_) => false,
+        };
+        if on {
+            Self {
+                enabled: true,
+                era: Some(EmbedEra::minilm_384()),
+            }
+        } else {
+            Self::off()
+        }
+    }
+
     /// Recusa encode se off ou era ausente.
     pub fn encode_refuse(&self, _text: &str) -> Result<EmbedVector, String> {
         if !self.enabled {

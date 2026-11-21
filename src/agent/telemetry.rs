@@ -5,7 +5,7 @@ use crate::json::Json;
 use super::tool::Goal;
 use super::Action;
 
-/// Um passo do episódio.
+/// Um passo do episódio (ACOES §6: tool, args, custo, claims).
 #[derive(Clone, Debug)]
 pub struct StepTrace {
     /// Tool.
@@ -22,6 +22,40 @@ pub struct StepTrace {
     pub elapsed_us: u64,
     /// Detalhe.
     pub detail: String,
+    /// Custo estimado da tool (ms).
+    pub cost_ms: f32,
+    /// Args / rótulo estável do goal neste passo.
+    pub args: String,
+    /// Número de claims na saída.
+    pub claim_n: u32,
+    /// Maior autoridade entre claims (0 se vazio).
+    pub max_authority: u8,
+}
+
+impl StepTrace {
+    /// Passo não executado (hold / erro pré-call).
+    pub fn skipped(
+        tool: impl Into<String>,
+        score: f64,
+        reason: impl Into<String>,
+        detail: impl Into<String>,
+        cost_ms: f32,
+        args: impl Into<String>,
+    ) -> Self {
+        Self {
+            tool: tool.into(),
+            score,
+            reason: reason.into(),
+            executed: false,
+            met: false,
+            elapsed_us: 0,
+            detail: detail.into(),
+            cost_ms,
+            args: args.into(),
+            claim_n: 0,
+            max_authority: 0,
+        }
+    }
 }
 
 /// Episódio completo.
@@ -58,6 +92,10 @@ impl EpisodeTrace {
                     ("met", Json::Bool(step.met)),
                     ("elapsed_us", Json::num(step.elapsed_us as f64)),
                     ("detail", Json::str(step.detail.clone())),
+                    ("cost_ms", Json::num(f64::from(step.cost_ms))),
+                    ("args", Json::str(step.args.clone())),
+                    ("claim_n", Json::num(f64::from(step.claim_n))),
+                    ("max_authority", Json::num(f64::from(step.max_authority))),
                 ])
             })
             .collect();

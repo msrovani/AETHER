@@ -24,8 +24,8 @@ pub use fs::{resolve_sandbox_path, FsReadTool, FsWriteTool};
 pub use http::HttpGetTool;
 pub use mcp::McpCallTool;
 pub use research::{
-    claims_from_research_json, research_network_enabled, ResearchExpandTool, ResearchQueryTool,
-    RESEARCH_AUTH_CAP,
+    claims_from_research_json, is_research_persist_goal, research_network_enabled,
+    research_persist_authority, ResearchExpandTool, ResearchQueryTool, RESEARCH_AUTH_CAP,
 };
 pub use predict::{GoalProposeTool, PredictSeriesTool};
 pub use shell::{shell_kill_switch, shell_mode, ShellMode, ShellTool, SHELL_AUTH_CAP};
@@ -405,7 +405,7 @@ impl Tool for MemoryWriteTool {
                 && snapshot.provenance != SOURCE
                 && snapshot.authority < AUTHORITY_CORROBORATED
         });
-        let authority = if verified {
+        let mut authority = if verified {
             AUTHORITY_VERIFIED
         } else if corroborated {
             AUTHORITY_CORROBORATED
@@ -415,6 +415,14 @@ impl Tool for MemoryWriteTool {
                 .map(|snapshot| snapshot.authority)
                 .unwrap_or(AUTHORITY_QUARANTINE)
         };
+        // ACOES §6: research persist ≤120 e nunca 255 (mesmo se JSON/claim mentir).
+        let research_bb = ctx
+            .claims
+            .iter()
+            .any(|c| c.relation.starts_with("research."));
+        if research::is_research_persist_goal(goal) || research_bb {
+            authority = research::research_persist_authority(authority);
+        }
         // Watermark ANTES da escrita: o rewind volta o outbox a este ponto.
         let outbox_len = backend.outbox_len();
         let prev = backend

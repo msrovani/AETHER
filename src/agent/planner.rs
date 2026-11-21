@@ -136,9 +136,9 @@ impl Planner {
                         + self.lambda_ucb * u
                         - self.lambda_cost * cost
                         - self.lambda_risk * risk;
-                    // Routing explícito (affordance≈1, ex.: goal.propose / shell.exec):
-                    // High não some sob Medium genérico — piso acima do min_score.
-                    if candidate.affordance >= 0.95 {
+                    // Routing explícito High (affordance≈1, ex.: goal.propose):
+                    // não some sob penalty — só aplica a Risk::High (não Low/Medium).
+                    if candidate.affordance >= 0.95 && candidate.risk == Risk::High {
                         base.max(self.min_score + 1.0)
                     } else {
                         base

@@ -57,6 +57,11 @@
 | `research.query` come `goal.propose` | affordance genérica 0.65 no `query` JSON | relação exclusiva → affordance 0 | `research.rs` |
 | Forecast inventa sob ruído | sem OOD/metacog | NRMSE>0.15 → `ood`; self_field surpresa → `abstain`; auth≤120 | `predict.rs`, `agent_a8_gate` |
 | Meta endógena vira Act no mundo | propor = executar | `goal.propose` High HITL + claim `execute=false`; host decide | `tools/predict.rs` |
+| Act sem telemetria auditável | StepTrace só tinha detail | campos `cost_ms`/`args`/`claim_n`/`max_authority`; gate §6 | `telemetry.rs`, `agent_accept_s6_gate` |
+| Research virava 255 no write | memory.write promovia verified | `research_persist_authority` cap 120; relation `research.*` | `research.rs`, `MemoryWriteTool` |
+| STT/OCR/VIS falam com planner | affordance direta / Goal inventado | funil único T-NL-IN; conf baixa → ask | `ocr`/`speech`/`vision`, `CORE_TOMADAS` §8 |
+| TTS narra abstain | texto livre | só `CertifiedUtterance`; beep “não sei” | `nl_out.rs`, `TtsPort` |
+| Hier MoE antes do funil | LSH no caminho crítico | Fase 8 pós T-EMB+B1; `blocks_tnl_in=false` | `hier_moe.rs` |
 
 ## 3. Invariantes que não podem regredir
 

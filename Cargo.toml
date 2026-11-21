@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "aether_engine"
-version = "0.5.2"
+version = "0.5.3"
 edition = "2021"
 rust-version = "1.78"
 description = "AETHER — motor de computação pós-token baseado em física contínua (Ising contínuo, interferência espectral, Kuramoto UDP)"
@@ -72,7 +72,7 @@ m8 = ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "sgdb"]
 # Inclui o sink durÃƒÂ¡vel do neural-sgdb e o agente (rota /v1/aether/agent).
 api = ["m1", "sgdb", "agent"]
 # Dashboard Windows de metricas (egui). Opt-in; nao entra no default.
-dashboard = ["dep:eframe", "dep:egui", "dep:serde", "dep:serde_json", "m4"]
+dashboard = ["dep:eframe", "dep:egui", "dep:serde", "dep:serde_json", "m4", "agent"]
 # FASE 5 (hardware extremus): JIT Cranelift para termos SINDy ativos e pinning
 # de threads por nucleo. Ambos opcionais; sem eles o crate cai em fallbacks
 # interpretados / no-op (ver src/core/sindy_jit.rs e aether_governor.rs).
@@ -94,6 +94,12 @@ gpu = ["dep:wgpu", "dep:bytemuck"]
 sgdb = ["m1"]
 # Agente: especialistas (FHRR, fase, lÃƒÂ³gica, solver, SGDB) + MoE + coerÃƒÂªncia.
 agent = ["m1", "m5", "sgdb", "dep:serde_json"]
+# Modalidades externas (default off) — stubs compilam sem a feature.
+ocr = []
+speech = []
+vision = []
+# Hierarchical MoE + LSH (Fase 8; pos T-EMB + B1).
+hier_moe = []
 # F1: liga o binding PyO3 do crate aether-decision (embed do interpretador).
 # Opt-in: o build default NAO precisa de Python (Eixo C do plano).
 decision-pyo3 = ["aether_decision/pyo3"]

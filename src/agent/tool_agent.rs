@@ -378,15 +378,14 @@ impl ToolAgent {
             };
             // Não marcar `used` antes da execução (causa raiz MSG 0464).
             if !ctx.can_spend(step.cost) {
-                steps.push(StepTrace {
-                    tool: step.tool.to_string(),
-                    score: step.score,
-                    reason: step.reason.clone(),
-                    executed: false,
-                    met: false,
-                    elapsed_us: 0,
-                    detail: "custo > orçamento: hold".to_string(),
-                });
+                steps.push(StepTrace::skipped(
+                    step.tool,
+                    step.score,
+                    step.reason.clone(),
+                    "custo > orçamento: hold",
+                    step.cost.ms,
+                    goal_label(goal),
+                ));
                 rationale = "orçamento insuficiente: hold".to_string();
                 continue;
             }
@@ -401,6 +400,7 @@ impl ToolAgent {
                         execution.met,
                         execution.elapsed_us,
                         &execution,
+                        goal,
                     ));
                     last = Some(execution);
                     if met {
@@ -412,15 +412,14 @@ impl ToolAgent {
                     rationale = format!("{} não satisfez o critério", step.tool);
                 }
                 Err(e) => {
-                    steps.push(StepTrace {
-                        tool: step.tool.to_string(),
-                        score: step.score,
-                        reason: step.reason.clone(),
-                        executed: false,
-                        met: false,
-                        elapsed_us: 0,
-                        detail: e.to_string(),
-                    });
+                    steps.push(StepTrace::skipped(
+                        step.tool,
+                        step.score,
+                        step.reason.clone(),
+                        e.to_string(),
+                        step.cost.ms,
+                        goal_label(goal),
+                    ));
                     if matches!(e, super::tool::ToolError::NeedsHuman(_)) {
                         used.push(step.tool);
                         action = Action::Cite;
@@ -534,7 +533,21 @@ impl ToolAgent {
     }
 }
 
-fn step_trace(step: &PlanStep, met: bool, elapsed_us: u64, execution: &Execution) -> StepTrace {
+fn step_trace(
+    step: &PlanStep,
+    met: bool,
+    elapsed_us: u64,
+    execution: &Execution,
+    goal: &Goal,
+) -> StepTrace {
+    let claim_n = execution.outcome.claims.len() as u32;
+    let max_authority = execution
+        .outcome
+        .claims
+        .iter()
+        .map(|c| c.authority)
+        .max()
+        .unwrap_or(0);
     StepTrace {
         tool: step.tool.to_string(),
         score: step.score,
@@ -543,6 +556,10 @@ fn step_trace(step: &PlanStep, met: bool, elapsed_us: u64, execution: &Execution
         met,
         elapsed_us,
         detail: execution.outcome.detail.clone(),
+        cost_ms: step.cost.ms,
+        args: goal_label(goal),
+        claim_n,
+        max_authority,
     }
 }
 

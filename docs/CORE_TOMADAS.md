@@ -53,35 +53,37 @@ escada de produto, estado.
 
 | ID | Nome | Contrato | Disjuntor | Escada | Estado |
 |---|---|---|---|---|---|
-| **T-NL-IN** | `LanguagePort::parse` | texto → `Goal` + confidence | OOV / conf &lt;0.50 → abstain | P0, A0–A1 | **vivo** (C1) |
+| **T-NL-IN** | `LanguagePort::parse` | texto → `Goal` + confidence | OOV / conf &lt;0.50 → abstain | P0, A0–A1 | **vivo** (C1; contrato `target/aether_tnl_in_contract.json`) |
+| **T-OCR** | `OcrPort` | `DocRef` → texto → T-NL-IN | conf baixa → ask; PII deny; feature `ocr` off | stub | **vivo stub** |
 | **T-PACK** | ETL doação (Python) | corpus → `facts.jsonl` + manifest | licença / auth&gt;120 sem HITL | M1–M6 | **vivo** (playbook) |
 | **T-NET** | `research.query` (F2/A5) | pergunta → claims tieradas auth≤120 | rede off; waste=0 | A5, P0/P2 | **vivo** (planner + chat; opt-in) |
-| **T-STT** | speech→text | áudio → texto UTF-8 **ou** `Goal` | sem motor STT; PII; offline policy | — | **reservada** |
-| **T-VIS** | vision→struct | imagem/frame → `VisionObs` tipado | sem motor visão; sem pixels no core | — | **reservada** |
+| **T-STT** | `SttPort` | áudio-ref → texto → T-NL-IN | conf baixa → ask; feature `speech` off; PCM fora T0 | S0–S3 | **vivo stub** |
+| **T-VIS** | `VisionPort` | image-ref → `VisionObs` → T-NL-IN | conf baixa → ask; feature `vision` off; pixels fora T0 | V0–V4 | **vivo stub** |
 
 ### 2.2 Núcleo (sempre presentes)
 
 | ID | Nome | Contrato | Disjuntor | Escada | Estado |
 |---|---|---|---|---|---|
 | **T-MOE** | `MoERouter` EXP3/UCB + LinUCB opt-in | `Goal` → top-k experts/tools | score &lt; min_score → abstain | M0, M5, A1–A6 | **vivo** (A6/`AETHER_LINUCB`) |
-| **T-XP-*** | experts (transplant, phase, logic, solver, memory) | task → `ExpertOutput` | evidência fraca → None/abstain | M1–M3 | **vivo** |
+| **T-XP-*** | experts (transplant, phase, logic, solver, memory, **predict**) | task → `ExpertOutput` | evidência fraca → None/abstain | M1–M3, A8 | **vivo** |
+| **T-PRED** | `PredictExpert` / `predict.series` | série tipada → yhat+intervalo+NRMSE | OOD/metacog → abstain; auth≤120 | A8 | **vivo** (MoE + tool; `enter_v1_default=false`) |
 | **T-DEC** | DecisionPort / Vega | Goal → route/abstain + conformal | `engine_unavailable` → stub | F1/P6 | **vivo** (opt-in; hub `dec_view`) |
 | **T-EMB** | EmbedPort | texto → `Vec<f32>`+era | dim/era mismatch; off→lexical | F4 | **vivo formal** (off; F4 congelada) |
 | **T-PLAN** | planner + executor | Goal → PlanStep* + rollback | risk_ceiling / allowlist | A0–A7 | **vivo** (mundo A4) |
 | **T-COH** | coherence | claims → Action | contradição → abstain/cite | — | **vivo** |
 | **T-AUTH** | autoridade / HITL | claim auth 60…255 | ≥200/255 só HITL; LLM≤120 | todas | **vivo** |
-| **T-HITL** | `HitlRequest`→`HitlDecision` + matriz A7 | promote/deny/ampliar + audit; High always | timeout→abstain; 255/`AETHER_AGENT_KILL` | A7 | **vivo** (`hitl.rs` + `risk_policy.rs`) |
+| **T-HITL** | `HitlRequest`→`HitlDecision` + matriz A7 | promote/deny/ampliar + audit; High always | timeout→abstain; 255/`AETHER_AGENT_KILL` | A7 | **vivo** (`hitl.rs` + hub `hitl_view`) |
 
 ### 2.3 Saída (atuação / render)
 
 | ID | Nome | Contrato | Disjuntor | Escada | Estado |
 |---|---|---|---|---|---|
-| **T-NL-OUT** | `LanguagePort::generate` / template | Concept/claims → texto + cite auth | sem evidência → Empty | P1–P6 | **vivo (P1)** |
+| **T-NL-OUT** | `LanguagePort::generate` + juíz P2 | claims → `CertifiedUtterance` | sem evidência → Empty; falso settled | P1–P2 | **vivo (P2)** |
 | **T-CODE** | `code.*` …/lm/eval + `shell.exec` | Goal→sandbox→verify/patch; T3; shell HITL | falso merge; G-A4; auth≤120; shell never default | K0–K8 | **vivo K1–K8** (`agent_coder_gate`) |
 | **T-FS** | `fs.read` / `fs.write` | path relativo → bytes sob `sandbox_root` | traversal / escape | A4 | **vivo** (`tests/agent_safety_gate`) |
 | **T-HTTP** | `http.get` | URL → body/claim; GET only | host fora allowlist; POST | A4 | **vivo** (fetch opt-in) |
 | **T-MCP** | `mcp.call` | nome allowlist → `ToolOutcome` | nome fora; args inválidos | A4 | **vivo** (proxy tipado) |
-| **T-TTS** | text→speech | texto certificado → áudio | falar claim sem fonte; auth&lt;limiar | — | **reservada** |
+| **T-TTS** | `TtsPort` | só `CertifiedUtterance` → speak/beep | abstain → “não sei”; sem fato inventado | S0–S2 | **vivo stub** |
 | **T-UI** | hub / API | Action → tela/SSE | — | produto hub | **vivo** |
 
 ## 3. Disjuntores (banda de triagem)
@@ -220,16 +222,34 @@ dims com era do SGDB sem `health(view=era)`.
 - [x] Visão/speech = tomadas reservadas, mesmo barramento Goal/Action  
 - [x] Core sem token / sem pixel / sem PCM no T0  
 
-## 8. Próximos plugues (ordem)
+## 8. Como plugar borda (só T-NL-IN)
+
+```text
+sua borda → texto UTF-8 ──┐
+             ou Goal struct ┼──► T-NL-IN (LanguagePort::parse / GoalSchema)
+STT / OCR / VIS ───────────┘         │
+                                     ▼
+                              MoE / plan / coh
+                                     │
+                              T-NL-OUT P2 → CertifiedUtterance → T-TTS
+```
+
+- Contrato versionado: `target/aether_tnl_in_contract.json` (`tnl_in` / gate `agent_tnl_in_gate`).
+- STT/OCR/VIS **não** falam com o planner: só emitem texto/struct para T-NL-IN.
+- High externo / `goal.propose` → hub T-HITL (`hitl_view`) antes de auth 255.
+- Hierarchical MoE/LSH **não** bloqueia este funil (Fase 8 / pós T-EMB+B1).
+
+## 9. Próximos plugues (ordem)
 
 1. Manter T-NL-IN + T-MOE + T-NET estáveis (já medidos).  
-2. ~~A4 / G-A4~~ **fechado** (`fs`/`http.get`/`mcp.call` + `agent_safety_gate`).  
-3. P1 template → T-NL-OUT mínimo.  
-4. Pack piloto (`MOE_ETL`) → alimenta transplant.  
-5. Speech / visão — escadas reservadas; **zero** no default.  
-6. Fila restante (T-HITL, T-EMB, T-PRED, robot…): [`TOMADAS_FUTURO.md`](TOMADAS_FUTURO.md).
+2. ~~A4 / G-A4~~ **fechado**.  
+3. ~~P1/P2 T-NL-OUT~~ **fechado** (`CertifiedUtterance`).  
+4. ~~Hub HITL~~ **vivo** (`hitl_view`).  
+5. Modalidades stub (OCR/STT/VIS/TTS) — feature off até backend.  
+6. A8 `enter_v1` — só após sanção HITL (`aether_a8_v1_criteria.json`).  
+7. Hier MoE/LSH — pós T-EMB + B1.  
 
-## 9. Memória / recall
+## 10. Memória / recall
 
 Entities: `aether/agent`, `doc/architecture`, `mom/constraint`, `mom/pattern`.  
 Trigger sugerido: `docs/CORE_TOMADAS.md`, `src/agent/**`.
