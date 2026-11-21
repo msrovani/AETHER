@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 
 def anchored(claims: list, style: str) -> str:
@@ -34,9 +35,13 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--artifact", default="")
     ap.add_argument("--style", default="factual")
+    ap.add_argument("--input", default="", help="JSON file (senão stdin)")
     ap.add_argument("--require-model", action="store_true")
     args = ap.parse_args()
-    raw = sys.stdin.read()
+    if args.input:
+        raw = Path(args.input).read_text(encoding="utf-8")
+    else:
+        raw = sys.stdin.read()
     try:
         payload = json.loads(raw) if raw.strip() else {}
     except json.JSONDecodeError:

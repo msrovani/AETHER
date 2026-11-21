@@ -20,6 +20,15 @@ pub struct HostReport {
     pub reserved_siblings: Vec<usize>,
     pub ram_total_mb: Option<f64>,
     pub ram_available_mb: Option<f64>,
+    /// VRAM livre (MiB) via `nvidia-smi` quando houver GPU NVIDIA.
+    #[serde(default)]
+    pub vram_free_mb: Option<u64>,
+    /// VRAM total (MiB).
+    #[serde(default)]
+    pub vram_total_mb: Option<u64>,
+    /// Nome da GPU (primeiro adaptador).
+    #[serde(default)]
+    pub gpu_name: Option<String>,
     pub arch: String,
     pub os: String,
     pub affinity_feature: bool,
@@ -91,6 +100,37 @@ fn on_path(exe: &str) -> bool {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
+}
+
+/// NVIDIA VRAM via `nvidia-smi` (user final / scribe policy). Ausente → None.
+fn nvidia_vram() -> (Option<String>, Option<u64>, Option<u64>) {
+    let Ok(out) = std::process::Command::new("nvidia-smi")
+        .args([
+            "--query-gpu=name,memory.total,memory.free",
+            "--format=csv,noheader,nounits",
+        ])
+        .output()
+    else {
+        return (None, None, None);
+    };
+    if !out.status.success() {
+        return (None, None, None);
+    }
+    let line = String::from_utf8_lossy(&out.stdout);
+    let Some(line) = line.lines().map(str::trim).find(|l| !l.is_empty()) else {
+        return (None, None, None);
+    };
+    let mut parts = line.split(',').map(str::trim);
+    let name = parts.next().map(str::to_string);
+    let total = parts
+        .next()
+        .and_then(|s| s.parse::<f64>().ok())
+        .map(|n| n as u64);
+    let free = parts
+        .next()
+        .and_then(|s| s.parse::<f64>().ok())
+        .map(|n| n as u64);
+    (name, total, free)
 }
 
 /// Coleta gaps a partir do host + scorecard opcional.
@@ -223,6 +263,7 @@ pub fn probe_and_save(scorecard: Option<&ScorecardView>) -> Result<HostReport> {
         logical
     };
     let (ram_total_mb, ram_available_mb) = ram_windows();
+    let (gpu_name, vram_total_mb, vram_free_mb) = nvidia_vram();
 
     let mut report = HostReport {
         logical_cpus: logical,
@@ -231,6 +272,9 @@ pub fn probe_and_save(scorecard: Option<&ScorecardView>) -> Result<HostReport> {
         reserved_siblings: plan.reserved_siblings.clone(),
         ram_total_mb,
         ram_available_mb,
+        vram_free_mb,
+        vram_total_mb,
+        gpu_name,
         arch: std::env::consts::ARCH.to_string(),
         os: std::env::consts::OS.to_string(),
         affinity_feature: cfg!(feature = "affinity"),

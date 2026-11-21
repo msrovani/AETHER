@@ -1,0 +1,108 @@
+﻿{
+    "schema":  "aether.aceite_0_5_5/v1",
+    "date":  "2026-11-21T20:56:53-03:00",
+    "host":  "ROCKY",
+    "steps":  [
+                  {
+                      "name":  "gates_dec_upgrade",
+                      "pass":  true,
+                      "ms":  0,
+                      "detail":  "skipped_prepass",
+                      "exit":  0
+                  },
+                  {
+                      "name":  "gates_gemma_scribe",
+                      "pass":  true,
+                      "ms":  0,
+                      "detail":  "skipped_prepass",
+                      "exit":  0
+                  },
+                  {
+                      "name":  "check_dashboard",
+                      "pass":  true,
+                      "ms":  0,
+                      "detail":  "skipped_prepass",
+                      "exit":  0
+                  },
+                  {
+                      "name":  "host_probe",
+                      "pass":  true,
+                      "ms":  98,
+                      "detail":  "gpu=NVIDIA GeForce RTX 3050 6GB Laptop GPU vram_free=5821MiB",
+                      "exit":  0
+                  },
+                  {
+                      "name":  "dry_smoke",
+                      "pass":  true,
+                      "ms":  102,
+                      "detail":  "{\"ok\": true, \"path\": \"C:\\\\Users\\\\msrov\\\\Documents\\\\AETHER\\\\target\\\\aether_dec_upgrade_smoke.json\"}",
+                      "exit":  0
+                  },
+                  {
+                      "name":  "scribe_anchored",
+                      "pass":  true,
+                      "ms":  100,
+                      "detail":  "Com base na evidência, brasil capital brasilia (autoridade 128).",
+                      "exit":  0
+                  },
+                  {
+                      "name":  "hitl_roundtrip",
+                      "pass":  true,
+                      "ms":  303,
+                      "detail":  "{\"ok\":true,\"phase\":\"hitl_cutover\",\"hitl_cutover_id\":1795305414275,\"reason\":\"smoke verde — aguarda HITL cutover\"} {\"ok\":true,\"roundtrip\":\"prepare→cutover→scribe→revert\",\"scribe_path\":\"gemma-3-1b-prose\",\"final_phase\":\"active\",\"reason\":\"revertido para previous\"}",
+                      "exit":  0
+                  }
+              ],
+    "pass":  true,
+    "failed":  [
+
+               ],
+    "lock_active":  {
+                        "schema":  "engine.lock/1",
+                        "bank":  "active",
+                        "sentinel":  {
+                                         "id":  "gemma-3-1b-prose"
+                                     },
+                        "primary":  {
+                                        "id":  "vega-u-0.8b"
+                                    },
+                        "scribe_enabled":  true,
+                        "scribe_path":  "gemma-3-1b-prose",
+                        "scribe_backend":  "gemma_local"
+                    },
+    "live_smoke":  {
+                       "schema":  "dec_upgrade_smoke/1",
+                       "mode":  "live",
+                       "ok":  false,
+                       "boot":  "yellow",
+                       "fit":  "green",
+                       "t1":  "yellow",
+                       "t2":  "green",
+                       "c1":  "green",
+                       "and":  "yellow",
+                       "reason":  "primary_model_missing:.vega/models/vega-u-0.8b; t2_abstain=True peak=0.339; c1_choice=B abstain=True peak=0.506",
+                       "paths":  {
+                                     "primary":  "C:\\Users\\msrov\\Documents\\AETHER\\.vega\\models\\vega-u-0.8b",
+                                     "sentinel":  "C:\\Users\\msrov\\Documents\\AETHER\\.vega\\models\\vega-u-gemma-1b-prose",
+                                     "primary_exists":  false,
+                                     "sentinel_exists":  true
+                                 }
+                   },
+    "live_verdict":  "parcial_t2_c1_ok_t1_pending_primary_model",
+    "host_gpu":  {
+                     "schema":  "aether_host_report/aceite",
+                     "logical_cpus":  16,
+                     "physical_cpus":  16,
+                     "ram_total_mb":  null,
+                     "ram_available_mb":  null,
+                     "vram_free_mb":  5821,
+                     "vram_total_mb":  6144,
+                     "gpu_name":  "NVIDIA GeForce RTX 3050 6GB Laptop GPU",
+                     "arch":  "x86_64",
+                     "os":  "windows",
+                     "gaps":  [
+
+                              ],
+                     "note":  "aceite_0_5_5: VRAM via nvidia-smi; hub host_probe grava o mesmo campo"
+                 }
+}

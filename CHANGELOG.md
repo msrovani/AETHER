@@ -5,6 +5,13 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
 
 ## [Unreleased]
 
+### Added
+
+- Aceite 0.5.5: `docs/ACEITE_0_5_5.md`, `tools/aceite_0_5_5.ps1`,
+  `examples/aceite_055_hitl.rs` (roundtrip HITL cutover↔revert).
+- `host_probe`: campos `vram_free_mb` / `vram_total_mb` / `gpu_name` (nvidia-smi).
+- Smoke T-DEC `--live` com schema vegaml dict; parcial honesto se primary ausente.
+
 ## [0.5.5] - 2026-11-21
 
 ### Added

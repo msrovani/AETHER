@@ -34,7 +34,11 @@
 cargo test --features agent --test agent_dec_upgrade_gate
 cargo test --features agent --test agent_gemma_scribe_gate
 cargo check --features dashboard,agent --bin aether-dashboard
+.\tools\aceite_0_5_5.ps1          # dry + HITL roundtrip
+.\tools\aceite_0_5_5.ps1 -Live    # + T2/C1 gemma (T1 precisa vega-u-0.8b local)
 ```
+
+Roteiro: [`ACEITE_0_5_5.md`](ACEITE_0_5_5.md).
 
 ## Memória
 
