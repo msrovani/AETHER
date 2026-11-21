@@ -1,0 +1,128 @@
+{
+  "summary": {
+    "n": 4,
+    "with_searx": 4,
+    "auth_ge_80": 4,
+    "multi_provider_confirm": 3,
+    "mean_s": 2.049,
+    "searx_url": "https://search.lumy.live"
+  },
+  "rows": [
+    {
+      "q": "capital da Franca",
+      "ok": true,
+      "authority": 80,
+      "verdict": "open",
+      "reason": "multi_provider_confirm",
+      "n_independent": 12,
+      "providers": [
+        "searx",
+        "wiki"
+      ],
+      "trail": "ddg:0|searx:6|wiki:6|parallel:1",
+      "parallel": true,
+      "s": 2.536,
+      "sample": [
+        [
+          "searx",
+          "PARIS ‐ França, capital mundial do turismo, CONHEÇA... - You"
+        ],
+        [
+          "searx",
+          "qual a capital da franca - brainly.com.br"
+        ],
+        [
+          "searx",
+          "Divisões administrativas da França – Wikipédia, a enciclopéd"
+        ]
+      ]
+    },
+    {
+      "q": "quem escreveu Dom Casmurro?",
+      "ok": true,
+      "authority": 80,
+      "verdict": "open",
+      "reason": "multi_provider_confirm",
+      "n_independent": 12,
+      "providers": [
+        "searx",
+        "wiki"
+      ],
+      "trail": "ddg:0|searx:6|wiki:6|parallel:1",
+      "parallel": true,
+      "s": 1.323,
+      "sample": [
+        [
+          "searx",
+          "Dom Casmurro – Introdução à obra de Machado de Assis"
+        ],
+        [
+          "searx",
+          "O Otelo Brasileiro de Machado de Assis: Um Estudo de Dom Cas"
+        ],
+        [
+          "searx",
+          "De “Dom Casmurro” a “Véspera”, Fátima Bernardes indica livro"
+        ]
+      ]
+    },
+    {
+      "q": "qual a distancia media Terra-Lua",
+      "ok": true,
+      "authority": 80,
+      "verdict": "settled",
+      "reason": "numeric_converged",
+      "n_independent": 12,
+      "providers": [
+        "searx",
+        "wiki"
+      ],
+      "trail": "ddg:0|searx:6|wiki:6|parallel:1",
+      "parallel": true,
+      "s": 2.533,
+      "sample": [
+        [
+          "searx",
+          "A órbita da Lua em torno da Terra é elíptica, porém... - You"
+        ],
+        [
+          "searx",
+          "Tudo à Mão | Informação é Poder: Como medir a distância da T"
+        ],
+        [
+          "searx",
+          "Qual é a fase da lua hoje: 0"
+        ]
+      ]
+    },
+    {
+      "q": "o que e a Torre Eiffel",
+      "ok": true,
+      "authority": 80,
+      "verdict": "open",
+      "reason": "multi_provider_confirm",
+      "n_independent": 12,
+      "providers": [
+        "searx",
+        "wiki"
+      ],
+      "trail": "ddg:0|searx:6|wiki:6|parallel:1",
+      "parallel": true,
+      "s": 1.804,
+      "sample": [
+        [
+          "searx",
+          "A Torre Eiffel: História, Factos e Guia de Visita | One Jour"
+        ],
+        [
+          "searx",
+          "Conheça a Torre Eiffel em Paris | Optima Intercâmbio"
+        ],
+        [
+          "searx",
+          "Simplificando sua visita à Torre Eiffel | Bem in Paris"
+        ]
+      ]
+    }
+  ]
+}

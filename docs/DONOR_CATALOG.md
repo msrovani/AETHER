@@ -3,6 +3,8 @@
 > Objetivo: AETHER como **IA completa destokenizada**, paralela às LLMs.
 > Doadoras **nunca** entram no hot path T0 (146 µs). Sidecar offline → HV + fatos.
 > Evidência de ciclo: MSG **0519–0521**, `target/b0_parafra_gate.json`, playbook §2.
+>
+> Encaixe MoE / skill pack (“Trinity” + ETL Python): [`MOE_ETL_PACK.md`](MOE_ETL_PACK.md).
 
 Atualizado: **2026-11-18** · mediado CURSOR (pesquisa HF + fórum A3).
 

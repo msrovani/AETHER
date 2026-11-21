@@ -1,0 +1,58 @@
+{
+  "schema": "aether.product_sim_100_compare/v1",
+  "before_ref": "product_sim_100_before_parallel.json",
+  "after_ref": "product_sim_100.json",
+  "delta": {
+    "productive": 1,
+    "honest_deny": -1,
+    "waste": 0,
+    "n_research": 5,
+    "n_deny": -1,
+    "n_cite": 0,
+    "n_reresearch_hit": 0,
+    "elapsed_s": -14.14,
+    "latency_mean": -0.143,
+    "latency_p50": -0.023,
+    "latency_max": 2.725
+  },
+  "before": {
+    "index": {
+      "productive": 91,
+      "honest_deny": 7,
+      "waste": 0,
+      "other": 2
+    },
+    "n_research": 48,
+    "n_deny": 7,
+    "n_cite": 83,
+    "n_reresearch_hit": 15,
+    "elapsed_s": 293.55,
+    "latency_s": {
+      "p50": 3.264,
+      "max": 8.918,
+      "mean": 2.86
+    },
+    "research_parallel": "0/seq"
+  },
+  "after": {
+    "index": {
+      "productive": 92,
+      "honest_deny": 6,
+      "waste": 0,
+      "other": 2
+    },
+    "n_research": 53,
+    "n_deny": 6,
+    "n_cite": 83,
+    "n_reresearch_hit": 15,
+    "elapsed_s": 279.41,
+    "latency_s": {
+      "p50": 3.241,
+      "max": 11.643,
+      "mean": 2.717
+    },
+    "research_parallel": "1",
+    "research_provider": "cascade"
+  },
+  "note": "before=first-hit seq; after=cascade parallel fuse; SEARX_URL vazio → multi_provider_confirm raro (wiki-only)"
+}

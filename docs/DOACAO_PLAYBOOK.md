@@ -3,7 +3,8 @@
 > Documento operacional. Objetivo: **clonar** o processo para uma nova rodada
 > sem reinventar arquitetura.  
 > Spec técnica: [`INTAKE_PLAN.md`](INTAKE_PLAN.md) · Números da 1ª rodada: [`TRANSPLANT_HV.md`](TRANSPLANT_HV.md)  
-> CLAIM fórum: MSG **0229** / **0244** / **0245** · Tópico `INTAKE_TRANSPLANT`
+> CLAIM fórum: MSG **0229** / **0244** / **0245** · Tópico `INTAKE_TRANSPLANT`  
+> Pack → MoE (analista Python): [`MOE_ETL_PACK.md`](MOE_ETL_PACK.md).
 
 ---
 

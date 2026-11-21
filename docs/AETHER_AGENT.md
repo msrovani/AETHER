@@ -9,8 +9,10 @@
 abstenção calibrada. A suíte própria (ACQ 100) mede metas internas, não
 inteligência geral. O produto é híbrido — `LanguagePort` (parser/template por
 default; small LM/concept/remote LLM opcionais) na borda, AETHER no meio para
-memória/verificação/decisão. Ver `docs/LANGUAGE_PORT.md` e
-`docs/AETHER_AGENT_ROADMAP.md` (Tiers T0–T3, Trilha C).
+memória/verificação/decisão. Fiação core×tomadas (prosa/MoE/coder/agêntica/
+visão/speech): **`docs/CORE_TOMADAS.md`**. Escadas:
+`docs/PROSA_FLUENTE.md`, `docs/ACOES_AGENTICAS.md`, `docs/CODER_AETHER.md`,
+`docs/MOE_ETL_PACK.md`, `docs/LANGUAGE_PORT.md`, `docs/AETHER_AGENT_ROADMAP.md`.
 
 ## Premissas → implementação
 
@@ -76,6 +78,9 @@ O corpus curado do próprio projeto vive em **`data/agent_facts.jsonl`**
 gate `gate_memoriza_fatos_do_projeto` garante que doc e memória não divergem.
 
 ## MoE sem gradiente
+
+Skill packs via ETL Python (doação → `facts.jsonl` → transplant → EXP3):
+ver **`docs/MOE_ETL_PACK.md`**.
 
 Para cada tarefa, o probe de cada especialista é uma competência declarada
 (`0..1`). O gate amostra até `top_k` especialistas:

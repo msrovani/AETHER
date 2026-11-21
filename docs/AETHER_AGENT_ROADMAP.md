@@ -19,7 +19,7 @@ O veredito está correto e precisa entrar no plano:
 
 | Fato | Consequência para o plano |
 |---|---|
-| **Não é um LLM**: não tokeniza, não prevê próximo token, não gera linguagem | MMLU/GSM8K/HumanEval/Arena são **N/A** até existir um gerador na borda |
+| **Não é um LLM**: não tokeniza, não prevê próximo token, não gera linguagem | MMLU/GSM8K/HumanEval/Arena são **N/A** até existir um gerador na borda; escada coder: **`docs/CODER_AETHER.md`** |
 | **É um coprocessador cognitivo**: memória auditável, solver com certificado, abstenção calibrada | A métrica é factualidade/abstenção/latência/RAM, não “inteligência geral” |
 | **ACQ 100 é 100% da suíte própria** (12 dimensões, 50 fatos) | Não é comparável a benchmark externo; nunca apresentar como “empata com GPT” |
 | **Transplante compra conhecimento, similaridade e recall** | Não compra linguagem, raciocínio geral nem geração |
@@ -60,6 +60,8 @@ de ferramentas, efeitos, pré-condições, planejamento multi-passo, linguagem,
 mundo preditivo nem sandbox.
 
 ## 1. O que significa “a IA escolhe o que usar”
+
+Escada de produto A0→A8 (gates, estado, aceite): **`docs/ACOES_AGENTICAS.md`**.
 
 Separar quatro decisões que hoje estão colapsadas:
 
@@ -409,6 +411,8 @@ obedecê-la.
 
 ### Trilha B — Conhecimento em escala
 
+Pack MoE via ETL Python (doação → facts → EXP3): **`docs/MOE_ETL_PACK.md`**.
+
 O gargalo não é “mais fatos no mock”; é **transdutor semântico + memória em
 escala + governança**. O estado atual: 205 átomos, 43 KB de fatos, 1,28 KB/átomo,
 borda por hash.
@@ -426,6 +430,7 @@ borda por hash.
 ### Trilha C — Linguagem plugável (`LanguagePort`)
 
 Detalhe das alternativas, papers e experimentos: **`docs/LANGUAGE_PORT.md`**.
+Escada de produto até prosa fluente (ordem P0→P6, aceites): **`docs/PROSA_FLUENTE.md`**.
 
 | Fase | Entrega | Esforço | Gate |
 |---|---|---|---|

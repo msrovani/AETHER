@@ -632,7 +632,47 @@ fn port_reason_opens_research(port_line: &str) -> bool {
         .any(|tok| tok == "motivo=unknown")
 }
 
-/// Chama o cabo offline. Não escolhe caso: texto sem caso vira `sem_caso`.
+/// HITL opt-in: com `AETHER_RESEARCH_NETWORK=1`, abstenção por desconhecimento
+/// (OOV / sem memória) abre o vetor F2 mesmo sob stub (`engine_unavailable`).
+/// Sem o opt-in, mantém a regra estrita `motivo=unknown` only.
+fn network_research_opt_in() -> bool {
+    std::env::var("AETHER_RESEARCH_NETWORK")
+        .map(|v| v.trim() == "1")
+        .unwrap_or(false)
+}
+
+/// Classifica o pedido via `research_intent` (research|memory|deny).
+fn research_intent_action(text: &str) -> String {
+    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tools/research_intent.py");
+    let out = std::process::Command::new("python")
+        .arg(&script)
+        .arg(text)
+        .output();
+    match out {
+        Ok(done) if done.status.success() => {
+            let raw = String::from_utf8_lossy(&done.stdout);
+            // JSON com "action": "…"
+            if let Some(idx) = raw.find("\"action\"") {
+                let after = &raw[idx + "\"action\"".len()..];
+                if let Some(colon) = after.find(':') {
+                    let slice = &after[colon + 1..];
+                    if let Some(start_q) = slice.find('"') {
+                        let rest = &slice[start_q + 1..];
+                        if let Some(end_q) = rest.find('"') {
+                            return rest[..end_q].to_string();
+                        }
+                    }
+                }
+            }
+            "deny".to_string()
+        }
+        _ => "deny".to_string(),
+    }
+}
+
+/// Chama o cabo F2 (offline ou vivo conforme `AETHER_RESEARCH_NETWORK`).
+/// O hook classifica: research (fato) | memory (interno) | deny (lixo/gerativo).
+/// Sem fontes após cascata → linha `desconhecimento:` (nega; não limbo).
 fn f2_research_notice(text: &str) -> String {
     let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tools/f2_chat_hook.py");
     let out = std::process::Command::new("python")
@@ -640,14 +680,16 @@ fn f2_research_notice(text: &str) -> String {
         .arg("once")
         .arg("--text")
         .arg(text)
+        .arg("--reason")
+        .arg("unknown")
         .output();
     match out {
         Ok(done) if done.status.success() => String::from_utf8_lossy(&done.stdout)
             .lines()
             .next()
-            .unwrap_or("pesquisa: sem_saida")
+            .unwrap_or("desconhecimento: sem_saida_do_cabo")
             .to_string(),
-        _ => "pesquisa: indisponivel".to_string(),
+        _ => "desconhecimento: cabo indisponivel — não afirmo".to_string(),
     }
 }
 
@@ -721,6 +763,7 @@ fn chat_turn(
         // memória durável. Hit = CITAÇÃO com score/authority na tela
         // (evidência, não afirmação — o core não decide). Sem sgdb ou sem
         // hit, o abstain permanece honesto.
+        let mut cited_memory = false;
         if let Some(mem) = memory {
             match mem.recall(text, 8) {
                 Ok(citations) if !citations.is_empty() => {
@@ -730,7 +773,7 @@ fn chat_turn(
                         let _ =
                             writeln!(out, "  [{:.2} auth={}] {}", c.score, c.authority, snippet);
                     }
-                    return EXIT_OK;
+                    cited_memory = true;
                 }
                 Ok(_) => {}
                 Err(e) => {
@@ -738,9 +781,30 @@ fn chat_turn(
                 }
             }
         }
-        // F2 (MSG 1022): só unknown do port abre pesquisa. Stub = engine_unavailable.
-        if port_reason_opens_research(&port_line) {
-            let _ = writeln!(out, "{}", f2_research_notice(text));
+        // HITL item 2: interno + citação → web fechada (produtivo).
+        // Fato mundano → pesquisa mesmo com hits fracos de memória.
+        // Sem citação + interno/deny → cabo imprime desconhecimento.
+        let intent = research_intent_action(text);
+        if cited_memory && intent == "memory" {
+            let _ = writeln!(out, "memória: assunto interno — web fechada (citação acima)");
+            return EXIT_OK;
+        }
+        if cited_memory && intent == "deny" {
+            // Já citou o que havia; não gasta rede em lixo/controle.
+            return EXIT_OK;
+        }
+        // F2: unknown do port OU rede=1 em fato/desconhecimento.
+        if port_reason_opens_research(&port_line) || network_research_opt_in() {
+            let notice = f2_research_notice(text);
+            // Interno sem citação: negar explicitamente.
+            if intent == "memory" && notice.starts_with("memória:") {
+                let _ = writeln!(
+                    out,
+                    "desconhecimento: assunto interno — sem evidência local; não afirmo"
+                );
+            } else {
+                let _ = writeln!(out, "{notice}");
+            }
         }
         return EXIT_OK;
     }
@@ -766,6 +830,14 @@ fn chat_turn(
     }
     let outcome = agent.solve(&goal);
     print_goal_outcome(out, &outcome, false);
+    // HITL rede: abstain por desconhecimento em ask/memory abre pesquisa
+    // (fato sem evidência / memória vazia). verify/sat já têm contrato próprio.
+    if outcome.action == Action::Abstain
+        && network_research_opt_in()
+        && matches!(intent, "ask" | "memory" | "?")
+    {
+        let _ = writeln!(out, "{}", f2_research_notice(text));
+    }
     EXIT_OK
 }
 

@@ -1,0 +1,44 @@
+[
+  {
+    "mode": "seq",
+    "q": "capital da Franca",
+    "s": 1.369,
+    "trail": "ddg:0|searx:0|wiki:4",
+    "n": 4
+  },
+  {
+    "mode": "seq",
+    "q": "quem escreveu Dom Casmurro?",
+    "s": 1.333,
+    "trail": "ddg:0|searx:0|wiki:4",
+    "n": 4
+  },
+  {
+    "mode": "seq",
+    "q": "qual a distancia media Terra-Lua",
+    "s": 2.223,
+    "trail": "ddg:0|searx:0|wiki:4",
+    "n": 4
+  },
+  {
+    "mode": "par",
+    "q": "capital da Franca",
+    "s": 0.693,
+    "trail": "ddg:0|searx:0|wiki:4|parallel:1",
+    "n": 4
+  },
+  {
+    "mode": "par",
+    "q": "quem escreveu Dom Casmurro?",
+    "s": 0.898,
+    "trail": "ddg:0|searx:0|wiki:4|parallel:1",
+    "n": 4
+  },
+  {
+    "mode": "par",
+    "q": "qual a distancia media Terra-Lua",
+    "s": 2.982,
+    "trail": "ddg:0|searx:0|wiki:3|parallel:1",
+    "n": 3
+  }
+]

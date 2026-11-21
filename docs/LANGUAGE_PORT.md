@@ -215,7 +215,7 @@ zero alucinação, mas sem fluência geral. É o default para “cite/abstain”
 | Pergunta factual | memória + template/extrativo | concept decoder | não |
 | Explicação curta | template + fatos | small LM | talvez |
 | Conversa aberta | remote LLM | small LM (xLSTM/RWKV/BLT) | sim |
-| Código | remote LLM | small code LM | sim |
+| Código | remote LLM | small code LM | sim — escada produto: [`CODER_AETHER.md`](CODER_AETHER.md) |
 | Planejamento estruturado | solver + diffusion constrained | LLM | não/sim |
 | Domínio fechado/edge | ESN/LAERC | parser/grammar | não |
 | Energia extrema | regras/template | spiking | não (mas hardware) |
@@ -322,6 +322,15 @@ promove fato a `255` (isso exige HITL, ver AGENTS.md).
 Para esses casos, o LLM (remoto ou pequeno) continua sendo a opção pragmática.
 A diferença é que ele deixa de ser **o centro** e passa a ser **uma tool** com
 custo, risco e validação — exatamente o que o plano híbrido já diz.
+
+### 6.0 Escada até prosa fluente (produto)
+
+Ordem, gates e critério de aceite em **[`PROSA_FLUENTE.md`](PROSA_FLUENTE.md)** —
+P0 parser/pesquisa → P1 template → P2 juíz textual → P3 `generate()` →
+P4 small_lm/concept → P5 remote → P6 AND Vega. Não pular degraus.
+
+Fiação com MoE/coder/agêntica/visão/speech: **[`CORE_TOMADAS.md`](CORE_TOMADAS.md)**
+(T-NL-IN/OUT; T-STT/T-TTS reservadas).
 
 ## 6.1 C1 — confiança calibrada no parser (código em `src/agent/language.rs`)
 

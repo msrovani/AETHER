@@ -1,0 +1,25 @@
+﻿{
+    "schema":  "aether.hub_smoke/v1",
+    "date":  "2026-11-21",
+    "cargo_check":  "ok",
+    "checks":  [
+                   {
+                       "name":  "banner_congelada",
+                       "pass":  true
+                   },
+                   {
+                       "name":  "msg_1093",
+                       "pass":  true
+                   },
+                   {
+                       "name":  "f4_freeze_const",
+                       "pass":  true
+                   },
+                   {
+                       "name":  "program_line_fechada",
+                       "pass":  true
+                   }
+               ],
+    "pass":  true,
+    "ref":  "MSG_1096"
+}

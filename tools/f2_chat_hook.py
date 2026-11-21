@@ -25,7 +25,9 @@ from research_harness import (  # noqa: E402
     write_quarantine,
 )
 import research_live  # noqa: E402
+from research_intent import classify_request  # noqa: E402
 from research_live import live_research  # noqa: E402
+from research_persist import persist_research  # noqa: E402
 from research_reliability import find_case, load_json  # noqa: E402
 
 OUT = ROOT / "data" / "reports" / "f2_chat_quarantine.jsonl"
@@ -53,18 +55,100 @@ def once(text: str, reason: str, out: Path) -> dict:
     dig = digest_certificate(f"edge=fora_lexico text={text}")
     if dig["n_tokens"] > 320 or not dig.get("ok", True):
         return {"opens": False, "line": "pesquisa: digest_reject", "network": False}
-    # G4 (opt-in HITL): com AETHER_RESEARCH_NETWORK=1 o vetor é REAL — busca
-    # viva (DuckDuckGo lite), tier por domínio, convergência numérica
-    # conservadora, tripla do Eixo F em quarentena (60–120, nunca 255).
+
+    # Gate: research | memory | deny — evita limbo fontes=0 (~50% perdido).
+    intent = classify_request(text)
+    if intent["action"] == "memory":
+        # Web fechada; citação (se houver) já saiu no CLI. Sem citação o CLI
+        # imprime desconhecimento — aqui só sinaliza o ramo.
+        rec = {
+            "kind": "memory_only",
+            "abstain_reason": "unknown",
+            "question": text[:240],
+            "verdict": "memory_only",
+            "authority": 60,
+            "n_independent": 0,
+            "reason": intent["reason"],
+            "hitl_required_for_255": True,
+            "never_255": True,
+            "network": False,
+            "state_digest": {"n_tokens": dig["n_tokens"], "preview": dig["digest"][:120]},
+        }
+        write_quarantine(out, rec)
+        return {
+            "opens": False,
+            "line": intent["line"],
+            "network": False,
+            "case": None,
+            "intent": "memory",
+            "intent_reason": intent["reason"],
+        }
+    if intent["action"] == "deny":
+        rec = {
+            "kind": "knowledge_deny",
+            "abstain_reason": "unknown",
+            "question": text[:240],
+            "verdict": "denied",
+            "authority": 60,
+            "n_independent": 0,
+            "reason": intent["reason"],
+            "hitl_required_for_255": True,
+            "never_255": True,
+            "network": False,
+            "state_digest": {"n_tokens": dig["n_tokens"], "preview": dig["digest"][:120]},
+        }
+        write_quarantine(out, rec)
+        return {
+            "opens": False,
+            "line": intent["line"],
+            "network": False,
+            "case": None,
+            "intent": "deny",
+            "intent_reason": intent["reason"],
+        }
+
+    # G4 (opt-in HITL): vetor REAL só para pista factual.
     if research_live.network_enabled():
         live = research_live.live_research(text, DEFAULT_TIER)
+        n_src = int(live.get("n_independent") or 0)
+        trail = live.get("provider_trail") or []
+        prov = ",".join(live.get("providers") or []) or "nenhum"
+        # Cascata vazia → negar conhecimento (não ficar em open/fontes=0).
+        if n_src <= 0:
+            rec = {
+                "kind": "knowledge_deny",
+                "abstain_reason": "unknown",
+                "question": text[:240],
+                "verdict": "denied",
+                "authority": 60,
+                "n_independent": 0,
+                "reason": "sem_fontes_apos_cascata",
+                "provider_trail": trail,
+                "hitl_required_for_255": True,
+                "never_255": True,
+                "network": True,
+                "state_digest": {"n_tokens": dig["n_tokens"], "preview": dig["digest"][:120]},
+            }
+            write_quarantine(out, rec)
+            return {
+                "opens": False,
+                "line": (
+                    "desconhecimento: pesquisa sem fontes utilizáveis — "
+                    f"não afirmo (trail={'|'.join(trail)})"
+                ),
+                "network": True,
+                "case": None,
+                "intent": "deny",
+                "intent_reason": "sem_fontes_apos_cascata",
+                "provider_trail": trail,
+            }
         rec = {
             "kind": "external_research",
             "abstain_reason": "unknown",
             "question": text[:240],
             "verdict": live.get("verdict", "open"),
             "authority": live.get("authority", 60),
-            "n_independent": live.get("n_independent", 0),
+            "n_independent": n_src,
             "reason": live.get("reason"),
             "convergence_sigma_over_mu": live.get("convergence_sigma_over_mu"),
             "evidence": live.get("evidence", []),
@@ -74,15 +158,23 @@ def once(text: str, reason: str, out: Path) -> dict:
             "state_digest": {"n_tokens": dig["n_tokens"], "preview": dig["digest"][:120]},
         }
         write_quarantine(out, rec)
+        # Persiste na memória durável (≤120) para o turno seguinte citar.
+        mem = persist_research(text, live)
+        mem_note = "mem=ok" if mem.get("ok") else f"mem=fail:{mem.get('error') or mem.get('exit')}"
         return {
-            "opens": bool(live.get("ok")),
+            "opens": True,
             "line": (
                 f"pesquisa (vivo): quarentena veredito={rec['verdict']} "
                 f"autoridade={rec['authority']} fontes={rec['n_independent']} "
-                f"motivo={rec['reason']}"
+                f"motivo={rec['reason']} provider={prov} "
+                f"trail={'|'.join(trail)} {mem_note}"
             ),
             "network": True,
             "case": None,
+            "providers": live.get("providers"),
+            "provider_trail": trail,
+            "intent": "research",
+            "persisted": mem,
         }
     case_id = match_case(text, DEFAULT_CASES)
     if case_id is None:
@@ -123,21 +215,29 @@ def selftest() -> int:
     path = ROOT / "target" / "f2_chat_hook_selftest.jsonl"
     if path.exists():
         path.unlink()
+    # Selftest offline: não misturar com cascata viva.
+    os_env_net = __import__("os").environ.pop("AETHER_RESEARCH_NETWORK", None)
     failures: list[str] = []
-    closed = once("margem", "ambiguous", path)
-    if closed["opens"] or path.exists():
-        failures.append("ambiguous abriu")
-    gap = once("zxq qwerty fora do lexico", "unknown", path)
-    if not gap["opens"] or gap.get("case") is not None:
-        failures.append(f"sem_caso: {gap}")
-    if "terra_lua" in gap["line"]:
-        failures.append("sem_caso virou terra_lua")
-    known = once("Qual a distancia media Terra-Lua?", "unknown", path)
-    if known.get("case") != "terra_lua" or known.get("authority") != 120:
-        failures.append(f"terra_lua: {known}")
-    if find_case(load_json(DEFAULT_CASES), "terra_lua") is None:
-        failures.append("regua ausente")
-    report = {"ok": not failures, "failures": failures, "ref": "MSG_1022"}
+    try:
+        closed = once("margem", "ambiguous", path)
+        if closed["opens"] or path.exists():
+            failures.append("ambiguous abriu")
+        # Lixo → negar (não gastar rede / não sem_caso fantasma).
+        gap = once("asdf qwer zxcv 12345", "unknown", path)
+        if gap.get("opens") or gap.get("intent") != "deny":
+            failures.append(f"lixo_deveria_negar: {gap}")
+        if "terra_lua" in gap.get("line", ""):
+            failures.append("lixo virou terra_lua")
+        # Fato da régua offline (rede off) → caso terra_lua.
+        known = once("Qual a distancia media Terra-Lua?", "unknown", path)
+        if known.get("case") != "terra_lua" or known.get("authority") != 120:
+            failures.append(f"terra_lua: {known}")
+        if find_case(load_json(DEFAULT_CASES), "terra_lua") is None:
+            failures.append("regua ausente")
+    finally:
+        if os_env_net is not None:
+            __import__("os").environ["AETHER_RESEARCH_NETWORK"] = os_env_net
+    report = {"ok": not failures, "failures": failures, "ref": "MSG_1022+intent_gate"}
     print(json.dumps(report, ensure_ascii=False))
     return 0 if not failures else 1
 
