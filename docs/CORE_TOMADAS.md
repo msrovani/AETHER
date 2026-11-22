@@ -8,7 +8,7 @@
 > [`ACOES_AGENTICAS.md`](ACOES_AGENTICAS.md) · [`CODER_AETHER.md`](CODER_AETHER.md) ·
 > [`MOE_ETL_PACK.md`](MOE_ETL_PACK.md) · [`VISAO_AETHER.md`](VISAO_AETHER.md) ·
 > [`SPEECH_AETHER.md`](SPEECH_AETHER.md). Linguagem: [`LANGUAGE_PORT.md`](LANGUAGE_PORT.md).
-> Fila próximo/médio/distante: **[`TOMADAS_FUTURO.md`](TOMADAS_FUTURO.md)**.
+> Fila por dependência (código → sanção → externo → hardware): **[`TOMADAS_FUTURO.md`](TOMADAS_FUTURO.md)**.
 
 ## 1. O que é o core (e o que não é)
 
@@ -254,15 +254,17 @@ STT / OCR / VIS ───────────┘         │
 - High externo / `goal.propose` → hub T-HITL (`hitl_view`) antes de auth 255.
 - Hierarchical MoE/LSH **não** bloqueia este funil (Fase 8 / pós T-EMB+B1).
 
-## 9. Próximos plugues (ordem)
+## 9. Próximos plugues (ordem por dependência)
 
-1. Manter T-NL-IN + T-MOE + T-NET estáveis (já medidos).  
-2. ~~A4 / G-A4~~ **fechado**.  
-3. ~~P1/P2 T-NL-OUT~~ **fechado** (`CertifiedUtterance`).  
-4. ~~Hub HITL~~ **vivo** (`hitl_view`).  
-5. Modalidades stub (OCR/STT/VIS/TTS) — feature off até backend.  
-6. A8 `enter_v1` — só após sanção HITL (`aether_a8_v1_criteria.json`).  
-7. Hier MoE/LSH — pós T-EMB + B1.  
+Ordem completa e critério em [`TOMADAS_FUTURO.md`](TOMADAS_FUTURO.md) §1.
+Resumo:
+
+1. Manter T-NL-IN + T-MOE + T-NET estáveis (já medidos).
+2. **Só código:** T-TAB → T-EVAL → T-P2P → T-CLIP.
+3. **Sanção humana:** A8 `enter_v1` → cutover T-DEC → nova geração F4.
+4. **Backend externo:** T-OCR → T-STT/T-VIS/T-TTS (feature off até motor).
+5. **Hardware:** T-SENSOR → T-HAPTIC → T-AR → T-ROBOT.
+6. Hier MoE/LSH — paralelo, pós T-EMB + rerank f32/bits; não bloqueia 2–5.
 
 ## 10. Memória / recall
 
