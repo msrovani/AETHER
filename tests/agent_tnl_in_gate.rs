@@ -13,7 +13,9 @@ fn gate_tnl_in_contrato_e_fixtures() {
     let text = std::fs::read_to_string(TNL_IN_CONTRACT_PATH).unwrap();
     assert!(text.contains("T-NL-IN"));
     assert!(text.contains("LanguagePort::parse"));
-    assert!(tnl_in_contract_json().to_string().contains("abstain_ceiling"));
+    assert!(tnl_in_contract_json()
+        .to_string()
+        .contains("abstain_ceiling"));
 
     let mut port = ParserPort::new();
     tnl_in_gate_fixtures(&mut port).expect("fixtures");

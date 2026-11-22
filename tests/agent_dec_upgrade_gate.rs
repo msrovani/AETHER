@@ -12,7 +12,9 @@ use aether_engine::json::Json;
 fn catalog_allowlist_existe() {
     assert!(std::path::Path::new(CATALOG_PATH).is_file());
     let cat = load_catalog().expect("catalog");
-    assert!(cat.iter().any(|r| r.id == "vega-u-0.8b" && r.slot == DecSlot::Primary));
+    assert!(cat
+        .iter()
+        .any(|r| r.id == "vega-u-0.8b" && r.slot == DecSlot::Primary));
     assert!(cat
         .iter()
         .any(|r| r.id == "gemma-3-1b-prose" && r.slot == DecSlot::Sentinel));
@@ -38,10 +40,12 @@ fn begin_upgrade_27b_aborta_hw() {
 
 #[test]
 fn smoke_vermelho_nao_cutover() {
-    let mut st = DecUpgradeState::default();
-    st.phase = DecUpgradePhase::Smoke;
-    st.slot = Some(DecSlot::Primary);
-    st.candidate_id = Some("vega-u-0.8b".into());
+    let mut st = DecUpgradeState {
+        phase: DecUpgradePhase::Smoke,
+        slot: Some(DecSlot::Primary),
+        candidate_id: Some("vega-u-0.8b".into()),
+        ..Default::default()
+    };
     let smoke = Json::obj([
         ("boot", Json::str("green")),
         ("fit", Json::str("green")),
@@ -59,10 +63,12 @@ fn smoke_vermelho_nao_cutover() {
 
 #[test]
 fn smoke_verde_pede_hitl_cutover() {
-    let mut st = DecUpgradeState::default();
-    st.phase = DecUpgradePhase::Smoke;
-    st.slot = Some(DecSlot::Sentinel);
-    st.candidate_id = Some("gemma-3-1b-prose".into());
+    let mut st = DecUpgradeState {
+        phase: DecUpgradePhase::Smoke,
+        slot: Some(DecSlot::Sentinel),
+        candidate_id: Some("gemma-3-1b-prose".into()),
+        ..Default::default()
+    };
     let smoke = Json::obj([
         ("boot", Json::str("green")),
         ("fit", Json::str("green")),

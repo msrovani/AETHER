@@ -168,7 +168,7 @@ pub fn forecast_series(series: &[f32], horizon: usize) -> PredictReport {
     let n = if series.len() < 200 { 64 } else { 100 };
     let cfg = ReservoirConfig {
         n,
-        degree: (n / 10).max(4).min(12),
+        degree: (n / 10).clamp(4, 12),
         spectral_radius: 0.95,
         leak: 0.5,
         input_scale: 0.5,
@@ -184,13 +184,18 @@ pub fn forecast_series(series: &[f32], horizon: usize) -> PredictReport {
         };
     };
 
-    let nrmse = match evaluate(&mut model, series, train_len, test_len.saturating_sub(1).max(1)) {
+    let nrmse = match evaluate(
+        &mut model,
+        series,
+        train_len,
+        test_len.saturating_sub(1).max(1),
+    ) {
         Ok((nrmse, _)) if nrmse.is_finite() => nrmse,
         _ => {
             return PredictReport {
                 yhat: Vec::new(),
                 nrmse: f32::INFINITY,
-            interval: 0.0,
+                interval: 0.0,
                 abstain: Some("ood"),
             };
         }

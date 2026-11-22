@@ -156,14 +156,8 @@ impl EngineConfig {
                 self.engine = label.to_string();
             }
         } else {
-            let p = self
-                .model_primary
-                .as_deref()
-                .unwrap_or("vega-u-0.8b");
-            let s = self
-                .model_sentinel
-                .as_deref()
-                .unwrap_or("gemma-prose");
+            let p = self.model_primary.as_deref().unwrap_or("vega-u-0.8b");
+            let s = self.model_sentinel.as_deref().unwrap_or("gemma-prose");
             self.engine = format!("{p} AND {s}");
         }
     }

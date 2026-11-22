@@ -107,7 +107,14 @@ impl VisionPort {
         Json::obj([
             ("tomada", Json::str("T-VIS")),
             ("enabled", Json::Bool(self.enabled)),
-            ("feature", Json::str(if cfg!(feature = "vision") { "on" } else { "off" })),
+            (
+                "feature",
+                Json::str(if cfg!(feature = "vision") {
+                    "on"
+                } else {
+                    "off"
+                }),
+            ),
             ("pixels_in_t0", Json::Bool(false)),
             ("auth_cap", Json::num(f64::from(VISION_AUTH_CAP))),
             ("act_alone", Json::Bool(false)),

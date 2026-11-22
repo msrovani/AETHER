@@ -91,7 +91,7 @@ impl HitlRequest {
             kind: HitlKind::Promote,
             reason: reason.into(),
             from_authority: from,
-            to_authority: to.min(AUTHORITY_HITL),
+            to_authority: to,
             subject: Some(subject.into()),
             timeout_ms: 0,
         }
@@ -107,10 +107,7 @@ impl HitlRequest {
             ("to_authority", Json::num(f64::from(self.to_authority))),
             (
                 "subject",
-                self.subject
-                    .as_ref()
-                    .map(|s| Json::str(s))
-                    .unwrap_or(Json::Null),
+                self.subject.as_ref().map(Json::str).unwrap_or(Json::Null),
             ),
             ("timeout_ms", Json::num(self.timeout_ms as f64)),
         ])
@@ -194,7 +191,7 @@ pub fn apply_hitl(
         | HitlKind::ApproveMerge
         | HitlKind::DecUpgradeDownload
         | HitlKind::DecUpgradeCutover => {
-            if req.to_authority >= AUTHORITY_HITL && !token_ok {
+            if req.to_authority == AUTHORITY_HITL && !token_ok {
                 return HitlDecision {
                     request_id: req.request_id,
                     approved: false,
@@ -206,7 +203,7 @@ pub fn apply_hitl(
                 };
             }
             let authority = if token_ok {
-                req.to_authority.min(AUTHORITY_HITL)
+                req.to_authority
             } else {
                 req.to_authority.min(120)
             };

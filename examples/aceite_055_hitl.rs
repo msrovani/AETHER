@@ -58,10 +58,7 @@ fn prepare_sentinel() {
     let lock = Json::obj([
         ("schema", Json::str("engine.lock/1")),
         ("bank", Json::str("candidate")),
-        (
-            "primary",
-            Json::obj([("id", Json::str("vega-u-0.8b"))]),
-        ),
+        ("primary", Json::obj([("id", Json::str("vega-u-0.8b"))])),
         (
             "sentinel",
             Json::obj([("id", Json::str("gemma-3-1b-prose"))]),
@@ -128,10 +125,7 @@ fn ensure_scribe() {
     let path = aether_engine::agent::active_scribe_path().unwrap_or_default();
     println!(
         "{}",
-        Json::obj([
-            ("ok", Json::Bool(true)),
-            ("scribe_path", Json::str(&path)),
-        ])
+        Json::obj([("ok", Json::Bool(true)), ("scribe_path", Json::str(&path)),])
     );
 }
 
@@ -157,7 +151,10 @@ fn roundtrip() {
     prepare_sentinel();
     let mut st = DecUpgradeState::load();
     if st.phase != DecUpgradePhase::HitlCutover {
-        eprintln!("roundtrip: esperado hitl_cutover após prepare, atual={}", st.phase.label());
+        eprintln!(
+            "roundtrip: esperado hitl_cutover após prepare, atual={}",
+            st.phase.label()
+        );
         std::process::exit(4);
     }
     cutover_promote(&mut st).unwrap_or_else(|e| {

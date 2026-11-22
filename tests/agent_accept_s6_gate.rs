@@ -202,11 +202,7 @@ fn ga2_pipeline() -> (bool, usize) {
     ] {
         registry.register(Box::new(t)).unwrap();
     }
-    let mut agent = ToolAgent::with_registry(
-        registry,
-        SelfModel::new(None),
-        ScopeId::new(1, 0, 1),
-    );
+    let mut agent = ToolAgent::with_registry(registry, SelfModel::new(None), ScopeId::new(1, 0, 1));
     let fetch = Goal {
         id: 0,
         kind: GoalKind::Answer,
@@ -284,11 +280,7 @@ fn ga3_ood_false_act(n: usize) -> (usize, usize) {
             relation: "value",
         }))
         .unwrap();
-    let mut agent = ToolAgent::with_registry(
-        registry,
-        SelfModel::new(None),
-        ScopeId::new(1, 0, 1),
-    );
+    let mut agent = ToolAgent::with_registry(registry, SelfModel::new(None), ScopeId::new(1, 0, 1));
     let mut abstain = 0usize;
     let mut false_act = 0usize;
     for _ in 0..n {
@@ -384,8 +376,8 @@ fn research_persist_write_auth() -> u8 {
     // relation alone is enough
     assert!(is_research_persist_goal(&goal));
 
-    let mut ctx = ToolContext::new(ScopeId::new(1, 0, 1), Budget::default(), 1)
-        .with_undo_backend(backend);
+    let mut ctx =
+        ToolContext::new(ScopeId::new(1, 0, 1), Budget::default(), 1).with_undo_backend(backend);
     // Blackboard with research claim pretending high auth path.
     ctx.claims.push(Claim::new(
         "q",
@@ -436,24 +428,19 @@ fn aceite_s6_inventario_e_artefato() {
     let n_ood = 20usize;
     let (abstain, false_act) = ga3_ood_false_act(n_ood);
     let false_act_rate = false_act as f64 / n_ood as f64;
-    assert!(
-        false_act_rate <= 0.05,
-        "G-A3 falso act={false_act}/{n_ood}"
-    );
+    assert!(false_act_rate <= 0.05, "G-A3 falso act={false_act}/{n_ood}");
     assert_eq!(abstain + false_act, n_ood);
 
     // act + trace completo
     let mut agent = ToolAgent::new(&AgentConfig::default());
-    let out = agent.solve(
-        &Goal::fact("Brasil", "capital").with_budget(
-            Budget {
-                max_steps: 3,
-                max_ms: 5_000,
-                max_tokens: 0,
-            },
-            Risk::Low,
-        ),
-    );
+    let out = agent.solve(&Goal::fact("Brasil", "capital").with_budget(
+        Budget {
+            max_steps: 3,
+            max_ms: 5_000,
+            max_tokens: 0,
+        },
+        Risk::Low,
+    ));
     let act_trace_ok = if out.action == Action::Act && out.success {
         let step = out
             .steps
@@ -463,7 +450,11 @@ fn aceite_s6_inventario_e_artefato() {
         assert!(step.cost_ms.is_finite());
         assert!(!step.args.is_empty() || !step.tool.is_empty());
         assert!(
-            step.claim_n >= 1 || out.outcome.as_ref().is_some_and(|o| o.certificate.is_some()),
+            step.claim_n >= 1
+                || out
+                    .outcome
+                    .as_ref()
+                    .is_some_and(|o| o.certificate.is_some()),
             "act sem claims/cert: claim_n={}",
             step.claim_n
         );
@@ -535,7 +526,10 @@ fn aceite_s6_inventario_e_artefato() {
             "act_trace",
             Json::obj([
                 ("pass", Json::Bool(act_trace_ok)),
-                ("fields", Json::str("tool,args,cost_ms,claim_n,max_authority")),
+                (
+                    "fields",
+                    Json::str("tool,args,cost_ms,claim_n,max_authority"),
+                ),
             ]),
         ),
         (

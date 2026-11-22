@@ -179,9 +179,7 @@ mod tests {
         assert!(p.accept(EmbedEra::minilm_384(), vec![0.0; 384]).is_err());
         // e o inverso
         p.era = Some(EmbedEra::minilm_384());
-        assert!(p
-            .accept(EmbedEra::bge_m3_1024(), vec![0.0; 1024])
-            .is_err());
+        assert!(p.accept(EmbedEra::bge_m3_1024(), vec![0.0; 1024]).is_err());
         // porta off continua negando encode (default lexical intacto)
         assert!(EmbedPort::off().encode_refuse("x").is_err());
     }
@@ -200,8 +198,6 @@ mod tests {
             model_id: "other".into(),
             dim: 384,
         });
-        assert!(p
-            .accept(EmbedEra::minilm_384(), vec![0.0; 384])
-            .is_err());
+        assert!(p.accept(EmbedEra::minilm_384(), vec![0.0; 384]).is_err());
     }
 }

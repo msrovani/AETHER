@@ -288,18 +288,9 @@ impl DecUpgradeState {
                     .map(|s| Json::str(s.label()))
                     .unwrap_or(Json::Null),
             ),
-            (
-                "candidate_id",
-                opt_str(&self.candidate_id),
-            ),
-            (
-                "candidate_hf",
-                opt_str(&self.candidate_hf),
-            ),
-            (
-                "candidate_revision",
-                opt_str(&self.candidate_revision),
-            ),
+            ("candidate_id", opt_str(&self.candidate_id)),
+            ("candidate_hf", opt_str(&self.candidate_hf)),
+            ("candidate_revision", opt_str(&self.candidate_revision)),
             ("dtype", opt_str(&self.dtype)),
             ("vram_mb_est", Json::num(self.vram_mb_est as f64)),
             ("hw_compat", Json::str(self.hw_compat.label())),
@@ -345,10 +336,7 @@ impl DecUpgradeState {
             .and_then(|v| v.as_str())
             .map(str::to_string);
         s.dtype = j.get("dtype").and_then(|v| v.as_str()).map(str::to_string);
-        s.vram_mb_est = j
-            .get("vram_mb_est")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
+        s.vram_mb_est = j.get("vram_mb_est").and_then(|v| v.as_u64()).unwrap_or(0);
         if let Some(h) = j.get("hw_compat").and_then(|v| v.as_str()) {
             s.hw_compat = LampColor::parse(h);
         }
@@ -558,26 +546,28 @@ pub fn begin_upgrade(slot: DecSlot, candidate_id: &str) -> Result<DecUpgradeStat
     let prefer_nf4 = reader.hw_6gb != "green" && reader.nf4_vram_mb_est.is_some();
     let peer = peer_vram_mb(slot);
     let hw = hw_compat_for(&reader, peer, prefer_nf4);
-    let mut state = DecUpgradeState::default();
-    state.phase = DecUpgradePhase::HwCheck;
-    state.slot = Some(slot);
-    state.candidate_id = Some(reader.id.clone());
-    state.candidate_hf = Some(reader.hf_id.clone());
-    state.candidate_revision = Some(reader.revision.clone());
-    state.dtype = Some(if prefer_nf4 {
-        "nf4".into()
-    } else {
-        reader.dtype.clone()
-    });
-    state.vram_mb_est = if prefer_nf4 {
-        reader.nf4_vram_mb_est.unwrap_or(reader.vram_mb_est)
-    } else {
-        reader.vram_mb_est
+    let mut state = DecUpgradeState {
+        phase: DecUpgradePhase::HwCheck,
+        slot: Some(slot),
+        candidate_id: Some(reader.id.clone()),
+        candidate_hf: Some(reader.hf_id.clone()),
+        candidate_revision: Some(reader.revision.clone()),
+        dtype: Some(if prefer_nf4 {
+            "nf4".into()
+        } else {
+            reader.dtype.clone()
+        }),
+        vram_mb_est: if prefer_nf4 {
+            reader.nf4_vram_mb_est.unwrap_or(reader.vram_mb_est)
+        } else {
+            reader.vram_mb_est
+        },
+        hw_compat: hw,
+        product_bank: "active".into(),
+        fallback_armed: true,
+        ..Default::default()
     };
-    state.hw_compat = hw;
     state.lamps.hw = hw;
-    state.product_bank = "active".into();
-    state.fallback_armed = true;
     state.reason = format!(
         "hw={} peak_and≈{}+{}MB hf={}",
         hw.label(),
@@ -741,10 +731,7 @@ pub fn revert_previous(state: &mut DecUpgradeState) -> Result<(), String> {
     let _ = fs::remove_dir_all(".vega/profiles/candidate");
     if Path::new(".vega/profiles/active").exists() {
         let _ = fs::remove_dir_all(".vega/profiles/active.bak_failed");
-        let _ = fs::rename(
-            ".vega/profiles/active",
-            ".vega/profiles/active.bak_failed",
-        );
+        let _ = fs::rename(".vega/profiles/active", ".vega/profiles/active.bak_failed");
     }
     fs::rename(".vega/profiles/previous", ".vega/profiles/active")
         .map_err(|e| format!("revert previous→active: {e}"))?;
@@ -760,7 +747,10 @@ pub fn revert_previous(state: &mut DecUpgradeState) -> Result<(), String> {
 }
 
 /// Abort: limpa candidate; active intacto.
-pub fn abort_rollback(state: &mut DecUpgradeState, reason: impl Into<String>) -> Result<(), String> {
+pub fn abort_rollback(
+    state: &mut DecUpgradeState,
+    reason: impl Into<String>,
+) -> Result<(), String> {
     clear_candidate_marker();
     state.phase = DecUpgradePhase::AbortRollback;
     state.product_bank = "active".into();
@@ -923,10 +913,12 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("aether_dec_up_{}", now_ms()));
         let _ = fs::create_dir_all(&dir);
         // Usa STATE_PATH relativo ao CWD do teste (repo root em cargo test).
-        let mut st = DecUpgradeState::default();
-        st.phase = DecUpgradePhase::Smoke;
-        st.slot = Some(DecSlot::Primary);
-        st.candidate_id = Some("vega-u-0.8b".into());
+        let mut st = DecUpgradeState {
+            phase: DecUpgradePhase::Smoke,
+            slot: Some(DecSlot::Primary),
+            candidate_id: Some("vega-u-0.8b".into()),
+            ..Default::default()
+        };
         let smoke = Json::obj([
             ("boot", Json::str("green")),
             ("fit", Json::str("green")),

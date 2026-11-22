@@ -27,7 +27,11 @@ pub fn load_dec_view() -> DecView {
                 .map(|r| {
                     format!(
                         "{} [{}] {} VRAM≈{}MB hw6g={}",
-                        r.id, r.slot.label(), r.hf_id, r.vram_mb_est, r.hw_6gb
+                        r.id,
+                        r.slot.label(),
+                        r.hf_id,
+                        r.vram_mb_est,
+                        r.hw_6gb
                     )
                 })
                 .collect()
@@ -59,11 +63,7 @@ pub fn dec_program_line(view: &DecView) -> String {
     };
     format!(
         "T-DEC {} · {} · up={} · {} · {} · {}",
-        if view.status.enabled {
-            "opt-in"
-        } else {
-            "off"
-        },
+        if view.status.enabled { "opt-in" } else { "off" },
         view.status.backend,
         up.phase.label(),
         fb,
@@ -82,7 +82,11 @@ pub fn dec_detail(view: &DecView) -> String {
         "Gemma sentinela = mesmo artefato que a escriba T-NL-OUT (1 download · 2 papéis).".into(),
         format!(
             "chip: 1 artefato · 2 papéis · scribe={} · path={}",
-            if scribe_on { "ON (AETHER_SCRIBE=gemma)" } else { "off (template)" },
+            if scribe_on {
+                "ON (AETHER_SCRIBE=gemma)"
+            } else {
+                "off (template)"
+            },
             scribe_path
         ),
         "Up no hub troca o READER; cutover atualiza sentinela e escriba. Fallback = active.".into(),

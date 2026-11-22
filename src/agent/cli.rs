@@ -16,9 +16,7 @@ use std::path::PathBuf;
 
 use crate::core::logic_pipeline::Clause3;
 use crate::json::Json;
-use aether_decision::{
-    AbstainReason, DecisionPort, DecisionRequest, DecisionResponse, StubPort,
-};
+use aether_decision::{AbstainReason, DecisionPort, DecisionRequest, DecisionResponse, StubPort};
 
 use super::language::{GoalSchema, LanguageError, ParserPort};
 use super::{
@@ -728,7 +726,11 @@ fn chat_turn(
             }
             Some("reformular") => {
                 let residuo = report.unconsumed.join(" ");
-                let foco = if residuo.is_empty() { text } else { residuo.as_str() };
+                let foco = if residuo.is_empty() {
+                    text
+                } else {
+                    residuo.as_str()
+                };
                 let _ = writeln!(
                     out,
                     "ação: reformular | confiança {:.2} | pergunta de esclarecimento: \
@@ -786,7 +788,10 @@ fn chat_turn(
         // Sem citação + interno/deny → cabo imprime desconhecimento.
         let intent = research_intent_action(text);
         if cited_memory && intent == "memory" {
-            let _ = writeln!(out, "memória: assunto interno — web fechada (citação acima)");
+            let _ = writeln!(
+                out,
+                "memória: assunto interno — web fechada (citação acima)"
+            );
             return EXIT_OK;
         }
         if cited_memory && intent == "deny" {

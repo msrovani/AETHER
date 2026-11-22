@@ -13,8 +13,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use aether_engine::agent::{
-    class_for_tool, forecast_series, gate_before_call, metacog_should_abstain, AgentConfig,
-    Budget, Goal, Risk, ToolAgent, WorldPolicy, NRMSE_OOD,
+    class_for_tool, forecast_series, gate_before_call, metacog_should_abstain, AgentConfig, Budget,
+    Goal, Risk, ToolAgent, WorldPolicy, NRMSE_OOD,
 };
 use aether_engine::core::reservoir::mackey_glass;
 use aether_engine::json::Json;
@@ -28,10 +28,12 @@ fn clear_a8_env() {
 }
 
 fn agent() -> ToolAgent {
-    let mut cfg = AgentConfig::default();
-    cfg.world = WorldPolicy {
-        sandbox_root: PathBuf::from("target/aether_a8_sandbox"),
-        ..WorldPolicy::default()
+    let cfg = AgentConfig {
+        world: WorldPolicy {
+            sandbox_root: PathBuf::from("target/aether_a8_sandbox"),
+            ..WorldPolicy::default()
+        },
+        ..AgentConfig::default()
     };
     let _ = std::fs::create_dir_all(&cfg.world.sandbox_root);
     ToolAgent::new(&cfg)
@@ -116,7 +118,9 @@ fn predict_mg_emite_yhat() {
     let out = agent.solve(&goal);
     println!(
         "[A8] MG success={} action={} rationale={}",
-        out.success, out.action.label(), out.rationale
+        out.success,
+        out.action.label(),
+        out.rationale
     );
     assert!(
         out.claims
@@ -146,10 +150,7 @@ fn ood_serie_curta_nao_inventa() {
         Risk::Low,
     );
     let out = agent.solve(&goal);
-    let invented = out
-        .claims
-        .iter()
-        .any(|c| c.relation == "predict.yhat");
+    let invented = out.claims.iter().any(|c| c.relation == "predict.yhat");
     assert!(!invented, "false-act yhat: {:?}", out.claims);
     let why = out.rationale.to_ascii_lowercase();
     assert!(
@@ -180,7 +181,10 @@ fn goal_propose_exige_hitl() {
     let goal = Goal::goal_propose(0.4);
     let err = gate_before_call("goal.propose", Risk::High, &goal, 9).unwrap_err();
     let msg = err.to_string();
-    assert!(msg.contains("A7") || msg.contains("hitl") || msg.contains("HITL"), "{msg}");
+    assert!(
+        msg.contains("A7") || msg.contains("hitl") || msg.contains("HITL"),
+        "{msg}"
+    );
 
     let mut with_tok = goal.clone();
     with_tok.query = Some(r#"{"propose":true,"uncertainty":0.4,"hitl_token":"a8tok"}"#.into());

@@ -622,10 +622,14 @@ fn run_dec_upgrade(shared: &Shared) -> Result<String, String> {
     let root = workspace_root();
     set_log(shared, "T-DEC upgrade: fetch→attach→fit→smoke (candidate)…");
     let mut cmd = Command::new("python");
-    cmd.args(["tools/dec_upgrade_run.py", "--state", "target/aether_dec_upgrade.json"])
-        .current_dir(&root)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.args([
+        "tools/dec_upgrade_run.py",
+        "--state",
+        "target/aether_dec_upgrade.json",
+    ])
+    .current_dir(&root)
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped());
     let out = wait_cmd(cmd, Duration::from_secs(3600), shared, "dec_upgrade")?;
     if shared.cancel.load(Ordering::SeqCst) {
         let _ = Command::new("python")
@@ -641,15 +645,12 @@ fn run_dec_upgrade(shared: &Shared) -> Result<String, String> {
     }
     // Aplica smoke no estado Rust (enfileira HITL cutover se verde).
     let smoke_path = root.join("target/aether_dec_upgrade_smoke.json");
-    let smoke_text = std::fs::read_to_string(&smoke_path)
-        .map_err(|e| format!("smoke ausente após job: {e}"))?;
+    let smoke_text =
+        std::fs::read_to_string(&smoke_path).map_err(|e| format!("smoke ausente após job: {e}"))?;
     let smoke = Json::parse(&smoke_text).map_err(|e| format!("smoke JSON: {e}"))?;
     let mut st = DecUpgradeState::load();
     apply_smoke_result(&mut st, &smoke).map_err(|e| format!("apply_smoke: {e}"))?;
-    Ok(format!(
-        "T-DEC upgrade fase={} — {out}",
-        st.phase.label()
-    ))
+    Ok(format!("T-DEC upgrade fase={} — {out}", st.phase.label()))
 }
 
 fn run_agent_ask(shared: &Shared, subject: &str, relation: &str) -> Result<String, String> {

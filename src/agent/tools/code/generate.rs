@@ -6,7 +6,7 @@
 //! - `1`/`live` → `tools/code_generate.py` (borda LLM/code LM)
 //! - `small_lm` → `tools/code_lm_local.py` (K6 offline)
 
-use super::{sandbox_root, CODE_AUTH_CAP, PatchProposal};
+use super::{sandbox_root, PatchProposal, CODE_AUTH_CAP};
 use crate::agent::tool::{
     Cost, Goal, GoalKind, Risk, Tool, ToolContext, ToolError, ToolOutcome, ToolSchema, WorldState,
 };
@@ -62,7 +62,8 @@ pub(crate) fn proposal_from_brief_in(
         return Ok(p);
     }
     // Fallback: envelope/campos no topo (sem fence).
-    let v = Json::parse(raw.trim()).map_err(|e| ToolError::InvalidArgs(format!("brief json: {e}")))?;
+    let v =
+        Json::parse(raw.trim()).map_err(|e| ToolError::InvalidArgs(format!("brief json: {e}")))?;
     if let Some(inner) = v.get("proposal") {
         let prop = PatchProposal::from_json(&inner.to_text())?;
         super::grammar::grammar_validate(&prop)?;
@@ -117,10 +118,7 @@ pub(crate) fn proposal_from_live(raw: &str) -> Result<(PatchProposal, u8, String
     let text = String::from_utf8_lossy(&out.stdout);
     let v = Json::parse(text.trim()).map_err(|e| ToolError::Failed(format!("json live: {e}")))?;
     if v.get("ok").and_then(|o| o.as_bool()) == Some(false) {
-        let err = v
-            .get("error")
-            .and_then(|e| e.as_str())
-            .unwrap_or("erro");
+        let err = v.get("error").and_then(|e| e.as_str()).unwrap_or("erro");
         return Err(ToolError::Failed(format!("code_generate: {err}")));
     }
     let prop = if let Some(inner) = v.get("proposal") {
@@ -348,11 +346,10 @@ mod tests {
 
     #[test]
     fn stub_brief_vira_proposal() {
-        let p = proposal_from_brief(
-            r#"{"path":"a.rs","op":"replace","anchor":"OLD","content":"NEW"}"#,
-        )
-        .unwrap();
+        let p =
+            proposal_from_brief(r#"{"path":"a.rs","op":"replace","anchor":"OLD","content":"NEW"}"#)
+                .unwrap();
         assert_eq!(p.path, "a.rs");
-        assert_eq!(p.to_json().contains("NEW"), true);
+        assert!(p.to_json().contains("NEW"));
     }
 }

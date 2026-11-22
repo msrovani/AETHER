@@ -15,19 +15,18 @@ pub mod shell;
 pub use code::{
     code_generate_mode, code_lm_caps, coder_t3_generator_declared, default_coder_t3_path,
     extract_json_object, grammar_parse_rate, parse_constrained, pass_at_k, rasp_resolve_anchor,
-    run_coder_t3, CodeApplyProposalTool, CodeAstGrepTool, CodeCheckTool, CodeEvalTool,
-    CodeGenerateTool, CodeGenMode, CodeGrammarTool, CodeLmCaps, CodeLmTool, CodeLoopTool,
-    CodePatchTool, CodeTestTool, CoderT3Report, PatchOp, PatchProposal, CODE_AUTH_CAP,
-    CODER_T3_PILOT,
+    run_coder_t3, CodeApplyProposalTool, CodeAstGrepTool, CodeCheckTool, CodeEvalTool, CodeGenMode,
+    CodeGenerateTool, CodeGrammarTool, CodeLmCaps, CodeLmTool, CodeLoopTool, CodePatchTool,
+    CodeTestTool, CoderT3Report, PatchOp, PatchProposal, CODER_T3_PILOT, CODE_AUTH_CAP,
 };
 pub use fs::{resolve_sandbox_path, FsReadTool, FsWriteTool};
 pub use http::HttpGetTool;
 pub use mcp::McpCallTool;
+pub use predict::{GoalProposeTool, PredictSeriesTool};
 pub use research::{
     claims_from_research_json, is_research_persist_goal, research_network_enabled,
     research_persist_authority, ResearchExpandTool, ResearchQueryTool, RESEARCH_AUTH_CAP,
 };
-pub use predict::{GoalProposeTool, PredictSeriesTool};
 pub use shell::{shell_kill_switch, shell_mode, ShellMode, ShellTool, SHELL_AUTH_CAP};
 
 use super::experts::{make_logic, make_memory, make_solver, make_transplant, Expert};

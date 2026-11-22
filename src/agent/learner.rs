@@ -55,10 +55,7 @@ impl EpisodeRecord {
     fn from_json(v: &Json) -> Option<Self> {
         let tool = v.get("tool")?.as_str()?.to_string();
         let features = match v.get("features")? {
-            Json::Arr(items) => items
-                .iter()
-                .filter_map(|j| j.as_f64())
-                .collect::<Vec<_>>(),
+            Json::Arr(items) => items.iter().filter_map(|j| j.as_f64()).collect::<Vec<_>>(),
             _ => return None,
         };
         if features.len() != LINUCB_DIM {

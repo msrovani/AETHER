@@ -103,7 +103,10 @@ impl OcrPort {
         Json::obj([
             ("tomada", Json::str("T-OCR")),
             ("enabled", Json::Bool(self.enabled)),
-            ("feature", Json::str(if cfg!(feature = "ocr") { "on" } else { "off" })),
+            (
+                "feature",
+                Json::str(if cfg!(feature = "ocr") { "on" } else { "off" }),
+            ),
             ("funnel", Json::str("DocRef → text → T-NL-IN")),
             ("auth_cap", Json::num(120.0)),
         ])

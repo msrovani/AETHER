@@ -169,11 +169,12 @@ fn summarize_v3_text(name: &str, text: &str) -> String {
         return format!("{name} ilegível");
     };
     if let Some(rr) = rerank_hit5(text) {
-        let verdict = if rr >= v.gate_hit5 { "PASSOU" } else { "REPROVADO" };
-        return format!(
-            "{name} denso {:.4} rerank {rr:.4} {verdict}",
-            v.embed_hit5
-        );
+        let verdict = if rr >= v.gate_hit5 {
+            "PASSOU"
+        } else {
+            "REPROVADO"
+        };
+        return format!("{name} denso {:.4} rerank {rr:.4} {verdict}", v.embed_hit5);
     }
     let verdict = if v.hybrid_pass && v.embed_hit5 >= v.gate_hit5 {
         "PASSOU"

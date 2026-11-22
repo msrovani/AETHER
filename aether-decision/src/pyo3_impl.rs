@@ -378,12 +378,7 @@ fn install_feature_cache(
     let cache_dir = std::env::var("VEGA_FEATURE_CACHE")
         .ok()
         .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| {
-            format!(
-                "{cal_dir}{}feature_cache",
-                std::path::MAIN_SEPARATOR
-            )
-        });
+        .unwrap_or_else(|| format!("{cal_dir}{}feature_cache", std::path::MAIN_SEPARATOR));
     let tools_str = tools.to_string_lossy().to_string();
     let sep = std::path::MAIN_SEPARATOR.to_string();
     let script = format!(
@@ -447,7 +442,9 @@ fn install_engine_cache(
     tag: &str,
     tools_dir: Option<&std::path::Path>,
 ) -> PyResult<()> {
-    let Some(tools) = tools_dir else { return Ok(()) };
+    let Some(tools) = tools_dir else {
+        return Ok(());
+    };
     let tools_str = tools.to_string_lossy().to_string();
     let cal_dir = std::path::Path::new(calibration)
         .parent()
@@ -457,12 +454,7 @@ fn install_engine_cache(
     let cache_dir = std::env::var("VEGA_FEATURE_CACHE")
         .ok()
         .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| {
-            format!(
-                "{cal_dir}{}feature_cache",
-                std::path::MAIN_SEPARATOR
-            )
-        });
+        .unwrap_or_else(|| format!("{cal_dir}{}feature_cache", std::path::MAIN_SEPARATOR));
     // O fingerprint usa a cfg do PRÓPRIO reader via closure do Python? Não:
     // o fingerprint é computado aqui (paths já são os deste reader).
     let fp = engine_fingerprint_of_reader(reader, calibration);
@@ -502,10 +494,7 @@ print('[G1] engine cache ok:', _c.stats(), flush=True)",
 /// Fingerprint por reader: hash dos paths reais que o vegaml usou (o reader
 /// sabe o próprio diretorio via config do vegaml; do lado Rust usamos os
 /// caminhos conhecidos do cfg + o caminho do corpus).
-fn engine_fingerprint_of_reader(
-    _reader: &Bound<'_, PyAny>,
-    calibration: &str,
-) -> String {
+fn engine_fingerprint_of_reader(_reader: &Bound<'_, PyAny>, calibration: &str) -> String {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     std::hash::Hash::hash(&calibration, &mut h);
     if let Ok(text) = std::fs::read_to_string(calibration) {
@@ -518,7 +507,8 @@ fn engine_fingerprint_of_reader(
 /// Persiste o cache de features (G1) — o atexit do Python NÃO roda quando o
 /// processo Rust sai sem finalizar o interpreter (achado do ciclo), então o
 /// hospedeiro chama o flush explicitamente após cada fit.
-fn flush_feature_cache(py: Python<'_>, tools_dir: Option<&std::path::Path>) {    let Some(tools) = tools_dir else { return };
+fn flush_feature_cache(py: Python<'_>, tools_dir: Option<&std::path::Path>) {
+    let Some(tools) = tools_dir else { return };
     let tools_str = tools.to_string_lossy().to_string();
     let script = format!(
         "import sys as _s; _s.path.insert(0, r'{t}'); \

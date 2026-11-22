@@ -57,7 +57,8 @@ pub struct PatchProposal {
 impl PatchProposal {
     /// Parse de JSON (campos: path, op, anchor, content?).
     pub fn from_json(text: &str) -> Result<Self, ToolError> {
-        let v = Json::parse(text.trim()).map_err(|e| ToolError::InvalidArgs(format!("json: {e}")))?;
+        let v =
+            Json::parse(text.trim()).map_err(|e| ToolError::InvalidArgs(format!("json: {e}")))?;
         let path = v
             .get("path")
             .and_then(|p| p.as_str())
@@ -196,10 +197,7 @@ impl Tool for CodePatchTool {
             .and_then(|q| PatchProposal::from_json(q).ok())
             .map(|p| p.path)
             .unwrap_or_default();
-        vec![Effect::FsWrite {
-            path,
-            prev: None,
-        }]
+        vec![Effect::FsWrite { path, prev: None }]
     }
 
     fn call(&mut self, goal: &Goal, ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {

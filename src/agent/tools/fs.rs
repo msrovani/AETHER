@@ -49,9 +49,8 @@ pub fn resolve_sandbox_path(root: &Path, rel: &str) -> Result<PathBuf, ToolError
     // Arquivo ainda não existe: validar o pai canônico.
     if let Some(parent) = joined.parent() {
         if parent.exists() {
-            let parent_canon = std::fs::canonicalize(parent).map_err(|e| {
-                ToolError::Precondition(format!("sandbox pai inválido: {e}"))
-            })?;
+            let parent_canon = std::fs::canonicalize(parent)
+                .map_err(|e| ToolError::Precondition(format!("sandbox pai inválido: {e}")))?;
             if !parent_canon.starts_with(&root) {
                 return Err(ToolError::Precondition(
                     "path escapa da sandbox (pai)".into(),
@@ -61,9 +60,7 @@ pub fn resolve_sandbox_path(root: &Path, rel: &str) -> Result<PathBuf, ToolError
         }
     }
     if !joined.starts_with(&root) {
-        return Err(ToolError::Precondition(
-            "path escapa da sandbox".into(),
-        ));
+        return Err(ToolError::Precondition("path escapa da sandbox".into()));
     }
     Ok(joined)
 }
@@ -224,10 +221,7 @@ impl Tool for FsWriteTool {
 
     fn planned_effects(&self, goal: &Goal) -> Vec<Effect> {
         let path = goal.path.clone().unwrap_or_default();
-        vec![Effect::FsWrite {
-            path,
-            prev: None,
-        }]
+        vec![Effect::FsWrite { path, prev: None }]
     }
 
     fn call(&mut self, goal: &Goal, ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {

@@ -4,7 +4,7 @@
 //! valida gramática (`op` enum, path relativo, âncora não vazia) e opcionalmente
 //! resolve `anchor_hint` por retrieval lexical no arquivo (RASP-lite).
 
-use super::{claim, sandbox_root, CODE_AUTH_CAP, PatchOp, PatchProposal};
+use super::{claim, sandbox_root, PatchOp, PatchProposal, CODE_AUTH_CAP};
 use crate::agent::tool::{
     Cost, Goal, GoalKind, Risk, Tool, ToolContext, ToolError, ToolOutcome, ToolSchema, WorldState,
 };
@@ -108,7 +108,10 @@ pub fn rasp_resolve_anchor(src: &str, hint: &str) -> Result<String, ToolError> {
 
 fn maybe_rasp_fill(root: &std::path::Path, raw_obj: &str) -> Result<PatchProposal, ToolError> {
     let v = Json::parse(raw_obj).map_err(|e| ToolError::InvalidArgs(format!("json: {e}")))?;
-    if v.get("anchor").and_then(|a| a.as_str()).is_some_and(|a| !a.is_empty()) {
+    if v.get("anchor")
+        .and_then(|a| a.as_str())
+        .is_some_and(|a| !a.is_empty())
+    {
         let prop = PatchProposal::from_json(raw_obj)?;
         grammar_validate(&prop)?;
         return Ok(prop);

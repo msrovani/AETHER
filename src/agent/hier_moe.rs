@@ -62,10 +62,7 @@ impl HierMoeStatus {
                 "deps",
                 Json::str("Fase4 T-EMB + B1 10k + M7 LSH; pós funil T-NL-IN estável"),
             ),
-            (
-                "blocks_tnl_in",
-                Json::Bool(false),
-            ),
+            ("blocks_tnl_in", Json::Bool(false)),
         ])
     }
 }

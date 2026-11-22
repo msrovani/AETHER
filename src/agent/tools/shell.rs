@@ -218,7 +218,10 @@ impl ShellTool {
             )
         })?;
         let Some(tok) = presented.as_deref() else {
-            return Err(needs_human_hitl(ctx, "shell.exec: hitl_token ausente no query"));
+            return Err(needs_human_hitl(
+                ctx,
+                "shell.exec: hitl_token ausente no query",
+            ));
         };
         if !token_eq(tok.trim(), &expected) {
             return Err(needs_human_hitl(ctx, "shell.exec: hitl_token inválido"));
@@ -229,7 +232,8 @@ impl ShellTool {
                 "shell.exec binário fora da allowlist: {bin}"
             )));
         }
-        if bin.eq_ignore_ascii_case("cargo") && !cargo_subcmd_ok(&argv[1..].iter().map(|s| s.as_str()).collect::<Vec<_>>())
+        if bin.eq_ignore_ascii_case("cargo")
+            && !cargo_subcmd_ok(&argv[1..].iter().map(|s| s.as_str()).collect::<Vec<_>>())
         {
             return Err(ToolError::InvalidArgs(
                 "shell.exec cargo: só check|test|build|clippy|--version".into(),
@@ -305,9 +309,7 @@ impl Tool for ShellTool {
     }
 
     fn planned_effects(&self, _goal: &Goal) -> Vec<Effect> {
-        vec![Effect::Irreversible {
-            kind: "shell.exec",
-        }]
+        vec![Effect::Irreversible { kind: "shell.exec" }]
     }
 
     fn dry_run(&self, goal: &Goal, ctx: &ToolContext) -> Result<(), ToolError> {
@@ -331,9 +333,7 @@ impl Tool for ShellTool {
                 claims: vec![claim("shell.exec", "ok", 1.0)],
                 confidence: 1.0,
                 detail,
-                effects: vec![Effect::Irreversible {
-                    kind: "shell.exec",
-                }],
+                effects: vec![Effect::Irreversible { kind: "shell.exec" }],
                 ..ToolOutcome::default()
             });
         }
@@ -408,9 +408,7 @@ impl Tool for ShellTool {
                 ctx.scope,
                 ctx.trace_id
             ),
-            effects: vec![Effect::Irreversible {
-                kind: "shell.exec",
-            }],
+            effects: vec![Effect::Irreversible { kind: "shell.exec" }],
             ..ToolOutcome::default()
         })
     }

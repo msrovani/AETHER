@@ -20,10 +20,12 @@ fn clear_a7_env() {
 }
 
 fn agent() -> ToolAgent {
-    let mut cfg = AgentConfig::default();
-    cfg.world = WorldPolicy {
-        sandbox_root: PathBuf::from("target/aether_a7_sandbox"),
-        ..WorldPolicy::default()
+    let cfg = AgentConfig {
+        world: WorldPolicy {
+            sandbox_root: PathBuf::from("target/aether_a7_sandbox"),
+            ..WorldPolicy::default()
+        },
+        ..AgentConfig::default()
     };
     let _ = std::fs::create_dir_all(&cfg.world.sandbox_root);
     ToolAgent::new(&cfg)

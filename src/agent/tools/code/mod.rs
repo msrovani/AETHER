@@ -22,7 +22,8 @@ pub use eval_t3::{
 };
 pub use generate::{code_generate_mode, CodeGenMode, CodeGenerateTool};
 pub use grammar::{
-    extract_json_object, grammar_parse_rate, parse_constrained, rasp_resolve_anchor, CodeGrammarTool,
+    extract_json_object, grammar_parse_rate, parse_constrained, rasp_resolve_anchor,
+    CodeGrammarTool,
 };
 pub use loop_tool::{CodeApplyProposalTool, CodeLoopTool};
 pub use patch::{CodePatchTool, PatchOp, PatchProposal};
@@ -40,7 +41,12 @@ use std::path::PathBuf;
 /// Cap de autoridade para claims de coder (quarentena).
 pub const CODE_AUTH_CAP: u8 = 120;
 
-pub(crate) fn claim(subj: impl Into<String>, rel: &str, val: impl Into<String>, conf: f32) -> Claim {
+pub(crate) fn claim(
+    subj: impl Into<String>,
+    rel: &str,
+    val: impl Into<String>,
+    conf: f32,
+) -> Claim {
     Claim::new(
         subj,
         rel,
@@ -145,10 +151,7 @@ impl Tool for CodeCheckTool {
                 1.0,
             )],
             confidence: 1.0,
-            detail: format!(
-                "code.check ok scope={:?} trace={}",
-                ctx.scope, ctx.trace_id
-            ),
+            detail: format!("code.check ok scope={:?} trace={}", ctx.scope, ctx.trace_id),
             ..ToolOutcome::default()
         })
     }

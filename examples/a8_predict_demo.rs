@@ -8,7 +8,10 @@ fn main() {
     let series = mackey_glass(500, 17, 0.1);
     let rep = forecast_series(&series, 3);
     println!("=== A8 predict.series (Mackey–Glass τ=17, n=500, H=3) ===");
-    println!("NRMSE holdout = {:.6}  (limite OOD = {NRMSE_OOD})", rep.nrmse);
+    println!(
+        "NRMSE holdout = {:.6}  (limite OOD = {NRMSE_OOD})",
+        rep.nrmse
+    );
     println!("abstain       = {:?}", rep.abstain);
     println!("yhat[H]       = {:?}", rep.yhat);
     println!();

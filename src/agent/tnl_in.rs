@@ -75,8 +75,7 @@ pub fn write_tnl_in_contract(path: impl AsRef<Path>) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    fs::write(path, tnl_in_contract_json().to_string())
-        .map_err(|e| e.to_string())
+    fs::write(path, tnl_in_contract_json().to_string()).map_err(|e| e.to_string())
 }
 
 /// Gate de fixtures: fact/sat/memory/act-path + OOV abstain (0 Goal inventado).

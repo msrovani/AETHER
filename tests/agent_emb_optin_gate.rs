@@ -15,9 +15,7 @@ fn emb_era_bge_m3_encaixada_sem_mistura() {
     assert!(on.accept(EmbedEra::bge_m3_1024(), vec![0.0; 384]).is_err());
     assert!(on.accept(EmbedEra::minilm_384(), vec![0.0; 384]).is_err());
     on.era = Some(EmbedEra::minilm_384());
-    assert!(on
-        .accept(EmbedEra::bge_m3_1024(), vec![0.0; 1024])
-        .is_err());
+    assert!(on.accept(EmbedEra::bge_m3_1024(), vec![0.0; 1024]).is_err());
     // F4 segue congelada no status (encaixar era ≠ passar gate)
     let j = EmbedPort::off().status_json().to_string();
     assert!(j.contains("frozen"));
@@ -39,9 +37,7 @@ fn emb_off_recusa_e_era_mismatch() {
         model_id: "other".into(),
         dim: 384,
     });
-    assert!(on
-        .accept(EmbedEra::minilm_384(), vec![0.0; 384])
-        .is_err());
+    assert!(on.accept(EmbedEra::minilm_384(), vec![0.0; 384]).is_err());
     let j = EmbedPort::off().status_json().to_string();
     assert!(j.contains("frozen"));
 }

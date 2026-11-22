@@ -9,7 +9,7 @@ use aether_engine::agent::{
     code_generate_mode, code_lm_caps, default_coder_t3_path, grammar_parse_rate, parse_constrained,
     pass_at_k, rasp_resolve_anchor, run_coder_t3, shell_kill_switch, shell_mode, Action,
     AgentConfig, Budget, CodeGenMode, Effect, Goal, PatchProposal, Risk, ShellMode, ToolAgent,
-    ToolContext, WorldPolicy, CODE_AUTH_CAP, CODER_T3_PILOT, SHELL_AUTH_CAP,
+    ToolContext, WorldPolicy, CODER_T3_PILOT, CODE_AUTH_CAP, SHELL_AUTH_CAP,
 };
 use aether_engine::core::knowledge_bridge_f1::ScopeId;
 
@@ -26,12 +26,14 @@ fn sandbox_dir() -> PathBuf {
 }
 
 fn agent_with_sandbox(root: PathBuf) -> ToolAgent {
-    let mut cfg = AgentConfig::default();
-    cfg.world = WorldPolicy {
-        sandbox_root: root,
-        http_hosts: vec![],
-        http_fetch: false,
-        mcp_allow: vec![],
+    let cfg = AgentConfig {
+        world: WorldPolicy {
+            sandbox_root: root,
+            http_hosts: vec![],
+            http_fetch: false,
+            mcp_allow: vec![],
+        },
+        ..AgentConfig::default()
     };
     ToolAgent::new(&cfg)
 }
@@ -69,11 +71,17 @@ fn coder_tools_na_allowlist_e_plano() {
     let (b, r) = budget();
     let plan = agent.plan(&Goal::code_check("x.rs").with_budget(b, r));
     assert_eq!(plan.first().map(|p| p.tool), Some("code.check"));
-    let plan = agent.plan(&Goal::code_generate(r#"{"path":"x","op":"delete","anchor":"a"}"#));
+    let plan = agent.plan(&Goal::code_generate(
+        r#"{"path":"x","op":"delete","anchor":"a"}"#,
+    ));
     assert_eq!(plan.first().map(|p| p.tool), Some("code.generate"));
-    let plan = agent.plan(&Goal::code_loop(r#"{"path":"x","op":"delete","anchor":"a"}"#));
+    let plan = agent.plan(&Goal::code_loop(
+        r#"{"path":"x","op":"delete","anchor":"a"}"#,
+    ));
     assert_eq!(plan.first().map(|p| p.tool), Some("code.loop"));
-    let plan = agent.plan(&Goal::code_grammar(r#"{"path":"x","op":"delete","anchor":"a"}"#));
+    let plan = agent.plan(&Goal::code_grammar(
+        r#"{"path":"x","op":"delete","anchor":"a"}"#,
+    ));
     assert_eq!(plan.first().map(|p| p.tool), Some("code.grammar"));
     let plan = agent.plan(&Goal::code_lm(r#"{"path":"x","op":"delete","anchor":"a"}"#));
     assert_eq!(plan.first().map(|p| p.tool), Some("code.lm"));
@@ -87,7 +95,7 @@ fn code_check_ok_e_needle_fail() {
     std::fs::write(root.join("sample.rs"), "fn main() { /* MARKER */ }\n").unwrap();
     let mut agent = agent_with_sandbox(root);
     let (b, r) = budget();
-    let out = agent.solve(&Goal::code_check("sample.rs").with_budget(b.clone(), r));
+    let out = agent.solve(&Goal::code_check("sample.rs").with_budget(b, r));
     assert!(out.success, "{}", out.rationale);
     let claim = out.outcome.as_ref().and_then(|o| o.claims.first()).unwrap();
     assert!(claim.value.contains("ok"));
@@ -126,7 +134,7 @@ fn code_test_pass_e_fail() {
     std::fs::write(root.join("bad.txt"), "no marker\n").unwrap();
     let mut agent = agent_with_sandbox(root);
     let (b, r) = budget();
-    let out = agent.solve(&Goal::code_test("ok.txt").with_budget(b.clone(), r));
+    let out = agent.solve(&Goal::code_test("ok.txt").with_budget(b, r));
     assert!(out.success, "{}", out.rationale);
     assert_eq!(
         out.outcome.as_ref().unwrap().claims[0].value.as_str(),
@@ -137,7 +145,9 @@ fn code_test_pass_e_fail() {
     assert!(!out.success, "sem marker não passa");
     // Em falha, `finish` zera `outcome`; evidência fica no blackboard.
     assert!(
-        out.claims.iter().any(|c| c.relation == "code.test" && c.value == "fail"),
+        out.claims
+            .iter()
+            .any(|c| c.relation == "code.test" && c.value == "fail"),
         "claims={:?}",
         out.claims
     );
@@ -153,14 +163,12 @@ fn patch_proposal_parse_e_apply_unit() {
     assert!(prop.apply("none").is_err());
     assert!(prop.apply("OLD OLD").is_err());
 
-    let ins = PatchProposal::from_json(
-        r#"{"path":"f.txt","op":"insert","anchor":"X","content":"Y"}"#,
-    )
-    .unwrap();
+    let ins =
+        PatchProposal::from_json(r#"{"path":"f.txt","op":"insert","anchor":"X","content":"Y"}"#)
+            .unwrap();
     assert_eq!(ins.apply("X").unwrap(), "XY");
 
-    let del =
-        PatchProposal::from_json(r#"{"path":"f.txt","op":"delete","anchor":"Z"}"#).unwrap();
+    let del = PatchProposal::from_json(r#"{"path":"f.txt","op":"delete","anchor":"Z"}"#).unwrap();
     assert_eq!(del.apply("a Z b").unwrap(), "a  b");
 }
 
@@ -176,7 +184,7 @@ fn code_patch_aplica_e_respeita_cap() {
     let claim = &out.outcome.as_ref().unwrap().claims[0];
     assert!(claim.value.contains("applied"));
     assert!(claim.authority <= CODE_AUTH_CAP);
-    assert!(CODE_AUTH_CAP <= 120);
+    const _: () = assert!(CODE_AUTH_CAP <= 120);
     let text = std::fs::read_to_string(root.join("edit.txt")).unwrap();
     assert_eq!(text, "hello PATCHED world\n");
 }
@@ -259,9 +267,17 @@ fn code_generate_off_stub_e_cap() {
         PatchProposal::from_json(&prop.value).unwrap().content,
         "PATCHED"
     );
-    assert!(out.outcome.as_ref().unwrap().detail.contains("applied=false"));
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), "hello ANCHOR world\n");
-    assert!(CODE_AUTH_CAP <= 120 && CODE_AUTH_CAP < 255);
+    assert!(out
+        .outcome
+        .as_ref()
+        .unwrap()
+        .detail
+        .contains("applied=false"));
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "hello ANCHOR world\n"
+    );
+    const _: () = assert!(CODE_AUTH_CAP <= 120 && CODE_AUTH_CAP < 255);
 }
 
 #[test]
@@ -285,14 +301,13 @@ fn code_loop_keep_e_rollback() {
     }"##;
     let out = agent.solve(&Goal::code_loop(brief_keep));
     assert!(out.success, "keep: {}", out.rationale);
-    assert!(
-        out.outcome
-            .as_ref()
-            .unwrap()
-            .claims
-            .iter()
-            .any(|c| c.relation == "code.loop" && c.value == "keep")
-    );
+    assert!(out
+        .outcome
+        .as_ref()
+        .unwrap()
+        .claims
+        .iter()
+        .any(|c| c.relation == "code.loop" && c.value == "keep"));
     assert!(out
         .outcome
         .as_ref()
@@ -412,11 +427,7 @@ fn code_lm_offline_e_pass_at_k() {
 
     let brief = r#"{"path":"lm.txt","op":"replace","anchor":"OLD","content":"NEW"}"#;
     let mut agent = agent_with_sandbox(sandbox_dir());
-    std::fs::write(
-        sandbox_dir().join("lm.txt"),
-        "line OLD line\n",
-    )
-    .unwrap();
+    std::fs::write(sandbox_dir().join("lm.txt"), "line OLD line\n").unwrap();
     let out = agent.solve(&Goal::code_lm(brief));
     assert!(out.success, "{}", out.rationale);
     let detail = &out.outcome.as_ref().unwrap().detail;
@@ -539,12 +550,7 @@ fn shell_k8_default_deny_hitl_stub_e_kill() {
     assert_eq!(claim.value, "ok");
     assert!(claim.authority <= SHELL_AUTH_CAP);
     assert!(claim.authority <= CODE_AUTH_CAP);
-    assert!(out
-        .outcome
-        .as_ref()
-        .unwrap()
-        .detail
-        .contains("stub ok"));
+    assert!(out.outcome.as_ref().unwrap().detail.contains("stub ok"));
 
     // Token errado → NeedsHuman / não Act.
     let out = agent.solve(&Goal::shell_exec(

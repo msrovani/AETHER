@@ -4,8 +4,8 @@
 
 use aether_engine::agent::{
     active_scribe_path, certify_utterance, ensure_scribe_fields_on_active_lock, load_catalog,
-    scribe_runtime_policy, Action, Claim, ExpertId, GemmaScribePort, ParserPort, Style,
-    DEFAULT_AND_PEAK_MB, ScribeRuntime, CATALOG_PATH,
+    scribe_runtime_policy, Action, Claim, ExpertId, GemmaScribePort, ParserPort, ScribeRuntime,
+    Style, CATALOG_PATH, DEFAULT_AND_PEAK_MB,
 };
 use aether_engine::core::certificate::Provenance;
 use aether_engine::json::Json;
@@ -77,11 +77,7 @@ fn lock_scribe_path_amarrado() {
         ),
         ("primary", Json::obj([("id", Json::str("vega-u-0.8b"))])),
     ]);
-    std::fs::write(
-        ".vega/profiles/active/engine.lock.json",
-        lock.to_string(),
-    )
-    .unwrap();
+    std::fs::write(".vega/profiles/active/engine.lock.json", lock.to_string()).unwrap();
     ensure_scribe_fields_on_active_lock().unwrap();
     let path = active_scribe_path().expect("scribe_path");
     assert_eq!(path, "gemma-3-1b-prose");

@@ -1,10 +1,10 @@
 //! K4 — `code.loop` (generate→apply→test→keep|rollback) + `code.apply_proposal`.
 
 use super::generate::{
-    code_generate_mode, propose_from_mode_in, proposal_claim, proposal_from_brief_in,
+    code_generate_mode, proposal_claim, proposal_from_brief_in, propose_from_mode_in,
     test_expect_from_brief, validate_anchor_if_present, CodeGenMode,
 };
-use super::{claim, sandbox_root, CODE_AUTH_CAP, PatchProposal};
+use super::{claim, sandbox_root, PatchProposal, CODE_AUTH_CAP};
 use crate::agent::tool::{
     Cost, Effect, Goal, GoalKind, Risk, Tool, ToolContext, ToolError, ToolOutcome, ToolSchema,
     WorldState,
@@ -97,7 +97,12 @@ impl Tool for CodeApplyProposalTool {
     }
 
     fn call(&mut self, goal: &Goal, ctx: &mut ToolContext) -> Result<ToolOutcome, ToolError> {
-        let prop = if let Some(q) = goal.query.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        let prop = if let Some(q) = goal
+            .query
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             if q.starts_with('{') {
                 PatchProposal::from_json(q)?
             } else {

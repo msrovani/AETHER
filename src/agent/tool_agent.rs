@@ -10,10 +10,10 @@ use std::sync::Arc;
 use crate::core::knowledge_bridge_f1::ScopeId;
 
 use super::executor::{Execution, ToolExecutor};
-use super::planner::{PlanStep, Planner};
-use super::registry::ToolRegistry;
 use super::learner::{EpisodeRecord, Learner};
 use super::linucb::{linucb_enabled, ContextualTools};
+use super::planner::{PlanStep, Planner};
+use super::registry::ToolRegistry;
 use super::self_model::SelfModel;
 use super::telemetry::{goal_label, EpisodeTrace, StepTrace};
 use super::tool::{
@@ -506,8 +506,7 @@ impl ToolAgent {
         let intrinsic = feedback.correct.unwrap_or(outcome.success);
         for step in &outcome.steps {
             if step.executed {
-                self.self_model
-                    .update(&step.tool, &outcome.goal, intrinsic);
+                self.self_model.update(&step.tool, &outcome.goal, intrinsic);
             }
         }
         self.self_model.persist();

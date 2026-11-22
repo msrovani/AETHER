@@ -52,10 +52,7 @@ impl Tool for PredictSeriesTool {
 
     fn preconditions(&self, goal: &Goal, state: &WorldState) -> bool {
         self.affordance(goal, state) > 0.0
-            && goal
-                .query
-                .as_deref()
-                .is_some_and(|q| !q.trim().is_empty())
+            && goal.query.as_deref().is_some_and(|q| !q.trim().is_empty())
     }
 
     fn dry_run(&self, goal: &Goal, _ctx: &ToolContext) -> Result<(), ToolError> {

@@ -2,17 +2,20 @@
 
 #![cfg(feature = "agent")]
 
-use aether_engine::agent::{LEARN_AUTH_CAP};
+use aether_engine::agent::LEARN_AUTH_CAP;
 use aether_engine::json::Json;
 
 #[test]
 fn learn_cap_e_artefato() {
-    assert!(LEARN_AUTH_CAP <= 120);
+    const _: () = assert!(LEARN_AUTH_CAP <= 120);
     let art = Json::obj([
         ("db", Json::str("n-sgdb")),
         ("learn_auth_cap", Json::num(f64::from(LEARN_AUTH_CAP))),
         ("auto_255", Json::Bool(false)),
-        ("promote", Json::str("T-HITL hub + AETHER_HITL_TOKEN → curate set_authority 255")),
+        (
+            "promote",
+            Json::str("T-HITL hub + AETHER_HITL_TOKEN → curate set_authority 255"),
+        ),
         ("writes_le_120", Json::num(0.0)),
         ("promotes_255", Json::num(0.0)),
         ("denies", Json::num(0.0)),

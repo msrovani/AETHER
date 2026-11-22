@@ -4,7 +4,7 @@
 //! Sem rede por default. Auth ≤120. Núcleo não carrega pesos.
 
 use super::grammar::parse_constrained;
-use super::{sandbox_root, CODE_AUTH_CAP, PatchProposal};
+use super::{sandbox_root, PatchProposal, CODE_AUTH_CAP};
 use crate::agent::tool::{
     Cost, Goal, GoalKind, Risk, Tool, ToolContext, ToolError, ToolOutcome, ToolSchema, WorldState,
 };
@@ -79,10 +79,7 @@ pub fn invoke_small_lm(brief: &str) -> Result<(PatchProposal, u8, String, u32), 
     let text = String::from_utf8_lossy(&out.stdout);
     let v = Json::parse(text.trim()).map_err(|e| ToolError::Failed(format!("json lm: {e}")))?;
     if v.get("ok").and_then(|o| o.as_bool()) == Some(false) {
-        let err = v
-            .get("error")
-            .and_then(|e| e.as_str())
-            .unwrap_or("erro");
+        let err = v.get("error").and_then(|e| e.as_str()).unwrap_or("erro");
         return Err(ToolError::Failed(format!("code_lm_local: {err}")));
     }
     if v.get("offline").and_then(|o| o.as_bool()) == Some(false) {
@@ -225,12 +222,10 @@ impl Tool for CodeLmTool {
         let caps = code_lm_caps();
         let (prop, auth, backend, ram) = invoke_small_lm(brief)?;
         // Validação leve na sandbox se o arquivo existir.
-        if let Ok(path) =
-            crate::agent::tools::fs::resolve_sandbox_path(&self.root, &prop.path)
-        {
+        if let Ok(path) = crate::agent::tools::fs::resolve_sandbox_path(&self.root, &prop.path) {
             if path.is_file() {
-                let src = std::fs::read_to_string(&path)
-                    .map_err(|e| ToolError::Failed(e.to_string()))?;
+                let src =
+                    std::fs::read_to_string(&path).map_err(|e| ToolError::Failed(e.to_string()))?;
                 let _ = prop.apply(&src)?;
             }
         }
@@ -260,10 +255,7 @@ impl Tool for CodeLmTool {
             detail: format!(
                 "code.lm ok backend={backend} ram_mb={ram}/{} offline={} \
                  applied=false auth_cap={CODE_AUTH_CAP} scope={:?} trace={}",
-                caps.max_ram_mb,
-                caps.offline,
-                ctx.scope,
-                ctx.trace_id
+                caps.max_ram_mb, caps.offline, ctx.scope, ctx.trace_id
             ),
             ..ToolOutcome::default()
         })

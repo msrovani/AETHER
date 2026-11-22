@@ -20,10 +20,7 @@ fn predict_expert_no_moe() {
     assert!(rep.interval.is_finite());
 
     let mut agent = AetherAgent::new(AgentConfig::default());
-    let out = agent.run(&Task::Predict {
-        series,
-        horizon: 1,
-    });
+    let out = agent.run(&Task::Predict { series, horizon: 1 });
     assert!(
         out.experts_used.contains(&ExpertId::Predict)
             || out.outputs.iter().any(|o| o.expert == ExpertId::Predict)

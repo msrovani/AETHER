@@ -3,9 +3,7 @@
 //! Dois plugues, um path. Nunca chama `vegaml.decide`. Opt-in `AETHER_SCRIBE=gemma`.
 
 use super::dec_upgrade::{load_active_lock, ACTIVE_LOCK};
-use super::language::{
-    GoalSchema, LanguageCaps, LanguageError, LanguagePort, ParserPort, Style,
-};
+use super::language::{GoalSchema, LanguageCaps, LanguageError, LanguagePort, ParserPort, Style};
 use super::tool::{Goal, Risk};
 use super::Claim;
 
@@ -108,17 +106,12 @@ pub fn ensure_scribe_fields_on_active_lock() -> Result<(), String> {
     let mut pairs: Vec<(String, crate::json::Json)> = match lock {
         crate::json::Json::Obj(v) => v
             .into_iter()
-            .filter(|(k, _)| {
-                k != "scribe_enabled" && k != "scribe_path" && k != "scribe_backend"
-            })
+            .filter(|(k, _)| k != "scribe_enabled" && k != "scribe_path" && k != "scribe_backend")
             .collect(),
         _ => Vec::new(),
     };
     pairs.push(("scribe_enabled".into(), crate::json::Json::Bool(true)));
-    pairs.push((
-        "scribe_path".into(),
-        crate::json::Json::str(&sent_path),
-    ));
+    pairs.push(("scribe_path".into(), crate::json::Json::str(&sent_path)));
     pairs.push((
         "scribe_backend".into(),
         crate::json::Json::str("gemma_local"),
@@ -157,7 +150,11 @@ impl GemmaScribePort {
             return None;
         }
         let path = active_scribe_path().unwrap_or_else(|| "gemma-3-1b-prose".into());
-        let backend_label = if live { "gemma_scribe_live" } else { "gemma_scribe" };
+        let backend_label = if live {
+            "gemma_scribe_live"
+        } else {
+            "gemma_scribe"
+        };
         Some(Self {
             artifact_path: path,
             runtime,
@@ -277,10 +274,13 @@ fn claims_to_jsonl(claims: &[Claim], style: Style) -> String {
         })
         .collect();
     Json::obj([
-        ("style", Json::str(match style {
-            Style::Factual => "factual",
-            Style::Compact => "compact",
-        })),
+        (
+            "style",
+            Json::str(match style {
+                Style::Factual => "factual",
+                Style::Compact => "compact",
+            }),
+        ),
         ("claims", Json::Arr(arr)),
         ("rule", Json::str("only_rephrase_claims_no_new_facts")),
     ])
@@ -292,13 +292,11 @@ pub fn vram_free_from_host_report() -> Option<u64> {
     let text = std::fs::read_to_string("target/aether_host_report.json").ok()?;
     // Campo opcional futuro; RAM disponível como proxy fraco se não houver VRAM.
     let j = crate::json::Json::parse(&text).ok()?;
-    j.get("vram_free_mb")
-        .and_then(|v| v.as_u64())
-        .or_else(|| {
-            j.get("ram_available_mb")
-                .and_then(|v| v.as_u64())
-                .map(|ram| ram / 4) // proxy conservador
-        })
+    j.get("vram_free_mb").and_then(|v| v.as_u64()).or_else(|| {
+        j.get("ram_available_mb")
+            .and_then(|v| v.as_u64())
+            .map(|ram| ram / 4) // proxy conservador
+    })
 }
 
 #[cfg(test)]

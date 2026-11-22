@@ -6,9 +6,9 @@ use std::path::PathBuf;
 
 use aether_engine::agent::tools::resolve_sandbox_path;
 use aether_engine::agent::{
-    Action, AgentConfig, Budget, Claim, Goal, GoalKind, Risk, SelfModel, ShellTool, Tool, ToolAgent,
-    ToolContext, ToolError, ToolOutcome, ToolRegistry, ToolSchema, WorldPolicy, WorldState,
-    AUTHORITY_QUARANTINE,
+    Action, AgentConfig, Budget, Claim, Goal, GoalKind, Risk, SelfModel, ShellTool, Tool,
+    ToolAgent, ToolContext, ToolError, ToolOutcome, ToolRegistry, ToolSchema, WorldPolicy,
+    WorldState, AUTHORITY_QUARANTINE,
 };
 use aether_engine::core::certificate::Provenance;
 use aether_engine::core::knowledge_bridge_f1::ScopeId;
@@ -20,8 +20,10 @@ fn sandbox_dir() -> PathBuf {
 }
 
 fn agent_with_world(world: WorldPolicy) -> ToolAgent {
-    let mut cfg = AgentConfig::default();
-    cfg.world = world;
+    let cfg = AgentConfig {
+        world,
+        ..AgentConfig::default()
+    };
     ToolAgent::new(&cfg)
 }
 
@@ -318,10 +320,7 @@ fn injecao_em_memoria_nao_altera_escolha_de_tool() {
         Provenance::Inferred,
     );
     let dirty = agent.plan(&dirty_state_goal);
-    assert_eq!(
-        clean.first().map(|s| s.tool),
-        dirty.first().map(|s| s.tool)
-    );
+    assert_eq!(clean.first().map(|s| s.tool), dirty.first().map(|s| s.tool));
     assert_eq!(clean.first().map(|s| s.tool), Some("fact"));
     dirty_state_goal.query = Some(poison.value);
     let still = agent.plan(&dirty_state_goal);

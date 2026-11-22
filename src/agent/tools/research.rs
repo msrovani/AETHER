@@ -106,10 +106,7 @@ pub fn claims_from_research_json(query: &str, payload: &Json) -> (Vec<Claim>, St
         .get("verdict")
         .and_then(|v| v.as_str())
         .unwrap_or("open");
-    let reason = payload
-        .get("reason")
-        .and_then(|r| r.as_str())
-        .unwrap_or("");
+    let reason = payload.get("reason").and_then(|r| r.as_str()).unwrap_or("");
     let mut claims = Vec::new();
     claims.push(Claim::new(
         query,
@@ -127,10 +124,7 @@ pub fn claims_from_research_json(query: &str, payload: &Json) -> (Vec<Claim>, St
                 .and_then(|t| t.as_str())
                 .unwrap_or("")
                 .trim();
-            let domain = item
-                .get("domain")
-                .and_then(|d| d.as_str())
-                .unwrap_or("?");
+            let domain = item.get("domain").and_then(|d| d.as_str()).unwrap_or("?");
             if title.is_empty() {
                 continue;
             }
@@ -196,8 +190,13 @@ impl Tool for ResearchQueryTool {
         // Não competir com tools de relação exclusiva (A8 predict / propose).
         match goal.relation.as_deref() {
             Some("research.query") => return 1.0,
-            Some("predict.series") | Some("goal.propose") | Some("fs.read") | Some("fs.write")
-            | Some("http.get") | Some("mcp.call") | Some("shell.exec") => {
+            Some("predict.series")
+            | Some("goal.propose")
+            | Some("fs.read")
+            | Some("fs.write")
+            | Some("http.get")
+            | Some("mcp.call")
+            | Some("shell.exec") => {
                 return 0.0;
             }
             _ => {}
@@ -222,10 +221,7 @@ impl Tool for ResearchQueryTool {
         if self.affordance(goal, state) <= 0.0 {
             return false;
         }
-        let q_ok = goal
-            .query
-            .as_deref()
-            .is_some_and(|q| !q.trim().is_empty());
+        let q_ok = goal.query.as_deref().is_some_and(|q| !q.trim().is_empty());
         let s_ok = goal
             .subject
             .as_deref()

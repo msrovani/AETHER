@@ -111,6 +111,6 @@ fn expand_exige_hitl() {
 
 #[test]
 fn rede_desligada_nao_e_verdade_255() {
-    assert!(RESEARCH_AUTH_CAP <= 120);
-    assert!(RESEARCH_AUTH_CAP < 255);
+    const _: () = assert!(RESEARCH_AUTH_CAP <= 120);
+    const _: () = assert!(RESEARCH_AUTH_CAP < 255);
 }

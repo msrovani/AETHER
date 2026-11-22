@@ -40,7 +40,7 @@ impl CertifiedUtterance {
             ("auth", Json::num(f64::from(self.auth))),
             (
                 "sources",
-                Json::Arr(self.sources.iter().map(|s| Json::str(s)).collect()),
+                Json::Arr(self.sources.iter().map(Json::str).collect()),
             ),
             ("judge_conf", Json::num(f64::from(self.judge_conf))),
             ("may_speak_fact", Json::Bool(self.may_speak_fact())),
@@ -111,7 +111,7 @@ pub fn judge_claim_text(claims: &[Claim], text: &str) -> (bool, f32, Vec<String>
         let slot_ok = (!sub.is_empty() && fold.contains(&sub))
             && (!rel.is_empty() && fold.contains(&rel))
             && (!val.is_empty() && fold.contains(&val));
-        let cite_ok = fold.contains("fonte=") || fold.contains(&fold_ascii(&c.source.label()));
+        let cite_ok = fold.contains("fonte=") || fold.contains(&fold_ascii(c.source.label()));
         if slot_ok && cite_ok {
             hits += 1;
         }

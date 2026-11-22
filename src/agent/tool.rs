@@ -1205,12 +1205,9 @@ impl ToolContext {
         if self.undo_log.len() <= watermark {
             return report;
         }
-        let needs_backend = self.undo_log[watermark..].iter().any(|op| {
-            !matches!(
-                op,
-                UndoOp::FsRestore { .. } | UndoOp::Irreversible { .. }
-            )
-        });
+        let needs_backend = self.undo_log[watermark..]
+            .iter()
+            .any(|op| !matches!(op, UndoOp::FsRestore { .. } | UndoOp::Irreversible { .. }));
         if needs_backend && self.undo_backend.is_none() {
             report
                 .failed

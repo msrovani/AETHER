@@ -3,8 +3,8 @@
 #![cfg(feature = "agent")]
 
 use aether_engine::agent::{
-    certify_utterance, Action, Claim, DocRef, ExpertId, LanguageStyle, OcrPort, ParserPort, SttPort,
-    TtsPort, VisionPort,
+    certify_utterance, Action, Claim, DocRef, ExpertId, LanguageStyle, OcrPort, ParserPort,
+    SttPort, TtsPort, VisionPort,
 };
 use aether_engine::core::certificate::Provenance;
 
@@ -22,10 +22,12 @@ fn ocr_stt_vis_funil_tnl_in() {
         .unwrap();
     assert!(g.subject.as_deref().unwrap().eq_ignore_ascii_case("brasil"));
 
-    let g = SttPort::off()
-        .to_goal("hello.wav", &mut p)
-        .unwrap();
-    assert!(g.relation.as_deref().unwrap().eq_ignore_ascii_case("capital"));
+    let g = SttPort::off().to_goal("hello.wav", &mut p).unwrap();
+    assert!(g
+        .relation
+        .as_deref()
+        .unwrap()
+        .eq_ignore_ascii_case("capital"));
 
     let g = VisionPort::off()
         .to_goal("fixture/brasil.png", &mut p)

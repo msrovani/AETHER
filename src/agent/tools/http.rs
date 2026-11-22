@@ -26,7 +26,12 @@ pub fn normalize_host(url: &str) -> Result<String, ToolError> {
         .or_else(|| raw.strip_prefix("http://"))
         .unwrap_or(raw);
     let hostport = without_scheme.split('/').next().unwrap_or("");
-    let host = hostport.split(':').next().unwrap_or("").trim().to_lowercase();
+    let host = hostport
+        .split(':')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_lowercase();
     if host.is_empty() || host.contains("..") {
         return Err(ToolError::InvalidArgs("host inválido".into()));
     }
@@ -181,12 +186,8 @@ fn http_get_plain(url: &str, host: &str) -> Result<String, ToolError> {
     let addr = format!("{host}:80");
     let mut stream = TcpStream::connect(addr.as_str())
         .map_err(|e| ToolError::Failed(format!("connect: {e}")))?;
-    stream
-        .set_read_timeout(Some(Duration::from_secs(5)))
-        .ok();
-    stream
-        .set_write_timeout(Some(Duration::from_secs(5)))
-        .ok();
+    stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
+    stream.set_write_timeout(Some(Duration::from_secs(5))).ok();
     let req = format!("GET {path} HTTP/1.0\r\nHost: {host}\r\nConnection: close\r\n\r\n");
     stream
         .write_all(req.as_bytes())

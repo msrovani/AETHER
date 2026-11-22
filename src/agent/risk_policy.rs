@@ -123,7 +123,7 @@ pub fn requirement_for(risk: Risk) -> HitlRequirement {
 /// Classe da matriz que casa o nome da tool (fallback pelo risco).
 pub fn class_for_tool(name: &str, risk: Risk) -> &'static str {
     for row in RISK_MATRIX {
-        if row.examples.iter().any(|e| *e == name) {
+        if row.examples.contains(&name) {
             return row.class;
         }
     }
@@ -209,9 +209,9 @@ pub fn gate_before_call(
         HitlRequirement::Always => format!(
             "A7: risco high (`{tool_name}` class={class}) exige hitl_token + AETHER_HITL_TOKEN"
         ),
-        HitlRequirement::Optional => format!(
-            "A7: AETHER_HITL_MEDIUM=1 — `{tool_name}` (class={class}) exige hitl_token"
-        ),
+        HitlRequirement::Optional => {
+            format!("A7: AETHER_HITL_MEDIUM=1 — `{tool_name}` (class={class}) exige hitl_token")
+        }
         HitlRequirement::Never => unreachable!(),
     };
     let hitl = HitlRequest {

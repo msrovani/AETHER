@@ -81,7 +81,14 @@ impl SttPort {
         Json::obj([
             ("tomada", Json::str("T-STT")),
             ("enabled", Json::Bool(self.enabled)),
-            ("feature", Json::str(if cfg!(feature = "speech") { "on" } else { "off" })),
+            (
+                "feature",
+                Json::str(if cfg!(feature = "speech") {
+                    "on"
+                } else {
+                    "off"
+                }),
+            ),
             ("pcm_in_t0", Json::Bool(false)),
         ])
     }
