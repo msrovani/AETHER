@@ -2,6 +2,8 @@
 //!
 //! O core **não** embute modelo. Host passa vetor + `model_id`/`dim`, ou usa
 //! sidecar (`tools/embed_server.py`). Misturar dims/eras = deny.
+//! Era encaixada: `BAAI/bge-m3` 1024d (HITL 2026-11-22 — V3-A venceu com
+//! 0.9366); `AETHER_EMBED_ERA=minilm` declara a era legada 384.
 //! F4 hybrid permanece congelada até HITL sancionar novo gate (≥0.974).
 
 use crate::json::Json;
@@ -21,6 +23,16 @@ impl EmbedEra {
         Self {
             model_id: "paraphrase-multilingual-MiniLM-L12-v2".into(),
             dim: 384,
+        }
+    }
+
+    /// BGE-M3 1024-dim — era **encaixada** (HITL 2026-11-22): vencedor do
+    /// V3-A no set v2 congelado (embed hit@5 0.9366; MiniLM 0.6761).
+    /// É a era default do sidecar `tools/embed_server.py` (cap 512 tokens).
+    pub fn bge_m3_1024() -> Self {
+        Self {
+            model_id: "BAAI/bge-m3".into(),
+            dim: 1024,
         }
     }
 }
@@ -69,8 +81,10 @@ impl EmbedPort {
         Self::default()
     }
 
-    /// Opt-in: `AETHER_EMBED=1` declara era MiniLM 384 (sidecar host).
-    /// F4 permanece congelada — hybrid só após `health(view=era)` no host.
+    /// Opt-in: `AETHER_EMBED=1` declara a era ativa — default **BGE-M3 1024d**
+    /// (encaixado por HITL 2026-11-22). `AETHER_EMBED_ERA=minilm` mantém a era
+    /// legada 384 (vetores já gravados no nsgdb). F4 permanece congelada —
+    /// hybrid só após `health(view=era)` no host.
     pub fn from_env() -> Self {
         let on = match std::env::var("AETHER_EMBED") {
             Ok(v) => matches!(
@@ -80,9 +94,13 @@ impl EmbedPort {
             Err(_) => false,
         };
         if on {
+            let era = match std::env::var("AETHER_EMBED_ERA") {
+                Ok(v) if v.trim().eq_ignore_ascii_case("minilm") => EmbedEra::minilm_384(),
+                _ => EmbedEra::bge_m3_1024(),
+            };
             Self {
                 enabled: true,
-                era: Some(EmbedEra::minilm_384()),
+                era: Some(era),
             }
         } else {
             Self::off()
@@ -146,6 +164,26 @@ mod tests {
     fn off_recusa_encode() {
         let p = EmbedPort::off();
         assert!(p.encode_refuse("oi").is_err());
+    }
+
+    #[test]
+    fn era_bge_m3_1024_valida_e_nao_mistura() {
+        let mut p = EmbedPort {
+            enabled: true,
+            era: Some(EmbedEra::bge_m3_1024()),
+        };
+        // era encaixada aceita 1024 e recusa dim alheia
+        assert!(p.accept(EmbedEra::bge_m3_1024(), vec![0.0; 1024]).is_ok());
+        assert!(p.accept(EmbedEra::bge_m3_1024(), vec![0.0; 384]).is_err());
+        // 0 mistura de eras: era legada MiniLM recusada na porta BGE
+        assert!(p.accept(EmbedEra::minilm_384(), vec![0.0; 384]).is_err());
+        // e o inverso
+        p.era = Some(EmbedEra::minilm_384());
+        assert!(p
+            .accept(EmbedEra::bge_m3_1024(), vec![0.0; 1024])
+            .is_err());
+        // porta off continua negando encode (default lexical intacto)
+        assert!(EmbedPort::off().encode_refuse("x").is_err());
     }
 
     #[test]

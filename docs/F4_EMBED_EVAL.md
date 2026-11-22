@@ -25,7 +25,9 @@ POST /embed       {"text": "..."}      -> {"embedding": [...]}
 POST /embed_batch {"texts": [...]}     -> {"embeddings": [[...], ...]}
 ```
 
-- modelo default `sentence-transformers/all-MiniLM-L6-v2` (384-dim, normalizado);
+- modelo default `BAAI/bge-m3` (1024-dim, normalizado, cap 512 tokens) —
+  encaixe HITL 2026-11-22 (V3-A: hit@5 0.9366 vs MiniLM 0.6761 no set v2);
+  MiniLM 384 permanece via `--model` (era legada do nsgdb);
 - **offline por default** (`HF_HUB_OFFLINE=1`): nenhuma chamada externa em runtime;
 - aquisição única do modelo = `AETHER_EMBED_ALLOW_DOWNLOAD=1` (setup explícito,
   feito em 2026-11-20 com autorização do HITL);

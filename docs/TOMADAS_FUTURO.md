@@ -46,7 +46,7 @@ Horizontes:
 | **Contrato** | texto|visão → `Vec<f32>` + `model_id` / dim |
 | **Fio** | T-NL-IN / T-VIS / T-PACK → **T-EMB** → SGDB L4 / recall hybrid → T-MOE |
 | **Disjuntor** | dim/era nova sem `health(view=era)` → lexical only |
-| **Estado hoje** | **formalizado** — `src/agent/embed.rs` (`EmbedPort` off); F4 **congelada** |
+| **Estado hoje** | **encaixado** — era default `BAAI/bge-m3` 1024d (`AETHER_EMBED=1`; legado `AETHER_EMBED_ERA=minilm`); `EmbedPort` segue off por default; F4 **congelada** |
 | **Deps** | ADR-0008; `DONOR_CATALOG` mapa |
 | **Aceite** | 0 mistura de eras; gate B-G0/F4 conforme doc |
 

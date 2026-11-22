@@ -26,7 +26,9 @@ import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+# Encaixe HITL 2026-11-22: BGE-M3 (V3-A vencedor, hit@5 0.9366) é o default;
+# MiniLM 384 permanece via --model (era legada do nsgdb).
+DEFAULT_MODEL = "BAAI/bge-m3"
 DEFAULT_PORT = 8788
 BATCH_SIZE = 32
 
@@ -144,7 +146,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="embed_server AETHER (384d, offline por default)")
+    ap = argparse.ArgumentParser(description="embed_server AETHER (default BGE-M3 1024d, offline por default)")
     ap.add_argument("--model", default=os.environ.get("AETHER_EMBED_MODEL", DEFAULT_MODEL))
     ap.add_argument("--port", type=int, default=int(os.environ.get("AETHER_EMBED_PORT", DEFAULT_PORT)))
     ap.add_argument(
