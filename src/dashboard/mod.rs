@@ -35,12 +35,18 @@ pub use dec_view::{
 };
 pub use demo_trace::{DemoSample, DemoTrace};
 pub use f4_view::{f4_detail, f4_program_line, load_f4_view, F4View};
-pub use hitl_view::{hitl_detail, hitl_program_line, load_hitl_view, HitlBand, HitlView};
 pub use fmt::fmt_compact;
 pub use gaps::{Gap, GapSeverity};
+pub use hitl_view::{
+    hitl_detail, hitl_program_line, load_hitl_view, HitlBand, HitlDecisionSummary, HitlQueueItem,
+    HitlView,
+};
 pub use host_probe::{host_report_path, load_host_report, probe_and_save, HostReport};
 pub use jobs::{JobKind, JobPhase, JobRunner, JobSnapshot};
-pub use model::{load_scorecard, DimCard, ScorecardView, ThroughputRegime, ThroughputView};
+pub use model::{
+    load_scorecard, DimCard, ScorecardView, ThroughputRegime, ThroughputView,
+    SCORECARD_EXPECTED_DIMS,
+};
 pub use transplant_view::{
     dest_detail, gates_detail, load_transplant_view, origin_detail, DonationOrigin,
     TransplantGates, TransplantView, UsoCase,

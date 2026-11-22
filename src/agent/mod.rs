@@ -41,13 +41,13 @@ pub mod coherence;
 pub mod dec_status;
 pub mod dec_upgrade;
 pub mod embed;
-pub mod gemma_scribe;
-pub mod hitl_queue;
 pub mod eval;
 pub mod executor;
 pub mod experts;
+pub mod gemma_scribe;
 pub mod hier_moe;
 pub mod hitl;
+pub mod hitl_queue;
 pub mod language;
 pub mod learner;
 pub mod linucb;
@@ -55,8 +55,8 @@ pub mod nl_out;
 pub mod ocr;
 pub mod planner;
 pub mod predict;
-pub mod risk_policy;
 pub mod registry;
+pub mod risk_policy;
 pub mod router;
 pub mod self_model;
 pub mod semantic;
@@ -80,6 +80,11 @@ use self::experts::{default_experts, Expert};
 pub use self::experts::{MemoryCitations, RecallCitation};
 use self::router::MoERouter;
 
+pub use a8_v1::{
+    a8_v1_flag, criteria as a8_v1_criteria, enter_v1_allowed, enter_v1_default,
+    write_criteria_artifact as write_a8_v1_criteria, A8V1Criterion, A8_V1_CRITERIA_PATH,
+};
+pub use bus::{promote_key_255, run_trio_turn, TrioOpts, TrioTurn, LEARN_AUTH_CAP};
 pub use dec_status::DecTomadaStatus;
 pub use dec_upgrade::{
     abort_rollback, active_model_paths, apply_smoke_result, begin_upgrade, cutover_promote,
@@ -87,44 +92,33 @@ pub use dec_upgrade::{
     mark_download_approved, revert_previous, CatalogReader, DecLamps, DecSlot, DecUpgradePhase,
     DecUpgradeState, LampColor, ACTIVE_LOCK, CATALOG_PATH, STATE_PATH as DEC_UPGRADE_STATE_PATH,
 };
-pub use a8_v1::{
-    a8_v1_flag, criteria as a8_v1_criteria, enter_v1_allowed, enter_v1_default,
-    write_criteria_artifact as write_a8_v1_criteria, A8V1Criterion, A8_V1_CRITERIA_PATH,
-};
-pub use bus::{
-    promote_key_255, run_trio_turn, TrioOpts, TrioTurn, LEARN_AUTH_CAP,
-};
-pub use hitl_queue::{
-    append_decision, enqueue as hitl_enqueue, enqueue_promote, load_pending as hitl_load_pending,
-    HITL_DECISIONS_PATH, HITL_QUEUE_PATH,
-};
 pub use embed::{EmbedEra, EmbedPort, EmbedVector};
 pub use eval::{default_eval_path, EvalReport, EvalTier};
 pub use executor::ToolExecutor;
-pub use hier_moe::{lsh_route_refuse, HierMoeStatus, HIER_MOE_STATUS_PATH};
-pub use hitl::{apply_hitl, HitlDecision, HitlKind, HitlRequest};
-pub use language::{
-    adapt_text, GoalSchema, LanguageCaps, LanguageError, LanguageParseTool, LanguagePort,
-    ParserPort, Style, Style as LanguageStyle,
-};
 pub use gemma_scribe::{
     active_scribe_path, ensure_scribe_fields_on_active_lock, scribe_opt_in, scribe_runtime_policy,
     vram_free_from_host_report, GemmaScribePort, ScribeRuntime, DEFAULT_AND_PEAK_MB, ENV_SCRIBE,
 };
+pub use hier_moe::{lsh_route_refuse, HierMoeStatus, HIER_MOE_STATUS_PATH};
+pub use hitl::{apply_hitl, HitlDecision, HitlKind, HitlRequest};
+pub use hitl_queue::{
+    append_decision, enqueue as hitl_enqueue, enqueue_promote,
+    load_decisions as hitl_load_decisions, load_pending as hitl_load_pending,
+    load_unresolved as hitl_load_unresolved, queue_exists, rewrite_queue_without,
+    HITL_DECISIONS_PATH, HITL_QUEUE_PATH,
+};
+pub use language::{
+    adapt_text, GoalSchema, LanguageCaps, LanguageError, LanguageParseTool, LanguagePort,
+    ParserPort, Style, Style as LanguageStyle,
+};
+pub use learner::{EpisodeRecord, Learner};
+pub use linucb::{goal_features, linucb_enabled, ContextualTools, LinUcb, LINUCB_DIM};
 pub use nl_out::{
     certify_utterance, certify_utterance_template, judge_claim_text, CertifiedUtterance,
 };
 pub use ocr::{DocRef, OcrPort, OcrResult};
-pub use predict::PredictExpert;
-pub use speech::{SttPort, SttResult, TtsPort, TtsResult};
-pub use tnl_in::{
-    gate_fixtures as tnl_in_gate_fixtures, tnl_in_contract_json, write_tnl_in_contract,
-    TNL_IN_CONTRACT_PATH, TNL_IN_CONTRACT_VERSION,
-};
-pub use vision::{VisionObs, VisionPort, VISION_AUTH_CAP};
-pub use learner::{EpisodeRecord, Learner};
-pub use linucb::{goal_features, linucb_enabled, ContextualTools, LinUcb, LINUCB_DIM};
 pub use planner::{PlanStep, Planner};
+pub use predict::PredictExpert;
 pub use predict::{
     forecast_series, metacog_should_abstain, parse_series_query, PredictReport, NRMSE_OOD,
     PREDICT_AUTH_CAP, WASHOUT_MIN,
@@ -136,26 +130,32 @@ pub use risk_policy::{
     RISK_MATRIX,
 };
 pub use self_model::SelfModel;
+pub use speech::{SttPort, SttResult, TtsPort, TtsResult};
+pub use telemetry::{goal_label, EpisodeTrace, StepTrace};
+pub use tnl_in::{
+    gate_fixtures as tnl_in_gate_fixtures, tnl_in_contract_json, write_tnl_in_contract,
+    TNL_IN_CONTRACT_PATH, TNL_IN_CONTRACT_VERSION,
+};
 pub use tool::{
     Budget, Cost, Effect, Goal, GoalKind, Risk, Snapshot, SuccessCriteria, Tool, ToolContext,
     ToolError, ToolOutcome, ToolSchema, UndoBackend, UndoOp, VerifiedFact, WorldState,
     AUTHORITY_CORROBORATED, AUTHORITY_HITL, AUTHORITY_QUARANTINE, AUTHORITY_VERIFIED,
 };
-pub use telemetry::{goal_label, EpisodeTrace, StepTrace};
 pub use tool_agent::{GoalOutcome, ToolAgent, VerifyTool};
 pub use tools::{
     claims_from_research_json, code_generate_mode, code_lm_caps, coder_t3_generator_declared,
     default_coder_t3_path, extract_json_object, grammar_parse_rate, is_research_persist_goal,
     parse_constrained, pass_at_k, rasp_resolve_anchor, research_network_enabled,
     research_persist_authority, resolve_sandbox_path, run_coder_t3, shell_kill_switch, shell_mode,
-    CodeApplyProposalTool, CodeAstGrepTool, CodeCheckTool, CodeEvalTool, CodeGenerateTool,
-    CodeGenMode, CodeGrammarTool, CodeLmCaps, CodeLmTool, CodeLoopTool, CodePatchTool,
+    CodeApplyProposalTool, CodeAstGrepTool, CodeCheckTool, CodeEvalTool, CodeGenMode,
+    CodeGenerateTool, CodeGrammarTool, CodeLmCaps, CodeLmTool, CodeLoopTool, CodePatchTool,
     CodeTestTool, CoderT3Report, FsReadTool, FsWriteTool, GoalProposeTool, HttpGetTool,
     McpCallTool, MemoryWriteTool, PatchOp, PatchProposal, PredictSeriesTool, ResearchExpandTool,
-    ResearchQueryTool, ShellMode, ShellTool, CODE_AUTH_CAP, CODER_T3_PILOT, RESEARCH_AUTH_CAP,
+    ResearchQueryTool, ShellMode, ShellTool, CODER_T3_PILOT, CODE_AUTH_CAP, RESEARCH_AUTH_CAP,
     SHELL_AUTH_CAP,
 };
 pub use undo_sgdb::SgdbUndoBackend;
+pub use vision::{VisionObs, VisionPort, VISION_AUTH_CAP};
 
 /// Identidade estável de um especialista (1 byte para logs).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

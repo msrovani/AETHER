@@ -23,8 +23,8 @@ Single-flight global: um job por vez em Lab/Testes IA. Console IA usa HTTP próp
 | Região | Conteúdo |
 |---|---|
 | Barra superior | **AETHER** + versão + frase de fronteira (*LLM gera; AETHER cita, certifica ou abstem.*) + seletor Lab \| Testes IA \| Console IA + jobs da aba ativa + status |
-| Centro (Lab e Testes IA) | Faixa **Situação**: cartão Programa (versão, fronteira, ACQ, API eval, agente) e cartão Online (job, demo, SGDB, última sonda de CPU/RAM) |
-| Centro (Lab) | ACQ, cobertura, hot-path, **F4** (congelada), **T-DEC** (Vega + readers; Gemma = sentinela ∧ escriba, 1 artefato; dual-bank; [`USER_GUIDE.md`](USER_GUIDE.md) §7c · [`GEMMA_SENTINEL_SCRIBE.md`](GEMMA_SENTINEL_SCRIBE.md)), **T-HITL**, T01–T12, vazão, doação, gaps, host |
+| Centro (Lab) | Faixa **semáforo** (ACQ/F4/T-DEC/HITL + caminhos de origem) → Situação → Visão global → F4 → T-DEC → **T-HITL** (lista clicável da fila + ficha do pedido + Approve/Deny/Ampliar + histórico de decisões) → T01–T12… |
+| Centro (Lab e Testes IA) | Cartões Programa/Online; ACQ só verde com **12/12** dims; F4 vermelho se híbrido &lt; gate; fontes explícitas (`aether_scorecard.json`, `data/embed_eval_last.json`) |
 | Centro (Console IA) | Chat → API `/v1/chat/completions` no **fio trio** (`bus`: T-NL-IN parse → solve → CertifiedUtterance); abstain = “não sei”; learn ≤120 enfileira promote HITL |
 | Centro (Testes IA) | Grade U1–U6, tabela API eval, painel ask/cite/abstain, contrato usabilidade |
 | Centro (Console IA) | Histórico chat + campo pergunta + escopo (org/run/app) + URL API (`AETHER_API_URL` ou `http://127.0.0.1:8787`) |

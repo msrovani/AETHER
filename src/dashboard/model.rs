@@ -51,6 +51,9 @@ pub struct ThroughputView {
     pub regimes: Vec<ThroughputRegime>,
 }
 
+/// Dimensões canônicas da suite cognitiva (T01–T12).
+pub const SCORECARD_EXPECTED_DIMS: usize = 12;
+
 /// Visão agregada para a UI.
 #[derive(Clone, Debug, Default)]
 pub struct ScorecardView {
@@ -61,6 +64,26 @@ pub struct ScorecardView {
     pub dimensions: Vec<DimCard>,
     pub throughput: Option<ThroughputView>,
     pub load_error: Option<String>,
+}
+
+impl ScorecardView {
+    /// Suite completa = 12 dims MEASURED/PRESENT. Parcial não pode ostentar ACQ verde.
+    pub fn is_complete(&self) -> bool {
+        self.load_error.is_none() && self.dimensions.len() >= SCORECARD_EXPECTED_DIMS
+    }
+
+    pub fn dims_label(&self) -> String {
+        format!("{}/{}", self.dimensions.len(), SCORECARD_EXPECTED_DIMS)
+    }
+
+    /// Origem curta para o hub (arquivo).
+    pub fn source_label(&self) -> String {
+        self.path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("scorecard")
+            .to_string()
+    }
 }
 
 #[derive(Deserialize)]

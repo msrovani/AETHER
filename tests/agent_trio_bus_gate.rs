@@ -13,7 +13,7 @@ fn gate_trio_bus_fio_comum() {
 
     let oov = run_trio_turn("xyzzy blorp 99", &TrioOpts::default());
     assert_eq!(oov.verdict, "abstain");
-    assert_eq!(oov.content, "não sei");
+    assert!(oov.content.starts_with("não sei"));
     let ev = oov.evidence.to_string();
     assert!(ev.contains("tnl_in_version"));
     assert!(ev.contains("language_caps"));
@@ -26,12 +26,16 @@ fn gate_trio_bus_fio_comum() {
         "cite" | "act" | "abstain" | "propose"
     ));
     if ask.verdict != "abstain" {
-        assert!(ask.utterance.as_ref().map(|u| u.may_speak_fact()).unwrap_or(true));
+        assert!(ask
+            .utterance
+            .as_ref()
+            .map(|u| u.may_speak_fact())
+            .unwrap_or(true));
     } else {
         assert_eq!(ask.content, "não sei");
     }
 
-    assert!(LEARN_AUTH_CAP <= 120);
+    const _: () = assert!(LEARN_AUTH_CAP <= 120);
 
     let _ = std::fs::remove_file(HITL_QUEUE_PATH);
     hitl_enqueue(&HitlRequest {

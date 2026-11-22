@@ -55,8 +55,10 @@ impl Default for ConsolePane {
             input: String::new(),
             messages: vec![ChatMsg {
                 role: ChatRole::System,
-                text: "Coprocessador: pergunta → cite/act com evidência, ou abstain. \
-Não gera prosa livre. Suba a API: cargo run --release --bin aether-api --features api"
+                text: "Coprocessador (não chatbot): cite/act com evidência, senão abstain.\n\
+Ex. que funciona: «qual a capital do Brasil?»\n\
+«oi» / prosa livre → abstain (OOV). API: cargo run --release --bin aether-api --features api\n\
+SGDB: defina AETHER_SGDB_STDIO/.env para citar memória em OOV."
                     .into(),
                 verdict: String::new(),
             }],
@@ -141,10 +143,10 @@ pub fn draw_console(ui: &mut egui::Ui, pane: &mut ConsolePane) {
     pane.poll();
 
     ui.horizontal(|ui| {
-        ui.label(RichText::new("Console IA").strong());
+        ui.label(RichText::new("Console IA").strong().size(22.0));
         ui.label(
-            RichText::new("· acionamento manual · cite / act / abstain")
-                .small()
+            RichText::new("· cite / act / abstain · não é LLM")
+                .size(16.0)
                 .color(Color32::from_rgb(140, 150, 165)),
         );
     });
@@ -153,7 +155,7 @@ pub fn draw_console(ui: &mut egui::Ui, pane: &mut ConsolePane) {
             "API {}  ·  escopo org:{} run:{} app:{}",
             pane.base_url, pane.organism, pane.run, pane.app
         ))
-        .small()
+        .size(15.0)
         .color(Color32::from_rgb(120, 130, 145)),
     );
     ui.add_space(6.0);
@@ -233,10 +235,21 @@ fn draw_bubble(ui: &mut egui::Ui, m: &ChatMsg) {
                 "error" => Color32::from_rgb(200, 90, 90),
                 _ => Color32::GRAY,
             };
-            ui.label(RichText::new(format!("[{}]", m.verdict)).small().color(vc));
+            ui.label(
+                RichText::new(format!("[{}]", m.verdict))
+                    .size(15.0)
+                    .color(vc),
+            );
         }
     });
-    ui.label(RichText::new(&m.text).color(Color32::from_rgb(210, 215, 220)));
+    ui.add(
+        egui::Label::new(
+            RichText::new(&m.text)
+                .size(17.0)
+                .color(Color32::from_rgb(210, 215, 220)),
+        )
+        .wrap(),
+    );
 }
 
 fn parse_chat_reply(raw: &str) -> ChatMsg {

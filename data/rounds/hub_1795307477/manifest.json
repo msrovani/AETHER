@@ -1,0 +1,62 @@
+{
+  "donor": "Qwen/Qwen3-Embedding-0.6B",
+  "revision": "jl-only-smoke",
+  "dim_in": 768,
+  "dim_hv": 10240,
+  "words": 160,
+  "seed": 3735928559,
+  "count": 205,
+  "labels": 205,
+  "facts": 205,
+  "whitened": false,
+  "sha256_whitening": null,
+  "sha256_embeds": "815e2fa5a31d1eeee814c550ffe8ae99868dc593a7a2b00baf9622f7822ffa1d",
+  "sha256_bank": "9b8bfaddcacd9a845b6333dd65225cfad499048b81feac4888b1c8c5fbc06f8f",
+  "shards": [
+    {
+      "relation": "capital",
+      "offset": 0,
+      "count": 20
+    },
+    {
+      "relation": "é_um",
+      "offset": 0,
+      "count": 41
+    },
+    {
+      "relation": "é",
+      "offset": 0,
+      "count": 20
+    },
+    {
+      "relation": "é_uma",
+      "offset": 0,
+      "count": 48
+    },
+    {
+      "relation": "é_uma",
+      "offset": 48,
+      "count": 14
+    },
+    {
+      "relation": "orbita",
+      "offset": 0,
+      "count": 21
+    },
+    {
+      "relation": "usa",
+      "offset": 0,
+      "count": 21
+    },
+    {
+      "relation": "minimiza",
+      "offset": 0,
+      "count": 20
+    }
+  ],
+  "conflicts_planted": 5,
+  "conflicts_detected": 5,
+  "authority_max_transplant": 240,
+  "created": "2026-11-17",
+  "claim": "MSG 0229 INTAKE_TRANSPLANT"
+}

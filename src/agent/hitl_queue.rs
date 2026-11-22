@@ -40,12 +40,57 @@ pub fn enqueue_promote(
     enqueue(&req)
 }
 
-/// Lê pedidos pendentes (todas as linhas; hub filtra já decididos se quiser).
+/// Lê pedidos da outbox (todas as linhas; hub filtra já decididos).
 pub fn load_pending() -> Vec<HitlRequest> {
     read_jsonl(HITL_QUEUE_PATH)
         .into_iter()
         .filter_map(parse_request)
         .collect()
+}
+
+/// `true` se o arquivo da outbox existe (mesmo vazio).
+pub fn queue_exists() -> bool {
+    Path::new(HITL_QUEUE_PATH).is_file()
+}
+
+/// Lê decisões do audit (ordem de arquivo = cronológica).
+pub fn load_decisions() -> Vec<HitlDecision> {
+    read_jsonl(HITL_DECISIONS_PATH)
+        .into_iter()
+        .filter_map(parse_decision)
+        .collect()
+}
+
+/// Conjunto de `request_id` já decididos (última decisão vence para o id).
+pub fn decided_ids() -> std::collections::HashSet<u64> {
+    load_decisions().into_iter().map(|d| d.request_id).collect()
+}
+
+/// Pedidos ainda pendentes: outbox menos ids com decisão.
+pub fn load_unresolved() -> Vec<HitlRequest> {
+    let done = decided_ids();
+    load_pending()
+        .into_iter()
+        .filter(|r| !done.contains(&r.request_id))
+        .collect()
+}
+
+/// Reescreve a outbox sem o `request_id` resolvido (decisões ficam append-only).
+pub fn rewrite_queue_without(request_id: u64) -> Result<(), String> {
+    let kept: Vec<HitlRequest> = load_pending()
+        .into_iter()
+        .filter(|r| r.request_id != request_id)
+        .collect();
+    let p = PathBuf::from(HITL_QUEUE_PATH);
+    if let Some(parent) = p.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let mut body = String::new();
+    for req in &kept {
+        body.push_str(&req.to_json().to_string());
+        body.push('\n');
+    }
+    fs::write(&p, body).map_err(|e| e.to_string())
 }
 
 /// Append decisão (audit).
@@ -112,17 +157,71 @@ fn parse_request(j: Json) -> Option<HitlRequest> {
     })
 }
 
+fn parse_decision(j: Json) -> Option<HitlDecision> {
+    use super::Action;
+    let request_id = j.get("request_id")?.as_u64()?;
+    let approved = j.get("approved")?.as_bool()?;
+    let token_present = j
+        .get("token_present")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let timed_out = j
+        .get("timed_out")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let authority = j.get("authority").and_then(|a| a.as_u64()).unwrap_or(0) as u8;
+    let action = match j
+        .get("action")
+        .and_then(|a| a.as_str())
+        .unwrap_or("abstain")
+    {
+        "act" => Action::Act,
+        "cite" => Action::Cite,
+        "propose" => Action::Propose,
+        _ => Action::Abstain,
+    };
+    let detail = j
+        .get("detail")
+        .and_then(|d| d.as_str())
+        .unwrap_or("")
+        .to_string();
+    Some(HitlDecision {
+        request_id,
+        approved,
+        token_present,
+        timed_out,
+        authority,
+        action,
+        detail,
+    })
+}
+
 /// Path helper (testes).
 pub fn queue_path() -> &'static Path {
     Path::new(HITL_QUEUE_PATH)
 }
 
+/// Trava dos testes: a outbox e o audit de decisões são arquivos globais em
+/// `target/` e o `cargo test` roda testes em paralelo — sem esta trava,
+/// `remove_file` de um teste corrói o `append` de outro (raça intermitente).
+#[cfg(test)]
+pub(crate) static HITL_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::Action;
+
+    /// Guarda o arquivo compartilhado durante o teste.
+    fn lock() -> std::sync::MutexGuard<'static, ()> {
+        HITL_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 
     #[test]
     fn enqueue_e_load() {
+        let _g = lock();
         let _ = fs::remove_file(HITL_QUEUE_PATH);
         enqueue_promote(42, "md/L3/test", 96, "sanção").unwrap();
         let pending = load_pending();
@@ -132,5 +231,36 @@ mod tests {
             pending.last().unwrap().subject.as_deref(),
             Some("md/L3/test")
         );
+    }
+
+    #[test]
+    fn rewrite_remove_id() {
+        let _g = lock();
+        let _ = fs::remove_file(HITL_QUEUE_PATH);
+        enqueue_promote(1001, "md/L3/a", 96, "a").unwrap();
+        enqueue_promote(1002, "md/L3/b", 96, "b").unwrap();
+        rewrite_queue_without(1001).unwrap();
+        let left: Vec<_> = load_pending().into_iter().map(|r| r.request_id).collect();
+        assert!(!left.contains(&1001));
+        assert!(left.contains(&1002));
+    }
+
+    #[test]
+    fn unresolved_filtra_decidido() {
+        let _g = lock();
+        let _ = fs::remove_file(HITL_QUEUE_PATH);
+        let _ = fs::remove_file(HITL_DECISIONS_PATH);
+        enqueue_promote(2001, "md/L3/x", 96, "x").unwrap();
+        append_decision(&HitlDecision {
+            request_id: 2001,
+            approved: false,
+            token_present: false,
+            timed_out: false,
+            authority: 96,
+            action: Action::Abstain,
+            detail: "test deny".into(),
+        })
+        .unwrap();
+        assert!(load_unresolved().is_empty());
     }
 }

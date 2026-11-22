@@ -71,10 +71,7 @@ pub fn run_trio_turn(text: &str, opts: &TrioOpts) -> TrioTurn {
         ),
         (
             "parse_intent".into(),
-            report
-                .intent
-                .map(Json::str)
-                .unwrap_or(Json::Null),
+            report.intent.map(Json::str).unwrap_or(Json::Null),
         ),
         (
             "unconsumed".into(),
@@ -100,28 +97,14 @@ pub fn run_trio_turn(text: &str, opts: &TrioOpts) -> TrioTurn {
         return trio_oov(text, report.confidence, &mut fields, opts);
     }
     let goal = report.goal.clone().unwrap();
-    trio_goal(
-        goal,
-        report.confidence,
-        report.intent,
-        &mut fields,
-        opts,
-    )
+    trio_goal(goal, report.confidence, report.intent, &mut fields, opts)
 }
 
-fn trio_oov(
-    text: &str,
-    conf: f32,
-    fields: &mut Vec<(String, Json)>,
-    opts: &TrioOpts,
-) -> TrioTurn {
+fn trio_oov(text: &str, conf: f32, fields: &mut Vec<(String, Json)>, opts: &TrioOpts) -> TrioTurn {
     fields.push(("abstain".into(), Json::Bool(true)));
     fields.push(("verdict".into(), Json::str("abstain")));
     fields.push(("reason".into(), Json::str("oov_or_empty")));
-    fields.push((
-        "parse_oov".into(),
-        Json::Bool(conf <= ABSTAIN_CEILING),
-    ));
+    fields.push(("parse_oov".into(), Json::Bool(conf <= ABSTAIN_CEILING)));
 
     let mut citations_json = Vec::new();
     let mut claims: Vec<Claim> = Vec::new();
@@ -172,8 +155,18 @@ fn trio_oov(
     }
 
     fields.push(("certified".into(), Json::Null));
+    // Mensagem honesta: abstain ≠ silêncio seco — orienta pergunta factual.
+    let tip = text.trim();
+    let content = if tip.chars().count() <= 16 && !tip.contains('?') {
+        format!(
+            "não sei — «{tip}» não é pergunta factual (OOV). Ex.: «qual a capital do Brasil?» · cite/act só com evidência."
+        )
+    } else {
+        "não sei — sem evidência no léxico/memória para citar. Reformule como fato (sujeito + relação) ou aponte SGDB."
+            .into()
+    };
     TrioTurn {
-        content: "não sei".into(),
+        content,
         verdict: "abstain",
         evidence: Json::Obj(fields.clone()),
         utterance: None,
@@ -296,7 +289,7 @@ fn trio_goal(
     match certify_with_scribe_or_template(&outcome.claims, outcome.action, fields) {
         Some(utt) => {
             if opts.learn {
-                let auth = utt.auth.min(LEARN_AUTH_CAP).max(AUTHORITY_QUARANTINE);
+                let auth = utt.auth.clamp(AUTHORITY_QUARANTINE, LEARN_AUTH_CAP);
                 if let Some(key) = learn_text(
                     opts.sgdb.as_deref(),
                     &format!("learn/{verdict}: {}", utt.text),
@@ -416,8 +409,7 @@ fn learn_text(sgdb: Option<&str>, text: &str, auth: u8) -> Option<String> {
 pub fn promote_key_255(sgdb: Option<&str>, key: &str) -> Result<(), String> {
     let spec = sgdb.ok_or_else(|| "sgdb ausente".to_string())?;
     let cfg = SgdbConfig::from_env();
-    let mut client: SgdbClient<Box<dyn Transport>> =
-        open(spec, cfg).map_err(|e| e.to_string())?;
+    let mut client: SgdbClient<Box<dyn Transport>> = open(spec, cfg).map_err(|e| e.to_string())?;
     client
         .call_tool(
             "curate",
@@ -475,7 +467,7 @@ mod tests {
     fn oov_abstain_nao_sei() {
         let turn = run_trio_turn("xyzzy blorp", &TrioOpts::default());
         assert_eq!(turn.verdict, "abstain");
-        assert_eq!(turn.content, "não sei");
+        assert!(turn.content.starts_with("não sei"));
         assert!(turn.evidence.to_string().contains("tnl_in_version"));
     }
 
@@ -483,15 +475,12 @@ mod tests {
     fn ask_brasil_produz_certified_ou_abstain() {
         let turn = run_trio_turn("ask Brasil capital", &TrioOpts::default());
         assert!(
-            matches!(
-                turn.verdict,
-                "cite" | "act" | "abstain" | "propose"
-            ),
+            matches!(turn.verdict, "cite" | "act" | "abstain" | "propose"),
             "{}",
             turn.verdict
         );
         if turn.verdict == "abstain" {
-            assert_eq!(turn.content, "não sei");
+            assert!(turn.content.starts_with("não sei"));
         } else {
             assert!(!turn.content.is_empty());
         }
