@@ -56,7 +56,8 @@ Seis lints travavam `clippy --all-targets -- -D warnings`. Fix mecânico: `for i
   só de docs vira `wip(cycle)` sem bump. Tag automática só com versão
   `< 0.1.0`; daí em diante é pedido humano.
 - O script é quem grava `.cycle/state.json` (e `CYCLE_LOG.md` quando há
-  mudança). `data/cycle_gate.json` **não** é gravado por ele — vem de
+  mudança). **`.cycle/` é gitignored**: `git add .cycle/state.json` falha e
+  aborta a cadeia `&&` — o estado é local, não se commita. `data/cycle_gate.json` **não** é gravado por ele — vem de
   `python tools/cycle_gate.py` (só imprime JSON; redirecionar).
 - Release manual (padrão 0.5.x): `Cargo.toml` + `Cargo.lock`, `CHANGELOG.md`,
   `docs/RELEASE_0_5_x.md`, commit `chore(release): ...`; push separado.
