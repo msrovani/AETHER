@@ -84,6 +84,7 @@ Horizontes:
 | **Disjuntor** | OOD série → abstain; sem cert → cite only |
 | **Escada** | reservatório / Koopman (ROADMAP P5); E8 já medido em lab |
 | **Deps** | T-MOE M3 expert novo; [`MOE_ETL_PACK.md`](MOE_ETL_PACK.md) |
+| **Estado hoje** | **vivo** — `PredictExpert` + tool `predict.series` (`predict.rs`, A8); `enter_v1_default=false` até sanção HITL |
 | **Aceite** | gate NRMSE/calibração no artefato; false-act ≤ limiar |
 
 ### T-OCR — Documento → texto
@@ -92,6 +93,7 @@ Horizontes:
 | **Contrato** | `DocRef` → texto UTF-8 + conf + spans |
 | **Fio** | **T-OCR** → T-NL-IN e/ou T-PACK (ETL) → core |
 | **Disjuntor** | conf baixa → ask; PII deny |
+| **Estado hoje** | **vivo stub** — contrato `DocRef`→texto em `ocr.rs`; falta backend real atrás de `feature ocr` (off) |
 | **Nota** | pode ser ramo de T-VIS (V*); não duplicar pixels no core |
 | **Deps** | [`VISAO_AETHER.md`](VISAO_AETHER.md) V2+ ou sidecar Python |
 | **Aceite** | mesmo gates de STT conf → não chutar Goal |

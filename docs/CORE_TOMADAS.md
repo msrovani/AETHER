@@ -72,13 +72,13 @@ escada de produto, estado.
 | **T-PLAN** | planner + executor | Goal → PlanStep* + rollback | risk_ceiling / allowlist | A0–A7 | **vivo** (mundo A4) |
 | **T-COH** | coherence | claims → Action | contradição → abstain/cite | — | **vivo** |
 | **T-AUTH** | autoridade / HITL | claim auth 60…255 | ≥200/255 só HITL; LLM≤120 | todas | **vivo** |
-| **T-HITL** | `HitlRequest`→`HitlDecision` + matriz A7 | promote/deny/ampliar + audit; High always | timeout→abstain; 255/`AETHER_AGENT_KILL` | A7 | **vivo** (`hitl.rs` + hub `hitl_view`) |
+| **T-HITL** | `HitlRequest`→`HitlDecision` + matriz A7 | promote/deny/ampliar + audit; High always | timeout→abstain; 255/`AETHER_AGENT_KILL` | A7 | **vivo** (`hitl.rs` + outbox `hitl_queue` + hub `hitl_view`: fila, ficha, approve/deny/ampliar, histórico; API) |
 
 ### 2.3 Saída (atuação / render)
 
 | ID | Nome | Contrato | Disjuntor | Escada | Estado |
 |---|---|---|---|---|---|
-| **T-NL-OUT** | `LanguagePort::generate` + juíz P2 | claims → `CertifiedUtterance` | sem evidência → Empty; falso settled | P1–P2 | **vivo (P2)** |
+| **T-NL-OUT** | `LanguagePort::generate` + juíz P2 | claims → `CertifiedUtterance` | sem evidência → Empty; falso settled | P1–P2 | **vivo (P2)**; escriba Gemma opt-in `AETHER_SCRIBE` (`gemma_scribe.rs`, sentinela ∧ escriba) |
 | **T-CODE** | `code.*` …/lm/eval + `shell.exec` | Goal→sandbox→verify/patch; T3; shell HITL | falso merge; G-A4; auth≤120; shell never default | K0–K8 | **vivo K1–K8** (`agent_coder_gate`) |
 | **T-FS** | `fs.read` / `fs.write` | path relativo → bytes sob `sandbox_root` | traversal / escape | A4 | **vivo** (`tests/agent_safety_gate`) |
 | **T-HTTP** | `http.get` | URL → body/claim; GET only | host fora allowlist; POST | A4 | **vivo** (fetch opt-in) |
