@@ -12,6 +12,20 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
 - `host_probe`: campos `vram_free_mb` / `vram_total_mb` / `gpu_name` (nvidia-smi).
 - Smoke T-DEC `--live` com schema vegaml dict; parcial honesto se primary ausente.
 
+## [0.5.6] - 2026-11-22
+
+### Changed
+
+- **Fila de tomadas reordenada por dependência** (`docs/TOMADAS_FUTURO.md`):
+  classes A (só código) → B (sanção humana) → C (backend/modelo externo) →
+  D (hardware), com ordem crescente de pré-requisitos dentro da classe.
+- `docs/CORE_TOMADAS.md` §9 e cabeçalho apontam para a fila por dependência.
+- `docs/BUFFY_LEARNINGS.md` §4–§6 (fila, truncamento de heredoc, ciclo).
+
+### Notes
+
+- Sem mudança de código: fmt/clippy/gates seguem os de 0.5.5.
+
 ## [0.5.5] - 2026-11-21
 
 ### Added
