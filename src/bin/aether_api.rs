@@ -50,6 +50,8 @@ fn parse_u64(raw: &str, flag: &str) -> std::io::Result<u64> {
 }
 
 fn main() -> std::io::Result<()> {
+    // Memória do chat: carrega `.env` (AETHER_SGDB_*) sem sobrescrever o ambiente.
+    load_repo_dotenv();
     let mut cfg = ApiConfig::default();
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     let mut i = 0usize;
@@ -100,6 +102,30 @@ fn main() -> std::io::Result<()> {
         i += 1;
     }
 
+    // Sem --sgdb: herda AETHER_SGDB_STDIO/URL do .env (comando solto → stdio:…).
+    if cfg.sgdb.is_none() {
+        for key in ["AETHER_SGDB_STDIO", "AETHER_SGDB_URL"] {
+            if let Ok(spec) = std::env::var(key) {
+                let s = spec.trim();
+                if s.is_empty() {
+                    continue;
+                }
+                cfg.sgdb = Some(normalize_sgdb_spec(s));
+                break;
+            }
+        }
+    } else if let Some(spec) = cfg.sgdb.take() {
+        cfg.sgdb = Some(normalize_sgdb_spec(&spec));
+    }
+    if cfg.sgdb_outbox.is_none() {
+        if let Ok(p) = std::env::var("AETHER_SGDB_OUTBOX") {
+            let p = p.trim();
+            if !p.is_empty() {
+                cfg.sgdb_outbox = Some(PathBuf::from(p));
+            }
+        }
+    }
+
     let listener = api::bind(cfg.addr)?;
     let local = listener.local_addr()?;
     println!("aether-api {} em http://{local}", api::VERSION);
@@ -134,4 +160,60 @@ fn main() -> std::io::Result<()> {
     println!("  openai: OPENAI_BASE_URL=http://{local}/v1");
     println!("  threads: {}", cfg.threads.max(1));
     api::serve_listener(listener, cfg)
+}
+
+/// Prefixa `stdio:` quando o `.env` traz comando solto (MSG 1056).
+fn normalize_sgdb_spec(spec: &str) -> String {
+    let s = spec.trim();
+    if s.is_empty() {
+        return s.to_string();
+    }
+    if s == "mock"
+        || s.starts_with("http://")
+        || s.starts_with("https://")
+        || s.starts_with("stdio:")
+    {
+        return s.to_string();
+    }
+    format!("stdio:{s}")
+}
+
+/// Carrega `.env` na raiz do repo sem sobrescrever variáveis já definidas.
+fn load_repo_dotenv() {
+    let mut dir = match std::env::current_dir() {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+    for _ in 0..8 {
+        let cargo = dir.join("Cargo.toml");
+        let env_path = dir.join(".env");
+        if cargo.is_file() {
+            if let Ok(text) = std::fs::read_to_string(&env_path) {
+                for raw in text.lines() {
+                    let line = raw.trim();
+                    if line.is_empty() || line.starts_with('#') {
+                        continue;
+                    }
+                    let Some((key, value)) = line.split_once('=') else {
+                        continue;
+                    };
+                    let key = key.trim();
+                    if key.is_empty() || std::env::var_os(key).is_some() {
+                        continue;
+                    }
+                    let mut val = value.trim().to_string();
+                    if (val.starts_with('"') && val.ends_with('"') && val.len() >= 2)
+                        || (val.starts_with('\'') && val.ends_with('\'') && val.len() >= 2)
+                    {
+                        val = val[1..val.len() - 1].to_string();
+                    }
+                    std::env::set_var(key, val);
+                }
+            }
+            return;
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
 }

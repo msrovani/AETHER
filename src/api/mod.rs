@@ -1888,6 +1888,23 @@ fn completion(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
     )
 }
 
+/// `AETHER_SGDB_STDIO` no `.env` é comando solto; o cliente só aceita
+/// `mock` | `http://…` | `stdio:cmd` (mesma regra do agente / MSG 1056).
+fn normalize_sgdb_spec(spec: &str) -> String {
+    let s = spec.trim();
+    if s.is_empty() {
+        return s.to_string();
+    }
+    if s == "mock"
+        || s.starts_with("http://")
+        || s.starts_with("https://")
+        || s.starts_with("stdio:")
+    {
+        return s.to_string();
+    }
+    format!("stdio:{s}")
+}
+
 /// Evidência no fio comum T-NL-IN → MoE/coh → T-NL-OUT (P2) + learn/HITL.
 ///
 /// Recicla `run_trio_turn` (parser + CertifiedUtterance + n-sgdb). O ledger de
@@ -1895,7 +1912,7 @@ fn completion(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
 fn evidence_for(state: &mut ApiState, scope: ScopeId, text: &str) -> Json {
     use crate::agent::{run_trio_turn, TrioOpts};
 
-    let sgdb = state
+    let raw = state
         .sgdb
         .as_ref()
         .map(|_| {
@@ -1905,6 +1922,9 @@ fn evidence_for(state: &mut ApiState, scope: ScopeId, text: &str) -> Json {
         })
         .or_else(|| std::env::var("AETHER_SGDB_STDIO").ok())
         .or_else(|| std::env::var("AETHER_SGDB_URL").ok());
+    let sgdb = raw
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| normalize_sgdb_spec(&s));
 
     let opts = TrioOpts {
         sgdb,
