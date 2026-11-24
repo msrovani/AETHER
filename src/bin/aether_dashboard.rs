@@ -30,10 +30,12 @@ mod aether_dashboard_win {
         agent_ask_detail, api_case_detail, collect_wave_gaps, dec_detail, dec_lamps_line,
         dec_program_line, dest_detail, dimension_ficha, dimension_tooltip, draw_console, f4_detail,
         fmt_compact, gates_detail, global_tooltip, glossary_entries, hitl_detail,
-        hitl_program_line, load_agent_drive, load_api_eval, load_dec_view, load_f4_view,
+        agent_scorecard_line, hitl_program_line, load_agent_drive, load_agent_scorecard,
+        load_api_eval, load_dec_view, load_f4_view,
         load_hitl_view, load_host_report, load_scorecard, load_transplant_view, origin_detail,
         request_revert, request_upgrade, throughput_tooltip, upgrade_job_pending, AgentDriveReport,
-        ApiEvalReport, ConsolePane, DecView, DimFicha, F4View, Gap, GapSeverity, HitlBand,
+        AgentScorecardView, ApiEvalReport, ConsolePane, DecView, DimFicha, F4View, Gap,
+        GapSeverity, HitlBand,
         HitlView, HostReport, JobKind, JobPhase, JobRunner, ScorecardView, TransplantView,
         SCORECARD_EXPECTED_DIMS,
     };
@@ -213,6 +215,7 @@ mod aether_dashboard_win {
         view: ScorecardView,
         transplant: TransplantView,
         api_eval: ApiEvalReport,
+        agent_scorecard: AgentScorecardView,
         agent_drive: AgentDriveReport,
         f4: F4View,
         dec: DecView,
@@ -248,6 +251,7 @@ mod aether_dashboard_win {
             }
             self.transplant = load_transplant_view();
             self.api_eval = load_api_eval();
+            self.agent_scorecard = load_agent_scorecard();
             self.agent_drive = load_agent_drive();
             self.f4 = load_f4_view();
             self.dec = load_dec_view();
@@ -2482,6 +2486,24 @@ mod aether_dashboard_win {
         }
 
         fn draw_ai_agent(&mut self, ui: &mut egui::Ui) {
+            // A2 / T-EVAL — placar com linhagem (run_id + sha256 + tiers N/A).
+            let card = self.agent_scorecard.clone();
+            let accent = if !card.present {
+                theme::MUTED
+            } else if card.ok {
+                theme::OK
+            } else {
+                theme::BAD
+            };
+            ui.colored_label(accent, agent_scorecard_line(&card));
+            if card.present && !card.tiers_na.is_empty() {
+                ui.label(
+                    RichText::new(format!("tiers N/A: {}", card.tiers_na.join(", ")))
+                        .small()
+                        .color(theme::MUTED),
+                );
+            }
+            ui.add_space(6.0);
             self.section_header(ui, "Test drive agente (cite / abstain)",
                 "Corrida de demonstração do agente: Brasil e Atlântida → ação observada (cite / act / abstain).");
             let drive = self.agent_drive.clone();
@@ -2996,6 +3018,7 @@ mod aether_dashboard_win {
             view: ScorecardView::default(),
             transplant: TransplantView::default(),
             api_eval: ApiEvalReport::default(),
+            agent_scorecard: AgentScorecardView::default(),
             agent_drive: AgentDriveReport::default(),
             f4: F4View::default(),
             dec: load_dec_view(),

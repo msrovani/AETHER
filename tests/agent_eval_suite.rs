@@ -19,8 +19,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use aether_engine::agent::{Action, AgentConfig, Goal, GoalKind, Risk, SuccessCriteria, ToolAgent};
-use aether_engine::core::logic_pipeline::Clause3;
+use aether_engine::agent::scorecard::parse_goal_spec;
+use aether_engine::agent::{Action, AgentConfig, ToolAgent};
 use aether_engine::json::Json;
 
 /// Arquivo da suíte (relativo ao manifest: independe do CWD do harness).
@@ -90,7 +90,7 @@ fn t0_agent_eval_suite() {
     let mut mismatches: Vec<String> = Vec::new();
 
     for case in &cases {
-        let goal = parse_goal(&case.goal_spec).unwrap_or_else(|e| {
+        let goal = parse_goal_spec(&case.goal_spec).unwrap_or_else(|e| {
             panic!(
                 "caso `{}`: goal inválido `{}`: {e}",
                 case.id, case.goal_spec
@@ -304,190 +304,5 @@ fn temp_self_model_path() -> PathBuf {
     path
 }
 
-// ---------------------------------------------------------------------------
-// DSL de goal (ASCII, uma linha de JSON)
-//
-//   fact:<subject>:<relation>
-//   memory:<texto>                 (texto pode ser vazio)
-//   verify:<subject>
-//   act:<subject>:<relation>:<valor>:<low|medium|high>
-//   sat:<n>:<i,si,j,sj[,k,sk];...>
-//   qubo:<n>:<h csv>:<zeros | j csv>
-//   pipeline:<goal>|<goal>|...
-// ---------------------------------------------------------------------------
-
-fn parse_goal(spec: &str) -> Result<Goal, String> {
-    let spec = spec.trim();
-    if let Some(rest) = spec.strip_prefix("pipeline:") {
-        let mut steps = Vec::new();
-        for part in rest.split('|') {
-            steps.push(parse_goal(part)?);
-        }
-        if steps.is_empty() {
-            return Err("pipeline sem passos".into());
-        }
-        return Ok(Goal::pipeline(steps));
-    }
-    let (head, rest) = spec
-        .split_once(':')
-        .ok_or_else(|| format!("goal sem `tipo:` ({spec})"))?;
-    match head {
-        "fact" => {
-            let (subject, relation) = rest
-                .split_once(':')
-                .ok_or_else(|| "fact espera `<subject>:<relation>`".to_string())?;
-            require_nonempty(subject, "subject")?;
-            require_nonempty(relation, "relation")?;
-            Ok(Goal::fact(subject, relation))
-        }
-        "memory" => Ok(Goal::memory(rest)),
-        "verify" => {
-            require_nonempty(rest, "subject")?;
-            let mut goal = Goal::fact(rest, "verify");
-            goal.kind = GoalKind::Verify;
-            goal.relation = None;
-            goal.success = SuccessCriteria::Any;
-            Ok(goal)
-        }
-        "act" => {
-            let parts: Vec<&str> = rest.split(':').collect();
-            if parts.len() != 4 {
-                return Err("act espera `<subject>:<relation>:<valor>:<teto>`".into());
-            }
-            require_nonempty(parts[0], "subject")?;
-            require_nonempty(parts[1], "relation")?;
-            require_nonempty(parts[2], "valor")?;
-            let mut goal = Goal::fact(parts[0], parts[1]);
-            goal.kind = GoalKind::Act;
-            goal.query = Some(parts[2].to_string());
-            goal.success = SuccessCriteria::Claim {
-                subject: parts[0].to_string(),
-                relation: parts[1].to_string(),
-                value: Some(parts[2].to_string()),
-            };
-            goal.risk_ceiling = risk_from_label(parts[3])?;
-            Ok(goal)
-        }
-        "sat" => {
-            let (n, clauses_text) = rest
-                .split_once(':')
-                .ok_or_else(|| "sat espera `<n>:<clausulas>`".to_string())?;
-            let n: usize = n.parse().map_err(|_| format!("sat: n inválido `{n}`"))?;
-            require_positive(n, "sat n")?;
-            let mut clauses = Vec::new();
-            for clause in clauses_text.split(';') {
-                let clause = clause.trim();
-                if clause.is_empty() {
-                    continue;
-                }
-                clauses.push(parse_clause(clause)?);
-            }
-            Ok(Goal::satisfy(n, clauses))
-        }
-        "qubo" => {
-            let parts: Vec<&str> = rest.split(':').collect();
-            if parts.len() != 3 {
-                return Err("qubo espera `<n>:<h csv>:<zeros|j csv>`".into());
-            }
-            let n: usize = parts[0]
-                .parse()
-                .map_err(|_| format!("qubo: n inválido `{}`", parts[0]))?;
-            require_positive(n, "qubo n")?;
-            let h = parse_numbers(parts[1])?;
-            if h.len() != n {
-                return Err(format!("qubo: h com {} valores (esperado {n})", h.len()));
-            }
-            let j = if parts[2].trim() == "zeros" {
-                vec![0.0; n * n]
-            } else {
-                parse_numbers(parts[2])?
-            };
-            if j.len() != n * n {
-                return Err(format!(
-                    "qubo: j com {} valores (esperado {})",
-                    j.len(),
-                    n * n
-                ));
-            }
-            Ok(Goal::optimize(n, j, h))
-        }
-        other => Err(format!("tipo de goal desconhecido `{other}`")),
-    }
-}
-
-fn parse_clause(text: &str) -> Result<Clause3, String> {
-    let lit: Vec<&str> = text.split(',').map(str::trim).collect();
-    let parse = |value: &str, what: &str| -> Result<i64, String> {
-        value
-            .parse()
-            .map_err(|_| format!("cláusula `{text}`: {what} inválido `{value}`"))
-    };
-    match lit.len() {
-        4 | 6 => {}
-        _ => {
-            return Err(format!(
-                "cláusula `{text}`: 4 ou 6 campos, veio {}",
-                lit.len()
-            ))
-        }
-    }
-    let i = parse(lit[0], "i")?;
-    let si = parse(lit[1], "si")?;
-    let j = parse(lit[2], "j")?;
-    let sj = parse(lit[3], "sj")?;
-    let i = usize::try_from(i).map_err(|_| format!("cláusula `{text}`: i negativo"))?;
-    let j = usize::try_from(j).map_err(|_| format!("cláusula `{text}`: j negativo"))?;
-    let si = i8::try_from(si).map_err(|_| format!("cláusula `{text}`: si fora de i8"))?;
-    let sj = i8::try_from(sj).map_err(|_| format!("cláusula `{text}`: sj fora de i8"))?;
-    if lit.len() == 4 {
-        return Ok(Clause3::new2(i, si, j, sj));
-    }
-    let k = parse(lit[4], "k")?;
-    let sk = parse(lit[5], "sk")?;
-    let k = usize::try_from(k).map_err(|_| format!("cláusula `{text}`: k negativo"))?;
-    let sk = i8::try_from(sk).map_err(|_| format!("cláusula `{text}`: sk fora de i8"))?;
-    Ok(Clause3::new3(i, si, j, sj, k, sk))
-}
-
-fn parse_numbers(text: &str) -> Result<Vec<f64>, String> {
-    let mut out = Vec::new();
-    for part in text.split(',') {
-        let part = part.trim();
-        if part.is_empty() {
-            continue;
-        }
-        out.push(
-            part.parse::<f64>()
-                .map_err(|_| format!("número inválido `{part}`"))?,
-        );
-    }
-    if out.is_empty() {
-        return Err(format!("lista de números vazia (`{text}`)"));
-    }
-    Ok(out)
-}
-
-fn risk_from_label(label: &str) -> Result<Risk, String> {
-    match label.trim() {
-        "low" => Ok(Risk::Low),
-        "medium" => Ok(Risk::Medium),
-        "high" => Ok(Risk::High),
-        other => Err(format!("teto de risco desconhecido `{other}`")),
-    }
-}
-
-fn require_nonempty(value: &str, what: &str) -> Result<(), String> {
-    if value.trim().is_empty() {
-        Err(format!("{what} vazio"))
-    } else {
-        Ok(())
-    }
-}
-
-fn require_positive(value: usize, what: &str) -> Result<(), String> {
-    if value == 0 {
-        Err(format!("{what} deve ser > 0"))
-    } else {
-        Ok(())
-    }
-}
+// A DSL de goal vive em `aether_engine::agent::scorecard::parse_goal_spec`:
+// o placar A2 e este gate usam a mesma implementação (sem cópia).

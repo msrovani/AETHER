@@ -53,14 +53,17 @@ pub mod learner;
 pub mod linucb;
 pub mod nl_out;
 pub mod ocr;
+pub mod p2p;
 pub mod planner;
 pub mod predict;
 pub mod registry;
 pub mod risk_policy;
 pub mod router;
 pub mod self_model;
+pub mod scorecard;
 pub mod semantic;
 pub mod speech;
+pub mod tab;
 pub mod telemetry;
 pub mod tnl_in;
 pub mod tool;
@@ -131,6 +134,14 @@ pub use risk_policy::{
 };
 pub use self_model::SelfModel;
 pub use speech::{SttPort, SttResult, TtsPort, TtsResult};
+pub use scorecard::{
+    default_scorecard_path, load_suite, parse_goal_spec, run_suite, AgentScorecard, SuiteCase,
+    T0Metrics, TierLine, SCORECARD_SCHEMA,
+};
+pub use tab::{
+    claims_from_tab, facts_jsonl, parse_tabular, parse_tabular_with, write_facts, TabDoc,
+    TabError, TabMapping, TabRole, TabSchema, TabTool, TAB_AUTH,
+};
 pub use telemetry::{goal_label, EpisodeTrace, StepTrace};
 pub use tnl_in::{
     gate_fixtures as tnl_in_gate_fixtures, tnl_in_contract_json, write_tnl_in_contract,

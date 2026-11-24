@@ -85,6 +85,11 @@ impl Planner {
         {
             return Some(step.clone());
         }
+        // Teto `Low` = "não proponha efeito": um passo acima do teto viraria
+        // `Cite` sem evidência nenhuma (falso positivo do OOD da suíte T0).
+        if goal.risk_ceiling < Risk::Medium {
+            return None;
+        }
         steps.into_iter().find(|step| step.risk > goal.risk_ceiling)
     }
 

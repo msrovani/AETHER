@@ -297,7 +297,11 @@ impl Tool for ShellTool {
                 .is_some_and(|q| q.contains("hitl_token") || q.contains("argv"))
         {
             0.2
-        } else if goal.kind == GoalKind::Act {
+        } else if goal.kind == GoalKind::Act
+            && goal.query.as_deref().is_some_and(|q| q.contains("shell"))
+        {
+            // Só quando o goal cita shell: shell privilegiado não é fallback
+            // genérico de qualquer efeito (não roteie "registre um fato" aqui).
             0.05
         } else {
             0.0

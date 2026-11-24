@@ -58,7 +58,8 @@ COMANDOS
   plan                    mostra o ranking de tools sem executar
   goal                    executa um Goal com planner/verificador
   pipeline <arquivo.json> executa workflow de subgoals (P2)
-  eval                    D0: tiers T0–T3 + artefato JSON (ADR-011)
+  eval [--suite <jsonl>]  D0: tiers T0–T3; com --suite = placar T-EVAL (run_id/hash)
+  tab <arquivo.csv|tsv>   A1/T-TAB: planilha → claims (auth 96) + facts.jsonl
   teach                   ensina um fato novo com feedback verificado
   demo                    roda o conjunto de demonstração/gates
   stats                   mostra pesos do MoE e métricas
@@ -76,6 +77,10 @@ OPÇÕES
   --policy <arquivo>      política EXP3 persistida (JSON)
   --sgdb <spec>           memória durável: mock | http://…/mcp | stdio:cmd
   --seed <u64>            semente do roteador
+  --map <spec>            tab: subject=col,relation=col,value=col (padrão heurística)
+  --out <arquivo>         tab: facts.jsonl de saída (padrão target/facts_tab.jsonl)
+  --suite <arquivo.jsonl> eval: suite de casos (padrão do placar: bench/agent/suite.jsonl)
+  --report <arquivo>      eval: placar de saída (padrão target/aether_agent_scorecard.json)
   --json                  saída JSON
   --quiet                 só o essencial
   --vega                  F1 A-1b: tenta VegaPort (feature decision-pyo3); default StubPort
@@ -92,6 +97,8 @@ EXEMPLOS
   aether-agent goal --facts data/agent_facts.jsonl --subject AETHER --relation proibe
   aether-agent pipeline target/workflow.json
   aether-agent eval --seed 1 --json
+  aether-agent eval --suite bench/agent/suite.jsonl --report target/aether_agent_scorecard.json
+  aether-agent tab data/packs/moe_etl_pilot/facts.csv --out target/facts_tab.jsonl
   aether-agent teach --subject Itália --relation capital --value Roma
   aether-agent sat target/sat.dimacs
   aether-agent demo --json
@@ -112,6 +119,10 @@ struct Args {
     top_k: Option<usize>,
     steps: Option<usize>,
     seed: Option<u64>,
+    out: Option<PathBuf>,
+    map: Option<String>,
+    suite: Option<PathBuf>,
+    report: Option<PathBuf>,
     json: bool,
     quiet: bool,
     /// A-1b (MSG 0874): opt-in ao engine real; default permanece StubPort (Eixo C).
@@ -198,6 +209,10 @@ fn parse(argv: &[String]) -> Result<Args, String> {
             "--top-k" => args.top_k = Some(parse_num(&value(&mut i)?, "--top-k")?),
             "--steps" => args.steps = Some(parse_num(&value(&mut i)?, "--steps")?),
             "--seed" => args.seed = Some(parse_num(&value(&mut i)?, "--seed")?),
+            "--out" => args.out = Some(PathBuf::from(value(&mut i)?)),
+            "--map" => args.map = Some(value(&mut i)?),
+            "--suite" => args.suite = Some(PathBuf::from(value(&mut i)?)),
+            "--report" => args.report = Some(PathBuf::from(value(&mut i)?)),
             other if other.starts_with("--") => {
                 return Err(format!("flag desconhecida: {other} (use --help)"))
             }
@@ -248,6 +263,7 @@ pub fn run(argv: &[String], out: &mut dyn Write) -> i32 {
         "goal" => goal(&args, out),
         "pipeline" => pipeline(&args, out),
         "eval" => eval_cmd(&args, out),
+        "tab" => tab_cmd(&args, out),
         "teach" | "learn" => teach(&args, out),
         "stats" => stats(&args, out),
         "demo" => demo(&args, out),
@@ -1343,6 +1359,64 @@ fn teach(args: &Args, out: &mut dyn Write) -> i32 {
 
 fn eval_cmd(args: &Args, out: &mut dyn Write) -> i32 {
     use super::eval::{default_eval_path, EvalReport};
+    use super::scorecard::{default_scorecard_path, run_suite};
+
+    // A2 / T-EVAL — suite JSONL → placar com linhagem (run_id + dataset_sha256).
+    if let Some(suite) = &args.suite {
+        let mut cfg = args.config();
+        // Placar reproduzível: sem --seed explícito, seed 0 (não a entropia do default).
+        cfg.seed = args.seed.unwrap_or(0);
+        let card = match run_suite(suite, &cfg) {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = writeln!(out, "erro: {e}");
+                return EXIT_FAIL;
+            }
+        };
+        let path = args
+            .report
+            .clone()
+            .unwrap_or_else(default_scorecard_path);
+        if let Err(e) = card.write_to(&path) {
+            let _ = writeln!(out, "erro: nao gravou {}: {e}", path.display());
+            return EXIT_FAIL;
+        }
+        if args.json {
+            let _ = writeln!(out, "{}", card.to_json());
+        } else {
+            let _ = writeln!(
+                out,
+                "T-EVAL ok={} run_id={} casos={} seed={} host={}",
+                card.ok, card.run_id, card.cases, card.seed, card.host
+            );
+            let _ = writeln!(
+                out,
+                "  dataset={} sha256={}",
+                card.dataset, card.dataset_sha256
+            );
+            let _ = writeln!(
+                out,
+                "  T0 n={} action_accuracy={:.3} success_rate={:.3} false_act={} false_abstain_rate={:.3}",
+                card.t0.n,
+                card.t0.action_accuracy,
+                card.t0.success_rate,
+                card.t0.false_act,
+                card.t0.false_abstain_rate
+            );
+            for tier in &card.tiers {
+                let _ = writeln!(
+                    out,
+                    "  {} ready={} — {}",
+                    tier.tier, tier.ready, tier.note
+                );
+            }
+            for m in &card.mismatches {
+                let _ = writeln!(out, "  MISMATCH {m}");
+            }
+            let _ = writeln!(out, "placar: {}", path.display());
+        }
+        return if card.ok { EXIT_OK } else { EXIT_FAIL };
+    }
 
     let seed = args.seed.unwrap_or(0);
     let path = args
@@ -1377,6 +1451,83 @@ fn eval_cmd(args: &Args, out: &mut dyn Write) -> i32 {
             );
         }
         let _ = writeln!(out, "regra: self-suite (T0) != benchmark externo (T3)");
+    }
+    EXIT_OK
+}
+
+fn tab_cmd(args: &Args, out: &mut dyn Write) -> i32 {
+    use super::tab::{claims_from_tab, parse_tabular_with, write_facts, TabMapping};
+
+    let Some(input) = args.positional.first() else {
+        let _ = writeln!(
+            out,
+            "erro de uso: tab <arquivo.csv|tsv> [--map s=col,...] [--out target/facts_tab.jsonl]"
+        );
+        return EXIT_USAGE;
+    };
+    let mapping = match args.map.as_deref().map(str::trim) {
+        Some(spec) if !spec.is_empty() => match TabMapping::parse(spec) {
+            Ok(map) => map,
+            Err(e) => {
+                let _ = writeln!(out, "erro: {e}");
+                return EXIT_USAGE;
+            }
+        },
+        _ => TabMapping::default(),
+    };
+    let text = match std::fs::read_to_string(input) {
+        Ok(t) => t,
+        Err(e) => {
+            let _ = writeln!(out, "erro: nao leu {input}: {e}");
+            return EXIT_FAIL;
+        }
+    };
+    let doc = match parse_tabular_with(&text, &mapping) {
+        Ok(doc) => doc,
+        Err(e) => {
+            let _ = writeln!(out, "erro: {e}");
+            return EXIT_FAIL;
+        }
+    };
+    let (claims, abstains) = claims_from_tab(&doc);
+    let target = args
+        .out
+        .clone()
+        .unwrap_or_else(|| PathBuf::from("target/facts_tab.jsonl"));
+    if let Err(e) = write_facts(&target, &claims) {
+        let _ = writeln!(out, "erro: nao gravou {}: {e}", target.display());
+        return EXIT_FAIL;
+    }
+    if args.json {
+        let payload = Json::obj([
+            ("ok", Json::Bool(!claims.is_empty())),
+            ("rows", Json::Num(doc.rows.len() as f64)),
+            ("claims", Json::Num(claims.len() as f64)),
+            ("abstain", Json::Num(abstains.len() as f64)),
+            ("dialect", Json::str(doc.dialect.label())),
+            ("schema", Json::str(doc.schema.hash.clone())),
+            ("auth", Json::Num(f64::from(super::tab::TAB_AUTH))),
+            ("out", Json::str(target.to_string_lossy().to_string())),
+        ]);
+        let _ = writeln!(out, "{payload}");
+    } else {
+        let _ = writeln!(
+            out,
+            "T-TAB {} linhas={} claims={} abstain={} schema={} auth={} out={}",
+            doc.dialect.label(),
+            doc.rows.len(),
+            claims.len(),
+            abstains.len(),
+            doc.schema.hash,
+            super::tab::TAB_AUTH,
+            target.display()
+        );
+        for a in abstains.iter().take(5) {
+            let _ = writeln!(out, "  abstain linha {}: {}", a.row, a.reason);
+        }
+        if abstains.len() > 5 {
+            let _ = writeln!(out, "  … +{} abstains", abstains.len() - 5);
+        }
     }
     EXIT_OK
 }

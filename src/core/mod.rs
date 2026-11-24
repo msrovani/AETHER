@@ -84,6 +84,7 @@ pub mod kuramoto_field;
 
 #[cfg(feature = "m5")]
 pub mod fhrr;
+pub mod sha256;
 
 // FASE 5 — hardware extremus.
 pub mod bam_phase;

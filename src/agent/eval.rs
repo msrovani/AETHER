@@ -204,14 +204,14 @@ pub fn default_eval_path() -> PathBuf {
     PathBuf::from("target/aether_agent_eval.json")
 }
 
-fn now_unix() -> u64 {
+pub(crate) fn now_unix() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0)
 }
 
-fn hostname() -> String {
+pub(crate) fn hostname() -> String {
     env::var("HOSTNAME")
         .or_else(|_| env::var("COMPUTERNAME"))
         .ok()

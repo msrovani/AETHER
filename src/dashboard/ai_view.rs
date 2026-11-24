@@ -205,3 +205,128 @@ pub fn agent_ask_detail(a: &AgentAskRow) -> String {
         a.subject, a.relation, a.action, a.exit, a.detail
     )
 }
+
+/// Placar T-EVAL (A2) — `target/aether_agent_scorecard.json`.
+#[derive(Clone, Debug, Default)]
+pub struct AgentScorecardView {
+    /// Artefato existe?
+    pub present: bool,
+    /// Caminho lido.
+    pub path: PathBuf,
+    /// `run_id` determinístico do dataset.
+    pub run_id: String,
+    /// SHA-256 do dataset.
+    pub dataset_sha256: String,
+    /// Casos.
+    pub cases: u64,
+    /// Acurácia de ação no T0.
+    pub action_accuracy: f64,
+    /// false-act no T0.
+    pub false_act: u64,
+    /// Gate verde?
+    pub ok: bool,
+    /// Tiers declarados N/A nesta execução.
+    pub tiers_na: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct RawAgentScorecard {
+    #[serde(default)]
+    run_id: String,
+    #[serde(default)]
+    dataset_sha256: String,
+    #[serde(default)]
+    cases: u64,
+    #[serde(default)]
+    ok: bool,
+    #[serde(default)]
+    tiers: Vec<RawAgentTier>,
+}
+
+#[derive(Deserialize)]
+struct RawAgentTier {
+    #[serde(default)]
+    tier: String,
+    #[serde(default)]
+    ready: bool,
+    #[serde(default)]
+    metrics: Option<RawAgentT0>,
+}
+
+#[derive(Deserialize)]
+struct RawAgentT0 {
+    #[serde(default)]
+    action_accuracy: f64,
+    #[serde(default)]
+    false_act: u64,
+}
+
+/// Caminho do placar T-EVAL.
+pub fn agent_scorecard_path() -> PathBuf {
+    workspace_root().join("target/aether_agent_scorecard.json")
+}
+
+/// Carrega o placar T-EVAL (falta → present=false, sem erro de UI).
+pub fn load_agent_scorecard() -> AgentScorecardView {
+    let path = agent_scorecard_path();
+    let text = match fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(_) => {
+            return AgentScorecardView {
+                path,
+                ..Default::default()
+            }
+        }
+    };
+    let raw: RawAgentScorecard = match serde_json::from_str(&text) {
+        Ok(r) => r,
+        Err(_) => {
+            return AgentScorecardView {
+                path,
+                ..Default::default()
+            }
+        }
+    };
+    let mut tiers_na = Vec::new();
+    let mut t0_action_accuracy = 0.0;
+    let mut false_act = 0;
+    for tier in &raw.tiers {
+        if !tier.ready {
+            tiers_na.push(tier.tier.clone());
+        }
+        if let Some(m) = &tier.metrics {
+            t0_action_accuracy = m.action_accuracy;
+            false_act = m.false_act;
+        }
+    }
+    AgentScorecardView {
+        present: true,
+        path,
+        run_id: raw.run_id,
+        dataset_sha256: raw.dataset_sha256,
+        cases: raw.cases,
+        action_accuracy: t0_action_accuracy,
+        false_act,
+        ok: raw.ok,
+        tiers_na,
+    }
+}
+
+/// Linha de resumo do placar T-EVAL (para a aba Testes IA).
+pub fn agent_scorecard_line(v: &AgentScorecardView) -> String {
+    if !v.present {
+        return format!(
+            "Sem T-EVAL — rode `aether-agent eval --suite bench/agent/suite.jsonl` ({})",
+            v.path.display()
+        );
+    }
+    format!(
+        "T-EVAL ok={} n={} action_accuracy={:.3} false_act={} run_id={} sha256={}…",
+        v.ok,
+        v.cases,
+        v.action_accuracy,
+        v.false_act,
+        v.run_id,
+        &v.dataset_sha256[..v.dataset_sha256.len().min(12)]
+    )
+}

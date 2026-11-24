@@ -21,8 +21,9 @@ mod model;
 mod transplant_view;
 
 pub use ai_view::{
-    agent_ask_detail, api_case_detail, collect_wave_gaps, load_agent_drive, load_api_eval,
-    AgentAskRow, AgentDriveReport, ApiEvalCase, ApiEvalReport,
+    agent_ask_detail, agent_scorecard_line, agent_scorecard_path, api_case_detail,
+    collect_wave_gaps, load_agent_drive, load_agent_scorecard, load_api_eval, AgentAskRow,
+    AgentDriveReport, AgentScorecardView, ApiEvalCase, ApiEvalReport,
 };
 pub use catalog::{
     dimension_ficha, dimension_tooltip, global_tooltip, glossary_entries, throughput_tooltip,

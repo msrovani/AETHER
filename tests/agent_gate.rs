@@ -186,7 +186,8 @@ fn gate_orcamento_e_politica_persistente() {
     );
     assert!(policy.exists(), "política não persistiu");
     let weights = agent.router_weights();
-    assert_eq!(weights.len(), 5);
+    // 6 slots = ExpertId::code() 0..=5 (Predict entrou na A8/0.5.3).
+    assert_eq!(weights.len(), 6);
     assert!(weights.iter().all(|w| w.is_finite() && *w >= 0.0));
 
     // Outro agente carrega a política persistida.
@@ -196,7 +197,7 @@ fn gate_orcamento_e_politica_persistente() {
         ..cfg(facts.clone())
     });
     let reloaded_weights = reloaded.router_weights();
-    assert_eq!(reloaded_weights.len(), 5);
+    assert_eq!(reloaded_weights.len(), 6);
     let _ = std::fs::remove_file(&facts);
     let _ = std::fs::remove_file(&policy);
 }

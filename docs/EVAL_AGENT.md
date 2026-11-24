@@ -170,7 +170,12 @@ removidas:
 
 ## DSL de goal (ASCII)
 
-`goal` no JSONL é uma string; o parser vive em `tests/agent_eval_suite.rs`.
+`goal` no JSONL é uma string; o parser vive em
+`aether_engine::agent::scorecard::parse_goal_spec` (o teste e o runner A2 usam a
+mesma implementação). O runner do placar é
+`aether-agent eval --suite bench/agent/suite.jsonl`, que grava
+`target/aether_agent_scorecard.json` com `run_id`, `dataset_sha256` e tiers —
+ver `docs/PLANO_A1_D4.md` (A2).
 
 | Forma | Goal |
 |---|---|

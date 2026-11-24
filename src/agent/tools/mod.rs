@@ -28,6 +28,7 @@ pub use research::{
     research_persist_authority, ResearchExpandTool, ResearchQueryTool, RESEARCH_AUTH_CAP,
 };
 pub use shell::{shell_kill_switch, shell_mode, ShellMode, ShellTool, SHELL_AUTH_CAP};
+pub use super::tab::TabTool;
 
 use super::experts::{make_logic, make_memory, make_solver, make_transplant, Expert};
 use super::tool::{
@@ -533,6 +534,8 @@ pub fn default_tools(cfg: &AgentConfig) -> Vec<Box<dyn Tool>> {
     // A8 / P5 — predict.series (read_local) + goal.propose (HITL).
     tools.push(Box::new(PredictSeriesTool));
     tools.push(Box::new(GoalProposeTool));
+    // A1 / T-TAB — planilha → claims (auth 96, schema OOD abstém).
+    tools.push(Box::new(TabTool::new(&cfg.world)));
     // K1–K8 / T-CODE — …/lm/eval + shell HITL.
     tools.push(Box::new(CodeCheckTool::new(&cfg.world)));
     tools.push(Box::new(CodeAstGrepTool::new(&cfg.world)));

@@ -352,6 +352,7 @@ impl ToolAgent {
         let mut cooled: Vec<&'static str> = Vec::new();
         let mut steps: Vec<StepTrace> = Vec::new();
         let mut last: Option<Execution> = None;
+        let mut last_tool: Option<&'static str> = None;
         let mut rationale = "sem tool candidata".to_string();
         let mut action = Action::Abstain;
         let mut success = false;
@@ -403,6 +404,7 @@ impl ToolAgent {
                         goal,
                     ));
                     last = Some(execution);
+                    last_tool = Some(step.tool);
                     if met {
                         success = true;
                         action = Action::Act;
@@ -422,7 +424,14 @@ impl ToolAgent {
                     ));
                     if matches!(e, super::tool::ToolError::NeedsHuman(_)) {
                         used.push(step.tool);
-                        action = Action::Cite;
+                        // Escalação genérica (`ask.human`) em goal de efeito não
+                        // é "citar": não há nada confiável a citar. Pedido humano
+                        // continua no rationale/step; tools concretas seguem Cite.
+                        action = if goal.kind == GoalKind::Act && step.tool == "ask.human" {
+                            Action::Abstain
+                        } else {
+                            Action::Cite
+                        };
                         rationale = e.to_string();
                         break;
                     }
@@ -443,7 +452,13 @@ impl ToolAgent {
             if execution.outcome.needs_human {
                 // HITL não é sucesso: nada do passo entra no resultado.
                 success = false;
-                action = Action::Cite;
+                action = if goal.kind == GoalKind::Act
+                    && last_tool.as_deref() == Some("ask.human")
+                {
+                    Action::Abstain
+                } else {
+                    Action::Cite
+                };
                 rationale = "tool pediu HITL".to_string();
                 let effects = ctx.effects.len();
                 ctx.rollback_to(effects, claims_before, certificates_before, verified_before);

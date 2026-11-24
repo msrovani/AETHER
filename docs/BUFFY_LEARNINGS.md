@@ -61,3 +61,38 @@ Seis lints travavam `clippy --all-targets -- -D warnings`. Fix mecânico: `for i
   `python tools/cycle_gate.py` (só imprime JSON; redirecionar).
 - Release manual (padrão 0.5.x): `Cargo.toml` + `Cargo.lock`, `CHANGELOG.md`,
   `docs/RELEASE_0_5_x.md`, commit `chore(release): ...`; push separado.
+
+## 7. Frente A (A1–A3, 2026-11-24) — contratos tipados, gates e artefatos
+
+- **Regra por fase que funcionou:** 1 contrato tipado + 1 gate vermelho→verde +
+  1 artefato em `target/` + zero dependência nova. A1 (T-TAB) parseia CSV/TSV
+  RFC 4180 à mão e hasheia schema com FNV-1a; A2 escreveu SHA-256 próprio
+  (`src/core/sha256.rs`); A3 reusa o mesmo SHA-256 para hash chain + Merkle.
+  `cargo check --all-targets --offline` é o juiz: dependência nova é custo real.
+- **Placar separado:** o T-EVAL grava `target/aether_agent_scorecard.json`; o
+  placar cognitivo (`target/aether_scorecard.json`, do `cognitive_audit`) fica
+  intocado — não sobrescrever artefato de outro dono.
+- **Suíte T0 estava 22/24 antes da A2.** Causas reais, não testes frouxos:
+  `shell.exec` era fallback genérico de qualquer `Act` (agora só com goal que
+  cita "shell") e o planner escalava acima do teto quando `risk_ceiling == Low`.
+  Corrigir a causa devolveu 24/24 sem baixar asserção.
+- **A3 sem LWW:** estado é multi-valor por `(scope, key)`; `apply` deduplica por
+  `(nó, seq)` e por valor; valor divergente é preservado e vira `Claim` com
+  relação `contradicts`. Merkle root ordena os hashes → mesma raiz com qualquer
+  ordem de chegada (comparável entre nós).
+- **Limite honesto do A3:** `delta_all` publica só o oplog próprio; forwarding
+  para malha 3+ nós é extensão futura. Não fingir convergência de 3 nós.
+- **Artefatos são evidência só com `ok=true`:** `aether_tab_gate.json`,
+  `aether_agent_scorecard.json`, `aether_p2p.json`; `tools/cycle_gate.py` roda
+  os três gates + lib tests antes de versionar.
+
+## 8. `cycle_gate.py` no Windows: UTF-8 em duas pontas
+
+- `subprocess.run(..., text=True)` decodifica com **cp1252** e estoura com
+  `UnicodeDecodeError` quando o cargo imprime UTF-8 (acentos/setas) — o gate
+  inteiro morria. Fix: `encoding="utf-8", errors="replace"`.
+- `print(json.dumps(...))` com `> data/cycle_gate.json`: o stdout também é
+  cp1252 e falha com `UnicodeEncodeError` no `→`. Fix:
+  `sys.stdout.reconfigure(encoding="utf-8", errors="replace")` no topo.
+- `/tmp` do Git Bash **não é** `/tmp` do Python Windows: redirecionar para
+  `target/…` e copiar para `data/cycle_gate.json`; conferir o JSON com `python -c`.
