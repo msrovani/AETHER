@@ -12,6 +12,39 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
 - `host_probe`: campos `vram_free_mb` / `vram_total_mb` / `gpu_name` (nvidia-smi).
 - Smoke T-DEC `--live` com schema vegaml dict; parcial honesto se primary ausente.
 
+## [0.6.1] - 2026-11-24
+
+### Added
+
+- **A4 / T-CLIP** (`src/agent/clip.rs`): `ClipBackend` com **stdin como default**
+  (nenhum código de SO no caminho padrão) e `OsBackend` só sob `--features clip`
+  (`arboard 3.7`, `default-features = false`); redact de segredo forte (PEM,
+  `sk-`, `ghp_`, `AKIA`, JWT) -> deny do lote; hex32 **só com contexto de
+  atribuição** -> redigido e o lote segue; unified diff -> `code.patch` via
+  `resolve_sandbox_path`; saída só por `CertifiedUtterance`. Gate
+  `tests/agent_clip_gate.rs` (8 checks) -> `target/aether_clip_gate.json`,
+  registrado em `tools/cycle_gate.py`.
+
+### Fixed
+
+- `clip::process` certificava **depois** de gravar: lote sem claims devolvia
+  `Coherence` com `code.patch` já na sandbox. Agora `certify_utterance_template`
+  roda antes de qualquer escrita; o gate prova, com diff e claims vazias, que a
+  sandbox fica limpa (vermelho -> verde).
+- hex32 negava o lote inteiro: um md5/uuid colado num diff custava o paste de
+  até 256 KiB. Agora é classe de redação, não de deny, e `ingest` usa de fato
+  `redaction.text` (antes era calculado e descartado).
+
+### Changed
+
+- Revisão da A4 com corte de código morto: `src/agent/clip.rs` 502 -> 473
+  linhas e `tests/agent_clip_gate.rs` 337 -> 309. Saíram `CLIP_AUTH`, `Finding`,
+  `contains_secret`, `ClipKind::label`, `ClipPayload.bytes`,
+  `ClipBackend::label`/`ClipDrop.backend`; prefixos de token viraram tabela e o
+  check `sem_shell` virou varredura literal do fonte.
+- `rustfmt` em `tab.rs`, `p2p.rs`, `scorecard.rs`, `cli.rs`, `tool_agent.rs`,
+  `tools/mod.rs` e `aether_dashboard.rs` (só formato; sem mudança de lógica).
+
 ## [0.6.0] - 2026-11-24
 
 ### Added

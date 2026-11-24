@@ -96,3 +96,30 @@ Seis lints travavam `clippy --all-targets -- -D warnings`. Fix mecânico: `for i
   `sys.stdout.reconfigure(encoding="utf-8", errors="replace")` no topo.
 - `/tmp` do Git Bash **não é** `/tmp` do Python Windows: redirecionar para
   `target/…` e copiar para `data/cycle_gate.json`; conferir o JSON com `python -c`.
+
+## 9. A4 T-CLIP revisada (0.6.1, 2026-11-24) — atrito, ordem de efeitos e corte
+
+- **Detecção de segredo não é binária.** hex32 negando o lote inteiro era falso
+  positivo caro (md5/uuid/hash truncado custam um paste de até 256 KiB, sem
+  escape). Regra que ficou: classe *forte* (PEM, `sk-`, `ghp_`, `AKIA`, JWT) ->
+  deny; hex32 só com contexto de atribuição na linha (`key`/`token`/`secret`/
+  `password`/`passwd`/`auth`) -> **redige e segue**. `SecretClass::denies_batch()`
+  expressa a assimetria em um lugar só.
+- **`redact` calculado e descartado é bug de desenho:** `ingest` montava
+  `redaction.text` e só usava `classes()`. O texto aceito/gravado tem de ser o
+  redigido — senão a redação é decorativa.
+- **Ordem de efeitos > validação.** `process` gravava `code.patch` (via `ingest`)
+  e só depois chamava `certify_utterance_template`: lote negado deixava arquivo
+  na sandbox. Regra do módulo: certificar antes de qualquer escrita.
+- **Gate que não reproduz o defeito não é gate.** O caso "sem claims" usava texto
+  puro, que nunca vira patch — o bug era invisível. Trocar a entrada por um diff
+  unificado deixou o check vermelho com a mensagem exata e provou o verde depois.
+- **Varredura de fonte só vale sem heurística.** `sem_shell` filtrava linhas de
+  comentário porque o doc citava `Command::new`. Tirar a citação do doc deixou o
+  check literal (10 linhas) e ele continua sendo o único guard do "sem shell".
+- **Corte medido por `wc -l`.** A primeira revisão *cresceu* o arquivo; só caiu ao
+  remover `Finding`/offsets sem consumidor, `bytes` redundante, `label()` que só
+  ecoava string fixa e os 8 `match` repetidos do gate -> helper `record()`.
+- **`cargo fmt` sem argumentos formata o crate inteiro:** aparecem diffs em
+  `tab.rs`/`p2p.rs`/`scorecard.rs`/`cli.rs`/`dashboard` que não são da sua fase.
+  É formato, mas entra no commit e na nota de release para o tree não ficar sujo.

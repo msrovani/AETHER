@@ -44,9 +44,9 @@
       "ok": true,
       "exit": 0,
       "tail": [
-        "   Compiling aether_engine v0.6.0 (C:\\Users\\msrov\\Documents\\AETHER)",
-        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 25.23s",
-        "     Running tests\\agent_tab_gate.rs (target\\debug\\build\\aether_engine/6d7373c49b1a0e3a\\out\\agent_tab_gate-6d7373c49b1a0e3a.exe)"
+        "   Compiling aether_engine v0.6.1 (C:\\Users\\msrov\\Documents\\AETHER)",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 36.08s",
+        "     Running tests\\agent_tab_gate.rs (target\\debug\\build\\aether_engine/7f2d43345c0d4c6e\\out\\agent_tab_gate-7f2d43345c0d4c6e.exe)"
       ]
     },
     {
@@ -54,9 +54,9 @@
       "ok": true,
       "exit": 0,
       "tail": [
-        "   Compiling aether_engine v0.6.0 (C:\\Users\\msrov\\Documents\\AETHER)",
-        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.58s",
-        "     Running tests\\agent_eval_report_gate.rs (target\\debug\\build\\aether_engine/746ce7b2d0b29bb8\\out\\agent_eval_report_gate-746ce7b2d0b29bb8.exe)"
+        "   Compiling aether_engine v0.6.1 (C:\\Users\\msrov\\Documents\\AETHER)",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.13s",
+        "     Running tests\\agent_eval_report_gate.rs (target\\debug\\build\\aether_engine/fc88bc6e7ca309fa\\out\\agent_eval_report_gate-fc88bc6e7ca309fa.exe)"
       ]
     },
     {
@@ -64,9 +64,19 @@
       "ok": true,
       "exit": 0,
       "tail": [
-        "   Compiling aether_engine v0.6.0 (C:\\Users\\msrov\\Documents\\AETHER)",
-        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.35s",
-        "     Running tests\\agent_p2p_gate.rs (target\\debug\\build\\aether_engine/db1ff32f9603b293\\out\\agent_p2p_gate-db1ff32f9603b293.exe)"
+        "   Compiling aether_engine v0.6.1 (C:\\Users\\msrov\\Documents\\AETHER)",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.20s",
+        "     Running tests\\agent_p2p_gate.rs (target\\debug\\build\\aether_engine/abe182ad62fbc58e\\out\\agent_p2p_gate-abe182ad62fbc58e.exe)"
+      ]
+    },
+    {
+      "name": "cargo_test_agent_clip_gate",
+      "ok": true,
+      "exit": 0,
+      "tail": [
+        "   Compiling aether_engine v0.6.1 (C:\\Users\\msrov\\Documents\\AETHER)",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.76s",
+        "     Running tests\\agent_clip_gate.rs (target\\debug\\build\\aether_engine/2522e63b80376414\\out\\agent_clip_gate-2522e63b80376414.exe)"
       ]
     },
     {
@@ -84,8 +94,8 @@
       "ok": true,
       "exit": 0,
       "tail": [
-        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
-        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.43s",
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s",
         "     Running unittests src\\lib.rs (target\\debug\\build\\aether_decision/4f3690ea37be9cf6\\out\\aether_decision-4f3690ea37be9cf6.exe)"
       ]
     }
