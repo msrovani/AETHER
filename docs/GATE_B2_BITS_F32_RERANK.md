@@ -116,3 +116,48 @@ O próximo probe documentado continua sendo indexar as **duas direções**
 (`s2|rel|s1` também) — o que exige re-embed do donor, não um k maior. Enquanto
 esse número não subir, A5 (T-HIER) segue bloqueado por medição, não por código
 (`NO-GO: só liga com gate B2 ≥ 0,90`).
+
+## Probe das duas direções (item 3) — 2026-11-24
+
+Fecha o item 3 proposto no §3 depois do negativo do rerank:
+
+```powershell
+python tools/b2_two_directions.py --sample 0 --k 32 `
+  --out target/b2_two_directions_full.json
+```
+
+Re-embed: `s2|rel|s1` dos 5000 fatos com o mesmo donor/seed/dim/temperature do
+`emb/bank.f32` (Qwen3-Embedding-0.6B, MRL 768, seed 42, temperature 0, sem
+prompt, CPU fp32 — 40 min). Banco reverso em
+`data/rounds/20261117_b0_paws/emb/bank_rev.f32` (sha256 no artefato); o probe
+reusa esse cache e não re-embeda. Evidência: `data/b2_two_directions.json`
+(+`.meta.json`).
+
+| direção (doc indexado) | recall@1 bits | + rerank f32 (k=32) | teto f32 exato |
+|---|---:|---:|---:|
+| fwd `s1|rel|s2` | 0,7674 | 0,7708 | 0,7708 |
+| rev `s2|rel|s1` | 0,9146 | **0,9170** | 0,9170 |
+
+Sanidade: o fwd reconstruído de `emb/bank.f32` com o P do manifest concorda
+**100,0%** com `hv/bank.bin`, e o 0,7708 do fwd reproduz o monolito documentado
+(0,7676 em `b0_parafra_gate.json`).
+
+Leitura:
+
+1. **A assimetria era o gap.** Indexar o fato começando por `s2` leva o
+   recall@1 de 0,7708 para **0,9170** (+14,6 pp), acima do piso 0,90, sem tocar
+   o teto.
+2. **A quantização continua custando ~0,2 pp** e o rerank recupera exatamente
+   isso (0,9146 → 0,9170, idêntico ao teto f32 0,9170). Bits+rerank é o teto.
+3. **O ganho é de indexação, não de score.** O doc rev começa com o texto da
+   query: é o mesmo fato guardado no lado certo. Um sistema real precisa das
+   duas direções (a direção certa para cada lado da consulta) — o fwd não
+   melhora por rerank nenhum.
+4. Sem fusão de score entre direções: cossenos de espaços diferentes não são
+   comparáveis (união por "maior cosseno" media 0,86, abaixo do rev sozinho —
+   medida inválida, descartada).
+
+Consequência: **B2 fecha 0,90 na direção reversa** (0,9170 ≥ 0,90) com o teto A3
+intocado. O NO-GO de A5 ("só liga com gate B2 ≥ 0,90") fica satisfeito por
+medição; A5 segue off apenas até o seu próprio gate (recall@1 vs MoE plano e
+p99), não mais por B2.

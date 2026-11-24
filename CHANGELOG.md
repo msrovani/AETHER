@@ -11,7 +11,8 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
   `examples/aceite_055_hitl.rs` (roundtrip HITL cutover↔revert).
 - `host_probe`: campos `vram_free_mb` / `vram_total_mb` / `gpu_name` (nvidia-smi).
 - Smoke T-DEC `--live` com schema vegaml dict; parcial honesto se primary ausente.
-- **B2 pós-FAIL** (`tools/b2_oversample_adc.py`): probe de oversample (k≤1024) e ADC no round PAWS — bits+rerank e teto f32 exato empatam em **0,755** (n=200), confirma que o gap é a assimetria query vs doc, não o rerank. Evidência em `data/b2_oversample_adc.json` (+`.meta.json`); A5 (T-HIER) segue bloqueado.
+- **B2 pós-FAIL** (`tools/b2_oversample_adc.py`): probe de oversample (k≤1024) e ADC no round PAWS — bits+rerank e teto f32 exato empatam em **0,755** (n=200), confirma que o gap é a assimetria query vs doc, não o rerank. Evidência em `data/b2_oversample_adc.json` (+`.meta.json`); A5 (T-HIER) seguia bloqueado até o probe seguinte.
+- **B2 duas direções** (`tools/b2_two_directions.py`): indexar o fato como `s2|rel|s1` leva o recall@1 de 0,7708 (fwd) para **0,9170** (n=5000), acima do piso 0,90; bits+rerank iguala o teto f32 exato. O gap era a assimetria de indexação, não o rerank. Evidência em `data/b2_two_directions.json` (+`.meta.json`) e banco reverso em `emb/bank_rev.f32`.
 
 ## [0.6.1] - 2026-11-24
 

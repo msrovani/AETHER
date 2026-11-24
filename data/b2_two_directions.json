@@ -1,0 +1,32 @@
+{
+  "gate": "B2_two_directions",
+  "verdict": "PASS",
+  "round": "data/rounds/20261117_b0_paws",
+  "directions": {
+    "fwd": "s1|rel|s2",
+    "rev": "s2|rel|s1"
+  },
+  "donor": "Qwen/Qwen3-Embedding-0.6B",
+  "embed_seed": 42,
+  "jl_seed": 3735928559,
+  "n": 5000,
+  "k": 32,
+  "forward_bits_agreement_with_hv_bank": 1.0,
+  "by_direction": {
+    "fwd": {
+      "recall1_stage": 0.7674,
+      "recall1_after_rerank": 0.7708,
+      "ceiling_exact_f32": 0.7708
+    },
+    "rev": {
+      "recall1_stage": 0.9146,
+      "recall1_after_rerank": 0.917,
+      "ceiling_exact_f32": 0.917
+    }
+  },
+  "gate_recall1": 0.9,
+  "rev_bank_sha256": "11773c9cb968523fb6988ad12364e1e14d679e15704fae3f642cd684fd561c44",
+  "generated_at_utc": "2026-11-24T15:57:04Z",
+  "ref": "MSG_0705_B2_oversample_ADC_item3",
+  "doc": "docs/GATE_B2_BITS_F32_RERANK.md"
+}

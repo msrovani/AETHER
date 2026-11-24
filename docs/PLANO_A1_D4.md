@@ -72,11 +72,13 @@ Cada ficha segue: **Tema** (tomada) · **Item/Subitem** (o que existe no código
 - **GO:** recall@1 ≥ MoE plano com p99 menor (medido, não estimado).
 - **NO-GO:** recall < plano; só liga com gate B2 ≥ 0,90.
 - **Goal:** `target/aether_hier_moe_status.json` atualizado + gate.
-- **Bloqueio medido (2026-11-24):** B2 não fecha neste round — bits+rerank e o
-  teto f32 exato dão o mesmo **0,755** em n=200 (oversample k≤1024 e ADC não
-  movem; quantização custa só 1 pp). O gap é a assimetria query=`s2` vs
-  doc=`s1|rel|s2`, não o rerank. Ver `docs/GATE_B2_BITS_F32_RERANK.md` §probe e
-  `data/b2_oversample_adc.json`. A5 segue off por medição, não por falta de código.
+- **Pré-condição do B2 cumprida (2026-11-24):** o probe das duas direções
+  fechou o piso — doc `s2|rel|s1` dá **0,9170** de recall@1 (n=5000) contra
+  0,7708 do `s1|rel|s2`, com bits+rerank igualando o teto f32 exato (0,9170).
+  O gap era a assimetria de indexação, não o rerank
+  (`docs/GATE_B2_BITS_F32_RERANK.md`, `data/b2_two_directions.json`). A5 segue
+  off até o **próprio** gate medir recall@1 vs MoE plano e p99 — o bloqueio
+  deixou de ser o B2.
 
 ## 2. Classe B — decisão humana (código pronto, token HITL)
 
@@ -209,7 +211,9 @@ D1 (após A4) · D2 ‖ D3 (após C3) ──► D4
 | `target/aether_clip_gate.json` | gerado (`ok=true`) |
 | `tools/cycle_gate.py` | check `agent_clip_gate` (A4) |
 | `Cargo.toml` | feature `clip` = `dep:arboard` (opt-in, default off) |
-| `src/agent/hier_moe.rs` (A5) | stub — `may_enable=false`; bloqueio **medido** (B2 0,755 < 0,90) |
+| `src/agent/hier_moe.rs` (A5) | stub — `may_enable=false`; pré-condição do B2 **cumprida** (rev 0,9170), falta o gate próprio |
+| `tools/b2_two_directions.py` | probe das duas direções (re-embed cacheado em `emb/bank_rev.f32`) |
+| `data/b2_two_directions.json` (+`.meta.json`) | evidência: fwd 0,7708 · rev **0,9170** · teto f32 0,9170 |
 | `tools/b2_oversample_adc.py` | probe pós-FAIL do B2 (oversample k + ADC) |
 | `data/b2_oversample_adc.json` (+`.meta.json`) | evidência do probe: `verdict=FAIL`, 0,755 |
 | `src/knowledge/sgdb/`, `src/core/persistency_search.rs` | intocados |
