@@ -753,12 +753,28 @@ impl Expert for MemoryExpert {
         }
         let claims = hits
             .iter()
-            .map(|hit| {
+            .enumerate()
+            .map(|(i, hit)| {
+                // Cada hit é o próprio grupo de coerência (subject único):
+                // fatos DIFERENTES não podem se acusar de contradição só
+                // porque compartilham o especialista de origem. A detecção
+                // de contradição semântica entre fatos (sujeito extraído do
+                // texto) é refinamento futuro via LanguagePort parser.
+                let subject = hit
+                    .storage_key
+                    .clone()
+                    .unwrap_or_else(|| format!("mem/{i}"));
+                // Calibração BM25→confiança: score cru não é 0..1 (BM25 de
+                // stop-words com IDF baixo ainda soma ~3); saturação
+                // score/(score+2) faz score 8≈0.80 (relevante passa o
+                // min_confidence 0.75 do agente) e score 3≈0.60 (match de
+                // stop-word só, cai fora — abstenção calibrada preservada).
+                let confidence = (hit.score / (hit.score + 2.0)).clamp(0.0, 1.0);
                 Claim::new(
-                    "memory",
-                    "text",
+                    subject,
+                    "fato",
                     hit.text.clone(),
-                    hit.score,
+                    confidence,
                     hit.authority,
                     self.id(),
                     Provenance::Transplanted,
@@ -767,7 +783,7 @@ impl Expert for MemoryExpert {
             .collect();
         let confidence = hits
             .iter()
-            .map(|hit| hit.score)
+            .map(|hit| hit.score / (hit.score + 2.0))
             .fold(0.0f32, f32::max)
             .clamp(0.0, 1.0);
         ExpertOutput {

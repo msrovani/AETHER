@@ -354,10 +354,16 @@ impl ApiState {
                 }
             }
         }
-        // Agente: especialistas locais (transplante/SAT/QUBO). Não usa o SGDB
-        // diretamente para não abrir um segundo cliente; a rota `agent` é
-        // inferência + coerência, e a memória durável tem rota própria.
-        state.agent = Some(AetherAgent::new(AgentConfig::default()));
+        // Agente: especialistas locais (transplante/SAT/QUBO) + especialista
+        // de MEMÓRIA quando `--sgdb` está presente (JARBAS I3: a memória
+        // durável alimenta o agente). O MemoryExpert abre o próprio cliente
+        // em modo leitura (recall_text); o transporte é o único escritor do
+        // arquivo (replica remember/cue), então não há corrida de escrita.
+        let mut agent_cfg = AgentConfig::default();
+        if let Some(spec) = &cfg.sgdb {
+            agent_cfg.sgdb = Some(spec.clone());
+        }
+        state.agent = Some(AetherAgent::new(agent_cfg));
         Ok(state)
     }
 
