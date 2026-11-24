@@ -11,7 +11,7 @@
       "dst": "data/reports/f5_t0_eval.json",
       "sha256": "42c64976fe2d51b9dd9eda1fca49f047811e81fc2e85c3929a33e5f3dfc01b1b",
       "bytes": 11976,
-      "promoted_at_utc": "2026-11-22T21:16:47.172501+00:00",
+      "promoted_at_utc": "2026-11-24T03:27:22.499961+00:00",
       "ok": true
     },
     {
@@ -21,7 +21,7 @@
       "dst": "data/reports/f5_t3_eval.json",
       "sha256": "a2b286fb93d113a8b8ef6595b96c064227d7a0f921e1aacb6ed01721bbcb4b69",
       "bytes": 1819,
-      "promoted_at_utc": "2026-11-22T21:16:47.189012+00:00",
+      "promoted_at_utc": "2026-11-24T03:27:22.516291+00:00",
       "ok": true
     },
     {
@@ -31,7 +31,7 @@
       "dst": "data/reports/vega_path_audit.json",
       "sha256": "30b966c5694e61ce53d7e2aca67d6ede2487e43c10f511822aec4217965ff86b",
       "bytes": 90,
-      "promoted_at_utc": "2026-11-22T21:16:47.190652+00:00",
+      "promoted_at_utc": "2026-11-24T03:27:22.544570+00:00",
       "ok": true
     },
     {
@@ -41,7 +41,7 @@
       "dst": "data/reports/f1_offline_suite.json",
       "sha256": "b8fbc8a563db3bdbb831cc00faae377a82dd53be5da3fd6ab9e1a14ac72e95c3",
       "bytes": 1360,
-      "promoted_at_utc": "2026-11-22T21:16:47.192007+00:00",
+      "promoted_at_utc": "2026-11-24T03:27:22.548438+00:00",
       "ok": true
     }
   ]

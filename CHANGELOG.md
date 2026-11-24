@@ -12,6 +12,35 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
 - `host_probe`: campos `vram_free_mb` / `vram_total_mb` / `gpu_name` (nvidia-smi).
 - Smoke T-DEC `--live` com schema vegaml dict; parcial honesto se primary ausente.
 
+## [0.6.0] - 2026-11-24
+
+### Added
+
+- **A1 / T-TAB** (`src/agent/tab.rs`): parser CSV/TSV RFC 4180 proprio (BOM,
+  aspas, CRLF, quebra interna, 32 KiB/registro), `TabSchema` header para (s,r,v)
+  com hash FNV-1a, `claims_from_tab` auth **96**, `facts.jsonl` canonico, tool
+  `tab` e CLI `aether-agent tab`. Gate `agent_tab_gate`.
+- **A2 / T-EVAL** (`src/agent/scorecard.rs`, `src/core/sha256.rs`): runner de
+  suite JSONL com `dataset_sha256`/`run_id`/seed/host, placar por tier (T3 = N/A
+  sem gerador), CLI `aether-agent eval` e linha no hub. Gate
+  `agent_eval_report_gate` grava `target/aether_agent_scorecard.json`.
+- **A3 / T-P2P** (`src/agent/p2p.rs`): `SgdbDelta{node,seq,vclock,entries}`,
+  oplog append-only com hash chain e Merkle root, `Replica` multi-valor por
+  `(scope, key)`, `sync_pair` idempotente e conflito preservado como
+  `contradicts` (sem LWW). Gate `agent_p2p_gate`.
+- `tools/cycle_gate.py`: checks A1/A2/A3 e UTF-8 em stdout/subprocess.
+
+### Fixed
+
+- `shell.exec` vira affordance apenas quando o goal cita "shell" (suite T0 de 22/24 a 24/24).
+- Planner nao escala acima do teto com `risk_ceiling == Low`.
+- `tests/agent_gate.rs` com 6 pesos (Predict): ticket estava stale.
+
+### Notes
+
+- Sem dependencia nova; `src/knowledge/sgdb/` e o search de persistencia intocados.
+- `data/cycle_gate.json`: 9/9 verde em 2026-11-24. Ver `docs/RELEASE_0_6_0.md`.
+
 ## [0.5.6] - 2026-11-22
 
 ### Changed

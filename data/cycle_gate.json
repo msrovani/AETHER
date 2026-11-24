@@ -40,13 +40,43 @@
       ]
     },
     {
+      "name": "cargo_test_agent_tab_gate",
+      "ok": true,
+      "exit": 0,
+      "tail": [
+        "   Compiling aether_engine v0.6.0 (C:\\Users\\msrov\\Documents\\AETHER)",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 25.23s",
+        "     Running tests\\agent_tab_gate.rs (target\\debug\\build\\aether_engine/6d7373c49b1a0e3a\\out\\agent_tab_gate-6d7373c49b1a0e3a.exe)"
+      ]
+    },
+    {
+      "name": "cargo_test_agent_eval_report_gate",
+      "ok": true,
+      "exit": 0,
+      "tail": [
+        "   Compiling aether_engine v0.6.0 (C:\\Users\\msrov\\Documents\\AETHER)",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.58s",
+        "     Running tests\\agent_eval_report_gate.rs (target\\debug\\build\\aether_engine/746ce7b2d0b29bb8\\out\\agent_eval_report_gate-746ce7b2d0b29bb8.exe)"
+      ]
+    },
+    {
+      "name": "cargo_test_agent_p2p_gate",
+      "ok": true,
+      "exit": 0,
+      "tail": [
+        "   Compiling aether_engine v0.6.0 (C:\\Users\\msrov\\Documents\\AETHER)",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.35s",
+        "     Running tests\\agent_p2p_gate.rs (target\\debug\\build\\aether_engine/db1ff32f9603b293\\out\\agent_p2p_gate-db1ff32f9603b293.exe)"
+      ]
+    },
+    {
       "name": "cargo_test_aether_engine",
       "ok": true,
       "exit": 0,
       "tail": [
-        "test transducer_host::tests::amostra_cabe_em_menos_um_um ... ok",
-        "test agent::cli::tests::chat_fora_do_lexico_abste_com_residuo_visivel ... ok",
-        "test result: ok. 220 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.51s"
+        "[neural-sgdb] mcp=1.5.12 tools=5 git=aa81818 binary=C:\\Users\\msrov\\Documents\\neural-sgdb\\target\\mcp-release\\release\\examples\\mcp_server.exe mtime=Some(1795198424) db=C:\\Users\\msrov\\Documents\\neural-sgdb\\.nsgdb\\memory.db backend=file default_scope=Some(\"aether/project\") idx_snapshot=Off",
+        "[neural-sgdb] stdin fechado â€” encerrando",
+        "[neural-sgdb] stdin fechado â€” encerrando"
       ]
     },
     {
@@ -54,7 +84,7 @@
       "ok": true,
       "exit": 0,
       "tail": [
-        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
         "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.43s",
         "     Running unittests src\\lib.rs (target\\debug\\build\\aether_decision/4f3690ea37be9cf6\\out\\aether_decision-4f3690ea37be9cf6.exe)"
       ]
