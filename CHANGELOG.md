@@ -13,6 +13,7 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
 - Smoke T-DEC `--live` com schema vegaml dict; parcial honesto se primary ausente.
 - **B2 pós-FAIL** (`tools/b2_oversample_adc.py`): probe de oversample (k≤1024) e ADC no round PAWS — bits+rerank e teto f32 exato empatam em **0,755** (n=200), confirma que o gap é a assimetria query vs doc, não o rerank. Evidência em `data/b2_oversample_adc.json` (+`.meta.json`); A5 (T-HIER) seguia bloqueado até o probe seguinte.
 - **B2 duas direções** (`tools/b2_two_directions.py`): indexar o fato como `s2|rel|s1` leva o recall@1 de 0,7708 (fwd) para **0,9170** (n=5000), acima do piso 0,90; bits+rerank iguala o teto f32 exato. O gap era a assimetria de indexação, não o rerank. Evidência em `data/b2_two_directions.json` (+`.meta.json`) e banco reverso em `emb/bank_rev.f32`.
+- **A5 / T-HIER** (`src/agent/hier_moe.rs` + `tests/agent_hier_moe_gate.rs`): roteamento LSH multi-probe + re-rank f32 top-32 medido contra o MoE plano no mesmo bank — **recall@1 0,7680 vs 0,7680** e **p99 174 µs vs 455 µs** (release, n=500, config 8×10×16). `lsh_ok=true` no artefato; `may_enable` continua exigindo feature `hier_moe` + `AETHER_HIER_MOE=1` (nada no caminho default). Check `agent_hier_moe_gate` entra no `tools/cycle_gate.py` (11/11 verdes).
 
 ## [0.6.1] - 2026-11-24
 

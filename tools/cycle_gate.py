@@ -11,6 +11,7 @@ Tiers rodados (todos offline, sem rede):
   A2     cargo test --test agent_eval_report_gate (T-EVAL, run_id/hash)
   A3     cargo test --test agent_p2p_gate (T-P2P, delta Merkle/contradicts)
   A4     cargo test --test agent_clip_gate (T-CLIP, stdin/redact/code.patch)
+  A5     cargo test --test agent_hier_moe_gate (T-HIER, LSH vs MoE plano)
 
 Uso:
   python tools/cycle_gate.py            # roda tudo, sai 0 se verde
@@ -105,6 +106,14 @@ def main() -> int:
             run(
                 "cargo_test_agent_clip_gate",
                 ["cargo", "test", "-p", "aether_engine", "--test", "agent_clip_gate"],
+            )
+        )
+        # A5 / T-HIER — LSH + rerank f32 vs MoE plano; grava
+        # target/aether_hier_moe_status.json (recall não menor + p99 menor).
+        results.append(
+            run(
+                "cargo_test_agent_hier_moe_gate",
+                ["cargo", "test", "-p", "aether_engine", "--test", "agent_hier_moe_gate"],
             )
         )
         for pkg in ("aether_engine", "aether_decision"):

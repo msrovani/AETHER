@@ -79,6 +79,14 @@ Cada ficha segue: **Tema** (tomada) · **Item/Subitem** (o que existe no código
   (`docs/GATE_B2_BITS_F32_RERANK.md`, `data/b2_two_directions.json`). A5 segue
   off até o **próprio** gate medir recall@1 vs MoE plano e p99 — o bloqueio
   deixou de ser o B2.
+- **Gate próprio medido (2026-11-24):** `tests/agent_hier_moe_gate.rs` roda LSH
+  multi-probe + re-rank f32 top-32 contra o MoE plano no mesmo bank e na mesma
+  verdade: **recall@1 0,7680 vs 0,7680** e **p99 174 µs vs 455 µs** (release,
+  n=500, config **8×10×16**, pool ~988 átomos contra 5000). GO cumprido sem
+  baixar teto. A config default do bank (4×16×8) **perde** recall (0,658) e não
+  serve para rotear. A5 segue **off** no default: `may_enable` exige a feature
+  `hier_moe` + `AETHER_HIER_MOE=1`, e `default_path` é sempre `false`.
+  Artefato: `data/aether_hier_moe_status.json` (+`.meta.json`).
 
 ## 2. Classe B — decisão humana (código pronto, token HITL)
 
@@ -211,7 +219,10 @@ D1 (após A4) · D2 ‖ D3 (após C3) ──► D4
 | `target/aether_clip_gate.json` | gerado (`ok=true`) |
 | `tools/cycle_gate.py` | check `agent_clip_gate` (A4) |
 | `Cargo.toml` | feature `clip` = `dep:arboard` (opt-in, default off) |
-| `src/agent/hier_moe.rs` (A5) | stub — `may_enable=false`; pré-condição do B2 **cumprida** (rev 0,9170), falta o gate próprio |
+| `src/agent/hier_moe.rs` (A5) | LSH + re-rank f32 medidos; `lsh_ok=true`, `may_enable` só com feature+env |
+| `tests/agent_hier_moe_gate.rs` | verde: recall 0,7680 = plano, p99 174 µs < 455 µs (release, n=500) |
+| `data/aether_hier_moe_status.json` (+`.meta.json`) | evidência do gate A5 (`lsh_ok=true`) |
+| `tools/cycle_gate.py` | check `agent_hier_moe_gate` (A5) |
 | `tools/b2_two_directions.py` | probe das duas direções (re-embed cacheado em `emb/bank_rev.f32`) |
 | `data/b2_two_directions.json` (+`.meta.json`) | evidência: fwd 0,7708 · rev **0,9170** · teto f32 0,9170 |
 | `tools/b2_oversample_adc.py` | probe pós-FAIL do B2 (oversample k + ADC) |

@@ -1,0 +1,12 @@
+{
+  "schema": "aether.gate_evidence/v1",
+  "src": "target/aether_hier_moe_status.json",
+  "dst": "data/aether_hier_moe_status.json",
+  "sha256": "ca84ac27699b7469a4ed341cb06a288de5c2c7881ac7e11dae0f7ec655a9e1a7",
+  "bytes": 406,
+  "command": "AETHER_HIER_N=500 cargo test --release -p aether_engine --test agent_hier_moe_gate",
+  "verdict": "PASS",
+  "gate": "A5_hier_moe",
+  "promoted_at_utc": "2026-11-24T16:21:26Z",
+  "ok": true
+}

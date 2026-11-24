@@ -179,11 +179,13 @@ impl HvBank {
         out
     }
 
-    fn top_k_lsh(&self, q: &[u64], k: usize, out: &mut [(u32, u128)]) -> usize {
-        let bits_per = {
-            let buckets = self.lsh_tables[0].len();
-            (buckets.trailing_zeros()) as usize
-        };
+    /// Índices de linha candidatos do multi-probe (bucket + vizinhos de 1 bit),
+    /// união de todas as tabelas, sem duplicata. Sem tabelas: bank inteiro.
+    pub fn lsh_candidate_indices(&self, q: &[u64]) -> Vec<usize> {
+        if self.lsh_tables.is_empty() {
+            return (0..self.count()).collect();
+        }
+        let bits_per = self.lsh_tables[0].len().trailing_zeros() as usize;
         let mask = (1u64 << bits_per) - 1;
         let mut cand = Vec::with_capacity(512);
         for (t, table) in self.lsh_tables.iter().enumerate() {
@@ -201,12 +203,16 @@ impl HvBank {
         }
         cand.sort_unstable();
         cand.dedup();
+        cand.into_iter().map(|i| i as usize).collect()
+    }
+
+    fn top_k_lsh(&self, q: &[u64], k: usize, out: &mut [(u32, u128)]) -> usize {
+        let cand = self.lsh_candidate_indices(q);
         for slot in out.iter_mut().take(k) {
             *slot = (u32::MAX, 0);
         }
         let mut filled = 0usize;
-        for idx in cand {
-            let i = idx as usize;
+        for i in cand {
             let d = Self::hamming(q, self.atom_words(i));
             let key = self.keys[i];
             if filled < k {
