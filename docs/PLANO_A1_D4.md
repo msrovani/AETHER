@@ -72,6 +72,11 @@ Cada ficha segue: **Tema** (tomada) · **Item/Subitem** (o que existe no código
 - **GO:** recall@1 ≥ MoE plano com p99 menor (medido, não estimado).
 - **NO-GO:** recall < plano; só liga com gate B2 ≥ 0,90.
 - **Goal:** `target/aether_hier_moe_status.json` atualizado + gate.
+- **Bloqueio medido (2026-11-24):** B2 não fecha neste round — bits+rerank e o
+  teto f32 exato dão o mesmo **0,755** em n=200 (oversample k≤1024 e ADC não
+  movem; quantização custa só 1 pp). O gap é a assimetria query=`s2` vs
+  doc=`s1|rel|s2`, não o rerank. Ver `docs/GATE_B2_BITS_F32_RERANK.md` §probe e
+  `data/b2_oversample_adc.json`. A5 segue off por medição, não por falta de código.
 
 ## 2. Classe B — decisão humana (código pronto, token HITL)
 
@@ -204,4 +209,7 @@ D1 (após A4) · D2 ‖ D3 (após C3) ──► D4
 | `target/aether_clip_gate.json` | gerado (`ok=true`) |
 | `tools/cycle_gate.py` | check `agent_clip_gate` (A4) |
 | `Cargo.toml` | feature `clip` = `dep:arboard` (opt-in, default off) |
+| `src/agent/hier_moe.rs` (A5) | stub — `may_enable=false`; bloqueio **medido** (B2 0,755 < 0,90) |
+| `tools/b2_oversample_adc.py` | probe pós-FAIL do B2 (oversample k + ADC) |
+| `data/b2_oversample_adc.json` (+`.meta.json`) | evidência do probe: `verdict=FAIL`, 0,755 |
 | `src/knowledge/sgdb/`, `src/core/persistency_search.rs` | intocados |

@@ -73,3 +73,46 @@ self-query (+12 pp). Full 5k ainda pendente pós-D1.
 Rerank float **só reordena** o top-K Hamming — não recupera docs excluídos
 no 1º estágio. Próximo probe: **oversample** k∈{256,512} e/ou ADC (query f32
 × bits do bank) antes do full 5k.
+
+## Probe pós-FAIL — oversample de k e ADC (2026-11-24)
+
+Fecha o "próximo probe" acima, nos mesmos dados e com a mesma verdade
+(query `s2` sozinho → doc `s1|rel|s2`, 5000 docs):
+
+```powershell
+python tools/b2_oversample_adc.py --sample 200 --ks 32,256,1024 `
+  --out target/b2_oversample_adc.json
+```
+
+Artefato promovido: `data/b2_oversample_adc.json` (+`.meta.json`, sha256 do
+próprio artefato) · gerado por `tools/b2_oversample_adc.py`.
+
+| estágio | k=32 | k=256 | k=1024 |
+|---|---:|---:|---:|
+| bits → rerank f32 | 0,755 | 0,755 | 0,755 |
+| ADC → rerank f32 | 0,755 | 0,755 | 0,755 |
+| bits s/ rerank (rank-1) | 0,745 | 0,745 | 0,745 |
+| **teto f32 exato no bank inteiro** | **0,755** | **0,755** | **0,755** |
+
+Sanidade do probe: `sign(P·q)` reproduz `s2_query_hv.bin` em **100,0%**
+(mesmo `seed=3735928559` do manifest) — o caminho bits é o mesmo do bank.
+
+Leitura:
+
+1. **Oversample não move nada**: k=1024 de 5000 dá o mesmo 0,755 de k=32. O doc
+   certo não está fora do top-K; ele perde no ranking, com margem.
+2. **ADC não ajuda** (−0,5 pp no estágio, empata pós-rerank): somar a magnitude
+   da query projetada não carrega sinal além do sinal JL.
+3. **A quantização 1-bit custa 1 pp.** O teto em cosseno float exato contra o
+   bank inteiro é 0,755 — idêntico ao bits+rerank. Os 24,5 pp que faltam para
+   0,90 não são do rerank, nem do top-K, nem da quantização: são a **assimetria
+   query=`s2` sozinho vs doc=`s1|rel|s2`** já diagnosticada no §2. Rank do doc
+   certo: mediana 0, p90 1 (bits e f32).
+4. Objetos duplicados no corpus (477/5000 linhas em 236 grupos, 9,5%) não
+   explicam o gap.
+
+Consequência: **B2 não fecha 0,90 neste round por nenhum caminho de rerank**.
+O próximo probe documentado continua sendo indexar as **duas direções**
+(`s2|rel|s1` também) — o que exige re-embed do donor, não um k maior. Enquanto
+esse número não subir, A5 (T-HIER) segue bloqueado por medição, não por código
+(`NO-GO: só liga com gate B2 ≥ 0,90`).

@@ -1,0 +1,12 @@
+{
+  "schema": "aether.gate_evidence/v1",
+  "src": "target/b2_oversample_adc.json",
+  "dst": "data/b2_oversample_adc.json",
+  "sha256": "41dfbef9a67b1c1645ec53c8098225972b1ca3a2033265550f3363c0cf03205b",
+  "bytes": 1770,
+  "command": "python tools/b2_oversample_adc.py --sample 200 --ks 32,256,1024 --out target/b2_oversample_adc.json",
+  "verdict": "FAIL",
+  "gate": "B2_oversample_adc",
+  "promoted_at_utc": "2026-11-24T14:41:57Z",
+  "ok": true
+}

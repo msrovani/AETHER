@@ -11,6 +11,7 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
   `examples/aceite_055_hitl.rs` (roundtrip HITL cutover↔revert).
 - `host_probe`: campos `vram_free_mb` / `vram_total_mb` / `gpu_name` (nvidia-smi).
 - Smoke T-DEC `--live` com schema vegaml dict; parcial honesto se primary ausente.
+- **B2 pós-FAIL** (`tools/b2_oversample_adc.py`): probe de oversample (k≤1024) e ADC no round PAWS — bits+rerank e teto f32 exato empatam em **0,755** (n=200), confirma que o gap é a assimetria query vs doc, não o rerank. Evidência em `data/b2_oversample_adc.json` (+`.meta.json`); A5 (T-HIER) segue bloqueado.
 
 ## [0.6.1] - 2026-11-24
 
