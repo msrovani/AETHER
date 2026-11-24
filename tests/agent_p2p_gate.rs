@@ -16,7 +16,7 @@
 use std::path::{Path, PathBuf};
 
 use aether_engine::agent::p2p::{
-    sync_pair, ApplyReport, P2pError, Replica, SgdbDelta, ZERO_HASH, MAX_FIELD_CHARS,
+    sync_pair, ApplyReport, P2pError, Replica, SgdbDelta, MAX_FIELD_CHARS, ZERO_HASH,
 };
 use aether_engine::agent::{Claim, ExpertId};
 use aether_engine::core::certificate::Provenance;
@@ -136,7 +136,11 @@ fn check_convergencia() -> Result<(String, String, usize, String), String> {
         return Err("valores distintos viraram conflito".into());
     }
     if a.keys() != 5 || b.keys() != 5 {
-        return Err(format!("chaves: a={} b={} (esperado 5/5)", a.keys(), b.keys()));
+        return Err(format!(
+            "chaves: a={} b={} (esperado 5/5)",
+            a.keys(),
+            b.keys()
+        ));
     }
     let root_a = a.state_root();
     let root_b = b.state_root();
@@ -146,7 +150,11 @@ fn check_convergencia() -> Result<(String, String, usize, String), String> {
     let entries = a.log().entries().len() + b.log().entries().len();
     let (replay_a, replay_b) = sync_pair(&mut a, &mut b).map_err(|e| e.to_string())?;
     if replay_a.accepted != 0 || replay_b.accepted != 0 {
-        return Err(format!("replay escreveu: {} / {}", fmt_report(&replay_a), fmt_report(&replay_b)));
+        return Err(format!(
+            "replay escreveu: {} / {}",
+            fmt_report(&replay_a),
+            fmt_report(&replay_b)
+        ));
     }
     if replay_a.idempotent + replay_b.idempotent != entries {
         return Err(format!(
@@ -179,7 +187,11 @@ fn check_conflito() -> Result<(String, String, String), String> {
         .map_err(|e| e.to_string())?;
     let (a_to_b, b_to_a) = sync_pair(&mut a, &mut b).map_err(|e| e.to_string())?;
     if a_to_b.conflicts != 1 || b_to_a.conflicts != 1 {
-        return Err(format!("conflitos: {} / {}", fmt_report(&a_to_b), fmt_report(&b_to_a)));
+        return Err(format!(
+            "conflitos: {} / {}",
+            fmt_report(&a_to_b),
+            fmt_report(&b_to_a)
+        ));
     }
     for (node, replica) in [("a", &a), ("b", &b)] {
         let values = values_of(replica, "kb", "server", "status");
@@ -187,7 +199,10 @@ fn check_conflito() -> Result<(String, String, String), String> {
             return Err(format!("nó {node} perdeu valor: {values:?}"));
         }
         if replica.conflicts().len() != 1 {
-            return Err(format!("nó {node}: {} conflitos", replica.conflicts().len()));
+            return Err(format!(
+                "nó {node}: {} conflitos",
+                replica.conflicts().len()
+            ));
         }
     }
     if a.conflicts()[0].kept.value != "up" || b.conflicts()[0].kept.value != "down" {
@@ -213,7 +228,10 @@ fn check_guardas() -> Result<(), String> {
         return Err("nó inválido foi aceito".into());
     }
     let mut a = Replica::new("node-a").map_err(|e| e.to_string())?;
-    if !matches!(a.remember("", &claim("s", "r", "v")), Err(P2pError::BadScope)) {
+    if !matches!(
+        a.remember("", &claim("s", "r", "v")),
+        Err(P2pError::BadScope)
+    ) {
         return Err("escopo vazio foi aceito".into());
     }
     let long = "x".repeat(MAX_FIELD_CHARS + 1);
@@ -310,10 +328,7 @@ fn gate_a3_t_p2p() {
         ("ok".into(), Json::Bool(ok)),
         (
             "nodes".into(),
-            Json::Arr(vec![
-                Json::Str("node-a".into()),
-                Json::Str("node-b".into()),
-            ]),
+            Json::Arr(vec![Json::Str("node-a".into()), Json::Str("node-b".into())]),
         ),
         ("entries".into(), Json::Num(entries as f64)),
         ("conflict_keys".into(), Json::Num(keys as f64)),

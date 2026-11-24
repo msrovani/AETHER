@@ -59,7 +59,7 @@ Cada ficha segue: **Tema** (tomada) · **Item/Subitem** (o que existe no código
 
 ### A4 · T-CLIP — entrada por clipboard sem shell livre
 - **Tema:** T-CLIP (classe A, dep 1) · **Item:** `src/agent/clip.rs`
-- **Subitem:** `ClipBackend` com stdin como default; OS só atrás de feature `clip` + `arboard 3.7`; redact de segredo (PEM, `sk-`, `ghp_`, `AKIA`, hex32) → deny; diff→`code.patch` via `resolve_sandbox_path`; saída só pós-COH (`CertifiedUtterance`).
+- **Subitem:** `ClipBackend` com stdin como default; OS só atrás de feature `clip` + `arboard 3.7`; redact de segredo forte (PEM, `sk-`, `ghp_`, `AKIA`, JWT) → deny do lote; hex32 **só com contexto** (`token=…`) e aí é redigido, não negado — md5/uuid colados num diff não podem custar o paste; diff→`code.patch` via `resolve_sandbox_path`; saída só pós-COH (`CertifiedUtterance`).
 - **Objetivo:** colar código/dado sem abrir execução arbitrária.
 - **GO:** 0 escape de path, 100% dos segredos redigidos/negados, 0 shell.
 - **NO-GO:** clipboard direto no core, saída sem certificado.
@@ -199,4 +199,9 @@ D1 (após A4) · D2 ‖ D3 (após C3) ──► D4
 | `tests/agent_p2p_gate.rs` (6 checks) | verde (convergência + contradição) |
 | `target/aether_p2p.json` | gerado (`ok=true`, `converged=true`) |
 | `tools/cycle_gate.py` | check `agent_p2p_gate` (A3) |
+| `src/agent/clip.rs` (A4: stdin default, OS sob `clip`, redact contextual, `code.patch`) | implementado |
+| `tests/agent_clip_gate.rs` (7 checks) | verde (5 classes negadas, 0 escape, pós-COH) |
+| `target/aether_clip_gate.json` | gerado (`ok=true`) |
+| `tools/cycle_gate.py` | check `agent_clip_gate` (A4) |
+| `Cargo.toml` | feature `clip` = `dep:arboard` (opt-in, default off) |
 | `src/knowledge/sgdb/`, `src/core/persistency_search.rs` | intocados |

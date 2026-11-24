@@ -10,6 +10,7 @@ Tiers rodados (todos offline, sem rede):
   A1     cargo test --test agent_tab_gate  (T-TAB, docs/PLANO_A1_D4.md)
   A2     cargo test --test agent_eval_report_gate (T-EVAL, run_id/hash)
   A3     cargo test --test agent_p2p_gate (T-P2P, delta Merkle/contradicts)
+  A4     cargo test --test agent_clip_gate (T-CLIP, stdin/redact/code.patch)
 
 Uso:
   python tools/cycle_gate.py            # roda tudo, sai 0 se verde
@@ -97,6 +98,13 @@ def main() -> int:
             run(
                 "cargo_test_agent_p2p_gate",
                 ["cargo", "test", "-p", "aether_engine", "--test", "agent_p2p_gate"],
+            )
+        )
+        # A4 / T-CLIP — clipboard sem shell; grava target/aether_clip_gate.json.
+        results.append(
+            run(
+                "cargo_test_agent_clip_gate",
+                ["cargo", "test", "-p", "aether_engine", "--test", "agent_clip_gate"],
             )
         )
         for pkg in ("aether_engine", "aether_decision"):

@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "aether_engine"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2021"
 rust-version = "1.78"
 description = "AETHER — motor de computação pós-token baseado em física contínua (Ising contínuo, interferência espectral, Kuramoto UDP)"
@@ -94,6 +94,9 @@ gpu = ["dep:wgpu", "dep:bytemuck"]
 sgdb = ["m1"]
 # Agente: especialistas (FHRR, fase, lÃƒÂ³gica, solver, SGDB) + MoE + coerÃƒÂªncia.
 agent = ["m1", "m5", "sgdb", "dep:serde_json"]
+# A4 T-CLIP: clipboard do SO opt-in (arboard 3.7). Sem a feature, stdin é o
+# default e nenhum código de clipboard do SO é compilado.
+clip = ["dep:arboard"]
 # Modalidades externas (default off) — stubs compilam sem a feature.
 ocr = []
 speech = []
@@ -108,6 +111,8 @@ language-gemma = ["agent"]
 decision-pyo3 = ["aether_decision/pyo3"]
 
 [dependencies]
+# A4 (T-CLIP) — só sob `--features clip`; o core padrão não toca o clipboard.
+arboard = { version = "3.7", optional = true, default-features = false }
 # F1: unica face do vega no Rust. Sem a feature pyo3 o port default e StubPort
 # (degradacao honesta, nenhuma chamada externa - Eixo C do plano).
 aether_decision = { path = "aether-decision" }

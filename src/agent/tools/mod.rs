@@ -12,6 +12,7 @@ pub mod predict;
 pub mod research;
 pub mod shell;
 
+pub use super::tab::TabTool;
 pub use code::{
     code_generate_mode, code_lm_caps, coder_t3_generator_declared, default_coder_t3_path,
     extract_json_object, grammar_parse_rate, parse_constrained, pass_at_k, rasp_resolve_anchor,
@@ -28,7 +29,6 @@ pub use research::{
     research_persist_authority, ResearchExpandTool, ResearchQueryTool, RESEARCH_AUTH_CAP,
 };
 pub use shell::{shell_kill_switch, shell_mode, ShellMode, ShellTool, SHELL_AUTH_CAP};
-pub use super::tab::TabTool;
 
 use super::experts::{make_logic, make_memory, make_solver, make_transplant, Expert};
 use super::tool::{

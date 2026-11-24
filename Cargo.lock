@@ -125,9 +125,10 @@ dependencies = [
 
 [[package]]
 name = "aether_engine"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "aether_decision",
+ "arboard",
  "bytemuck",
  "core_affinity",
  "cranelift-codegen",

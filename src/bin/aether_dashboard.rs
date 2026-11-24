@@ -27,17 +27,15 @@ mod aether_dashboard_win {
 
     use aether_engine::agent::{DecSlot, HitlKind};
     use aether_engine::dashboard::{
-        agent_ask_detail, api_case_detail, collect_wave_gaps, dec_detail, dec_lamps_line,
-        dec_program_line, dest_detail, dimension_ficha, dimension_tooltip, draw_console, f4_detail,
-        fmt_compact, gates_detail, global_tooltip, glossary_entries, hitl_detail,
-        agent_scorecard_line, hitl_program_line, load_agent_drive, load_agent_scorecard,
-        load_api_eval, load_dec_view, load_f4_view,
-        load_hitl_view, load_host_report, load_scorecard, load_transplant_view, origin_detail,
-        request_revert, request_upgrade, throughput_tooltip, upgrade_job_pending, AgentDriveReport,
-        AgentScorecardView, ApiEvalReport, ConsolePane, DecView, DimFicha, F4View, Gap,
-        GapSeverity, HitlBand,
-        HitlView, HostReport, JobKind, JobPhase, JobRunner, ScorecardView, TransplantView,
-        SCORECARD_EXPECTED_DIMS,
+        agent_ask_detail, agent_scorecard_line, api_case_detail, collect_wave_gaps, dec_detail,
+        dec_lamps_line, dec_program_line, dest_detail, dimension_ficha, dimension_tooltip,
+        draw_console, f4_detail, fmt_compact, gates_detail, global_tooltip, glossary_entries,
+        hitl_detail, hitl_program_line, load_agent_drive, load_agent_scorecard, load_api_eval,
+        load_dec_view, load_f4_view, load_hitl_view, load_host_report, load_scorecard,
+        load_transplant_view, origin_detail, request_revert, request_upgrade, throughput_tooltip,
+        upgrade_job_pending, AgentDriveReport, AgentScorecardView, ApiEvalReport, ConsolePane,
+        DecView, DimFicha, F4View, Gap, GapSeverity, HitlBand, HitlView, HostReport, JobKind,
+        JobPhase, JobRunner, ScorecardView, TransplantView, SCORECARD_EXPECTED_DIMS,
     };
 
     /// Aba superior do hub.

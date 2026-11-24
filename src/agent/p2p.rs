@@ -142,7 +142,12 @@ impl VClock {
 
     /// JSON canônico (chaves ordenadas, `{"nó":seq}`).
     pub fn to_json(&self) -> Json {
-        Json::Obj(self.ticks.iter().map(|(n, s)| (n.clone(), Json::Num(*s as f64))).collect())
+        Json::Obj(
+            self.ticks
+                .iter()
+                .map(|(n, s)| (n.clone(), Json::Num(*s as f64)))
+                .collect(),
+        )
     }
 
     /// Lê um relógio de `Json::Obj`; rejeita valores negativos/não inteiros.
@@ -203,13 +208,7 @@ fn validate_scope(scope: &str) -> Result<(), P2pError> {
 }
 
 /// Texto canônico hasheado de uma entrada (versão + campos + `prev`).
-fn canonical(
-    scope: &str,
-    key: &str,
-    seq: u64,
-    claim: &Claim,
-    prev: &str,
-) -> String {
+fn canonical(scope: &str, key: &str, seq: u64, claim: &Claim, prev: &str) -> String {
     format!(
         "v{P2P_VERSION}\nscope={}\nkey={}\nseq={seq}\nsubject={}\nrelation={}\nvalue={}\nconfidence={:.6}\nauthority={}\nsource={}\nprovenance={}\nprev={prev}",
         scope.trim(),
@@ -276,12 +275,7 @@ pub struct DeltaEntry {
 
 impl DeltaEntry {
     /// Monta a entrada e sela o hash (`prev = ZERO_HASH` para a primeira).
-    pub fn build(
-        scope: &str,
-        claim: &Claim,
-        seq: u64,
-        prev: &str,
-    ) -> Result<Self, P2pError> {
+    pub fn build(scope: &str, claim: &Claim, seq: u64, prev: &str) -> Result<Self, P2pError> {
         validate_scope(scope)?;
         let key = entry_key(claim)?;
         let hash = sha256_hex(canonical(scope, &key, seq, claim, prev).as_bytes());
@@ -331,7 +325,10 @@ pub fn claim_json(claim: &Claim) -> Json {
         ("subject".into(), Json::Str(claim.subject.clone())),
         ("relation".into(), Json::Str(claim.relation.clone())),
         ("value".into(), Json::Str(claim.value.clone())),
-        ("confidence".into(), Json::Num(f64::from(claim.confidence.clamp(0.0, 1.0)))),
+        (
+            "confidence".into(),
+            Json::Num(f64::from(claim.confidence.clamp(0.0, 1.0))),
+        ),
         ("authority".into(), Json::Num(f64::from(claim.authority))),
         ("source".into(), Json::Str(claim.source.label().to_string())),
         (
@@ -651,7 +648,11 @@ impl Conflict {
         Claim::new(
             self.kept.subject.clone(),
             "contradicts",
-            format!("{} ≠ {}", self.kept.value.trim(), self.incoming.value.trim()),
+            format!(
+                "{} ≠ {}",
+                self.kept.value.trim(),
+                self.incoming.value.trim()
+            ),
             self.kept
                 .confidence
                 .min(self.incoming.confidence)
@@ -714,7 +715,9 @@ impl Replica {
         for entry in own {
             replica.seen.insert((replica.node.clone(), entry.seq));
             replica.absorb(&entry, &mut report);
-            replica.vclock.observe(replica.node.clone().as_str(), entry.seq);
+            replica
+                .vclock
+                .observe(replica.node.clone().as_str(), entry.seq);
         }
         Ok(replica)
     }
@@ -780,9 +783,7 @@ impl Replica {
             report.accepted += 1;
             return;
         }
-        let same = self.store[&key]
-            .iter()
-            .any(|c| c.same_value(&entry.claim));
+        let same = self.store[&key].iter().any(|c| c.same_value(&entry.claim));
         if same {
             report.idempotent += 1;
             return;
@@ -839,10 +840,7 @@ impl Replica {
 }
 
 /// Troca bidirecional: cada lado recebe o oplog inteiro do outro (idempotente).
-pub fn sync_pair(
-    a: &mut Replica,
-    b: &mut Replica,
-) -> Result<(ApplyReport, ApplyReport), P2pError> {
+pub fn sync_pair(a: &mut Replica, b: &mut Replica) -> Result<(ApplyReport, ApplyReport), P2pError> {
     let from_a = a.delta_all()?;
     let from_b = b.delta_all()?;
     let a_to_b = b.apply(&from_a)?;

@@ -94,7 +94,11 @@ pub enum TabError {
     /// Aspas abertas e nunca fechadas.
     UnclosedQuote { line: usize },
     /// Linha com número de campos diferente do header.
-    RaggedRow { row: usize, expected: usize, found: usize },
+    RaggedRow {
+        row: usize,
+        expected: usize,
+        found: usize,
+    },
     /// Mapeamento explícito cita coluna que não existe.
     SchemaBreak { reason: String },
 }
@@ -112,7 +116,11 @@ impl fmt::Display for TabError {
             }
             Self::TooManyRows { rows } => write!(f, "linhas demais ({rows} > {MAX_ROWS})"),
             Self::UnclosedQuote { line } => write!(f, "aspa não fechada (linha {line})"),
-            Self::RaggedRow { row, expected, found } => write!(
+            Self::RaggedRow {
+                row,
+                expected,
+                found,
+            } => write!(
                 f,
                 "linha {row} tem {found} campos, header tem {expected} (linha não é descartada)"
             ),
@@ -353,7 +361,14 @@ impl TabMapping {
 fn aliases(role: TabRole) -> &'static [&'static str] {
     match role {
         TabRole::Subject => &["subject", "sujeito", "entity", "entidade", "term", "termo"],
-        TabRole::Relation => &["relation", "relacao", "relação", "predicate", "predicado", "property"],
+        TabRole::Relation => &[
+            "relation",
+            "relacao",
+            "relação",
+            "predicate",
+            "predicado",
+            "property",
+        ],
         TabRole::Value => &["value", "valor", "object", "objeto", "target", "alvo"],
         _ => &[],
     }
@@ -392,7 +407,11 @@ impl TabSchema {
                         }
                         _ => {
                             return Err(TabError::SchemaBreak {
-                                reason: format!("coluna '{}' ({}) não existe no header", name, role.label()),
+                                reason: format!(
+                                    "coluna '{}' ({}) não existe no header",
+                                    name,
+                                    role.label()
+                                ),
                             })
                         }
                     }
@@ -433,7 +452,10 @@ impl TabSchema {
 
     /// Índice da coluna com o papel pedido.
     pub fn role_index(&self, role: TabRole) -> Option<usize> {
-        self.columns.iter().find(|c| c.role == role).map(|c| c.index)
+        self.columns
+            .iter()
+            .find(|c| c.role == role)
+            .map(|c| c.index)
     }
 
     /// Colunas sem papel.
@@ -608,10 +630,9 @@ pub fn convert_file(
     rel: &str,
     mapping: &TabMapping,
 ) -> Result<(TabDoc, Vec<Claim>, Vec<TabAbstain>), String> {
-    let path = super::tools::resolve_sandbox_path(root, rel)
-        .map_err(|e| format!("path: {e}"))?;
-    let text = std::fs::read_to_string(&path)
-        .map_err(|e| format!("leitura {}: {e}", path.display()))?;
+    let path = super::tools::resolve_sandbox_path(root, rel).map_err(|e| format!("path: {e}"))?;
+    let text =
+        std::fs::read_to_string(&path).map_err(|e| format!("leitura {}: {e}", path.display()))?;
     let doc = parse_tabular_with(&text, mapping).map_err(|e| format!("parse: {e}"))?;
     let (claims, abstains) = claims_from_tab(&doc);
     Ok((doc, claims, abstains))
@@ -682,8 +703,8 @@ impl Tool for TabTool {
                 .map_err(|e| ToolError::InvalidArgs(format!("mapeamento: {e}")))?,
             _ => TabMapping::default(),
         };
-        let (doc, claims, abstains) = convert_file(&self.root, &rel, &mapping)
-            .map_err(ToolError::Precondition)?;
+        let (doc, claims, abstains) =
+            convert_file(&self.root, &rel, &mapping).map_err(ToolError::Precondition)?;
         let total = claims.len() + abstains.len();
         let confidence = if total == 0 {
             0.0

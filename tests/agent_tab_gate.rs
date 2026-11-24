@@ -83,7 +83,11 @@ fn check_facts_jsonl() -> Result<(), String> {
     let text = facts_jsonl(&claims);
     let lines: Vec<&str> = text.lines().collect();
     if lines.len() != claims.len() {
-        return Err(format!("facts.jsonl: {} linhas != {}", lines.len(), claims.len()));
+        return Err(format!(
+            "facts.jsonl: {} linhas != {}",
+            lines.len(),
+            claims.len()
+        ));
     }
     for (i, line) in lines.iter().enumerate() {
         let parsed = Json::parse(line).map_err(|e| format!("json linha {i}: {e}"))?;
@@ -126,8 +130,14 @@ fn check_ood_abstain() -> Result<usize, String> {
 fn check_malformed() -> Result<usize, String> {
     let too_many_cols = format!(
         "{}\n{}\n",
-        (0..257).map(|i| format!("c{i}")).collect::<Vec<_>>().join(","),
-        (0..257).map(|i| i.to_string()).collect::<Vec<_>>().join(",")
+        (0..257)
+            .map(|i| format!("c{i}"))
+            .collect::<Vec<_>>()
+            .join(","),
+        (0..257)
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
     );
     let long_line = format!(
         "subject,relation,value\ns,r,{}\n",
@@ -181,8 +191,8 @@ fn check_tsv_bom_e_mapping() -> Result<(), String> {
     }
     // Header opaco + mapeamento explícito.
     let opaque = "a;b;c\nVec;metodo;push\n";
-    let mapping = TabMapping::parse("subject=a,relation=b,value=c")
-        .map_err(|e| format!("mapping: {e}"))?;
+    let mapping =
+        TabMapping::parse("subject=a,relation=b,value=c").map_err(|e| format!("mapping: {e}"))?;
     let doc = parse_tabular_with(opaque, &mapping).map_err(|e| format!("opaque: {e}"))?;
     if doc.dialect.label() != "csv_semicolon" {
         return Err(format!("dialeto ;: {}", doc.dialect.label()));
@@ -210,7 +220,10 @@ fn check_auth_e_determinismo() -> Result<(), String> {
     let a = parse_tabular(&csv).map_err(|e| format!("parse a: {e}"))?;
     let b = parse_tabular(&csv).map_err(|e| format!("parse b: {e}"))?;
     if a.schema.hash != b.schema.hash || a.schema.hash.len() != 16 {
-        return Err(format!("hash instável: {} / {}", a.schema.hash, b.schema.hash));
+        return Err(format!(
+            "hash instável: {} / {}",
+            a.schema.hash, b.schema.hash
+        ));
     }
     let (claims, _) = claims_from_tab(&a);
     for c in &claims {

@@ -452,8 +452,7 @@ impl ToolAgent {
             if execution.outcome.needs_human {
                 // HITL não é sucesso: nada do passo entra no resultado.
                 success = false;
-                action = if goal.kind == GoalKind::Act
-                    && last_tool.as_deref() == Some("ask.human")
+                action = if goal.kind == GoalKind::Act && last_tool.as_deref() == Some("ask.human")
                 {
                     Action::Abstain
                 } else {

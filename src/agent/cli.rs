@@ -1373,10 +1373,7 @@ fn eval_cmd(args: &Args, out: &mut dyn Write) -> i32 {
                 return EXIT_FAIL;
             }
         };
-        let path = args
-            .report
-            .clone()
-            .unwrap_or_else(default_scorecard_path);
+        let path = args.report.clone().unwrap_or_else(default_scorecard_path);
         if let Err(e) = card.write_to(&path) {
             let _ = writeln!(out, "erro: nao gravou {}: {e}", path.display());
             return EXIT_FAIL;
@@ -1404,11 +1401,7 @@ fn eval_cmd(args: &Args, out: &mut dyn Write) -> i32 {
                 card.t0.false_abstain_rate
             );
             for tier in &card.tiers {
-                let _ = writeln!(
-                    out,
-                    "  {} ready={} — {}",
-                    tier.tier, tier.ready, tier.note
-                );
+                let _ = writeln!(out, "  {} ready={} — {}", tier.tier, tier.ready, tier.note);
             }
             for m in &card.mismatches {
                 let _ = writeln!(out, "  MISMATCH {m}");

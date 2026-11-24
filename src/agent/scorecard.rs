@@ -81,8 +81,7 @@ pub fn load_suite(text: &str) -> Result<Vec<SuiteCase>, String> {
             .get("action")
             .and_then(|v| v.as_str())
             .ok_or_else(|| format!("linha {at}: `expect.action` ausente"))?;
-        let action =
-            action_from_label(action_label).map_err(|e| format!("linha {at}: {e}"))?;
+        let action = action_from_label(action_label).map_err(|e| format!("linha {at}: {e}"))?;
         let success = expect
             .get("success")
             .and_then(|v| v.as_bool())
@@ -384,8 +383,8 @@ pub fn default_scorecard_path() -> PathBuf {
 
 /// Roda a suite com o agente real. Duas execuções do mesmo dataset são iguais.
 pub fn run_suite(suite_path: &Path, cfg: &AgentConfig) -> Result<AgentScorecard, String> {
-    let bytes = fs::read(suite_path)
-        .map_err(|e| format!("leitura {}: {e}", suite_path.display()))?;
+    let bytes =
+        fs::read(suite_path).map_err(|e| format!("leitura {}: {e}", suite_path.display()))?;
     let dataset_sha256 = sha256_hex(&bytes);
     let text = String::from_utf8(bytes).map_err(|e| format!("suite não é UTF-8: {e}"))?;
     let cases = load_suite(&text)?;
@@ -456,17 +455,8 @@ pub fn run_suite(suite_path: &Path, cfg: &AgentConfig) -> Result<AgentScorecard,
         "release".to_string()
     };
     let seed = cfg.seed;
-    let run_id = sha256_hex(
-        format!(
-            "{}|{}|{}|{}|{}",
-            dataset_sha256,
-            n,
-            seed,
-            version,
-            profile
-        )
-        .as_bytes(),
-    );
+    let run_id =
+        sha256_hex(format!("{}|{}|{}|{}|{}", dataset_sha256, n, seed, version, profile).as_bytes());
     let run_id = run_id[..16].to_string();
 
     let t3_note = match super::coder_t3_generator_declared() {

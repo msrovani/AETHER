@@ -37,6 +37,7 @@
 pub mod a8_v1;
 pub mod bus;
 pub mod cli;
+pub mod clip;
 pub mod coherence;
 pub mod dec_status;
 pub mod dec_upgrade;
@@ -59,8 +60,8 @@ pub mod predict;
 pub mod registry;
 pub mod risk_policy;
 pub mod router;
-pub mod self_model;
 pub mod scorecard;
+pub mod self_model;
 pub mod semantic;
 pub mod speech;
 pub mod tab;
@@ -132,15 +133,15 @@ pub use risk_policy::{
     hitl_token_ok, matrix_json, requirement_for, write_matrix_artifact, HitlRequirement, RiskRow,
     RISK_MATRIX,
 };
-pub use self_model::SelfModel;
-pub use speech::{SttPort, SttResult, TtsPort, TtsResult};
 pub use scorecard::{
     default_scorecard_path, load_suite, parse_goal_spec, run_suite, AgentScorecard, SuiteCase,
     T0Metrics, TierLine, SCORECARD_SCHEMA,
 };
+pub use self_model::SelfModel;
+pub use speech::{SttPort, SttResult, TtsPort, TtsResult};
 pub use tab::{
-    claims_from_tab, facts_jsonl, parse_tabular, parse_tabular_with, write_facts, TabDoc,
-    TabError, TabMapping, TabRole, TabSchema, TabTool, TAB_AUTH,
+    claims_from_tab, facts_jsonl, parse_tabular, parse_tabular_with, write_facts, TabDoc, TabError,
+    TabMapping, TabRole, TabSchema, TabTool, TAB_AUTH,
 };
 pub use telemetry::{goal_label, EpisodeTrace, StepTrace};
 pub use tnl_in::{
