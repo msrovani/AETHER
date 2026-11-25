@@ -86,7 +86,7 @@ impl WaveInterferenceBlock {
     pub fn forward_batched(&mut self, u: ArrayView3<'_, f32>) -> Result<Array3<f32>>;
 
     /// Entropia espectral normalizada do campo de entrada, em [0,1].
-    pub fn compute_spectral_entropy(&self, u: ArrayView2<'_, f32>) -> Result<f64>;
+    pub fn compute_spectral_entropy(&mut self, u: ArrayView2<'_, f32>) -> Result<f64>; // F2 (Sprint C): reusa espectro do forward
     /// Entropia do espectro JA transferido (caminho de onda), em [0,1].
     pub fn compute_wave_entropy(&self) -> f64;
 

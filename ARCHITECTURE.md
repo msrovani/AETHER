@@ -284,7 +284,7 @@ impl WaveInterferenceBlock {
     pub fn forward(&mut self, u: ndarray::ArrayView2<'_, f32>) -> Result<ndarray::Array2<f32>, AetherError>;
     pub fn forward_batched(&mut self, u: ndarray::ArrayView3<'_, f32>) -> Result<ndarray::Array3<f32>, AetherError>;
     /// Entropia espectral normalizada H = -Σ p_k ln p_k / ln K, com p_k = |U_k|² / Σ|U|².
-    pub fn compute_spectral_entropy(&self, u: ndarray::ArrayView2<'_, f32>) -> Result<f64, AetherError>;
+    pub fn compute_spectral_entropy(&mut self, u: ndarray::ArrayView2<'_, f32>) -> Result<f64, AetherError>; // F2 (Sprint C): reusa o espectro do forward
 }
 ```
 

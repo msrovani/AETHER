@@ -193,8 +193,8 @@ fn mesma_semente_mesmos_pesos_e_saida() {
 
 #[test]
 fn inv_w4_entropia_coerente_menor_que_ruido() {
-    // `compute_spectral_entropy` toma `&self`.
-    let block = WaveInterferenceBlock::new(4, 8, 32, 0x5EED);
+    // F2 (Sprint C): `compute_spectral_entropy` reusa o espectro do forward.
+    let mut block = WaveInterferenceBlock::new(4, 8, 32, 0x5EED);
 
     let h_coherent = block
         .compute_spectral_entropy(sine_field(4, 512).view())

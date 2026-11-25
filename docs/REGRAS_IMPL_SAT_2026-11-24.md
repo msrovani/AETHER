@@ -187,6 +187,13 @@ pub fn try_probe() -> bool { ... decrement; on 0 → false }
 
 ---
 
+## Sprint C (2026-11-25)
+- **SC-1 (F1):** dedup de energia no `relax_one` (`thermodynamic_solver.rs`: `e` do `descend`/`best_e`; sem recompute O(N²) final).
+- **SC-2 (F2):** reuso do espectro do forward na entropia (`wave_interference.rs`: `spec_in_valid` + `entropy_from_spec`; chamadas: closed_loop_organism.rs:469, aether_daemon.rs:569-572, tests/test_wave.rs, ARCHITECTURE.md).
+- **SC-3 (F17):** **já está zero-alloc** no código atual (`logic_pipeline.rs:884-885`, trail/pq com capacidade).
+- **SC-4 (F18, opcional):** busy_work do `sample()` → fluxo de boot; outbox do T2Worker em batches temporizados.
+- **Gate:** `cargo test --release` (full_suite_sprint6.txt); E6 re-medida (HW_TARGET §8.2) via `target/aether_e6_mod.json`.
+
 ## Cronograma
 
 - **Sprint A (concluído, 2026-11-24):** Sessões 1–8 (R1–R12).

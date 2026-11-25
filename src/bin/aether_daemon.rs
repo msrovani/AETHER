@@ -566,10 +566,12 @@ impl AetherDaemon {
 
         // 2) predição espectral + surpresa
         self.wave.forward_into(self.u.view(), &mut self.v)?;
-        let entropy_raw = self
-            .wave
-            .compute_spectral_entropy(self.u.view())
-            .unwrap_or(0.0) as f32;
+        // F2 (Sprint C): reusa o espectro do forward (sem segundo FFT).
+        let entropy_raw = {
+            let w = &mut self.wave;
+            w.compute_spectral_entropy(self.u.view())
+        }
+        .unwrap_or(0.0) as f32;
         let entropy_wave = self.wave.compute_wave_entropy() as f32;
 
         // Surpresa = erro relativo de reconstrução ACIMA do baseline + variação

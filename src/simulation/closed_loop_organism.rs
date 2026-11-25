@@ -466,7 +466,11 @@ impl ClosedLoopOrganism {
         // --- interferência espectral ---
         self.wave.forward_into(self.u.view(), &mut self.v)?;
         lap!(stage::WAVE);
-        let entropy_raw = self.wave.compute_spectral_entropy(self.u.view())?;
+        // F2 (Sprint C): `forward_into` gravou o espectro — entropia reusa.
+        let entropy_raw = {
+            let w = &mut self.wave;
+            w.compute_spectral_entropy(self.u.view())?
+        };
         let entropy_wave = self.wave.compute_wave_entropy();
         lap!(stage::ENTROPY);
 

@@ -404,7 +404,9 @@ impl ThermodynamicIsingSolver {
         for i in 0..n {
             self.s_cur[i] = self.best_states[[b, i]];
         }
-        let e = descend(n, jb, hb, self.s_cur.as_mut_slice(), self.g.as_mut_slice());
+        // F1 (Sprint C): `e` vai ao final do estado devolvido; sem recálculo
+        // extra de O(N²) em `relax_one` (escavação redundantes em L436).
+        let mut e = descend(n, jb, hb, self.s_cur.as_mut_slice(), self.g.as_mut_slice());
 
         // --- fuga determinística (só se o polimento não bateu H(s_0)) ---
         if e >= e0 {
@@ -429,11 +431,15 @@ impl ThermodynamicIsingSolver {
                     self.s_cur.copy_from_slice(&self.s_try);
                 }
             }
+            // F1 (Sprint C): a energia do estado final devolvido reusamos
+            // (`descend` devolve `row_energy` do estado devolvido).
+            e = best_e;
         }
 
         state_row.copy_from_slice(&self.s_cur);
-        // Energia canônica do estado devolvido: mesma função/formula de `energy`.
-        row_energy(jb, n, hb, state_row)
+        // F1 (Sprint C): é `e` = `descend`/`best_e` acima — poupamos um
+        // recálculo O(N²) de `row_energy(jb, n, hb, state_row)`.
+        e
     }
 }
 

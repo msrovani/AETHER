@@ -266,6 +266,9 @@ pub struct WaveInterferenceBlock {
     wave_spectrum: Array2<Complex32>,
     /// `L_fft / 2 + 1` do último `forward` (denominador comum das entropias).
     last_bins: usize,
+    /// F2 (Sprint C): `true` se o último `dispatch` gravou `scratch.spec_in`
+    /// (válido até o próximo `compute_spectral_entropy`).
+    spec_in_valid: bool,
 }
 
 impl fmt::Debug for WaveInterferenceBlock {
@@ -341,6 +344,7 @@ impl WaveInterferenceBlock {
             entropy: RefCell::new(EntropyScratch::empty()),
             wave_spectrum: Array2::<Complex32>::zeros((c_out, modes)),
             last_bins: 0,
+            spec_in_valid: false,
         };
         // Pré-aquecimento: planos + buffers + scratch ficam prontos antes do
         // primeiro quadro.
@@ -474,6 +478,9 @@ impl WaveInterferenceBlock {
                     .map_err(fft_error)?;
             }
         }
+        // F2 (Sprint C): o espectro gravado é reusável por
+        // `compute_spectral_entropy` na mesma janela (sem segundo FFT).
+        self.spec_in_valid = true;
 
         // 3) Truncamento modal + contração sobre C_in:
         //    Y[o,k] = sum_c R_phi[o,c,k] * U[c,k], k < min(modes, nb).
@@ -603,7 +610,7 @@ impl WaveInterferenceBlock {
     ///
     /// Usa o scratch interno pré-alocado (a alocação só ocorre quando aparece
     /// um `L_eff` novo); no laço quente de `L` constante não aloca.
-    pub fn compute_spectral_entropy(&self, u: ArrayView2<'_, f32>) -> Result<f64> {
+    pub fn compute_spectral_entropy(&mut self, u: ArrayView2<'_, f32>) -> Result<f64> {
         if self.c_in == 0 {
             return Err(AetherError::Config("wave: c_in deve ser > 0".into()));
         }
@@ -619,11 +626,22 @@ impl WaveInterferenceBlock {
         }
         if l == 1 {
             // Um único sample já é "toda a energia no DC".
+            self.spec_in_valid = false;
             return Ok(0.0);
         }
 
         let n = fft_len_for(l);
         let nb = n / 2 + 1;
+
+        // F2 (Sprint C): reusa o espectro do `forward` (`dispatch`) desta
+        // janela — sem segundo FFT. A leitura é só a redução (sem alocação).
+        if self.spec_in_valid && self.scratch.len == n {
+            self.spec_in_valid = false;
+            let spec = self.scratch.spec_in.view();
+            return Ok(self.entropy_from_spec(spec, nb));
+        }
+        self.spec_in_valid = false;
+
         let (fwd, _) = self.plans.borrow_mut().ensure(n);
         let scratch_len = fwd.get_scratch_len();
 
@@ -653,7 +671,13 @@ impl WaveInterferenceBlock {
                     .map_err(fft_error)?;
             }
         }
+        Ok(self.entropy_from_spec(spec.view(), nb))
+    }
 
+    /// Entropia espectral sobre um espectro gravado (Sprint C, F2):
+    /// `H = -Σ p_k ln p_k / ln K`, `p_k = Σ_c |spec[c,k]|² / total`,
+    /// `K = nb` — sem alocação.
+    fn entropy_from_spec(&self, spec: ArrayView2<'_, Complex32>, nb: usize) -> f64 {
         // Potência por bin somada sobre os canais: p_k = Σ_c |U_c,k|² / total.
         // A distribuição tem K = nb categorias (bins), não C_in*nb: somar os
         // canais antes de normalizar é o que dá a entropia *espectral*.
@@ -662,7 +686,7 @@ impl WaveInterferenceBlock {
             total += spec.column(k).iter().map(bin_power).sum::<f64>();
         }
         if total <= 0.0 || !total.is_finite() {
-            return Ok(0.0);
+            return 0.0;
         }
         let mut h = 0.0f64;
         for k in 0..nb {
@@ -672,7 +696,7 @@ impl WaveInterferenceBlock {
             }
         }
         let k = nb as f64;
-        Ok((h / k.ln()).clamp(0.0, 1.0))
+        (h / k.ln()).clamp(0.0, 1.0)
     }
 
     /// Entropia do espectro **já transferido** (`wave_spectrum`), em `[0, 1]`.
