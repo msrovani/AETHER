@@ -125,6 +125,11 @@ impl T2Worker {
                         ledger.commit_run();
                         shared.snapshot(&ledger);
                         last = Instant::now();
+                    } else if due && ledger.metrics().spooled > 0 {
+                        // SC-4b (Sprint C): outbox em batches temporizados —
+                        // puxa pendências (respeitando backoff) no próprio
+                        // tick, mesmo sem novos eventos chegando.
+                        let _ = ledger.flush();
                     }
                     if flag.load(Ordering::Relaxed) {
                         break;

@@ -202,6 +202,12 @@ impl HardwareTransducer {
         acc
     }
 
+    /// Fluxo de boot — trabalho por pressão roda **uma vez** no boot do
+    /// transdutor, fora do laço quente de `sample()` (SC-4, Sprint C).
+    pub fn boot(&mut self) {
+        let _ = self.busy_work(WORK_ITERS);
+    }
+
     /// Captura o jitter do acordar corrente (o atraso contra o prazo previsto)
     /// e **só depois** avança o prazo — medir depois do avanço dava sempre ~0.
     pub fn tick_deadline(&mut self, hz: f64) {
@@ -240,8 +246,10 @@ impl HardwareTransducer {
         let now = Instant::now();
         let jitter_ns = self.last_jitter_ns;
 
+        // SC-4 (Sprint C): o trabalho por pressão (`busy_work`) saiu do hot
+        // path — roda no `boot()` do daemon. Aqui medimos apenas o custo do
+        // próprio `sample` (sem pressão extra na amostra).
         let t0 = Instant::now();
-        let _ = self.busy_work(WORK_ITERS);
         let work_ns = t0.elapsed().as_secs_f64() * 1e9;
         let load = (work_ns / self.baseline_ns - 1.0).clamp(-0.5, 4.0);
 
@@ -471,6 +479,8 @@ impl AetherDaemon {
         if daemon.cfg.host {
             daemon.transducer.enable_host();
         }
+        // SC-4 (Sprint C): trabalho por pressão sai do hot path — fluxo de boot.
+        daemon.transducer.boot();
         daemon.attach_sgdb()?;
         Ok(daemon)
     }
