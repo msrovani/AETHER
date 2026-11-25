@@ -258,6 +258,9 @@ pub struct MorphogeneticField {
     free_energy: f32,
     /// Última surpresa de reconstrução (MSE, `>= 0`).
     surprise: f32,
+    /// G-MORPH (L8, Sprint A): bacias híbridas nascentes detectadas no
+    /// último `evolve_topology` (densidade 0 → alta com surpresa ativa).
+    new_basin_count: u64,
     /// Buffer da iteração de potência (vetor).
     power_v: Vec<f32>,
     /// Buffer da iteração de potência (J·v).
@@ -296,6 +299,7 @@ impl MorphogeneticField {
             cfg,
             j,
             g_buf: vec![1.0f32; n],
+            new_basin_count: 0,
             cycles: 0,
             free_energy: 0.0,
             surprise: 0.0,
@@ -344,6 +348,19 @@ impl MorphogeneticField {
     /// Última surpresa de reconstrução `S` (MSE, `>= 0`).
     pub fn last_surprise(&self) -> f32 {
         self.surprise
+    }
+
+    /// G-MORPH (L8): bacias híbridas nascentes detectadas no último
+    /// `evolve_topology` (monotônico até o próximo passo).
+    pub fn new_basin_count(&self) -> u64 {
+        self.new_basin_count
+    }
+
+    /// G-MORPH (L8): tira o contador (consumidor pode registrar/consolidar).
+    pub fn take_new_basin_count(&mut self) -> u64 {
+        let c = self.new_basin_count;
+        self.new_basin_count = 0;
+        c
     }
 
     /// Fração de sinapses **ativas** (`|J_ij| > θ_dissolve`, fora da diagonal).
@@ -551,6 +568,12 @@ impl MorphogeneticField {
 
         self.cycles += 1;
         self.surprise = surprise;
+        // G-MORPH (L8, Sprint A): detecção de bacia nascente — bacias
+        // híbridas cristalizam quando surpresa alta (>0,5) e densidade estrutural
+        // está acima do piso (0,30). Sem estímulo/estrutura: sem bacia nova.
+        if surprise > 0.5 && self.density() > 0.30 {
+            self.new_basin_count += 1;
+        }
         if self.cycles % self.cfg.homeostasis_period == 0 {
             self.try_homeostasis()?;
         }

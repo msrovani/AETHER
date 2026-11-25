@@ -125,6 +125,9 @@ impl LinUcb {
 pub struct ContextualTools {
     bandit: LinUcb,
     arms: Vec<&'static str>,
+    /// R6/L6 (Sprint A): última assinatura macro do RG observada
+    /// (4 palavras `u16`, de `RenormalizationHierarchy::macro_signature`).
+    rg_macro_sig: Option<[u16; 4]>,
 }
 
 impl ContextualTools {
@@ -134,7 +137,19 @@ impl ContextualTools {
         Self {
             bandit: LinUcb::new(n, LINUCB_DIM, alpha),
             arms: tool_names,
+            rg_macro_sig: None,
         }
+    }
+
+    /// R6/L6 (Sprint A): seta a assinatura macro do RG mais recente.
+    /// Consumida pelo planner (Sprint B, L6).
+    pub fn set_rg_macro_signature(&mut self, sig: &[u16; 4]) {
+        self.rg_macro_sig = Some(*sig);
+    }
+
+    /// R6/L6 (Sprint A): assinatura macro do RG corrente (para gates).
+    pub fn rg_macro_signature(&self) -> Option<&[u16; 4]> {
+        self.rg_macro_sig.as_ref()
     }
 
     /// Nomes dos braços.

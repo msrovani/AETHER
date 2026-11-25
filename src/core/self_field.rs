@@ -149,6 +149,8 @@ pub struct SelfFieldConfig {
     pub recall_margin_min: f32,
     /// Queda relativa de coerência que dispara abstenção (ex.: `0,15` = −15%).
     pub coherence_drop: f32,
+    /// SB-6 (L9): peso do margem de estabilidade do J no campo interno (`observe_topology`).
+    pub topo_margin_weight: f32,
     /// Razão de surpresa acima da EMA que caracteriza novidade (`1,25` = +25%).
     pub surprise_ratio: f32,
 }
@@ -165,6 +167,7 @@ impl Default for SelfFieldConfig {
             recall_margin_min: 0.20,
             coherence_drop: 0.30,
             surprise_ratio: 2.0,
+            topo_margin_weight: 0.05,
         }
     }
 }
@@ -358,6 +361,8 @@ pub struct SelfField {
     /// manter `needs_drop` = false (invariante do tipo, E4).
     macro_sig_cache: [[u16; 4]; 16],
     macro_sig_len: usize,
+    /// SB-6 (L9): EMA do margem de estabilidade do J.
+    topo_margin_ema: f32,
     scale: [f32; FEATURES],
     topo_scale: [f32; FEATURES],
     err_ema: f32,
@@ -421,6 +426,7 @@ impl SelfField {
             topology: ChannelBank::default(),
             macro_sig_cache: [[0u16; 4]; 16],
             macro_sig_len: 0,
+            topo_margin_ema: 0.0,
             scale: [1.0; FEATURES],
             topo_scale: [1.0; FEATURES],
             err_ema: 0.0,
@@ -547,6 +553,24 @@ impl SelfField {
     /// True se a assinatura macro já está no cache recente (1-hop).
     pub fn macro_signature_seen(&self, sig: &[u16; 4]) -> bool {
         self.macro_sig_cache[..self.macro_sig_len].contains(sig)
+    }
+
+    /// SB-6 (L9, Sprint A): registra a EMA do margem de estabilidade do J
+    /// (`rho_bound` do chamador, estilo `1 - rho`), weight `topo_margin_weight`.
+    /// Não deve confundir com [`Self::observe_topology`] (estrutural, E4).
+    pub fn observe_j_stability(&mut self, rho_bound: f32) {
+        if !rho_bound.is_finite() || rho_bound < 0.0 {
+            return;
+        }
+        let margin = 1.0 - rho_bound.min(1.0);
+        let w = self.cfg.topo_margin_weight;
+        let alpha = Self::alpha(16.7, self.cfg.ema_tau_ms);
+        self.topo_margin_ema = (1.0 - alpha) * self.topo_margin_ema + alpha * margin * w;
+    }
+
+    /// SB-6: margem interna corrente do J (`topo_margin_ema`).
+    pub fn topo_stability_ema(&self) -> f32 {
+        self.topo_margin_ema
     }
 
     /// Similaridade Hamming 0..1 entre duas assinaturas macro (Sprint A, R6).

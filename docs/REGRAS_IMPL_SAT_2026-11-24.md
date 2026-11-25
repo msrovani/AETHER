@@ -194,8 +194,10 @@ pub fn try_probe() -> bool { ... decrement; on 0 → false }
   - **SB-1 (F19b):** `imagine_futures_into` → sequencial pinned (sem `rayon` no T0) — concluído.
   - **SB-1b:** correção do `aether_daemon` lock (drop antes do bind do nó) — concluído.
   - **SB-2 (L4, concluído):** `Governor::last_koopman_j() -> Option<Vec<f64>>` + `weights()` getter; gate `tests/governor_koopman_j_gate.rs` (1 pass). Injeção no Dreamer (forma 6×6 vs W 20×20) = Sprint B.
-  - **SB-3:** L6 (LinUCB ← RG macro) · **SB-4:** L7 (Sono SGDB→SINDy→Law) ·
-    **SB-5:** L8 (G-MORPH new_basin_events) · **SB-6:** L9 (introspecção no SelfField).
+  - **SB-3 (L6, concluído):** `ContextualTools.rg_macro_sig` + `set_rg_macro_signature` + `rg_macro_signature()` (linucb.rs); gate `tests/linucb_rg_signature_gate.rs`.
+  - **SB-4 (L7, concluído):** `LawRecord` + `ORGANISM_LAW_AUTH` (ledger.rs) + `SgdbLedger::stage_law`; gate `tests/g_law_distill_gate.rs` (SINDy fit residual < 0.25, Law recém do scope, auth ≤ 120).
+  - **SB-5 (L8):** `MorphogeneticField::new_basin_count/take_new_basin_count` + detecção (`surprise > 0.5 && density > 0.30`); gate `tests/g_morph_basin_gate.rs` (1 pass). Consolidação de impressão da bacia no daemon = Sprint B (2ª parte L8).
+  - **SB-6 (L9):** `SelfField::observe_j_stability` + `topo_stability_ema()` (Gershgorin bound do chamador, `topo_margin_weight` default 0.05); gate `tests/self_field_introspection_gate.rs` (1 pass).
 - **Guarda (contínuo):** `cargo test --release` (full_suite_sprint*.txt) + re-medida E6.
 
 ## Referências

@@ -179,6 +179,31 @@ impl<T: Transport> SgdbLedger<T> {
         self.staged.extend(records);
     }
 
+    /// SB-4 (L7, Sprint A): estage a lei destilada (autoridade
+    /// `ORGANISM_LAW_AUTH` ≤ 120; quarentenada até gate de redução de F).
+    pub fn stage_law(&mut self, law: LawRecord) {
+        let payload = law.encode();
+        let key = phase_key(&payload);
+        let wall_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        self.staged.push(DraftRecord {
+            key,
+            layer: Layer::L4Semantic,
+            certificate: Certificate {
+                energy: law.residual,
+                gap: 0.0,
+                violations: 0,
+            },
+            authority: law.authority,
+            scope: law.scope,
+            tick: law.n_samples as u64,
+            wall_ms,
+            payload,
+        });
+    }
+
     /// Fecha o ciclo: entrega o lote ao SGDB e consolida no cache local.
     ///
     /// Nunca perde um fato: em falha, o lote vai para o outbox/fila. Devolve
@@ -540,6 +565,39 @@ pub const ORGANISM_LAYER: Layer = Layer::L4Semantic;
 /// Autoridade de um padrão medido pelo próprio organismo (sem HITL).
 /// Rebase Sprint A/A9 (ajuste do usuário): teto autônomo ≤ 120; 200–255 = HITL.
 pub const ORGANISM_AUTHORITY: u8 = 120;
+
+/// SB-4 (L7, Sprint A): autoridade default de **lei destilada** (quarentenada).
+pub const ORGANISM_LAW_AUTH: u8 = 120;
+
+/// SB-4 (L7, Sprint A): lei destilada de episódios — registro tipado para o
+/// SGDB via [`SgdbLedger::stage_law`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LawRecord {
+    /// Pares consumidos no fit (estimado pelo chamador).
+    pub k: u32,
+    /// Amostras do episódio alimentado ao fit.
+    pub n_samples: u32,
+    /// Passo de integração usado no fit.
+    pub dt: f32,
+    /// Erro relativo do fit (`SindyEquationDiscoverer::fit_window`).
+    pub residual: f32,
+    /// Autoridade (`ORGANISM_LAW_AUTH` = 120 default).
+    pub authority: u8,
+    /// Escopo do organismo que distilou.
+    pub scope: ScopeId,
+}
+
+impl LawRecord {
+    /// Encodes into a 16-byte payload for `phase_key`.
+    pub fn encode(&self) -> Vec<u8> {
+        let mut v = Vec::with_capacity(16);
+        v.extend_from_slice(&self.k.to_le_bytes());
+        v.extend_from_slice(&self.n_samples.to_le_bytes());
+        v.extend_from_slice(&self.dt.to_le_bytes());
+        v.extend_from_slice(&self.residual.to_le_bytes());
+        v
+    }
+}
 
 /// Tempo máximo de espera de um `commit_run` no encerramento (diagnóstico).
 pub const CLOSE_GRACE: Duration = Duration::from_millis(750);
