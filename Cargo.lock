@@ -125,7 +125,7 @@ dependencies = [
 
 [[package]]
 name = "aether_engine"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "aether_decision",
  "arboard",

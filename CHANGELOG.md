@@ -5,6 +5,8 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-25
+
 ### Added
 
 - Aceite 0.5.5: `docs/ACEITE_0_5_5.md`, `tools/aceite_0_5_5.ps1`,
@@ -14,6 +16,13 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
 - **B2 pós-FAIL** (`tools/b2_oversample_adc.py`): probe de oversample (k≤1024) e ADC no round PAWS — bits+rerank e teto f32 exato empatam em **0,755** (n=200), confirma que o gap é a assimetria query vs doc, não o rerank. Evidência em `data/b2_oversample_adc.json` (+`.meta.json`); A5 (T-HIER) seguia bloqueado até o probe seguinte.
 - **B2 duas direções** (`tools/b2_two_directions.py`): indexar o fato como `s2|rel|s1` leva o recall@1 de 0,7708 (fwd) para **0,9170** (n=5000), acima do piso 0,90; bits+rerank iguala o teto f32 exato. O gap era a assimetria de indexação, não o rerank. Evidência em `data/b2_two_directions.json` (+`.meta.json`) e banco reverso em `emb/bank_rev.f32`.
 - **A5 / T-HIER** (`src/agent/hier_moe.rs` + `tests/agent_hier_moe_gate.rs`): roteamento LSH multi-probe + re-rank f32 top-32 medido contra o MoE plano no mesmo bank — **recall@1 0,7680 vs 0,7680** e **p99 174 µs vs 455 µs** (release, n=500, config 8×10×16). `lsh_ok=true` no artefato; `may_enable` continua exigindo feature `hier_moe` + `AETHER_HIER_MOE=1` (nada no caminho default). Check `agent_hier_moe_gate` entra no `tools/cycle_gate.py` (11/11 verdes).
+- **Sprint A (S1-S8)** — fiação cognitiva: fast-J por onda na morfogênese (S1, `MorphogeneticField::set_fast_g`), `steps_eff` elástico no daemon (S2), RG spine no Governor (S3), Dream -> E2 commit via `GovernorConfig.actuator` (S4), `macro_signature()` G-ISO cross-modal (S5), federação de 2 nós (S6), rebase de autoridade em docs (S7) e probe budget G-ABD/A10 (S8, `src/agent/epistemic_budget.rs`). Gates novos: `governor_rg_spine_gate`, `governor_e2_commit_gate`, `macro_signature_gate`, `morpho_gating_gate`, `daemon_federation_gate`, `bus_epistemic_probe_gate`.
+- **Sprint B (SB-1-SB-6)**: `imagine_futures_into` sequencial pinned (SB-1), lock do daemon corrigido (SB-1b), `Governor::last_koopman_j()` + `weights()` (SB-2, `governor_koopman_j_gate`), `ContextualTools.rg_macro_sig` no LinUCB (SB-3, `linucb_rg_signature_gate`), `LawRecord`/`ORGANISM_LAW_AUTH` + `stage_law` SINDy->Law (SB-4, `g_law_distill_gate`), bacias G-MORPH (SB-5, `g_morph_basin_gate`) e estabilidade J do SelfField (SB-6, `self_field_introspection_gate`).
+
+### Changed
+
+- **Sprint C (SC-1-SC-4)** — corte de custo sem dependência nova: dedup de energia no `relax_one` (SC-1), reuso do espectro do forward na entropia (`spec_in_valid` / `entropy_from_spec`, SC-2), confirmação de que trail/pq já são zero-alloc (SC-3) e `busy_work` de `sample()` movido para `HardwareTransducer::boot()`, com outbox do T2Worker em batches temporizados (SC-4).
+- `docs/REGRAS_IMPL_SAT_2026-11-24.md` passa a registrar S1-S8, SB-1-SB-6 e SC-1-SC-4.
 
 ## [0.6.1] - 2026-11-24
 

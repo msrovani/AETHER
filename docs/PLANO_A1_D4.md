@@ -196,6 +196,7 @@ D1 (após A4) · D2 ‖ D3 (após C3) ──► D4
 - Artefato em `target/` só vira evidência quando promovido a `data/` com `.meta.json` (sha256 do próprio artefato + comando).
 - Bump de versão só com `src`/`tests` (`tools/cycle.ps1`); `.cycle/state.json` é local.
 - Release **0.6.0** entregue em 2026-11-24 com A1+A2+A3 verdes (`docs/RELEASE_0_6_0.md`).
+- Release **0.6.2** entregue em 2026-11-25 com B2 (duas direcoes), A5 (T-HIER) e Sprint A/B/C (`docs/RELEASE_0_6_2.md`).
 
 ## 6. Estado desta entrega
 

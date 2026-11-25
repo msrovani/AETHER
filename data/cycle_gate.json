@@ -44,9 +44,9 @@
       "ok": true,
       "exit": 0,
       "tail": [
-        "   Compiling aether_engine v0.6.1 (C:\\Users\\msrov\\Documents\\AETHER)",
-        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.93s",
-        "     Running tests\\agent_tab_gate.rs (target\\debug\\build\\aether_engine/7f2d43345c0d4c6e\\out\\agent_tab_gate-7f2d43345c0d4c6e.exe)"
+        "   Compiling aether_engine v0.6.2 (C:\\Users\\msrov\\Documents\\AETHER)",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 09s",
+        "     Running tests\\agent_tab_gate.rs (target\\debug\\build\\aether_engine/938500e8c40f45ac\\out\\agent_tab_gate-938500e8c40f45ac.exe)"
       ]
     },
     {
@@ -54,9 +54,9 @@
       "ok": true,
       "exit": 0,
       "tail": [
-        "   Compiling aether_engine v0.6.1 (C:\\Users\\msrov\\Documents\\AETHER)",
-        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.77s",
-        "     Running tests\\agent_eval_report_gate.rs (target\\debug\\build\\aether_engine/fc88bc6e7ca309fa\\out\\agent_eval_report_gate-fc88bc6e7ca309fa.exe)"
+        "   Compiling aether_engine v0.6.2 (C:\\Users\\msrov\\Documents\\AETHER)",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.56s",
+        "     Running tests\\agent_eval_report_gate.rs (target\\debug\\build\\aether_engine/a282cc852356d47d\\out\\agent_eval_report_gate-a282cc852356d47d.exe)"
       ]
     },
     {
@@ -64,9 +64,9 @@
       "ok": true,
       "exit": 0,
       "tail": [
-        "   Compiling aether_engine v0.6.1 (C:\\Users\\msrov\\Documents\\AETHER)",
-        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.56s",
-        "     Running tests\\agent_p2p_gate.rs (target\\debug\\build\\aether_engine/abe182ad62fbc58e\\out\\agent_p2p_gate-abe182ad62fbc58e.exe)"
+        "   Compiling aether_engine v0.6.2 (C:\\Users\\msrov\\Documents\\AETHER)",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.45s",
+        "     Running tests\\agent_p2p_gate.rs (target\\debug\\build\\aether_engine/052d297f1b6177ec\\out\\agent_p2p_gate-052d297f1b6177ec.exe)"
       ]
     },
     {
@@ -74,9 +74,9 @@
       "ok": true,
       "exit": 0,
       "tail": [
-        "   Compiling aether_engine v0.6.1 (C:\\Users\\msrov\\Documents\\AETHER)",
-        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.89s",
-        "     Running tests\\agent_clip_gate.rs (target\\debug\\build\\aether_engine/2522e63b80376414\\out\\agent_clip_gate-2522e63b80376414.exe)"
+        "   Compiling aether_engine v0.6.2 (C:\\Users\\msrov\\Documents\\AETHER)",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.99s",
+        "     Running tests\\agent_clip_gate.rs (target\\debug\\build\\aether_engine/5ceb3149695a49e1\\out\\agent_clip_gate-5ceb3149695a49e1.exe)"
       ]
     },
     {
@@ -84,9 +84,9 @@
       "ok": true,
       "exit": 0,
       "tail": [
-        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.57s",
-        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s",
-        "     Running tests\\agent_hier_moe_gate.rs (target\\debug\\build\\aether_engine/cff4064c192aea4f\\out\\agent_hier_moe_gate-cff4064c192aea4f.exe)"
+        "   Compiling aether_engine v0.6.2 (C:\\Users\\msrov\\Documents\\AETHER)",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.37s",
+        "     Running tests\\agent_hier_moe_gate.rs (target\\debug\\build\\aether_engine/4ceb7691e2944cc2\\out\\agent_hier_moe_gate-4ceb7691e2944cc2.exe)"
       ]
     },
     {
@@ -94,7 +94,7 @@
       "ok": true,
       "exit": 0,
       "tail": [
-        "[neural-sgdb] mcp=1.5.12 tools=5 git=aa81818 binary=C:\\Users\\msrov\\Documents\\neural-sgdb\\.nsgdb\\bin\\mcp_server.exe mtime=Some(1795050104) db=C:\\Users\\msrov\\Documents\\neural-sgdb\\.nsgdb\\memory.db backend=file default_scope=Some(\"aether/project\") idx_snapshot=Off",
+        "Off",
         "[neural-sgdb] stdin fechado â€” encerrando",
         "[neural-sgdb] stdin fechado â€” encerrando"
       ]
@@ -104,8 +104,8 @@
       "ok": true,
       "exit": 0,
       "tail": [
-        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
-        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s",
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.77s",
         "     Running unittests src\\lib.rs (target\\debug\\build\\aether_decision/4f3690ea37be9cf6\\out\\aether_decision-4f3690ea37be9cf6.exe)"
       ]
     }
