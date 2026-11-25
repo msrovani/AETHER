@@ -57,6 +57,7 @@ não prontos; “vivo” não conta.
 | **A2** | A | T-EVAL — placar T0–T3 no hub | 1 | A1 (fixtures) + gates existentes | semáforo do hub; evidência para B1–B3 |
 | **A3** | A | T-P2P — delta entre nós SGDB | 1 | SGDB + 2 nós locais (sem writer duplo) | sync de evidência; conflito = `contradicts` |
 | **A4** | A | T-CLIP — clipboard sandbox | 1 | A4/G-A4 + K1–K2 (vivos) | entrada de UI sem shell livre |
+| **A6** | A | T-GRAPH — evento → átomo BAM / assinatura RG | 0 | BAM/E3 + RG + SGDB (vivos) | anomalia em fluxo sem re-treino; G-GRAPH |
 | **B1** | B | sanção **A8 `enter_v1`** | 1 | gate `aether_a8_v1_criteria.json` + token HITL | T-PRED deixa de ser opt-in |
 | **B2** | B | **cutover T-DEC** dual-bank | 1 | bank `active` + HITL (não depende de B1) | T-DEC sem candidate no bus |
 | **B3** | B | **nova geração F4** | 3 | T-EMB + B1/B2 + decisão de dataset | F4 deixa de congelada |
@@ -114,6 +115,15 @@ aprovada. C2–C4 só entram quando suas escadas (SPEECH/VISAO) abrirem.
 | **Disjuntor** | path escape; segredo detectado → redact |
 | **Deps** | A4; `CODER_AETHER.md` K1–K2 (vivos) |
 | **Aceite** | 0 exfil fora do sandbox |
+
+### A6 · T-GRAPH — Eventos → átomo / assinatura topológica
+| | |
+|---|---|
+| **Contrato** | evento estruturado (IDs, timestamp, features) → átomo tipado (BAM) → RG 64→16→4 → assinatura/surpresa |
+| **Fio** | **T-GRAPH** → T-MOE / T-PRED → T-COH → Action; claims → SGDB L6 |
+| **Disjuntor** | schema break → reject; auth ≤120; feature `graph` off; texto livre não atravessa |
+| **Deps** | nenhuma pendente: BAM (`host_transducer`), transplante E3 (JL), RG e SGDB já vivos |
+| **Aceite** | **G-GRAPH** — AUC ≥ baseline TGN em dataset público; latência/evento no orçamento; 0 re-treino (`POSICIONAMENTO_AETHER.md` §5.6) |
 
 ### A5 · Hier MoE/LSH (paralelo, pós-rerank f32/bits)
 | | |
@@ -272,6 +282,7 @@ Não pular: **A1** antes de C1 (tabelas de documento); **B1/B2** antes de B3;
 | T-EVAL | A (só código) | A2 | [`EVAL_AGENT.md`](EVAL_AGENT.md), CODER K7, PROSA L2 |
 | T-P2P | A (só código) | A3 | [`SGDB_INTEGRATION.md`](SGDB_INTEGRATION.md) |
 | T-CLIP | A (só código) | A4 | [`CODER_AETHER.md`](CODER_AETHER.md) K1–K2 |
+| T-GRAPH | A (só código) | A6 | [`POSICIONAMENTO_AETHER.md`](POSICIONAMENTO_AETHER.md) §5.6 |
 | Hier MoE/LSH | A (só código, paralelo) | A5 | [`B2_BITS_F32_RERANK.md`](B2_BITS_F32_RERANK.md) |
 | A8 `enter_v1` | B (sanção) | B1 | [`F4_NOVA_GERACAO_SANCAO_255.md`](F4_NOVA_GERACAO_SANCAO_255.md) |
 | T-DEC cutover | B (sanção) | B2 | [`T_DEC_UPGRADE.md`](T_DEC_UPGRADE.md) |

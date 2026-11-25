@@ -59,6 +59,7 @@ escada de produto, estado.
 | **T-NET** | `research.query` (F2/A5) | pergunta → claims tieradas auth≤120 | rede off; waste=0 | A5, P0/P2 | **vivo** (planner + chat; opt-in) |
 | **T-STT** | `SttPort` | áudio-ref → texto → T-NL-IN | conf baixa → ask; feature `speech` off; PCM fora T0 | S0–S3 | **vivo stub** |
 | **T-VIS** | `VisionPort` | image-ref → `VisionObs` → T-NL-IN | conf baixa → ask; feature `vision` off; pixels fora T0 | V0–V4 | **vivo stub** |
+| **T-GRAPH** | `GraphPort` (spec) | evento estruturado → átomo BAM → assinatura RG → surpresa | schema break → reject; auth ≤120; feature `graph` off | A6 (`TOMADAS_FUTURO`); G-GRAPH | **reservada (spec)** — [`POSICIONAMENTO_AETHER.md`](POSICIONAMENTO_AETHER.md) §5.6 |
 
 ### 2.2 Núcleo (sempre presentes)
 
