@@ -1354,6 +1354,13 @@ pub trait Tool: Send {
     /// Competência para o goal (`0` = não atende).
     fn affordance(&self, goal: &Goal, state: &WorldState) -> f32;
 
+    /// R10/A10 (Sprint A): é candidato a sondagem epístéo? (abdução G-ABD).
+    /// Default: `false`. O planner corta candidatos com `true` quando o
+    /// orçamento ([`crate::agent::epistemic_budget::remaining`]) esgota.
+    fn is_probe(&self) -> bool {
+        false
+    }
+
     /// Pré-condições.
     fn preconditions(&self, goal: &Goal, state: &WorldState) -> bool;
 

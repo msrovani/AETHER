@@ -197,6 +197,24 @@ impl RenormalizationHierarchy {
         (re * re + im * im).sqrt() / self.macro_dim.max(1) as f32
     }
 
+    /// Assinatura macro compacta (Sprint A, R6, F23): hash FNVan das
+    /// `(fase macro, ordem macro)` — determinística, comparável cross-domínio.
+    pub fn macro_signature(&self) -> [u16; 4] {
+        let mut h: u32 = 0x811c_9dc5;
+        for x in [self.macro_phase().to_bits(), self.macro_order().to_bits()] {
+            for b in x.to_le_bytes() {
+                h ^= b as u32;
+                h = h.wrapping_mul(0x0100_0193);
+            }
+        }
+        [
+            h as u16,
+            h.rotate_left(8) as u16,
+            h.rotate_left(16) as u16,
+            h.rotate_left(24) as u16,
+        ]
+    }
+
     /// Alinhamento fase-intenção micro↔macro: `(1/N) Σ cos(φ_i − ψ_macro)`.
     pub fn alignment(&self) -> f32 {
         let psi = self.macro_phase();

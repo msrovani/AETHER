@@ -17,8 +17,10 @@
 //!
 //! Dois regimes cognitivos na mesma equação:
 //! * `T → 0`  — ação: colapso rápido e determinístico;
-//! * `T > 0`  — imaginação: `K` trajetórias paralelas (rayon) geram um
-//!   conjunto de futuros plausíveis e medem a própria incerteza.
+//! * `T > 0`  — imaginação: `K` trajetórias geradas sequencialmente no
+//!   fio do chamador (SB-1, F19b) geram futuros plausíveis e medem a própria
+//!   incerteza. (Para lotes offline/benchmark existe `forward_batched` em
+//!   `WaveInterferenceBlock`; o `rayon` era removido do hot path.)
 //!
 //! # Contrato de alocação (Fase 2, §1)
 //!
@@ -42,7 +44,6 @@
 
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rayon::prelude::*;
 
 use crate::error::{AetherError, Result};
 
@@ -343,8 +344,8 @@ pub struct ThermodynamicDreamer {
     /// RNG stateful da referência aleatória (energia média de estados uniformes).
     rng: ChaCha8Rng,
     /// Workspace por amostra: `[x (N), y (N), hx (N)]` f64, fatiado por
-    /// `par_chunks_mut(3·N)`. Pré-alocado no warmup, nunca realocado quando o
-    /// número de amostras não cresce.
+    /// `chunks_mut(3·N)`. Pré-alocado no warmup, nunca realocado quando o
+    /// número de amostras não cresce. (SB-1: sem rayon no hot path.)
     scratch: Vec<f64>,
     /// Buffer reutilizado por [`Self::random_reference_energy`].
     ref_state: Vec<i8>,
@@ -509,18 +510,18 @@ impl ThermodynamicDreamer {
         let samples = &mut out.samples[..num_samples];
         let energies = &mut out.energies[..num_samples];
 
-        // K trajetórias paralelas, cada uma uma realização independente.
-        samples
-            .par_iter_mut()
-            .enumerate()
-            .zip(energies.par_iter_mut())
-            .zip(scratch.par_chunks_mut(3 * n))
-            .for_each(|(((k, s), energy), w)| {
-                let mut rng = ChaCha8Rng::seed_from_u64(
-                    base_seed ^ 0x9E37_79B9u64.wrapping_add((k as u64).wrapping_mul(7919)),
-                );
-                let (x, rest) = w.split_at_mut(n);
-                let (y, hx) = rest.split_at_mut(n);
+        // SB-1 (Sprint B, F19b): K trajetórias geradas SEQUENCIALMENTE no
+        // fio do chamador (sem rayon no T0); sem alocação; seeds por k
+        // mantêm determinismo bit-a-bit.
+        for k in 0..num_samples {
+            let s = &mut samples[k];
+            let energy = &mut energies[k];
+            let w = &mut scratch[k * 3 * n..(k + 1) * 3 * n];
+            let mut rng = ChaCha8Rng::seed_from_u64(
+                base_seed ^ 0x9E37_79B9u64.wrapping_add((k as u64).wrapping_mul(7919)),
+            );
+            let (x, rest) = w.split_at_mut(n);
+            let (y, hx) = rest.split_at_mut(n);
 
                 // estado inicial: sign de ruído fraco (mesma regra do Módulo 1)
                 for v in x.iter_mut() {
@@ -566,11 +567,11 @@ impl ThermodynamicDreamer {
                     }
                 }
 
-                for i in 0..n {
-                    s[i] = if x[i] >= 0.0 { 1 } else { -1 };
-                }
-                *energy = ising_energy(j, h, s, n);
-            });
+            for i in 0..n {
+                s[i] = if x[i] >= 0.0 { 1 } else { -1 };
+            }
+            *energy = ising_energy(j, h, s, n);
+        }
 
         let mut sum = 0.0f64;
         for e in energies.iter() {

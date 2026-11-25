@@ -123,6 +123,11 @@ impl OnlineKoopmanOperator {
         self.updates
     }
 
+    /// Matriz `W` (linha-major `out_dim × dim`) — somente leitura (SB-2, L4).
+    pub fn weights(&self) -> &[f64] {
+        &self.w
+    }
+
     /// Reinicia os pesos e a covariância (mantém as dimensões).
     pub fn reset(&mut self) {
         for v in self.p.iter_mut() {

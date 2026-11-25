@@ -35,6 +35,15 @@
 //!   `S ≳ 0.55` com `|s_i s_j| = 1`. Abaixo do limiar não há como cristalizar
 //!   conexão — é física, não bug (sem correlação suficiente, sem sinapse).
 //!
+//! # Fast-J Gating (Sprint A, R1)
+//!
+//! Multiplicativo de contexto aplicado ao termo hebbiano:
+//! `J_eff(i,j) = J(i,j) · g_i · g_j`, com `g ∈ [0, 2]^N`
+//! (`g_i = 0` desliga a conexão durante o quadro). O vetor `g` é setado via
+//! [`MorphogeneticField::set_fast_g`] (identidade = default) ou
+//! [`MorphogeneticField::fast_g_from_wave`] (espelho do espectro da onda).
+//! Zero alocação no `try_evolve_topology`.
+
 //! # Homeostase espectral (ρ real)
 //!
 //! A cada `homeostasis_period` passos (default 2, limitado a `1..=5`) o raio
@@ -242,6 +251,8 @@ pub struct MorphogeneticField {
     cfg: MorphogenesisConfig,
     /// Matriz plana `N×N` (ordem C, simétrica, diagonal zero).
     pub j: Vec<f32>,
+    /// Vetor de ganho multiplicativo Fast-J Gating (Sprint A, R1); default 1.0.
+    g_buf: Vec<f32>,
     cycles: usize,
     /// Última energia livre reportada (calculada uma vez por passo).
     free_energy: f32,
@@ -284,6 +295,7 @@ impl MorphogeneticField {
             n,
             cfg,
             j,
+            g_buf: vec![1.0f32; n],
             cycles: 0,
             free_energy: 0.0,
             surprise: 0.0,
@@ -475,6 +487,12 @@ impl MorphogeneticField {
         // Defesa contra mutação externa de `j` (campo público por compatibilidade).
         self.sanitize();
 
+        if self.g_buf.len() != n {
+            return Err(MorphogenesisError::SpinCountMismatch {
+                expected: n,
+                got: self.g_buf.len(),
+            });
+        }
         let surprise = prediction_error.max(0.0);
         let step = dt.min(self.cfg.max_dt);
         let density = self.density();
@@ -504,7 +522,10 @@ impl MorphogeneticField {
                 let idx_ki = k * n + i;
                 let jv = self.j[idx_ik];
                 let corr = active_spins[i] * active_spins[k];
-                let dj = gain * (corr - jv) - decay_rate * jv;
+                // Fast-J Gating (Sprint A, R1): J_eff(i,j) = J · g_i · g_j.
+                let gi = self.g_buf[i];
+                let gj = self.g_buf[k];
+                let dj = gain * (corr - jv) * gi * gj - decay_rate * jv;
                 let mut new_val = jv + dj * step;
                 if !new_val.is_finite() {
                     return Err(MorphogenesisError::NonFiniteUpdate { index: idx_ik });
@@ -679,6 +700,45 @@ impl MorphogeneticField {
     /// Matriz de acoplamento como fatia (para alimentar o Módulo 1/6).
     pub fn coupling(&self) -> &[f32] {
         &self.j
+    }
+
+    /// Vetor Fast-J Gating (Sprint A, R1).
+    ///
+    /// Valida e normaliza: `g ∈ [0, 2]^N`; vazio ⇒ identidade (todos 1.0);
+    /// aplicado em `try_evolve_topology` como multiplicador do termo hebbiano.
+    /// Zero alocação.
+    pub fn set_fast_g(&mut self, g: &[f32]) -> Result<(), MorphogenesisError> {
+        let n = self.n;
+        if !g.is_empty() && g.len() != n {
+            return Err(MorphogenesisError::SpinCountMismatch {
+                expected: n,
+                got: g.len(),
+            });
+        }
+        if g.is_empty() {
+            self.g_buf.fill(1.0);
+            return Ok(());
+        }
+        for (i, v) in g.iter().enumerate() {
+            if !v.is_finite() {
+                return Err(MorphogenesisError::NonFiniteInitialMatrix { index: i });
+            }
+            self.g_buf[i] = v.clamp(0.0, 2.0);
+        }
+        Ok(())
+    }
+
+    /// Alimenta `g_buf` do espectro transferido do bloco de onda
+    /// (Sprint A, R1) com **seletividade por canal/banda**:
+    /// `g_i = 1 - tanh(|Y_i|)` para `i < min(n, spec.len())`
+    /// (magnitude do espectro de canal `i`); `g_i = 1` (identidade) para
+    /// índices sem espectro — não mais média global (ajuste do usuário, L13).
+    pub fn fast_g_from_wave(&mut self, spec: &[num_complex::Complex32]) {
+        let n = self.n;
+        self.g_buf.fill(1.0);
+        for (i, v) in spec.iter().enumerate().take(n) {
+            self.g_buf[i] = 1.0 - v.norm().tanh();
+        }
     }
 
     /// Re-simetriza, zera diagonal, remove não finitos e poda `|J| < dissolve`.

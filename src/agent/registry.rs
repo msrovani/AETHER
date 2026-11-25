@@ -17,6 +17,8 @@ pub struct Candidate {
     pub risk: Risk,
     /// Tool de escalação (`ask.human`): nunca compete com tools executáveis.
     pub escalation: bool,
+    /// R10/A10 (Sprint A): candidato a sondagem epístéo.
+    pub is_probe: bool,
 }
 
 /// Registro de ferramentas.
@@ -113,6 +115,7 @@ impl ToolRegistry {
                     cost: tool.cost(),
                     risk: tool.risk(),
                     escalation: tool.escalation(),
+                    is_probe: tool.is_probe(),
                 })
             })
             .collect()

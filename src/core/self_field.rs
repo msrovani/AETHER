@@ -354,6 +354,10 @@ pub struct SelfField {
     cfg: SelfFieldConfig,
     bank: ChannelBank,
     topology: ChannelBank,
+    /// Assinaturas macro recentes (ring 16; Sprint A, R6/F23) — arrays para
+    /// manter `needs_drop` = false (invariante do tipo, E4).
+    macro_sig_cache: [[u16; 4]; 16],
+    macro_sig_len: usize,
     scale: [f32; FEATURES],
     topo_scale: [f32; FEATURES],
     err_ema: f32,
@@ -415,6 +419,8 @@ impl SelfField {
             cfg,
             bank: ChannelBank::default(),
             topology: ChannelBank::default(),
+            macro_sig_cache: [[0u16; 4]; 16],
+            macro_sig_len: 0,
             scale: [1.0; FEATURES],
             topo_scale: [1.0; FEATURES],
             err_ema: 0.0,
@@ -524,6 +530,33 @@ impl SelfField {
         self.coherence_ema = (1.0 - alpha) * self.coherence_ema + alpha * frame.coherence;
         self.steps = self.steps.wrapping_add(1);
         reading
+    }
+
+    /// R6/F23 (Sprint A): registra a assinatura macro recente (ring 16;
+    /// FIFO ao preencher, sem alocação).
+    pub fn push_macro_signature(&mut self, sig: &[u16; 4]) {
+        if self.macro_sig_len < 16 {
+            self.macro_sig_cache[self.macro_sig_len] = *sig;
+            self.macro_sig_len += 1;
+        } else {
+            self.macro_sig_cache.copy_within(1..16, 0);
+            self.macro_sig_cache[15] = *sig;
+        }
+    }
+
+    /// True se a assinatura macro já está no cache recente (1-hop).
+    pub fn macro_signature_seen(&self, sig: &[u16; 4]) -> bool {
+        self.macro_sig_cache[..self.macro_sig_len].contains(sig)
+    }
+
+    /// Similaridade Hamming 0..1 entre duas assinaturas macro (Sprint A, R6).
+    pub fn macro_signature_similarity(a: &[u16; 4], b: &[u16; 4]) -> f32 {
+        let d: u32 = a
+            .iter()
+            .zip(b.iter())
+            .map(|(x, y)| (x ^ y).count_ones())
+            .sum();
+        1.0 - d as f32 / 32.0
     }
 
     /// Atalho: lê a escala macro da [`RenormalizationHierarchy`] e observa.

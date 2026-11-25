@@ -42,6 +42,7 @@ pub mod coherence;
 pub mod dec_status;
 pub mod dec_upgrade;
 pub mod embed;
+pub mod epistemic_budget;
 pub mod eval;
 pub mod executor;
 pub mod experts;

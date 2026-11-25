@@ -82,6 +82,8 @@ pub struct DaemonConfig {
     pub sgdb_every: u64,
     /// Identidade durável da linhagem (`run` no escopo do SGDB).
     pub sgdb_run: u64,
+    /// Porta multicast do enxame (default `MULTICAST_PORT`; fio R8).
+    pub multicast_port: u16,
     /// Linha curta: CALMO / ALERTA / SONHANDO.
     pub human: bool,
     /// Log rotativo de floats (colunas fixas).
@@ -108,6 +110,7 @@ impl Default for DaemonConfig {
             sgdb_token: None,
             sgdb_every: 60,
             sgdb_run: 0,
+            multicast_port: MULTICAST_PORT,
             human: false,
             log: None,
             host: false,
@@ -303,6 +306,8 @@ pub struct DaemonTelemetry {
     pub dreaming: bool,
     /// Número de ciclos.
     pub cycles: u64,
+    /// Passos máximos observados no Dreamer (Sprint A, R2 — `Elastic compute`).
+    pub dream_steps_max: u64,
 }
 
 /// Estado do organismo encarnado.
@@ -341,6 +346,8 @@ pub struct AetherDaemon {
     baseline_nmse: f32,
     /// Quadros que estouraram o orçamento de 60 Hz (cumulativo).
     dropped_frames: u64,
+    /// Passos máximos observados no Dreamer (Sprint A, R2).
+    dream_steps_max: u64,
 }
 
 impl std::fmt::Debug for AetherDaemon {
@@ -378,13 +385,26 @@ impl AetherDaemon {
             ));
         }
 
+        // Ajuste C (R7/R8, Sprint A): trava atômica da porta multicast.
+        // Socket SEM SO_REUSEADDR: se o bind falhar, o daemon nega a partida —
+        // sem corrida (TOCTOU) e sem colapso de R por duplicata. Em hosts onde
+        // o bind de multicast é bloqueado pelo SO (10013), degrada
+        // honestamente (warn) e segue sem a trava (não aplicável à resolução R).
+        let lock = match lock_multicast_port(cfg.multicast_port) {
+            Ok(l) => Some(l),
+            Err(e) => {
+                println!("  warn: trava de porta multicast nao disponivel, continuando: {e}");
+                None
+            }
+        };
+        drop(lock);
         // Nó de fase em multicast: descoberta automática na LAN. node_id é
         // único por instância (auditoria QA/M8: id fixo colapsava N instâncias
         // num único slot e invalidava R(LAN)).
         let node_cfg = KuramotoConfig {
             node_id: unique_node_id(),
-            bind: SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, MULTICAST_PORT),
-            peers: vec![SocketAddrV4::new(MULTICAST_GROUP, MULTICAST_PORT)],
+            bind: SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, cfg.multicast_port),
+            peers: vec![SocketAddrV4::new(MULTICAST_GROUP, cfg.multicast_port)],
             omega: [6.0, 6.01, 5.99, 6.005],
             k_coupling: 8.0,
             hz,
@@ -446,6 +466,7 @@ impl AetherDaemon {
             cycles: 0,
             baseline_nmse: 0.0,
             dropped_frames: 0,
+            dream_steps_max: 0,
         };
         if daemon.cfg.host {
             daemon.transducer.enable_host();
@@ -576,6 +597,18 @@ impl AetherDaemon {
         for (i, spin) in self.spins_buf.iter_mut().enumerate() {
             *spin = (frame.phase[i % 4].cos() * 0.9) as f32;
         }
+        // Fast-J Gating (R1, Sprint A): vetor g contextual do espectro da
+        // onda de entrada (g_i = 1 - tanh(mean_k |Y_i,k|)); sem alocação.
+        {
+            let view = self.wave.wave_spectrum();
+            let spec = view.as_slice().ok_or_else(|| {
+                aether_engine::error::AetherError::Config(
+                    "wave_spectrum deve ser C-contíguo (ordem C)".into(),
+                )
+            })?;
+            self.field.fast_g_from_wave(spec);
+        }
+
         // A morfogênese vê o erro absoluto de reconstrução (mantém topologia
         // viva); o sonho é disparado pela SURPRESA relativa ao baseline.
         let free_energy = self.field.evolve_topology(abs_error, &self.spins_buf, 0.05);
@@ -594,12 +627,27 @@ impl AetherDaemon {
         for (i, b) in self.bias_buf.iter_mut().enumerate() {
             *b = (frame.phase[i % 4].sin() * 0.15) as f32;
         }
+        // Elastic compute (R2, Sprint A): escala os passos do Dreamer conforme
+        // a incerteza epistêmica do Ensemble (base · (1 + 3·esq), teto 30×) e
+        // ajuste C (ajuste do usuário): orçamento residual restante no quadro
+        // (`remaining_us` frente ao teto de 16.667 µs) limita steps_eff —
+        // sem derrubar quadros a 60 Hz.
+        let period_us = (1_000_000.0 / self.cfg.hz.max(1e-6)) as u64;
+        let remaining_us =
+            period_us.saturating_sub(t0.elapsed().as_micros().min(u64::MAX as u128) as u64);
+        let esq = self.ensemble.epistemic_uncertainty;
+        let steps_eff = ((self.cfg.dream_steps as f64) * (1.0 + 3.0 * esq))
+            .min(30.0 * self.cfg.dream_steps as f64) as usize;
+        let steps_eff = steps_eff.min(remaining_us.max(1) as usize);
+        if steps_eff as u64 > self.dream_steps_max {
+            self.dream_steps_max = steps_eff as u64;
+        }
         self.dreamer.imagine_futures_into(
             &self.j_field,
             &self.bias_buf,
             temperature,
             self.cfg.dream_samples,
-            self.cfg.dream_steps,
+            steps_eff.max(1),
             0.05,
             &mut self.ensemble,
         )?;
@@ -635,6 +683,7 @@ impl AetherDaemon {
             topological_density: self.field.density(),
             dreaming,
             cycles: self.cycles,
+            dream_steps_max: self.dream_steps_max,
         })
     }
 
@@ -800,6 +849,14 @@ fn parse_cli() -> std::result::Result<DaemonConfig, String> {
                 if !cfg.hz.is_finite() || cfg.hz <= 0.0 || cfg.hz > 10_000.0 {
                     return Err("--hz fora de (0, 10000] e finito".into());
                 }
+            }
+            "--multicast-port" => {
+                i += 1;
+                let v = args.get(i).ok_or("faltou valor para --multicast-port")?;
+                let port: u16 = v
+                    .parse()
+                    .map_err(|e| format!("--multicast-port inválido: {e}"))?;
+                cfg.multicast_port = port;
             }
             "--seed" => {
                 i += 1;
@@ -984,6 +1041,18 @@ fn print_human_banner(host: bool, alert: f32) {
         println!("  tip: no Windows use --host para sentir CPU/rede reais");
     }
     println!();
+}
+
+/// Ajuste C (R7/R8, Sprint A): trava a porta multicast via socket UDP
+/// **sem** `SO_REUSEADDR` — retorna `Err` se a porta já estiver em uso
+/// (atomicidade = eleito ao segundo bind). `std::net::UdpSocket`, sem `unsafe`.
+fn lock_multicast_port(port: u16) -> Result<std::net::UdpSocket> {
+    use socket2::{Domain, Protocol, Socket, Type};
+    let sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))
+        .map_err(aether_engine::error::AetherError::Io)?;
+    sock.bind(&SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port).into())
+        .map_err(aether_engine::error::AetherError::Io)?;
+    Ok(sock.into())
 }
 
 fn main() -> Result<()> {

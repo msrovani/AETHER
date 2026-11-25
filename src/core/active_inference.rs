@@ -305,6 +305,11 @@ impl ActiveInferenceEngine {
         self.zones[i].var
     }
 
+    /// Visão somente de leitura das zonas (Sprint A, L3/L4).
+    pub fn zones(&self) -> &[Zone] {
+        &self.zones
+    }
+
     /// Número de visitas à zona `i`.
     pub fn visits(&self, i: usize) -> u32 {
         self.visits[i]

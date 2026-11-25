@@ -538,7 +538,8 @@ pub fn phases_from_payload(payload: &[u8]) -> Vec<f32> {
 pub const ORGANISM_LAYER: Layer = Layer::L4Semantic;
 
 /// Autoridade de um padrão medido pelo próprio organismo (sem HITL).
-pub const ORGANISM_AUTHORITY: u8 = 200;
+/// Rebase Sprint A/A9 (ajuste do usuário): teto autônomo ≤ 120; 200–255 = HITL.
+pub const ORGANISM_AUTHORITY: u8 = 120;
 
 /// Tempo máximo de espera de um `commit_run` no encerramento (diagnóstico).
 pub const CLOSE_GRACE: Duration = Duration::from_millis(750);

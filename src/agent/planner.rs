@@ -26,6 +26,8 @@ pub struct PlanStep {
     pub reason: String,
     /// Tool de escalação (não executa; só pede humano).
     pub escalation: bool,
+    /// R10/A10 (Sprint A): candidato a sondagem epístéo.
+    pub is_probe: bool,
 }
 
 /// Planner.
@@ -115,11 +117,15 @@ impl Planner {
         used: &[&str],
         linucb: Option<&ContextualTools>,
     ) -> Vec<PlanStep> {
+        // R10/A10 (Sprint A): orçamento de sonda — budget esgotado ⇒ candidatos
+        // de sonda saem do ranking (anti-loop, analogia ao barge-in em Speech S6).
+        let has_probe_budget = crate::agent::epistemic_budget::has_probe_budget();
         let mut steps: Vec<PlanStep> = registry
             .candidates(goal, state)
             .into_iter()
             .filter(|candidate| !used.contains(&candidate.name))
             .filter(|candidate| candidate.affordance >= self.min_affordance)
+            .filter(|candidate| has_probe_budget || !candidate.is_probe)
             .map(|candidate| {
                 let over_ceiling = candidate.risk > goal.risk_ceiling;
                 let p_sm = self_model.calibrated_success(candidate.name, goal);
@@ -155,6 +161,7 @@ impl Planner {
                     cost: candidate.cost,
                     risk: candidate.risk,
                     escalation: candidate.escalation,
+                    is_probe: candidate.is_probe,
                     reason: if over_ceiling {
                         format!(
                             "HITL: risco {} > teto {}; affordance={:.2}",

@@ -152,8 +152,14 @@ fn f4_gate_t0_ao_sgdb_sem_perda_e_sem_vazamento() {
             violations: 0,
         },
     );
-    assert_eq!(fusion.action, FusionAction::CiteNoAct);
-    assert_eq!(decision, aether_engine::core::certificate::Decision::Cite);
+    // R9/A9 (Sprint A): ORGANISM_AUTHORITY rebatido para 120 (split = 128):
+    // tier não-social ⇒ `Abstain` no fusion e no decisor de cert.
+    assert_eq!(fusion.action, FusionAction::Abstain);
+    assert_eq!(
+        fusion.quadrant,
+        aether_engine::core::knowledge_fusion::Quadrant::UnvettedAmbiguous
+    );
+    assert_eq!(decision, aether_engine::core::certificate::Decision::Abstain);
 
     // ------------------------------------------------------------------
     // 5. cue_into reacende a fase a partir do banco.

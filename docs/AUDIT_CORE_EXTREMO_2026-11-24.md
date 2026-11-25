@@ -399,7 +399,7 @@ determinístico; INV-T5).
 - C1: Fases em `[0, 2π)`: definição muda (organism.rs:48 garante `[0,2π)`; kuramoto_field.rs:187-203) — padronizar em `wrap` (renormalization.rs:21).
 - C2: `should_abstain` (phase_memory.rs:312) — não chamado em nenhum loop (futuro, G-ABD).
 - C3: ADD-only: confirmado — memórias do daemon (`emit_pattern` gap=1.0) — não reprocessam.
-- C4: Autoridade: daemons emitem certificates = 200 (`aether_daemon.rs:524`, `organism.rs`); acão autônoma ∈ 200; **200–255 = HITL**; A9 decide rebase: agente/quarantine ≤120, Código 200.
+- C4: Autoridade (rebase, A9/Sprint A): daemons emitem certificates = 120 (`aether_daemon.rs:524`, `organism.rs`, `ledger.rs:541`); acão autônoma ∈ 120; **200–255 = HITL**.
 - C7: Federação: `--multicast-port` segmentada por organismo; precheck de duplicatas de `ScopeId` em boot (A8/F17); `peer_id` = scope (1-hop, sem vazamento).
 - C8: Determinismo sistêmico: hash bit-a-bit de fases (F19/L10) + teste de reproducibilidade paralela.
 - C5: Determinismo multi-instância: segundo instância local: R pode ser ~0 sem peers — invariante documentado; invariante de 1 instância nohost: ok.

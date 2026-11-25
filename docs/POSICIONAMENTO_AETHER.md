@@ -384,8 +384,8 @@ gate + licença verificada.
 3. Eixo C: tomada fora do inventário = bug; sem tomada duplicada. T-GRAPH
    registrada (A6 em `TOMADAS_FUTURO.md` + `CORE_TOMADAS.md`); world models
    reusa T-SENSOR/T-ROBOT (D1/D4).
-4. Autoridade: hipótese 60; agente/extraído 60–120; ≥200/255 só HITL; memória
-   nunca vira instrução de sistema.
+4. Autoridade: hipótese 60; agente/extraído 60–120; ≥120/255 só HITL
+   (rebase do organismo: 120, ledger.rs:541); memória nunca vira instrução de sistema.
 5. Orçamento: 60 Hz, 81,3 µs medidos, 0 alloc hot-path, L2 1,25 MB, N≤512;
    excedente → assíncrono fora do T0.
 6. Escopo `(organism, run, app)` não vaza; `scope_app=AETHER`, `org:1/run:0`.

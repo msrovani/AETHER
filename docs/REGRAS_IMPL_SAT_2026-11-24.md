@@ -12,6 +12,13 @@ bit-a-bit (INV-T5). Nenhuma R altera o caminho do organismo M4.
 
 ## Sessão 1 — R1 Fast-J Gating (morphogênese)
 
+**Resultado (S1, 2026-11-24):** implementado `MorphogeneticField::set_fast_g`
+e `fast_g_from_wave` (src/morphogenesis.rs); `try_evolve_topology` agora aplica
+`J_eff = J·g_i·g_j` (L507). Caller: `aether_daemon.rs:582`.
+**Gate verde:** `cargo test --release --test morpho_gating_gate` — 3 pass
+(ΔR > 0,30 adversarial; 0 alloc; reproducibilidade bit-a-bit). Full suite
+(`cargo test --release`) verde (R14).
+
 **Hook:** `src/morphogenesis.rs` — `try_evolve_topology` (L434).
 - Nova assinatura: `try_evolve_topology(&mut self, prediction_error, active_spins, dt, g: &[f32])`.
 - Nova instância: `MorphogeneticField::set_fast_g(&mut self, g: &[f32]) -> Result<()>`
@@ -26,25 +33,27 @@ bit-a-bit (INV-T5). Nenhuma R altera o caminho do organismo M4.
   3) bit-reproducibilidade: mesma seed ⇒ J idêntico entre 2 runs.
 - **Auth:** core.
 
-### 4.1 Snippet de referência: fast_g_from_wave (Sprint A)
+### 4.1 Implementação aprovada: fast_g_from_wave (Sprint A, ajuste A do usuário)
 ```rust
 // em MorphogeneticField, Sprint A
-pub fn fast_g_from_wave(&mut self, spec: &[Complex32]) {
-    // agrega |Y| por canal: g_i = 1 - tanh(|Y_i| / scale)
+pub fn fast_g_from_wave(&mut self, spec: &[num_complex::Complex32]) {
     let n = self.n;
-    for i in 0..n { self.g_buf[i] = 0.0; }
-    for k in 0..spec.len().min(n) {
-        let y = spec[k].re.abs();
-        for i in 0..n {
-            self.g_buf[i] += y;
-        }
+    self.g_buf.fill(1.0);
+    for (i, v) in spec.iter().enumerate().take(n) {
+        self.g_buf[i] = 1.0 - v.norm().tanh(); // magnitude por canal (ajuste A)
     }
-    for i in 0..n { self.g_buf[i] = 1.0 - (self.g_buf[i] / n as f32).tanh(); }
 }
 ```
-(Nota Sprint A: este snippet é referência; implementação geralada por gate R1.)
+(Sem agregação global — seletividade por canal/banda mantém L13.)
 
 ## Sessão 2 — R2 Elastic compute (daemon)
+
+**Resultado (S2, 2026-11-24):** implementado `steps_eff` dinâmico em
+`aether_daemon.rs` (~L608: `esq = ensemble.epistemic_uncertainty`;
+`steps = base·(1+3·esq)` cap 30×), campo `DreamStepsMax` na telemetria.
+Smoke 8 s `--dim 64`: `target/aether_e6_mod.json`
+(30 frames, median 7939 µs, max 11166 µs, drops 30 — host de referência;
+drop é o sinal honesto). Gate: smoke + re-medida de E6 (R14 guard).
 
 **Hook:** `src/bin/aether_daemon.rs` — cycle L597–605.
 ```rust
@@ -83,6 +92,13 @@ let steps_eff = ((base_steps * (1.0 + 3.0 * esq)).min(30.0 * base_steps)) as usi
 
 ## Sessão 4 — R4 Dream → E2 commit (Governor reflex)
 
+**Resultado (S4, 2026-11-24):** implementado `GovernorConfig.actuator`
+(`EmaActuator`, src/core/active_inference.rs); `reflex_loop` aplica o smoother
+sobre a política decidida; estatísticas novos `GovStats::actuator_applied`,
+`smoothed_policy_bits` → `GovernorReport::actuator_applied`, `last_smoothed_policy`.
+**Gate verde:** `cargo test --release --test governor_e2_commit_gate` — 1 pass
+(aplicado > 0, CBF = 0, policy em [0, 3)).
+
 **Hook:** `aether_governor.rs` — reflex_loop L581.
 - Add `actuator: Option<EmaActuator>` em GovernorConfig; on `Ok(out)`:
   ```rust
@@ -95,6 +111,13 @@ let steps_eff = ((base_steps * (1.0 + 3.0 * esq)).min(30.0 * base_steps)) as usi
 
 ## Sessão 5 — R6 G-ISO cross-modal (F23)
 
+**Resultado (S5, 2026-11-24):** implementado `RenormalizationHierarchy::macro_signature() -> [u16; 4]`
+(FNVan dos pares (macro_phase, macro_order)); consumer `SelfField::push_macro_signature`
+(VecDeque 16, LRU), `macro_signature_seen`, `macro_signature_similarity` (Hamming 0..1);
+novo `examples/rg_transfer_probe.rs`.
+**Gate verde:** `cargo test --release --test macro_signature_gate` — 2 pass
+(determinístico; colisões ≤ 2/10).
+
 **Hook:** `src/core/renormalization.rs` — nova `macro_signature(&self) -> [u16; 4]`
 (hash de `macro_phase()` + `macro_order()`, overflow em u16).
 - **Consumidor (Sprint A/B):** scopes T-SENSOR/T-GRAPH gravam
@@ -102,7 +125,18 @@ let steps_eff = ((base_steps * (1.0 + 3.0 * esq)).min(30.0 * base_steps)) as usi
 - **Gate (R6):** `tests/macro_signature_gate.rs` (10 hashes, ≤ 2 colisões
   hash64); exemplo zero-shot em `examples/rg_transfer_probe.rs` (TKNets — arXiv:2402.07834).
 
-## Sessão 6 — R7/R8 Federação (A8) e R11 Autobiografia (A11)
+## Sessão 6 — R7/R8 Federação (A8, ajuste C) e R11 Autobiografia (A11)
+
+**Ajuste C aplicado (ajuste do usuário):** `lock_multicast_port`
+(aether_daemon.rs) — socket UDP sem `SO_REUSEADDR` prechendo a porta multicast
+antes do bind do nó; `--multicast-port` + env; ScopeId via `ScopeId::new`
+(existente).
+**Resultado (S6, 2026-11-24):** `tests/daemon_federation_gate.rs` — 2 pass
+(portas distintas coexistem; rejeição de duplicata observada quando o d1 está
+vivo).
+*Correções Sprint A anteriores:* `aether_daemon.rs` — `drop(lock)` **antes** do
+bind do nó (Windows: bind #2 com lock vivo = falha 10013); degrade graceful da
+trava quando o ambiente bloqueia multicast.
 
 **Hook R7:** `src/bin/aether_daemon.rs`:
 - flag `--multicast-port` (parse_cli L729+) → `MULTICAST_PORT` via env
@@ -122,16 +156,26 @@ hash = sha256(JoinString(phase_hash_10s))  // phase_hash = hash de f32 de frame.
 (seed distinto), hash idêntico; R12 registra `aether_e6_autobiography.json`
 no area de cobertura do auditoria.
 
-## Sessão 7 — R9 Rebase de autoridade (A9)
+## Sessão 7 — R9 Rebase de autoridade (A9, ajuste do usuário) — DOCUMENTOS ATUALIZADOS (2026-11-24)
+- `CORE_TOMADAS.md` (T-SENSOR/T-ROBOT + inv. 4), `POSICIONAMENTO_AETHER.md` (I-4), `COERENCIA_E_REGRAS_IMPL_2026-11-24.md` (R9/C4');
+- `tests/f4_sgdb_gate.rs` L155-156 ajustado à nova doutrina (✓ 2 pass em `s7_f4.txt`).
 
-**Hook:** `src/knowledge/sgdb/ledger.rs:541`:
+**Hook:** `src/knowledge/sgdb/ledger.rs:541` (already 120 — implementação já aplicada):
 ```rust
-pub const ORGANISM_AUTHORITY: u8 = 200; // rebase: ação autônoma ∈ 200; 200–255 = HITL
+pub const ORGANISM_AUTHORITY: u8 = 120; // rebase: teto autônomo < 200; 200–255 = HITL
 ```
-- Doc: CORE_TOMADAS.md (T-SENSOR/T-ROBOT) + POSICIONAMENTO Invariante 9.
-- **Gate:** `tests/auth_levels_gate.rs` (c physicists: claims ≤200 sem token HITL).
+- Docs: CORE_TOMADAS.md (T-SENSOR/T-ROBOT), POSICIONAMENTO Invariante 4.
+- **Gate:** `tests/auth_levels_gate.rs` (claims do organismo ≤ 120; 200–255 só HITL).
 
-## Sessão 8 — R10 Probe budget (G-ABD, A10)
+## Sessão 8 — R10/A10 Probe budget (G-ABD, A10)
+
+**Resultado (S8, 2026-11-24):** implementado `src/agent/epistemic_budget.rs`
+(statics atômicos: `BUDGET`, `USED`; `set_budget/reset_budget/budget/used/
+remaining/has_probe_budget/try_probe`); `Tool::is_probe` (tool.rs); `Candidate.is_probe`
+(registry.rs); `PlanStep.is_probe` + bloqueio no `rank_with` (planner.rs).
+**Gate verde:** `cargo test --release --test bus_epistemic_probe_gate` — 2 pass.
+**Nota S7 (update):** `f4_sgdb_gate` ajustado à nova doutrina do rebase
+(`ORGANISM_AUTHORITY=120` < split 128 ⇒ `Abstain`/`UnvettedAmbiguous`).
 
 **Hook:** `src/agent/planner.rs` + novo `src/agent/epistemic_budget.rs`:
 ```rust
@@ -145,9 +189,14 @@ pub fn try_probe() -> bool { ... decrement; on 0 → false }
 
 ## Cronograma
 
-- **Sprint A (0–2):** Sessões 1–6 (R1–R12, exceto L6 LinUCB).
-- **Sprint B:** L6 (LinUCB ← RG macro, R6), L7 (G-ABD loop, R10), L8 (G-MORPH F19, L8).
-- **Guarda (contínuo):** `cargo test --release` + re-medida E6.
+- **Sprint A (concluído, 2026-11-24):** Sessões 1–8 (R1–R12).
+- **Sprint B (em execução, 2026-11-24):**
+  - **SB-1 (F19b):** `imagine_futures_into` → sequencial pinned (sem `rayon` no T0) — concluído.
+  - **SB-1b:** correção do `aether_daemon` lock (drop antes do bind do nó) — concluído.
+  - **SB-2 (L4, concluído):** `Governor::last_koopman_j() -> Option<Vec<f64>>` + `weights()` getter; gate `tests/governor_koopman_j_gate.rs` (1 pass). Injeção no Dreamer (forma 6×6 vs W 20×20) = Sprint B.
+  - **SB-3:** L6 (LinUCB ← RG macro) · **SB-4:** L7 (Sono SGDB→SINDy→Law) ·
+    **SB-5:** L8 (G-MORPH new_basin_events) · **SB-6:** L9 (introspecção no SelfField).
+- **Guarda (contínuo):** `cargo test --release` (full_suite_sprint*.txt) + re-medida E6.
 
 ## Referências
 

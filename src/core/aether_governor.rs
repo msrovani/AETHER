@@ -41,11 +41,12 @@
 //!   `SCHED_FIFO`); o reflexo faz *spin* curto e depois `yield_now`.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
-use crate::core::active_inference::{ActiveInferenceEngine, LyapunovCbf, Zone};
+use crate::core::active_inference::{ActiveInferenceEngine, EmaActuator, LyapunovCbf, Zone};
 use crate::core::koopman_sindy::{OnlineKoopmanOperator, SindyEquationDiscoverer, KOOPMAN_D};
+use crate::core::renormalization::RenormalizationHierarchy;
 use crate::core::silicon_entropy::SiliconEntropy;
 use crate::core::sindy_jit::{SindyIntegrator, SindyJit};
 use crate::core::spsc_ring::{SpscConsumer, SpscProducer, SpscRingBuffer};
@@ -274,6 +275,12 @@ pub struct GovernorConfig {
     pub idle_spins: u32,
     /// Semente determinística do reflexo (`None` = silício).
     pub entropy_seed: Option<u64>,
+    /// R3 (Sprint A): hierarquia de renormalização do spine (`None` = desligado).
+    pub rg: Option<RenormalizationHierarchy>,
+    /// Ganho do torque top-down do spine (Sprint A, L12).
+    pub rg_gain: f32,
+    /// R4 (Sprint A): suavizador da política (`None` = desligado).
+    pub actuator: Option<EmaActuator>,
 }
 
 impl Default for GovernorConfig {
@@ -290,6 +297,9 @@ impl Default for GovernorConfig {
             refit_every: 32,
             idle_spins: 2048,
             entropy_seed: None,
+            rg: None,
+            rg_gain: 0.5,
+            actuator: None,
         }
     }
 }
@@ -299,6 +309,14 @@ impl Default for GovernorConfig {
 struct GovStats {
     reflex_events: AtomicU64,
     reflex_errors: AtomicU64,
+    /// R3 (Sprint A): eventos onde o spine RG foi aplicado.
+    rg_spine_applied: AtomicU64,
+    /// R4 (Sprint A): eventos onde EmaActuator suavizou a política.
+    actuator_applied: AtomicU64,
+    /// R4 (Sprint A): última política suavizada (bits do f32).
+    smoothed_policy_bits: AtomicU64,
+    /// R3 (Sprint A): fase macro reportada a cada evento (bits do f32).
+    rg_macro_order: AtomicU64,
     cbf_violations: AtomicU64,
     dropped_koopman: AtomicU64,
     dropped_swarm: AtomicU64,
@@ -346,6 +364,14 @@ pub struct GovernorReport {
     pub plan: CorePlan,
     /// Pinning efetivamente aplicado: (reflexo, koopman, swarm).
     pub pinned: (bool, bool, bool),
+    /// R3 (Sprint A): eventos onde o spine RG foi aplicado.
+    pub rg_spine_applied: u64,
+    /// R3 (Sprint A): fase macro máxima observada (0 = desligado).
+    pub rg_macro_order: f32,
+    /// R4 (Sprint A): eventos onde EmaActuator aplicou a suavização.
+    pub actuator_applied: u64,
+    /// R4 (Sprint A): última política suavizada (0 = desligado).
+    pub last_smoothed_policy: f32,
 }
 
 /// Governador: possui as três threads e a fila de entrada.
@@ -358,6 +384,10 @@ pub struct Governor {
     plan: CorePlan,
     submitted: u64,
     rejected: u64,
+    /// SB-2 (Sprint B, L4): última matriz `W` do operador Koopman publicada
+    /// pela thread koopman (Sprint A: acessor existente; consumo no Dreamer
+    /// comentado p/ limite de dimensão 6×6).
+    koopman_j_last: Arc<Mutex<Option<Vec<f64>>>>,
 }
 
 impl Governor {
@@ -398,6 +428,7 @@ impl Governor {
 
         let stop = Arc::new(AtomicBool::new(false));
         let stats = Arc::new(GovStats::default());
+        let koopman_j_last = Arc::new(Mutex::new(None));
         let mut handles = Vec::with_capacity(3);
 
         let spawn_err = |e: std::io::Error| AetherError::Config(format!("Governor: spawn: {e}"));
@@ -420,6 +451,7 @@ impl Governor {
                     let (stop, stats) = (Arc::clone(&stop), Arc::clone(&stats));
                     let (pin, core_id, spins) = (cfg.pin, plan.koopman, cfg.idle_spins);
                     let refit = cfg.refit_every;
+                    let koopman_j_last = Arc::clone(&koopman_j_last);
                     move || {
                         koopman_loop(
                             koopman,
@@ -430,6 +462,7 @@ impl Governor {
                             stats,
                             (pin, core_id, spins),
                             refit,
+                            koopman_j_last,
                         )
                     }
                 })
@@ -442,6 +475,8 @@ impl Governor {
                     let (stop, stats) = (Arc::clone(&stop), Arc::clone(&stats));
                     let (pin, core_id, spins) = (cfg.pin, plan.reflex, cfg.idle_spins);
                     let nodes = cfg.swarm_nodes as u32;
+                    let rg_opt = cfg.rg;
+                    let actuator_opt = cfg.actuator;
                     move || {
                         reflex_loop(
                             core,
@@ -452,6 +487,8 @@ impl Governor {
                             stats,
                             (pin, core_id, spins),
                             nodes,
+                            rg_opt,
+                            actuator_opt,
                         )
                     }
                 })
@@ -466,7 +503,17 @@ impl Governor {
             plan,
             submitted: 0,
             rejected: 0,
+            koopman_j_last,
         })
+    }
+
+    /// SB-2 (Sprint B, L4): última matriz `W` do operador Koopman
+    /// (linha-major `out_dim × dim`), quando há alguma.
+    pub fn last_koopman_j(&self) -> Option<Vec<f64>> {
+        self.koopman_j_last
+            .lock()
+            .ok()
+            .and_then(|w| w.clone())
     }
 
     /// Entrega uma amostra ao reflexo; `false` se a fila estiver cheia.
@@ -525,6 +572,12 @@ impl Governor {
                 s.pinned_koopman.load(Ordering::Acquire),
                 s.pinned_swarm.load(Ordering::Acquire),
             ),
+            rg_spine_applied: ld(&s.rg_spine_applied),
+            rg_macro_order: f32::from_bits(s.rg_macro_order.load(Ordering::Acquire) as u32),
+            actuator_applied: ld(&s.actuator_applied),
+            last_smoothed_policy: f32::from_bits(
+                s.smoothed_policy_bits.load(Ordering::Acquire) as u32,
+            ),
         })
     }
 }
@@ -560,12 +613,17 @@ fn reflex_loop(
     stats: Arc<GovStats>,
     (pin, core_id, spins): (bool, Option<usize>, u32),
     nodes: u32,
+    rg_opt: Option<RenormalizationHierarchy>,
+    actuator_opt: Option<EmaActuator>,
 ) {
     if pin {
         stats
             .pinned_reflex
             .store(pin_current_thread(core_id), Ordering::Release);
     }
+    let mut rg = rg_opt;
+    let mut actuator = actuator_opt;
+    let rg_gain = 0.5_f32; // R3 (Sprint A, L12): ganho padrão do torque descendente
     let mut prev: Option<[f32; LATENT_DIM]> = None;
     let mut seq = 0u32;
     let mut idle_n = 0u32;
@@ -579,8 +637,35 @@ fn reflex_loop(
         };
         idle_n = 0;
         match core.process(&ev) {
-            Ok(out) => {
+            Ok(mut out) => {
                 stats.reflex_events.fetch_add(1, Ordering::Relaxed);
+                // R3 (Sprint A, L12): ascensão (upflow) da ressonância no
+                // estado latente + torque top-down no próximo estado.
+                if let Some(rg) = rg.as_mut() {
+                    // Sprint A: zero-pad LATENT_DIM(6) → micro(16);
+                    // Sprint B (L6): micro := LATENT_DIM.
+                    let (micro, _, _) = rg.level_sizes();
+                    let mut zf = [0.0f32; 16];
+                    for i in 0..LATENT_DIM {
+                        zf[i] = ev.z[i];
+                    }
+                    let _ = rg.forward(&zf[..micro]);
+                    let _ = rg.torque_into(&mut out.z_next, rg_gain);
+                    stats.rg_spine_applied.fetch_add(1, Ordering::Relaxed);
+                    stats
+                        .rg_macro_order
+                        .store(rg.macro_order().to_bits() as u64, Ordering::Relaxed);
+                }
+                // R4 (Sprint A, L3/L4): EmaActuator suaviza a política decidida.
+                if let Some(a) = actuator.as_mut() {
+                    let mut smoothed = [0.0f32; 1];
+                    if a.filter_into(&[out.policy as f32], &mut smoothed).is_ok() {
+                        stats.actuator_applied.fetch_add(1, Ordering::Relaxed);
+                        stats
+                            .smoothed_policy_bits
+                            .store(smoothed[0].to_bits() as u64, Ordering::Relaxed);
+                    }
+                }
                 if out.violated {
                     stats.cbf_violations.fetch_add(1, Ordering::Relaxed);
                 }
@@ -633,6 +718,7 @@ fn koopman_loop(
     stats: Arc<GovStats>,
     (pin, core_id, spins): (bool, Option<usize>, u32),
     refit_every: usize,
+    koopman_j_last: Arc<Mutex<Option<Vec<f64>>>>,
 ) {
     if pin {
         stats
@@ -652,6 +738,9 @@ fn koopman_loop(
         idle_n = 0;
         if koopman.observe_state(&p.x, &p.x_next).is_ok() {
             stats.koopman_updates.fetch_add(1, Ordering::Relaxed);
+            if let Ok(mut slot) = koopman_j_last.lock() {
+                *slot = Some(koopman.weights().to_vec());
+            }
         }
         sindy.push([p.x_next[0], p.x_next[1]]);
         since_fit += 1;
