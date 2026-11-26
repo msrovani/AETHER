@@ -11,6 +11,7 @@ Tiers rodados (todos offline, sem rede):
   A2     cargo test --test agent_eval_report_gate (T-EVAL, run_id/hash)
   A3     cargo test --test agent_p2p_gate (T-P2P, delta Merkle/contradicts)
   A4     cargo test --test agent_clip_gate (T-CLIP, stdin/redact/code.patch)
+  A5rev  tools/a5_rev_round.py          — round rev (`s2|rel|s1`) p/ o gate A5
   A5     cargo test --test agent_hier_moe_gate (T-HIER, LSH vs MoE plano)
 
 Uso:
@@ -108,6 +109,11 @@ def main() -> int:
                 ["cargo", "test", "-p", "aether_engine", "--test", "agent_clip_gate"],
             )
         )
+        # A5 / T-HIER — o round rev (`s2|rel|s1`) é derivado e mora em
+        # `target/`: em árvore limpa ele não existe e o gate pularia a direção
+        # reversa em silêncio. Gerar aqui (idempotente, bank determinístico do
+        # `P` do manifest) garante que o check seguinte mede as duas direções.
+        results.append(run("A5_rev_round", [PY, "tools/a5_rev_round.py"]))
         # A5 / T-HIER — LSH + rerank f32 vs MoE plano; grava
         # target/aether_hier_moe_status.json (recall não menor + p99 menor).
         results.append(

@@ -13,6 +13,8 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
   fwd e rev no mesmo caminho LSH + re-rank f32 top-32. Release, n=5000: rev
   **0,9170** = plano com p99 **370 µs vs 477 µs**; fwd 0,7708 = plano, p99
   335 µs vs 462 µs. `both_directions_ok=true`, `default_path` segue `false`.
+  O `tools/cycle_gate.py` gera o round rev antes do check do A5, então o skip
+  não esconde a medição reversa em árvore limpa.
 
 ## [0.6.2] - 2026-11-25
 
