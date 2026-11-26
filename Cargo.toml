@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "aether_engine"
-version = "0.6.2"
+version = "0.6.3"
 edition = "2021"
 rust-version = "1.78"
 description = "AETHER — motor de computação pós-token baseado em física contínua (Ising contínuo, interferência espectral, Kuramoto UDP)"

@@ -5,6 +5,8 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-11-26
+
 ### Added
 
 - A5 (T-HIER) mede as **duas** direções do fato: `tools/a5_rev_round.py` leva

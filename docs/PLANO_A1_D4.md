@@ -212,6 +212,7 @@ D1 (após A4) · D2 ‖ D3 (após C3) ──► D4
 - Bump de versão só com `src`/`tests` (`tools/cycle.ps1`); `.cycle/state.json` é local.
 - Release **0.6.0** entregue em 2026-11-24 com A1+A2+A3 verdes (`docs/RELEASE_0_6_0.md`).
 - Release **0.6.2** entregue em 2026-11-25 com B2 (duas direcoes), A5 (T-HIER) e Sprint A/B/C (`docs/RELEASE_0_6_2.md`).
+- Release **0.6.3** entregue em 2026-11-26 com o A5 medindo as duas direções e o `cycle_gate` gerando o round rev (`docs/RELEASE_0_6_3.md`).
 
 ## 6. Estado desta entrega
 
@@ -239,7 +240,7 @@ D1 (após A4) · D2 ‖ D3 (após C3) ──► D4
 | `tests/agent_hier_moe_gate.rs` | verde nas duas direções (release, n=5000): fwd 0,7708 = plano, p99 335 µs < 462 µs; rev 0,9170 = plano, p99 370 µs < 477 µs |
 | `tools/a5_rev_round.py` | round rev (`hv/bank_rev.bin` do `bank_rev.f32` pelo `P` do manifest, espelhado em `hv/bank.bin` para o `Round::load`) em `target/a5_rev_round/`, com autoverificação bit a bit do fwd |
 | `data/aether_hier_moe_status.json` (+`.meta.json`) | evidência do gate A5 (`lsh_ok=true`, `both_directions_ok=true`) |
-| `tools/cycle_gate.py` | check `agent_hier_moe_gate` (A5) |
+| `tools/cycle_gate.py` | checks `A5_rev_round` (gera o round antes) + `agent_hier_moe_gate` (A5) |
 | `tools/b2_two_directions.py` | probe das duas direções (re-embed cacheado em `emb/bank_rev.f32`) |
 | `data/b2_two_directions.json` (+`.meta.json`) | evidência: fwd 0,7708 · rev **0,9170** · teto f32 0,9170 |
 | `tools/b2_oversample_adc.py` | probe pós-FAIL do B2 (oversample k + ADC) |
