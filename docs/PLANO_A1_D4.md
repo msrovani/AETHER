@@ -213,6 +213,7 @@ D1 (após A4) · D2 ‖ D3 (após C3) ──► D4
 - Release **0.6.0** entregue em 2026-11-24 com A1+A2+A3 verdes (`docs/RELEASE_0_6_0.md`).
 - Release **0.6.2** entregue em 2026-11-25 com B2 (duas direcoes), A5 (T-HIER) e Sprint A/B/C (`docs/RELEASE_0_6_2.md`).
 - Release **0.6.3** entregue em 2026-11-26 com o A5 medindo as duas direções e o `cycle_gate` gerando o round rev (`docs/RELEASE_0_6_3.md`).
+- Release **0.6.4** entregue em 2026-11-26 com o A6 T-GRAPH (`docs/RELEASE_0_6_4.md`).
 
 ## 6. Estado desta entrega
 
@@ -245,4 +246,8 @@ D1 (após A4) · D2 ‖ D3 (após C3) ──► D4
 | `data/b2_two_directions.json` (+`.meta.json`) | evidência: fwd 0,7708 · rev **0,9170** · teto f32 0,9170 |
 | `tools/b2_oversample_adc.py` | probe pós-FAIL do B2 (oversample k + ADC) |
 | `data/b2_oversample_adc.json` (+`.meta.json`) | evidência do probe: `verdict=FAIL`, 0,755 |
+| `src/agent/graph.rs` (A6) | evento → átomo BAM 64 → RG 64→16→4 → assinatura/surpresa; `auth 120`; feature `graph` off → no-op |
+| `tests/agent_graph_gate.rs` (8 checks) | verde nos dois lados (default e `--features graph`) |
+| `data/aether_graph_gate.json` (+`.meta.json`) | evidência: `rg 64/16/4`, `claims 3`, `max_authority 120`, `ok=true` |
+| `tools/cycle_gate.py` | checks `cargo_test_agent_graph_gate_off` + `_on` (A6) |
 | `src/knowledge/sgdb/`, `src/core/persistency_search.rs` | intocados |

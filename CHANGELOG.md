@@ -5,6 +5,8 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-11-26
+
 ### Added
 
 - **A6 / T-GRAPH** (`src/agent/graph.rs` + `tests/agent_graph_gate.rs`): evento
