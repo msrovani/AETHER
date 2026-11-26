@@ -47,6 +47,7 @@ pub mod eval;
 pub mod executor;
 pub mod experts;
 pub mod gemma_scribe;
+pub mod graph;
 pub mod hier_moe;
 pub mod hitl;
 pub mod hitl_queue;

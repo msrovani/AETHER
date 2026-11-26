@@ -1,0 +1,12 @@
+{
+  "schema": "aether.gate_evidence/v1",
+  "src": "target/aether_graph_gate.json",
+  "dst": "data/aether_graph_gate.json",
+  "sha256": "525368b98bbb4cd3a5371e46a3838901dc5740ac108b928c1db806a4f044a6ab",
+  "bytes": 217,
+  "command": "cargo test -p aether_engine --features graph --test agent_graph_gate",
+  "verdict": "PASS",
+  "gate": "A6_graph",
+  "promoted_at_utc": "2026-11-26T05:26:40Z",
+  "ok": true
+}

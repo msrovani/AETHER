@@ -5,6 +5,18 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
 
 ## [Unreleased]
 
+### Added
+
+- **A6 / T-GRAPH** (`src/agent/graph.rs` + `tests/agent_graph_gate.rs`): evento
+  estruturado → átomo BAM de 64 fases (splitmix64, determinístico) → RG
+  **64→16→4** → assinatura macro `[u16;4]` + surpresa circular; claims
+  `graph.signature` + uma por feature, auth ≤ 120, `Provenance::Observed`.
+  Disjuntores: `validate` rejeita schema break e **id/nome que não é
+  identificador** (texto livre para na tomada), feature `graph` off → no-op,
+  e a porta `GraphPort` só aceita evento tipado. Gate com 8 checks, rodado nos
+  dois lados (`cycle_gate`: sem e com `--features graph`), grava
+  `target/aether_graph_gate.json`.
+
 ## [0.6.3] - 2026-11-26
 
 ### Added

@@ -57,7 +57,7 @@ não prontos; “vivo” não conta.
 | **A2** | A | T-EVAL — placar T0–T3 no hub | 1 | A1 (fixtures) + gates existentes | semáforo do hub; evidência para B1–B3 |
 | **A3** | A | T-P2P — delta entre nós SGDB | 1 | SGDB + 2 nós locais (sem writer duplo) | sync de evidência; conflito = `contradicts` |
 | **A4** | A | T-CLIP — clipboard sandbox | 1 | A4/G-A4 + K1–K2 (vivos) | entrada de UI sem shell livre |
-| **A6** | A | T-GRAPH — evento → átomo BAM / assinatura RG | 0 | BAM/E3 + RG + SGDB (vivos) | anomalia em fluxo sem re-treino; G-GRAPH |
+| **A6** | A | T-GRAPH — evento → átomo BAM / assinatura RG | 0 | BAM/E3 + RG + SGDB (vivos) | anomalia em fluxo sem re-treino; G-GRAPH | **vivo** (2026-11-25; `graph.rs`; feature `graph` off; `agent_graph_gate`) |
 | **B1** | B | sanção **A8 `enter_v1`** | 1 | gate `aether_a8_v1_criteria.json` + token HITL | T-PRED deixa de ser opt-in |
 | **B2** | B | **cutover T-DEC** dual-bank | 1 | bank `active` + HITL (não depende de B1) | T-DEC sem candidate no bus |
 | **B3** | B | **nova geração F4** | 3 | T-EMB + B1/B2 + decisão de dataset | F4 deixa de congelada |

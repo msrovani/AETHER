@@ -101,6 +101,8 @@ clip = ["dep:arboard"]
 ocr = []
 speech = []
 vision = []
+# T-GRAPH (A6): tomada de eventos estruturados → átomo BAM → RG 64→16→4. Off por default.
+graph = []
 # Hierarchical MoE + LSH (Fase 8; pos T-EMB + B1).
 hier_moe = []
 # Escriba Gemma (T-NL-OUT) — código sempre em `agent`; opt-in runtime

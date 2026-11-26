@@ -11,6 +11,8 @@ Tiers rodados (todos offline, sem rede):
   A2     cargo test --test agent_eval_report_gate (T-EVAL, run_id/hash)
   A3     cargo test --test agent_p2p_gate (T-P2P, delta Merkle/contradicts)
   A4     cargo test --test agent_clip_gate (T-CLIP, stdin/redact/code.patch)
+  A6off  cargo test --test agent_graph_gate (T-GRAPH off: no-op, texto livre para)
+  A6on   cargo test --features graph --test agent_graph_gate (T-GRAPH on: claims auth<=120)
   A5rev  tools/a5_rev_round.py          — round rev (`s2|rel|s1`) p/ o gate A5
   A5     cargo test --test agent_hier_moe_gate (T-HIER, LSH vs MoE plano)
 
@@ -107,6 +109,30 @@ def main() -> int:
             run(
                 "cargo_test_agent_clip_gate",
                 ["cargo", "test", "-p", "aether_engine", "--test", "agent_clip_gate"],
+            )
+        )
+        # A6 / T-GRAPH — o disjuntor `graph_enabled()` é `cfg!`, então cada
+        # binário testa UM lado: rodar sem a feature prova o no-op (e o schema
+        # break, que vale nos dois), com a feature prova as claims auth≤120.
+        results.append(
+            run(
+                "cargo_test_agent_graph_gate_off",
+                ["cargo", "test", "-p", "aether_engine", "--test", "agent_graph_gate"],
+            )
+        )
+        results.append(
+            run(
+                "cargo_test_agent_graph_gate_on",
+                [
+                    "cargo",
+                    "test",
+                    "-p",
+                    "aether_engine",
+                    "--features",
+                    "graph",
+                    "--test",
+                    "agent_graph_gate",
+                ],
             )
         )
         # A5 / T-HIER — o round rev (`s2|rel|s1`) é derivado e mora em
