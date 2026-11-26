@@ -87,7 +87,7 @@ pub use self::experts::{MemoryCitations, RecallCitation};
 use self::router::MoERouter;
 
 pub use a8_v1::{
-    a8_v1_flag, criteria as a8_v1_criteria, enter_v1_allowed, enter_v1_default,
+    a8_v1_flag, criteria as a8_v1_criteria, enter_v1_allowed, enter_v1_default, hitl_sanction_255,
     write_criteria_artifact as write_a8_v1_criteria, A8V1Criterion, A8_V1_CRITERIA_PATH,
 };
 pub use bus::{promote_key_255, run_trio_turn, TrioOpts, TrioTurn, LEARN_AUTH_CAP};

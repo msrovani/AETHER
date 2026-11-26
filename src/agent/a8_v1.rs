@@ -42,7 +42,8 @@ pub fn criteria() -> Vec<A8V1Criterion> {
         A8V1Criterion {
             id: "hitl_sanction_255",
             desc: "Sanção HITL explícita (MSG/hub) + fato nsgdb auth 255",
-            met: false, // requer humano
+            // B1: sanção humana fornecida (`AETHER_HITL_SANCTION_255=1`); nunca auto.
+            met: hitl_sanction_255(),
         },
         A8V1Criterion {
             id: "flag_aether_a8_v1",
@@ -68,9 +69,20 @@ pub fn enter_v1_allowed() -> bool {
     criteria().iter().all(|c| c.met) && a8_v1_flag()
 }
 
+/// `hitl_sanction_255`: sanção HITL explícita **fornecida por humano**
+/// (`AETHER_HITL_SANCTION_255=1`); nunca auto-concedida. (B1; + fato nsgdb auth 255.)
+pub fn hitl_sanction_255() -> bool {
+    std::env::var("AETHER_HITL_SANCTION_255")
+        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
 /// Default de produto (artefato / release).
+///
+/// B1: `enter_v1_default = enter_v1_allowed` — **só** vira `true` com checklist
+/// completo + sanção HITL + flag `AETHER_A8_V1=1`. Sem sanção, permanece `false`.
 pub fn enter_v1_default() -> bool {
-    false
+    enter_v1_allowed()
 }
 
 /// JSON de critérios.

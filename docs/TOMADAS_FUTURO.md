@@ -141,6 +141,7 @@ aprovada. C2–C4 só entram quando suas escadas (SPEECH/VISAO) abrirem.
 | **Contrato** | `PredictExpert` deixa de ser opt-in (`enter_v1_default=true`) |
 | **Deps** | `aether_a8_v1_criteria.json` verde + token HITL |
 | **Aceite** | false-act ≤ limiar do gate; audit trail do token |
+| **Estado** | **sanção registrada** (2026-11-26; usuário aprovado; nsgdb auth-255 `md/L3/mcp/1795729515840000`); `hitl_sanction_255` → `AETHER_HITL_SANCTION_255=1`; `enter_v1_default=enter_v1_allowed`; **nunca auto**; gate `agent_b1_gate`. Ativa em runtime com `AETHER_A8_V1=1` + `AETHER_HITL_SANCTION_255=1`. |
 
 ### B2 · cutover T-DEC dual-bank
 | | |
