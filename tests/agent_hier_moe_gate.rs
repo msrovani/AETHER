@@ -1,16 +1,18 @@
-//! A5 / T-HIER — gate: LSH + re-rank f32 contra o MoE plano.
+//! A5 / T-HIER — gate: LSH + re-rank f32 contra o MoE plano, nas duas direções.
 //!
-//! GO: `recall@1` do caminho LSH **não menor** que o plano, com p99 menor.
-//! Medido no mesmo bank, mesma verdade e mesmo `k` (top-32). Sem os artefatos
-//! do round, o gate não inventa número: sai com skip explícito.
+//! fwd = `s1|rel|s2` (o bank do round); rev = `s2|rel|s1` (o lado que fecha o
+//! B2), gerado por `tools/a5_rev_round.py` em `target/a5_rev_round`.
+//! GO: `recall@1` do caminho LSH **não menor** que o plano, com p99 menor, em
+//! cada direção medida. Sem os artefatos de uma direção, o gate não inventa
+//! número: sai com skip explícito e `both_directions_ok` fica falso.
 
 #![cfg(feature = "agent")]
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use aether_engine::agent::{
-    best_passing, sweep, HierMoeStatus, LshConfig, Round, DEFAULT_ROUND, HIER_MOE_STATUS_PATH,
-    RERANK_TOP,
+    best_passing, sweep, DirectionMeasure, HierMoeStatus, LshConfig, Round, DEFAULT_ROUND,
+    HIER_MOE_STATUS_PATH, RERANK_TOP, REV_ROUND,
 };
 use aether_engine::json::Json;
 
@@ -25,10 +27,18 @@ const CONFIGS: &[LshConfig] = &[
     LshConfig::new(4, 12, 8),
 ];
 
-#[test]
-fn hier_moe_gate_lsh_vs_plano() {
-    let dir = std::env::var("AETHER_ROUND").unwrap_or_else(|_| DEFAULT_ROUND.to_string());
-    let dir = Path::new(&dir);
+/// Varredura vencedora de uma direção.
+struct Sweep {
+    dir: DirectionMeasure,
+    over_capacity: bool,
+}
+
+fn dir_from_env(var: &str, default: &str) -> PathBuf {
+    PathBuf::from(std::env::var(var).unwrap_or_else(|_| default.to_string()))
+}
+
+/// Mede uma direção; `None` (com skip explícito) se faltar artefato do round.
+fn sweep_round(dir: &Path, n: usize, tag: &str) -> Option<Sweep> {
     for rel in [
         "hv/bank.bin",
         "hv/bank.idx",
@@ -38,27 +48,24 @@ fn hier_moe_gate_lsh_vs_plano() {
     ] {
         if !dir.join(rel).exists() {
             eprintln!(
-                "A5: {} ausente — skip (sem bank/query não há medida)",
+                "A5 {tag}: {} ausente — skip (sem bank/query não há medida)",
                 dir.join(rel).display()
             );
-            return;
+            return None;
         }
     }
 
-    let mut round = Round::load(dir).expect("round do A5");
-    let n = std::env::var("AETHER_HIER_N")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(200usize)
-        .min(round.len());
+    let mut round =
+        Round::load(dir).unwrap_or_else(|e| panic!("A5 {tag}: round {}: {e}", dir.display()));
+    let n = n.min(round.len());
     let (plain, rows) = sweep(&mut round, n, RERANK_TOP, CONFIGS);
     eprintln!(
-        "A5 plano: n={} recall@1={:.4} p99={}us cand={:.1}",
+        "A5 {tag} plano: n={} recall@1={:.4} p99={}us cand={:.1}",
         plain.n, plain.recall1, plain.p99_us, plain.candidates_avg
     );
     for (cfg, m) in &rows {
         eprintln!(
-            "A5 lsh {}: recall@1={:.4} p99={}us cand={:.1}",
+            "A5 {tag} lsh {}: recall@1={:.4} p99={}us cand={:.1}",
             cfg.label(),
             m.recall1,
             m.p99_us,
@@ -66,20 +73,53 @@ fn hier_moe_gate_lsh_vs_plano() {
         );
     }
 
+    // Negativo honesto: sem config aprovada, registra a de maior recall.
+    let (config, lsh) = best_passing(plain, &rows)
+        .or_else(|| {
+            rows.iter()
+                .max_by(|a, b| {
+                    a.1.recall1
+                        .total_cmp(&b.1.recall1)
+                        .then(b.1.p99_us.cmp(&a.1.p99_us))
+                })
+                .copied()
+        })
+        .expect("sweep vazio");
+    Some(Sweep {
+        dir: DirectionMeasure { config, plain, lsh },
+        over_capacity: round.bank.over_capacity(),
+    })
+}
+
+#[test]
+fn hier_moe_gate_lsh_vs_plano() {
+    let n = std::env::var("AETHER_HIER_N")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(200usize);
+
+    let base = dir_from_env("AETHER_ROUND", DEFAULT_ROUND);
+    let fwd = sweep_round(&base, n, "fwd").expect("A5: round base obrigatório (ver DEFAULT_ROUND)");
+
     let mut status = HierMoeStatus::from_env();
-    let chosen = best_passing(plain, &rows).or_else(|| {
-        // Negativo honesto: registra a config de maior recall para o artefato.
-        rows.iter()
-            .max_by(|a, b| {
-                a.1.recall1
-                    .total_cmp(&b.1.recall1)
-                    .then(b.1.p99_us.cmp(&a.1.p99_us))
-            })
-            .copied()
-    });
-    let (cfg, lsh) = chosen.expect("sweep vazio");
-    let over_capacity = round.bank.over_capacity();
-    status.measured(over_capacity, RERANK_TOP, cfg, plain, lsh);
+    status.measured(fwd.over_capacity, RERANK_TOP, fwd.dir);
+
+    let rev_dir = dir_from_env("AETHER_ROUND_REV", REV_ROUND);
+    status.rev = sweep_round(&rev_dir, n, "rev").map(|r| r.dir);
+    match &status.rev {
+        Some(r) => eprintln!(
+            "A5 rev: plano recall@1={:.4} p99={}us | lsh {} recall@1={:.4} p99={}us",
+            r.plain.recall1,
+            r.plain.p99_us,
+            r.config.label(),
+            r.lsh.recall1,
+            r.lsh.p99_us
+        ),
+        None => eprintln!(
+            "A5 rev: {} ausente — rode `python tools/a5_rev_round.py`; `both_directions_ok` fica falso",
+            rev_dir.display()
+        ),
+    }
 
     std::fs::create_dir_all("target").ok();
     std::fs::write(HIER_MOE_STATUS_PATH, status.to_json().to_text()).expect("artefato A5");
@@ -93,14 +133,24 @@ fn hier_moe_gate_lsh_vs_plano() {
     );
     assert!(
         status.lsh_ok(),
-        "GO do A5 não medido: nenhuma config LSH preserva recall {:.4} com p99 menor que {}us (melhor: {} recall {:.4} p99 {}us, cand {:.1})",
-        plain.recall1,
-        plain.p99_us,
-        cfg.label(),
-        lsh.recall1,
-        lsh.p99_us,
-        lsh.candidates_avg
+        "GO fwd não medido: nenhuma config LSH preserva recall {:.4} com p99 menor que {}us",
+        fwd.dir.plain.recall1,
+        fwd.dir.plain.p99_us
     );
+    match &status.rev {
+        Some(r) => assert!(
+            status.both_directions_ok(),
+            "GO rev não medido: lsh recall {:.4} p99 {}us vs plano recall {:.4} p99 {}us",
+            r.lsh.recall1,
+            r.lsh.p99_us,
+            r.plain.recall1,
+            r.plain.p99_us
+        ),
+        None => assert!(
+            !status.both_directions_ok(),
+            "sem medida rev o A5 não pode autorizar o default"
+        ),
+    }
     // Gate medido: sem feature+env, mesmo com números verdes, não liga.
     assert_eq!(status.may_enable(), status.feature_on && status.env_on);
 }

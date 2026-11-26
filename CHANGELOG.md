@@ -5,6 +5,15 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
 
 ## [Unreleased]
 
+### Added
+
+- A5 (T-HIER) mede as **duas** direções do fato: `tools/a5_rev_round.py` leva
+  `emb/bank_rev.f32` a `hv/bank_rev.bin` com o `P` do manifest (round em
+  `target/a5_rev_round/`, com autoverificação bit a bit do fwd) e o gate mede
+  fwd e rev no mesmo caminho LSH + re-rank f32 top-32. Release, n=5000: rev
+  **0,9170** = plano com p99 **370 µs vs 477 µs**; fwd 0,7708 = plano, p99
+  335 µs vs 462 µs. `both_directions_ok=true`, `default_path` segue `false`.
+
 ## [0.6.2] - 2026-11-25
 
 ### Added

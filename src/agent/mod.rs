@@ -105,8 +105,8 @@ pub use gemma_scribe::{
     vram_free_from_host_report, GemmaScribePort, ScribeRuntime, DEFAULT_AND_PEAK_MB, ENV_SCRIBE,
 };
 pub use hier_moe::{
-    best_passing, measure, rerank, sweep, HierMoeStatus, LshConfig, PathMeasure, Round,
-    DEFAULT_ROUND, HIER_MOE_STATUS_PATH, RERANK_TOP,
+    best_passing, measure, rerank, sweep, DirectionMeasure, HierMoeStatus, LshConfig, PathMeasure,
+    Round, DEFAULT_ROUND, HIER_MOE_STATUS_PATH, RERANK_TOP, REV_ROUND,
 };
 pub use hitl::{apply_hitl, HitlDecision, HitlKind, HitlRequest};
 pub use hitl_queue::{

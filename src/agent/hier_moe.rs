@@ -7,8 +7,9 @@
 //! GO (não negociável, medido e não estimado): `recall1` do caminho LSH **não
 //! pode ficar abaixo** do caminho plano, com `p99` menor. Enquanto o gate não
 //! medir isso, [`HierMoeStatus::may_enable`] é `false` e nada entra no caminho
-//! default. A pré-condição do B2 (rev 0,9170) está registrada no artefato, mas
-//! não substitui a medida própria do A5.
+//! default. As **duas** direções do fato são medidas: fwd `s1|rel|s2` (o bank do
+//! round) e rev `s2|rel|s1` (o lado que fecha o B2, `data/b2_two_directions.json`).
+//! [`HierMoeStatus::both_directions_ok`] é a evidência; não é a autorização.
 
 use std::path::Path;
 use std::time::Instant;
@@ -21,6 +22,9 @@ pub const HIER_MOE_STATUS_PATH: &str = "target/aether_hier_moe_status.json";
 
 /// Round PAWS com bank HV + `emb/bank.f32` + queries `s2`.
 pub const DEFAULT_ROUND: &str = "data/rounds/20261117_b0_paws";
+
+/// Round reverso (`s2|rel|s1`) gerado por `tools/a5_rev_round.py` em `target/`.
+pub const REV_ROUND: &str = "target/a5_rev_round";
 
 /// Candidatos que descem para o re-rank float (mesmo top-32 do B2).
 pub const RERANK_TOP: usize = 32;
@@ -252,6 +256,53 @@ pub fn best_passing(
         .copied()
 }
 
+/// Arredonda para 4 casas, como o resto do artefato.
+fn num4(v: f64) -> Json {
+    Json::Num((v * 10_000.0).round() / 10_000.0)
+}
+
+/// JSON de uma medida (`Null` quando ausente).
+fn measure_json(m: Option<PathMeasure>) -> Json {
+    match m {
+        Some(m) => Json::obj([
+            ("n", Json::Num(m.n as f64)),
+            ("recall1", num4(m.recall1)),
+            ("p99_us", Json::Num(m.p99_us as f64)),
+            ("candidates_avg", num4(m.candidates_avg)),
+        ]),
+        None => Json::Null,
+    }
+}
+
+/// Medida de uma direção do A5: fwd `s1|rel|s2` ou rev `s2|rel|s1`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DirectionMeasure {
+    /// Configuração LSH medida.
+    pub config: LshConfig,
+    /// MoE plano (varredura exata em Hamming).
+    pub plain: PathMeasure,
+    /// LSH multi-probe + re-rank f32.
+    pub lsh: PathMeasure,
+}
+
+impl DirectionMeasure {
+    /// GO da direção: recall não menor **e** p99 menor, com medida real.
+    pub fn lsh_ok(&self) -> bool {
+        let (p, l) = (self.plain, self.lsh);
+        p.n > 0 && l.n > 0 && l.recall1 >= p.recall1 && l.p99_us < p.p99_us
+    }
+
+    /// JSON da direção no artefato.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("lsh_config", Json::str(self.config.label())),
+            ("plain", measure_json(Some(self.plain))),
+            ("lsh_rerank_f32", measure_json(Some(self.lsh))),
+            ("lsh_ok", Json::Bool(self.lsh_ok())),
+        ])
+    }
+}
+
 /// Status/medida do A5 — é o que o artefato e o `may_enable` leem.
 #[derive(Clone, Copy, Debug)]
 pub struct HierMoeStatus {
@@ -261,16 +312,12 @@ pub struct HierMoeStatus {
     pub env_on: bool,
     /// Bank acima da capacidade E1B (`0,4 × D`).
     pub over_capacity: bool,
-    /// Queries medidas.
-    pub n: usize,
     /// Candidatos por query antes do re-rank.
     pub k: usize,
-    /// Configuração LSH vencedora.
-    pub config: Option<LshConfig>,
-    /// Medida do MoE plano.
-    pub plain: Option<PathMeasure>,
-    /// Medida do caminho LSH + re-rank.
-    pub lsh: Option<PathMeasure>,
+    /// Direção fwd (`s1|rel|s2`) medida pelo gate.
+    pub fwd: Option<DirectionMeasure>,
+    /// Direção reversa (`s2|rel|s1`), quando o round rev é medido.
+    pub rev: Option<DirectionMeasure>,
 }
 
 impl HierMoeStatus {
@@ -288,38 +335,29 @@ impl HierMoeStatus {
             feature_on: cfg!(feature = "hier_moe"),
             env_on,
             over_capacity: false,
-            n: 0,
             k: 0,
-            config: None,
-            plain: None,
-            lsh: None,
+            fwd: None,
+            rev: None,
         }
     }
 
-    /// Anexa a medida do gate.
-    pub fn measured(
-        &mut self,
-        over_capacity: bool,
-        k: usize,
-        config: LshConfig,
-        plain: PathMeasure,
-        lsh: PathMeasure,
-    ) -> Self {
+    /// Anexa a medida fwd do gate.
+    pub fn measured(&mut self, over_capacity: bool, k: usize, fwd: DirectionMeasure) -> Self {
         self.over_capacity = over_capacity;
-        self.n = plain.n.min(lsh.n);
         self.k = k;
-        self.config = Some(config);
-        self.plain = Some(plain);
-        self.lsh = Some(lsh);
+        self.fwd = Some(fwd);
         *self
     }
 
-    /// GO do A5 cumprido: recall não menor **e** p99 menor, com n > 0.
+    /// GO do A5 na direção fwd: recall não menor **e** p99 menor, com n > 0.
     pub fn lsh_ok(&self) -> bool {
-        match (self.plain, self.lsh) {
-            (Some(p), Some(l)) => self.n > 0 && l.recall1 >= p.recall1 && l.p99_us < p.p99_us,
-            _ => false,
-        }
+        self.fwd.is_some_and(|f| f.lsh_ok())
+    }
+
+    /// GO nas duas direções: fwd verde **e** rev medida e verde. É a evidência
+    /// que autoriza o A5 no default; sem a medida rev, não autoriza.
+    pub fn both_directions_ok(&self) -> bool {
+        self.lsh_ok() && self.rev.is_some_and(|r| r.lsh_ok())
     }
 
     /// Só liga com feature + env + GO medido. Nunca no caminho default.
@@ -329,16 +367,7 @@ impl HierMoeStatus {
 
     /// JSON do artefato.
     pub fn to_json(&self) -> Json {
-        let num = |v: f64| Json::Num((v * 10_000.0).round() / 10_000.0);
-        let measure_json = |m: Option<PathMeasure>| match m {
-            Some(m) => Json::obj([
-                ("n", Json::Num(m.n as f64)),
-                ("recall1", num(m.recall1)),
-                ("p99_us", Json::Num(m.p99_us as f64)),
-                ("candidates_avg", num(m.candidates_avg)),
-            ]),
-            None => Json::Null,
-        };
+        let fwd = self.fwd;
         Json::obj([
             ("tomada", Json::str("T-MOE-HIER")),
             ("feature", Json::Bool(self.feature_on)),
@@ -347,18 +376,19 @@ impl HierMoeStatus {
             ("k", Json::Num(self.k as f64)),
             (
                 "lsh_config",
-                self.config
-                    .map(|c| Json::str(c.label()))
+                fwd.map(|d| Json::str(d.config.label()))
                     .unwrap_or(Json::Null),
             ),
-            ("plain", measure_json(self.plain)),
-            ("lsh_rerank_f32", measure_json(self.lsh)),
+            ("plain", measure_json(fwd.map(|d| d.plain))),
+            ("lsh_rerank_f32", measure_json(fwd.map(|d| d.lsh))),
             ("lsh_ok", Json::Bool(self.lsh_ok())),
+            ("rev", self.rev.map(|r| r.to_json()).unwrap_or(Json::Null)),
+            ("both_directions_ok", Json::Bool(self.both_directions_ok())),
             ("may_enable", Json::Bool(self.may_enable())),
             ("default_path", Json::Bool(false)),
             (
                 "b2_precondition",
-                Json::str("rev 0,9170 em data/b2_two_directions.json"),
+                Json::str("rev 0,9170 em data/b2_two_directions.json, medido pelo A5 em `rev`"),
             ),
             ("blocks_tnl_in", Json::Bool(false)),
         ])
@@ -433,10 +463,19 @@ fn normalize(v: &mut [f32]) {
 mod tests {
     use super::*;
 
+    fn dm(plain: PathMeasure, lsh: PathMeasure) -> DirectionMeasure {
+        DirectionMeasure {
+            config: LshConfig::new(8, 8, 8),
+            plain,
+            lsh,
+        }
+    }
+
     #[test]
     fn status_sem_medida_nao_liga() {
         let s = HierMoeStatus::from_env();
         assert!(!s.lsh_ok());
+        assert!(!s.both_directions_ok());
         assert!(!s.may_enable());
         let j = s.to_json().to_string();
         assert!(j.contains("\"may_enable\":false"));
@@ -454,40 +493,64 @@ mod tests {
             candidates_avg: 32.0,
         };
         // recall menor: reprova mesmo com p99 melhor.
-        s.measured(
-            false,
-            32,
-            LshConfig::new(8, 8, 8),
-            plain,
-            PathMeasure {
-                recall1: 0.79,
-                ..plain
-            },
-        );
+        let lower = PathMeasure {
+            recall1: 0.79,
+            ..plain
+        };
+        s.measured(false, 32, dm(plain, lower));
         assert!(!s.lsh_ok());
         // p99 maior: reprova mesmo com recall igual.
-        s.measured(
-            false,
-            32,
-            LshConfig::new(8, 8, 8),
-            plain,
-            PathMeasure {
-                p99_us: 950,
-                ..plain
-            },
-        );
+        let slower = PathMeasure {
+            p99_us: 950,
+            ..plain
+        };
+        s.measured(false, 32, dm(plain, slower));
         assert!(!s.lsh_ok());
         // recall igual e p99 menor: passa o GO.
-        s.measured(
-            false,
-            32,
-            LshConfig::new(8, 8, 8),
-            plain,
-            PathMeasure {
-                p99_us: 120,
-                ..plain
-            },
-        );
+        let faster = PathMeasure {
+            p99_us: 120,
+            ..plain
+        };
+        s.measured(false, 32, dm(plain, faster));
         assert!(s.lsh_ok());
+    }
+
+    #[test]
+    fn rev_ausente_ou_vermelha_nao_autoriza() {
+        let mut s = HierMoeStatus::from_env();
+        let plain = PathMeasure {
+            n: 100,
+            recall1: 0.77,
+            p99_us: 900,
+            candidates_avg: 32.0,
+        };
+        let faster = PathMeasure {
+            p99_us: 400,
+            ..plain
+        };
+        s.measured(false, 32, dm(plain, faster));
+        assert!(s.lsh_ok());
+        assert!(
+            !s.both_directions_ok(),
+            "sem medida rev não autoriza as duas"
+        );
+        // rev verde: autoriza.
+        let rev_ok = PathMeasure {
+            recall1: 0.92,
+            p99_us: 420,
+            ..plain
+        };
+        s.rev = Some(dm(plain, rev_ok));
+        assert!(s.both_directions_ok());
+        // rev com p99 maior que o plano: reprova, mesmo com recall alto.
+        let rev_slow = PathMeasure {
+            recall1: 0.92,
+            p99_us: 900,
+            ..plain
+        };
+        s.rev = Some(dm(plain, rev_slow));
+        assert!(!s.both_directions_ok());
+        let j = s.to_json().to_string();
+        assert!(j.contains("\"both_directions_ok\":false"));
     }
 }

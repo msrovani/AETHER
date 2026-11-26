@@ -87,6 +87,21 @@ Cada ficha segue: **Tema** (tomada) · **Item/Subitem** (o que existe no código
   serve para rotear. A5 segue **off** no default: `may_enable` exige a feature
   `hier_moe` + `AETHER_HIER_MOE=1`, e `default_path` é sempre `false`.
   Artefato: `data/aether_hier_moe_status.json` (+`.meta.json`).
+- **Duas direções medidas (2026-11-26):** `tools/a5_rev_round.py` projeta
+  `emb/bank_rev.f32` com o **mesmo** `P` do manifest para `hv/bank_rev.bin` (autoverificação:
+  reconstrói o bank fwd e exige igualdade bit a bit com `hv/bank.bin`, sha
+  `20cd525e…`) e escreve `target/a5_rev_round/`; o mesmo gate mede as duas
+  direções sobre a mesma verdade (n=5000, release, config **8×8×8**):
+  fwd **0,7708 vs 0,7708** com p99 **335 µs vs 462 µs**; rev **0,9170 vs
+  0,9170** com p99 **370 µs vs 477 µs**. O rev do A5 reproduz o probe do B2
+  (0,9170) exatamente, então o número que faltava está medido no *caminho
+  real*, não só no probe Python. `both_directions_ok=true`; `may_enable`
+  continua `false` (feature/env) e `default_path` segue `false`: a medição
+  autoriza, o flip do default é decisão separada.
+- **Nota de honestidade (n=5000):** a config 8×10×16 perde 1 query no fwd
+  (0,7706 < 0,7708) e é reprovada pelo `best_passing`; o gate cai para 8×8×8,
+  que empata o plano. Em n=500 a 8×10×16 ainda passava (0,7680 = 0,7680) — o
+  número antigo não foi baixado, foi substituído pela amostra maior.
 
 ## 2. Classe B — decisão humana (código pronto, token HITL)
 
@@ -221,8 +236,9 @@ D1 (após A4) · D2 ‖ D3 (após C3) ──► D4
 | `tools/cycle_gate.py` | check `agent_clip_gate` (A4) |
 | `Cargo.toml` | feature `clip` = `dep:arboard` (opt-in, default off) |
 | `src/agent/hier_moe.rs` (A5) | LSH + re-rank f32 medidos; `lsh_ok=true`, `may_enable` só com feature+env |
-| `tests/agent_hier_moe_gate.rs` | verde: recall 0,7680 = plano, p99 174 µs < 455 µs (release, n=500) |
-| `data/aether_hier_moe_status.json` (+`.meta.json`) | evidência do gate A5 (`lsh_ok=true`) |
+| `tests/agent_hier_moe_gate.rs` | verde nas duas direções (release, n=5000): fwd 0,7708 = plano, p99 335 µs < 462 µs; rev 0,9170 = plano, p99 370 µs < 477 µs |
+| `tools/a5_rev_round.py` | round rev (`hv/bank_rev.bin` do `bank_rev.f32` pelo `P` do manifest, espelhado em `hv/bank.bin` para o `Round::load`) em `target/a5_rev_round/`, com autoverificação bit a bit do fwd |
+| `data/aether_hier_moe_status.json` (+`.meta.json`) | evidência do gate A5 (`lsh_ok=true`, `both_directions_ok=true`) |
 | `tools/cycle_gate.py` | check `agent_hier_moe_gate` (A5) |
 | `tools/b2_two_directions.py` | probe das duas direções (re-embed cacheado em `emb/bank_rev.f32`) |
 | `data/b2_two_directions.json` (+`.meta.json`) | evidência: fwd 0,7708 · rev **0,9170** · teto f32 0,9170 |

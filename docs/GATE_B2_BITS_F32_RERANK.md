@@ -161,3 +161,20 @@ Consequência: **B2 fecha 0,90 na direção reversa** (0,9170 ≥ 0,90) com o te
 intocado. O NO-GO de A5 ("só liga com gate B2 ≥ 0,90") fica satisfeito por
 medição; A5 segue off apenas até o seu próprio gate (recall@1 vs MoE plano e
 p99), não mais por B2.
+
+## A5 mediu o lado reverso (2026-11-26)
+
+`tools/a5_rev_round.py` leva o `bank_rev.f32` para HV com o mesmo `P` do
+manifest (`hv/bank_rev.bin`, espelhado em `hv/bank.bin` para o `Round::load`, round em `target/a5_rev_round/`) e o gate A5 passa a medir as duas
+direções no **mesmo** caminho LSH + re-rank f32 top-32 (n=5000, release):
+
+| direção | plano (µs / recall@1) | LSH 8×8×8 (µs / recall@1) | pool |
+|---|---:|---:|---:|
+| fwd `s1|rel|s2` | 462 / 0,7708 | **335 / 0,7708** | ~2108 |
+| rev `s2|rel|s1` | 477 / 0,9170 | **370 / 0,9170** | ~2111 |
+
+O rev do A5 reproduz este probe (0,9170) sem perder uma query, o que fecha a
+pré-condição que estava só no Python. Evidência:
+`data/aether_hier_moe_status.json` (`both_directions_ok=true`). A5 continua
+**off** no default (`may_enable` exige feature + env; `default_path` é sempre
+`false`) — medir autoriza, ligar é decisão à parte.
