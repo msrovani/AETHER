@@ -47,3 +47,17 @@
 
 ## Honestidade
 NÃ£o fingir backend; `Err` honesto; conf **nÃ£o inventada**; claims **authâ‰¤120**; **255 sÃ³ HITL**; **nunca atuar sem certificado + HITL duro + kill switch**. Flakes de tempo no host (`D1/E6/g5/t12/e8`) nÃ£o sÃ£o regressÃ£o desta frente (A/B vs pristine).
+
+## Correções pós-review (W1-W12)
+- **W1+W8 (sem shell + injeção + timeout/limite):** src/agent/backend.rs un_backend/un_backend_cmd/sanitize_ref/parse_cmd; **nunca** cmd /c/sh -c (cmd só por teste, não recomendado; sh/bash/powershell/pwsh bloqueados); dado do chamador **não em argv** (C4 texto?**stdin**; C1/C2/C3/D1/D3 ef **sanitizada**; D4 ction.code() estático); stdin?pipe+EOF; stdout=BACKEND_MAX_STDOUT; stderr?null; **timeout+kill** BACKEND_TIMEOUT_MS. AETHER_*_CMD=binário concreto.
+- **W2 (HITL real):** D4 execute(cmd, hitl: &HitlDecision) (pproved+	oken_present+!timed_out+uthority>=255+equest_id==request_id_for(cmd.id)+**reuso não permitido**); audit sem token; RobotError::NeedsHitl. EmbedBank::cutover exige hitl_sanction_255. hitl_sanction_255 nunca auto. **Nota honesta:** HitlDecision é emitido por pply_hitl/T-HITL; ainda **não** verifica criptograficamente a origem (sem IdP); hitl_sanction_255 hoje lê env AETHER_HITL_SANCTION_255=1, não nsgdb-255 programaticamente (fato auth-255 registrado em nsgdb separadamente).
+- **W3:** *_sidecar re-checa enabled+feature; speak_sidecar exige enabled.
+- **W4:** speak_sidecar uth<=120 + judge_conf>=0.5 + may_speak_fact.
+- **W5:** C1 detect_pii no **texto extraído**; **conf honesta** — backend sem conf medida?conf=0.0; AETHER_*_CONF só se operador declarar + is_finite; **NaN/inf?0/ask**; 	o_goal conf<=0.50?ask + !is_finite. C2/C3 idem.
+- **W6:** D1 alue.is_finite+.validate()+series MAX_SERIES+checked_add.
+- **W7:** GraphEvent::claims_from_event_inner?Result+alidate+ids.first().
+- **W9:** gent_b1_gate artefato próprio.
+- **W10:** PredictExpert::enter_v1_enabled?enter_v1_allowed. **Nota honesta:** PredictExpert não tinha v1 opt-in interno; getter adicionado, sem forkar comportamento; enter_v1_default continua no 8_v1.
+- **W11:** D4 Stop isento de cert+isk (abortivo) mas **mantém HITL+kill+enabled+allowlist**; MAX_AUDIT. AETHER_ROBOT_RISK_CEILING is_finite.
+- **W12:** RobotError Display+Error; cargo fmt.
+

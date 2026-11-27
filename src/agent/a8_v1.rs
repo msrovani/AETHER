@@ -73,7 +73,12 @@ pub fn enter_v1_allowed() -> bool {
 /// (`AETHER_HITL_SANCTION_255=1`); nunca auto-concedida. (B1; + fato nsgdb auth 255.)
 pub fn hitl_sanction_255() -> bool {
     std::env::var("AETHER_HITL_SANCTION_255")
-        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .map(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
         .unwrap_or(false)
 }
 

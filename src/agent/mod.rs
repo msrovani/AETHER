@@ -35,6 +35,8 @@
 //! ```
 
 pub mod a8_v1;
+pub mod ar;
+pub mod backend;
 pub mod bus;
 pub mod cli;
 pub mod clip;
@@ -48,6 +50,7 @@ pub mod executor;
 pub mod experts;
 pub mod gemma_scribe;
 pub mod graph;
+pub mod haptic;
 pub mod hier_moe;
 pub mod hitl;
 pub mod hitl_queue;
@@ -61,15 +64,13 @@ pub mod planner;
 pub mod predict;
 pub mod registry;
 pub mod risk_policy;
+pub mod robot;
 pub mod router;
 pub mod scorecard;
 pub mod self_model;
 pub mod semantic;
-pub mod speech;
 pub mod sensor;
-pub mod haptic;
-pub mod ar;
-pub mod robot;
+pub mod speech;
 pub mod tab;
 pub mod telemetry;
 pub mod tnl_in;

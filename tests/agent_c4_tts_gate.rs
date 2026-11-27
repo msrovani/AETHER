@@ -10,7 +10,13 @@ use aether_engine::agent::speech::TtsPort;
 use aether_engine::agent::Action;
 
 fn utt(action: Action, text: &str, sources: Vec<String>) -> CertifiedUtterance {
-    CertifiedUtterance { text: text.into(), action, auth: 120, sources, judge_conf: 0.95 }
+    CertifiedUtterance {
+        text: text.into(),
+        action,
+        auth: 120,
+        sources,
+        judge_conf: 0.95,
+    }
 }
 
 #[test]
@@ -28,8 +34,15 @@ fn c4_tts_so_certified_abstain_beep_nao_sei() {
     assert_eq!(port.speak_sidecar(&nofonte).unwrap().kind, "beep");
 
     // CertifiedUtterance com fonte + não-abstain + sem backend → Err honesto
-    let ok = utt(Action::Cite, "capital do Brasil é Brasília", vec!["nsgdb".into()]);
-    assert!(port.speak_sidecar(&ok).is_err(), "certificado mas sem AETHER_TTS_CMD → Err honesto");
+    let ok = utt(
+        Action::Cite,
+        "capital do Brasil é Brasília",
+        vec!["nsgdb".into()],
+    );
+    assert!(
+        port.speak_sidecar(&ok).is_err(),
+        "certificado mas sem AETHER_TTS_CMD → Err honesto"
+    );
     // comando inexistente → Err, não panic
     std::env::set_var("AETHER_TTS_CMD", "definitely-not-a-real-binary-xyz");
     assert!(port.speak_sidecar(&ok).is_err());

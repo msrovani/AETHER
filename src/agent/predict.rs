@@ -289,6 +289,12 @@ impl PredictExpert {
     pub fn new() -> Self {
         Self
     }
+
+    /// **W10 / B1:** `enter_v1` só com sanção+flag+checklist (`a8_v1::enter_v1_allowed`);
+    /// sem sanção `enter_v1` permanece opt-in. `PREDICT_AUTH_CAP=120`. Nunca auto.
+    pub fn enter_v1_enabled() -> bool {
+        crate::agent::a8_v1::enter_v1_allowed()
+    }
 }
 
 impl crate::agent::experts::Expert for PredictExpert {

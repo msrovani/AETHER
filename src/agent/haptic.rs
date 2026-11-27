@@ -63,14 +63,21 @@ impl HapticPort {
 
     /// `AETHER_HAPTIC=1` + feature `haptic`.
     pub fn from_env() -> Self {
-        let env_on = std::env::var("AETHER_HAPTIC").map(|v| v == "1" || v.eq_ignore_ascii_case("true")).unwrap_or(false);
-        Self { enabled: env_on && cfg!(feature = "haptic") }
+        let env_on = std::env::var("AETHER_HAPTIC")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        Self {
+            enabled: env_on && cfg!(feature = "haptic"),
+        }
     }
 
     /// `Action` → `HapticEvent` (nunca inventa fato; só render pós-triagem).
     pub fn render(&self, action: super::Action) -> HapticEvent {
         let band = band_from_action(action);
-        HapticEvent { band, pattern: band.pattern().to_string() }
+        HapticEvent {
+            band,
+            pattern: band.pattern().to_string(),
+        }
     }
 
     /// Emite no backend (`AETHER_HAPTIC_CMD`) se ligado; no-op honesto + log.
@@ -81,14 +88,15 @@ impl HapticPort {
         }
         match std::env::var("AETHER_HAPTIC_CMD") {
             Ok(cmd_line) if !cmd_line.trim().is_empty() => {
-                let mut parts = cmd_line.split_whitespace();
-                let prog = parts.next().ok_or_else(|| "AETHER_HAPTIC_CMD vazio".to_string())?;
-                let mut args: Vec<String> = parts.map(|s| s.to_string()).collect();
-                args.push(event.pattern.clone());
-                let output = std::process::Command::new(prog).args(&args).output().map_err(|e| format!("haptic spawn: {e}"))?;
-                if !output.status.success() {
-                    return Err(format!("haptic status {}", output.status));
-                }
+                // W1+W8: sem shell; pattern (estático); timeout+limite
+                super::backend::run_backend_cmd(
+                    &cmd_line,
+                    Some(&event.pattern),
+                    None,
+                    super::backend::BACKEND_TIMEOUT_MS,
+                    super::backend::BACKEND_MAX_STDOUT,
+                )
+                .map_err(|e| format!("haptic backend: {e}"))?;
                 Ok(())
             }
             _ => Ok(()), // backend ausente → no-op honesto, render tipado segue válido

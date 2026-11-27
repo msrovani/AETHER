@@ -59,8 +59,14 @@ impl ArPort {
 
     /// `AETHER_AR=1` + feature `ar`; deps C3 + T-COH devem estar prontas.
     pub fn from_env() -> Self {
-        let env_on = std::env::var("AETHER_AR").map(|v| v == "1" || v.eq_ignore_ascii_case("true")).unwrap_or(false);
-        Self { enabled: env_on && cfg!(feature = "ar"), vis_ready: true, coh_ready: true }
+        let env_on = std::env::var("AETHER_AR")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        Self {
+            enabled: env_on && cfg!(feature = "ar"),
+            vis_ready: true,
+            coh_ready: true,
+        }
     }
 
     /// **Overlay**: só se `enabled` + **C3 pronto** + **T-COH pronto** + âncora válida;
@@ -78,14 +84,15 @@ impl ArPort {
         }
         match std::env::var("AETHER_AR_CMD") {
             Ok(cmd_line) if !cmd_line.trim().is_empty() => {
-                let mut parts = cmd_line.split_whitespace();
-                let prog = parts.next().ok_or_else(|| "AETHER_AR_CMD vazio".to_string())?;
-                let mut args: Vec<String> = parts.map(|s| s.to_string()).collect();
-                args.push(anchor.id.clone());
-                let output = std::process::Command::new(prog).args(&args).output().map_err(|e| format!("ar spawn: {e}"))?;
-                if !output.status.success() {
-                    return Err(format!("ar status {}", output.status));
-                }
+                // W1+W8: sem shell; `anchor.id` sanitizado; timeout+limite
+                super::backend::run_backend_cmd(
+                    &cmd_line,
+                    Some(&anchor.id),
+                    None,
+                    super::backend::BACKEND_TIMEOUT_MS,
+                    super::backend::BACKEND_MAX_STDOUT,
+                )
+                .map_err(|e| format!("ar backend: {e}"))?;
                 Ok(())
             }
             _ => Ok(()), // backend ausente → no-op honesto; âncora validada

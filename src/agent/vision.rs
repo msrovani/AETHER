@@ -83,28 +83,42 @@ impl VisionPort {
         self.observe_sidecar(image_ref, emb)
     }
 
-    /// Backend externo (sidecar) → `VisionObs` tipada. `conf` default `0.5`
-    /// (limiar; não inventada alta); `AETHER_VIS_CONF` override. auth≤120.
-    pub fn observe_sidecar(&self, image_ref: &str, _emb: Option<&EmbedPort>) -> Result<VisionObs, String> {
-        let cmd_line = std::env::var("AETHER_VIS_CMD")
-            .map_err(|_| "T-VIS enabled sem backend (defina AETHER_VIS_CMD; sidecar; pixels fora do T0)".to_string())?;
-        let mut parts = cmd_line.split_whitespace();
-        let prog = parts.next().ok_or_else(|| "AETHER_VIS_CMD vazio".to_string())?;
-        let mut args: Vec<String> = parts.map(|s| s.to_string()).collect();
-        args.push(image_ref.to_string());
-        let output = std::process::Command::new(prog)
-            .args(&args)
-            .output()
-            .map_err(|e| format!("T-VIS sidecar spawn: {e}"))?;
-        if !output.status.success() {
-            return Err(format!("T-VIS sidecar status {}", output.status));
+    /// Backend externo (sidecar) → `VisionObs` tipada, **seguro**
+    /// (`backend::run_backend_cmd`): sem shell; `image_ref` **sanitizado**;
+    /// `AETHER_VIS_CMD`=binário concreto; timeout+limite; **pixels fora do T0**. W1+W8.
+    /// **W3** re-checa `enabled`. **W5/C3 conf honesta:** sem conf ⇒ `0.0`; `AETHER_VIS_CONF`
+    /// só se operador declarar + `is_finite`; schema break→não inventa. auth≤120. `AETHER_VIS_TIMEOUT_MS`.
+    pub fn observe_sidecar(
+        &self,
+        image_ref: &str,
+        _emb: Option<&EmbedPort>,
+    ) -> Result<VisionObs, String> {
+        if !self.enabled {
+            return Err("T-VIS off (feature vision / AETHER_VIS)".into()); // W3
         }
-        let raw = String::from_utf8_lossy(&output.stdout);
-        let default_conf = std::env::var("AETHER_VIS_CONF")
+        let cmd_line = std::env::var("AETHER_VIS_CMD")
+            .map_err(|_| "T-VIS enabled sem backend (defina AETHER_VIS_CMD; binário concreto; pixels fora do T0)".to_string())?;
+        let timeout = std::env::var("AETHER_VIS_TIMEOUT_MS")
             .ok()
-            .and_then(|s| s.parse::<f32>().ok())
-            .map(|c| c.clamp(0.0, 1.0))
-            .unwrap_or(0.5);
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(super::backend::BACKEND_TIMEOUT_MS);
+        let out = super::backend::run_backend_cmd(
+            &cmd_line,
+            Some(image_ref),
+            None,
+            timeout,
+            super::backend::BACKEND_MAX_STDOUT,
+        )
+        .map_err(|e| format!("T-VIS sidecar: {e}"))?;
+        let raw = String::from_utf8_lossy(&out);
+        // conf honesta (não inventada alta; NaN→0)
+        let default_conf = match std::env::var("AETHER_VIS_CONF") {
+            Ok(s) => match s.parse::<f32>() {
+                Ok(c) if c.is_finite() => c.clamp(0.0, 1.0),
+                _ => 0.0,
+            },
+            Err(_) => 0.0,
+        };
         let mut labels: Vec<(String, f32)> = Vec::new();
         let mut entities: Vec<String> = Vec::new();
         for line in raw.lines() {
@@ -117,18 +131,31 @@ impl VisionPort {
             if name.is_empty() {
                 continue;
             }
-            let conf = it.next().and_then(|s| s.trim().parse::<f32>().ok()).map(|c| c.clamp(0.0, 1.0)).unwrap_or(default_conf);
+            let conf = it
+                .next()
+                .and_then(|s| s.trim().parse::<f32>().ok())
+                .map(|c| c.clamp(0.0, 1.0))
+                .unwrap_or(default_conf);
             entities.push(name.clone());
             labels.push((name, conf));
         }
         // schema break: nenhuma label → conf 0.0 / vazio honesto (não inventa)
-        Ok(VisionObs { labels, entities, embed: None, auth_cap: VISION_AUTH_CAP })
+        Ok(VisionObs {
+            labels,
+            entities,
+            embed: None,
+            auth_cap: VISION_AUTH_CAP,
+        })
     }
 
     /// **C3**: `VisionObs` → evento estruturado → assinatura RG 64→16→4 →
     /// surpresa; reusa **A6 T-GRAPH** (`graph::GraphEvent`); claims auth≤120.
     pub fn signature(&self, image_ref: &str, obs: &VisionObs, timestamp_ms: u64) -> [u16; 4] {
-        let features = obs.labels.iter().map(|(n, c)| (n.clone(), *c as f64)).collect();
+        let features = obs
+            .labels
+            .iter()
+            .map(|(n, c)| (n.clone(), *c as f64))
+            .collect();
         let ev = super::graph::GraphEvent {
             ids: vec![image_ref.to_string()],
             timestamp_ms,

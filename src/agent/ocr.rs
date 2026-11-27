@@ -89,33 +89,58 @@ impl OcrPort {
         self.extract_sidecar(doc)
     }
 
-    /// Backend externo (sidecar/Tesseract). `conf` não é medida pelo backend:
-    /// default `0.5` (limiar `to_goal`); override `AETHER_OCR_CONF`. **não inventa
-    /// confiança alta**; texto vazio ⇒ `conf=0.0`. PII só se re-detectado.
+    /// Backend externo (sidecar/Tesseract), **seguro** (`backend::run_backend_cmd`):
+    /// sem shell; `doc.id` **sanitizado**; `AETHER_OCR_CMD` = binário concreto;
+    /// timeout + `stdout` limitado. **W1+W8.**
+    ///
+    /// **W3:** re-checa `enabled`+feature. **W5:** conf **não inventada**:
+    /// backend sem conf medida ⇒ `conf=0.0` (abstain); `AETHER_OCR_CONF` só
+    /// se operador declarar conf real + `is_finite`. **W5 PII:** detecção no
+    /// **texto extraído**. `AETHER_OCR_TIMEOUT_MS`.
     pub fn extract_sidecar(&self, doc: &DocRef) -> Result<OcrResult, String> {
+        // W3: feature off = no-op honesto; nunca spawn
+        if !self.enabled {
+            return Err("T-OCR off (feature ocr / AETHER_OCR)".into());
+        }
         let cmd_line = std::env::var("AETHER_OCR_CMD")
-            .map_err(|_| "T-OCR enabled sem backend (defina AETHER_OCR_CMD ou instale Tesseract; feature `ocr` off; sidecar Python/Tesseract)".to_string())?;
-        let mut parts = cmd_line.split_whitespace();
-        let prog = parts.next().ok_or_else(|| "AETHER_OCR_CMD vazio".to_string())?;
-        let mut args: Vec<String> = parts.map(|s| s.to_string()).collect();
-        args.push(doc.id.clone());
-        let output = std::process::Command::new(prog)
-            .args(&args)
-            .output()
-            .map_err(|e| format!("T-OCR sidecar spawn: {e}"))?;
-        if !output.status.success() {
-            return Err(format!("T-OCR sidecar status {}", output.status));
-        }
-        let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if text.is_empty() {
-            return Ok(OcrResult { text, conf: 0.0, spans: Vec::new(), pii: false });
-        }
-        let conf = std::env::var("AETHER_OCR_CONF")
+            .map_err(|_| "T-OCR enabled sem backend (defina AETHER_OCR_CMD; binário concreto; feature `ocr` off)".to_string())?;
+        let timeout = std::env::var("AETHER_OCR_TIMEOUT_MS")
             .ok()
-            .and_then(|s| s.parse::<f32>().ok())
-            .map(|c| c.clamp(0.0, 1.0))
-            .unwrap_or(0.5);
-        Ok(OcrResult { text, conf, spans: Vec::new(), pii: false })
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(super::backend::BACKEND_TIMEOUT_MS);
+        let out = super::backend::run_backend_cmd(
+            &cmd_line,
+            Some(&doc.id),
+            None,
+            timeout,
+            super::backend::BACKEND_MAX_STDOUT,
+        )
+        .map_err(|e| format!("T-OCR sidecar: {e}"))?;
+        let text = String::from_utf8_lossy(&out).trim().to_string();
+        if text.is_empty() {
+            return Ok(OcrResult {
+                text,
+                conf: 0.0,
+                spans: Vec::new(),
+                pii: false,
+            });
+        }
+        // W5: PII no texto extraído → deny (nunca emite Goal com PII)
+        let pii = detect_pii(&text);
+        // W5: conf honesta — sem conf medida ⇒ 0.0; NaN/inf rejeitado; clamp
+        let conf = match std::env::var("AETHER_OCR_CONF") {
+            Ok(s) => match s.parse::<f32>() {
+                Ok(c) if c.is_finite() => c.clamp(0.0, 1.0),
+                _ => 0.0,
+            },
+            Err(_) => 0.0, // backend não reporta conf medida
+        };
+        Ok(OcrResult {
+            text,
+            conf,
+            spans: Vec::new(),
+            pii,
+        })
     }
 
     /// OCR → T-NL-IN. Conf &lt; 0.50 ou PII → não emite Goal.
@@ -124,7 +149,8 @@ impl OcrPort {
         if r.pii {
             return Err("T-OCR PII deny".into());
         }
-        if r.conf < 0.50 {
+        // W5: NaN/inf → ask; `conf<=0.50` (não `<`) → não inventa Goal
+        if !r.conf.is_finite() || r.conf <= 0.50 {
             return Err("T-OCR conf baixa → ask (não inventa Goal)".into());
         }
         port.parse(&r.text, &GoalSchema::agent_default())
@@ -144,6 +170,28 @@ impl OcrPort {
             ("auth_cap", Json::num(120.0)),
         ])
     }
+}
+
+/// **W5**: detector de PII conservador no texto extraído (evita `to_goal` com PII).
+fn detect_pii(text: &str) -> bool {
+    let t = text.to_ascii_lowercase();
+    if t.contains("cpf")
+        || t.contains("cnpj")
+        || t.contains("passaporte")
+        || t.contains("cartão")
+        || t.contains("cartao")
+        || t.contains("cvv")
+        || t.contains("rg ")
+        || t.contains("rg:")
+        || t.contains("pan ")
+    {
+        return true;
+    }
+    if text.contains('@') && text.contains('.') {
+        return true;
+    }
+    let digits: String = text.chars().filter(|c| c.is_ascii_digit()).collect();
+    digits.len() == 11 || digits.len() == 14 || (13..=19).contains(&digits.len())
 }
 
 #[cfg(test)]

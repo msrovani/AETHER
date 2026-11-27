@@ -105,7 +105,7 @@ fn assinatura_deterministica_rg_64_16_4() {
 #[test]
 fn claims_auth_le_120_e_l6() {
     let e = ev();
-    let claims = e.claims_from_event_inner(0);
+    let claims = e.claims_from_event_inner(0).expect("schema ok"); // W7
     assert!(!claims.is_empty());
     for c in &claims {
         assert!(c.authority <= 120, "auth {} > 120", c.authority);
@@ -202,5 +202,8 @@ quebrada",
         features: vec![("weight".into(), 0.5)],
     };
     e.validate().expect("id legítimo");
-    assert_eq!(e.claims_from_event_inner(0)[0].subject, "n1:edge/42");
+    assert_eq!(
+        e.claims_from_event_inner(0).expect("schema ok")[0].subject,
+        "n1:edge/42"
+    ); // W7
 }

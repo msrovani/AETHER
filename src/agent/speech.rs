@@ -70,39 +70,58 @@ impl SttPort {
         self.transcribe_sidecar(audio_ref)
     }
 
-    /// Backend externo (sidecar). `conf` não é medida pelo backend: default `0.5`
-    /// (limiar `to_goal`); override `AETHER_STT_CONF`; texto vazio ⇒ `conf=0.0`.
-    /// `to_goal` ainda aplica `conf<0.50→ask`.
+    /// Backend externo (sidecar), **seguro** (`backend::run_backend_cmd`): sem
+    /// shell; `audio_ref` **sanitizado**; `AETHER_STT_CMD` = binário concreto;
+    /// timeout + `stdout`; **PCM fora do T0**. W1+W8.
+    ///
+    /// **W3** re-checa `enabled`. **W5/C2:** conf honesta — sem conf medida ⇒
+    /// `conf=0.0`; `AETHER_STT_CONF` só se operador declarar + `is_finite`;
+    /// texto vazio ⇒ `conf=0.0`. `to_goal` aplica `conf<=0.50→ask`. `AETHER_STT_TIMEOUT_MS`.
     pub fn transcribe_sidecar(&self, audio_ref: &str) -> Result<SttResult, String> {
+        if !self.enabled {
+            return Err("T-STT off (feature speech / AETHER_STT)".into()); // W3
+        }
         let cmd_line = std::env::var("AETHER_STT_CMD")
-            .map_err(|_| "T-STT enabled sem backend (defina AETHER_STT_CMD; sidecar; PCM fora do T0)".to_string())?;
-        let mut parts = cmd_line.split_whitespace();
-        let prog = parts.next().ok_or_else(|| "AETHER_STT_CMD vazio".to_string())?;
-        let mut args: Vec<String> = parts.map(|s| s.to_string()).collect();
-        args.push(audio_ref.to_string());
-        let output = std::process::Command::new(prog)
-            .args(&args)
-            .output()
-            .map_err(|e| format!("T-STT sidecar spawn: {e}"))?;
-        if !output.status.success() {
-            return Err(format!("T-STT sidecar status {}", output.status));
-        }
-        let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if text.is_empty() {
-            return Ok(SttResult { text, conf: 0.0, lang: None });
-        }
-        let conf = std::env::var("AETHER_STT_CONF")
+            .map_err(|_| "T-STT enabled sem backend (defina AETHER_STT_CMD; binário concreto; PCM fora do T0)".to_string())?;
+        let timeout = std::env::var("AETHER_STT_TIMEOUT_MS")
             .ok()
-            .and_then(|s| s.parse::<f32>().ok())
-            .map(|c| c.clamp(0.0, 1.0))
-            .unwrap_or(0.5);
-        Ok(SttResult { text, conf, lang: None })
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(super::backend::BACKEND_TIMEOUT_MS);
+        let out = super::backend::run_backend_cmd(
+            &cmd_line,
+            Some(audio_ref),
+            None,
+            timeout,
+            super::backend::BACKEND_MAX_STDOUT,
+        )
+        .map_err(|e| format!("T-STT sidecar: {e}"))?;
+        let text = String::from_utf8_lossy(&out).trim().to_string();
+        if text.is_empty() {
+            return Ok(SttResult {
+                text,
+                conf: 0.0,
+                lang: None,
+            });
+        }
+        let conf = match std::env::var("AETHER_STT_CONF") {
+            Ok(s) => match s.parse::<f32>() {
+                Ok(c) if c.is_finite() => c.clamp(0.0, 1.0),
+                _ => 0.0,
+            },
+            Err(_) => 0.0,
+        };
+        Ok(SttResult {
+            text,
+            conf,
+            lang: None,
+        })
     }
 
     /// STT → T-NL-IN.
     pub fn to_goal(&self, audio_ref: &str, port: &mut ParserPort) -> Result<Goal, String> {
         let r = self.transcribe(audio_ref)?;
-        if r.conf < 0.50 {
+        // W5/C2: NaN/inf→ask; `conf<=0.50` (não `<`) → não inventa Goal; PII básico STT
+        if !r.conf.is_finite() || r.conf <= 0.50 {
             return Err("T-STT conf baixa → ask".into());
         }
         port.parse(&r.text, &GoalSchema::agent_default())
@@ -180,22 +199,47 @@ impl TtsPort {
     pub fn speak_sidecar(&self, utt: &CertifiedUtterance) -> Result<TtsResult, String> {
         // só fato certificado fala; abstain → beep "não sei"
         if !utt.may_speak_fact() || matches!(utt.action, Action::Abstain) {
-            return Ok(TtsResult { kind: "beep", spoken: "não sei".into() });
+            return Ok(TtsResult {
+                kind: "beep",
+                spoken: "não sei".into(),
+            });
+        }
+        // W3: feature off = no-op honesto
+        if !self.enabled {
+            return Err("T-TTS off (feature speech / AETHER_TTS)".into());
+        }
+        // W4: auth ≤120 (nunca 255 auto) + `judge_conf` limiar
+        if utt.auth > 120 {
+            return Ok(TtsResult {
+                kind: "beep",
+                spoken: "não sei".into(),
+            }); // não fala fato auth>120
+        }
+        if !utt.judge_conf.is_finite() || utt.judge_conf < 0.50 {
+            return Ok(TtsResult {
+                kind: "beep",
+                spoken: "não sei".into(),
+            }); // juíz insuficiente
         }
         let cmd_line = std::env::var("AETHER_TTS_CMD")
-            .map_err(|_| "T-TTS enabled sem backend (defina AETHER_TTS_CMD; sidecar; PCM não cruza o T0)".to_string())?;
-        let mut parts = cmd_line.split_whitespace();
-        let prog = parts.next().ok_or_else(|| "AETHER_TTS_CMD vazio".to_string())?;
-        let mut args: Vec<String> = parts.map(|s| s.to_string()).collect();
-        args.push(utt.text.clone());
-        let output = std::process::Command::new(prog)
-            .args(&args)
-            .output()
-            .map_err(|e| format!("T-TTS sidecar spawn: {e}"))?;
-        if !output.status.success() {
-            return Err(format!("T-TTS sidecar status {}", output.status));
-        }
-        Ok(TtsResult { kind: "speak", spoken: utt.text.clone() })
+            .map_err(|_| "T-TTS enabled sem backend (defina AETHER_TTS_CMD; binário concreto; PCM não cruza o T0)".to_string())?;
+        let timeout = std::env::var("AETHER_TTS_TIMEOUT_MS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(super::backend::BACKEND_TIMEOUT_MS);
+        // W1+W8: sem shell; **texto certificado por stdin**, não argv; timeout + limite
+        super::backend::run_backend_cmd(
+            &cmd_line,
+            None,
+            Some(&utt.text),
+            timeout,
+            super::backend::BACKEND_MAX_STDOUT,
+        )
+        .map_err(|e| format!("T-TTS sidecar: {e}"))?;
+        Ok(TtsResult {
+            kind: "speak",
+            spoken: utt.text.clone(),
+        })
     }
 
     /// Status.

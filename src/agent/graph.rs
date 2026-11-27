@@ -190,22 +190,21 @@ impl GraphEvent {
             eprintln!("t-graph: tomada off — evento ignorado (feature `graph` off)");
             return Ok(Vec::new());
         }
-        Ok(self.claims_from_event_inner(seed))
+        self.claims_from_event_inner(seed)
     }
 
     /// Como `claims_from_event`, mas **sem** verificar `graph_enabled()`.
     ///
     /// Disponível para fiar/emitir claims explicitamente (inclusive do gate, que
-    /// roda com a feature off).
-    ///
-    /// # Panics
-    ///
-    /// Se `self.ids` estiver vazio ou o evento não passar em [`GraphEvent::validate`].
-    /// **Não** valida sozinho: chame `validate()` antes — este é o caminho não
-    /// checado, e o disjuntor de schema break mora em `validate`.
-    #[must_use]
-    pub fn claims_from_event_inner(&self, seed: u64) -> Vec<Claim> {
-        let subject = self.ids[0].clone();
+    /// roda com a feature off). **W7:** `pub` + `Result`; chama `validate()`;
+    /// `ids.first()` — **nunca `ids[0]` panic**.
+    pub fn claims_from_event_inner(&self, seed: u64) -> Result<Vec<Claim>, ToolError> {
+        self.validate()?; // W7: schema break → Err, nunca panic
+        let subject = self
+            .ids
+            .first()
+            .cloned()
+            .ok_or_else(|| ToolError::InvalidArgs("schema break: ids vazio".into()))?;
         let sig = self.signature(seed);
         let sig_str = format!("{:x},{:x},{:x},{:x}", sig[0], sig[1], sig[2], sig[3]);
         let mut claims = Vec::with_capacity(self.features.len() + 1);
@@ -229,7 +228,7 @@ impl GraphEvent {
                 provenance: Provenance::Observed,
             });
         }
-        claims
+        Ok(claims) // W7
     }
 }
 

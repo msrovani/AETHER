@@ -11,7 +11,11 @@ fn d1_sensor_virtual_serie_tpred_schema() {
     // tomada off → Err honesto; schema break → reject
     let off = SensorPort::off();
     assert!(off.read("s1", 0).is_err());
-    let p = SensorPort { enabled: true, backend: SensorBackend::Synthetic, seed: 42 };
+    let p = SensorPort {
+        enabled: true,
+        backend: SensorBackend::Synthetic,
+        seed: 42,
+    };
     assert!(p.read("", 0).is_err(), "schema break sensor_id vazio");
 
     // virtual sintético determinístico (classe D sem HW)
@@ -26,7 +30,11 @@ fn d1_sensor_virtual_serie_tpred_schema() {
     assert_eq!(vals.len(), 16, "série tipada para T-PRED");
 
     // sidecar honest Err sem backend
-    let sc = SensorPort { enabled: true, backend: SensorBackend::Sidecar, seed: 0 };
+    let sc = SensorPort {
+        enabled: true,
+        backend: SensorBackend::Sidecar,
+        seed: 0,
+    };
     std::env::remove_var("AETHER_SENSOR_CMD");
     assert!(sc.read("s1", 0).is_err());
     std::env::set_var("AETHER_SENSOR_CMD", "definitely-not-a-real-binary-xyz");

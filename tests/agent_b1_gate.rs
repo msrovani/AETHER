@@ -7,7 +7,8 @@
 #![cfg(feature = "agent")]
 
 use aether_engine::agent::{
-    enter_v1_allowed, enter_v1_default, hitl_sanction_255, write_a8_v1_criteria, A8_V1_CRITERIA_PATH,
+    enter_v1_allowed, enter_v1_default, hitl_sanction_255, write_a8_v1_criteria,
+    A8_V1_CRITERIA_PATH,
 };
 
 #[test]
@@ -23,12 +24,19 @@ fn enter_v1_only_with_hitl_sanction_and_flag() {
     std::env::set_var("AETHER_HITL_SANCTION_255", "1");
     std::env::set_var("AETHER_A8_V1", "1");
     assert!(hitl_sanction_255());
-    assert!(enter_v1_allowed(), "com sanção + flag, enter_v1_allowed deve ser true");
-    assert!(enter_v1_default(), "B1: enter_v1_default=true só com sanção + flag");
+    assert!(
+        enter_v1_allowed(),
+        "com sanção + flag, enter_v1_allowed deve ser true"
+    );
+    assert!(
+        enter_v1_default(),
+        "B1: enter_v1_default=true só com sanção + flag"
+    );
 
-    // artefato de critérios reflete o estado
-    write_a8_v1_criteria(A8_V1_CRITERIA_PATH).unwrap();
-    let text = std::fs::read_to_string(A8_V1_CRITERIA_PATH).unwrap();
+    // artefato de critérios reflete o estado — **W9: path próprio, não compartilha `A8_V1_CRITERIA_PATH`**
+    let path = "target/aether_b1_criteria.json";
+    write_a8_v1_criteria(path).unwrap();
+    let text = std::fs::read_to_string(path).unwrap();
     assert!(text.contains("\"hitl_sanction_255\""));
     assert!(text.contains("\"enter_v1_allowed\":true"));
 

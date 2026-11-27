@@ -24,7 +24,10 @@ fn c3_vis_sidecar_honesto_e_assinatura() {
         // sidecar stub imprime labels tipadas `nome conf`
         std::env::set_var("AETHER_VIS_CMD", "cmd /c echo brasil 0.9 & rem");
         let obs = port.observe_sidecar(img, None).expect("stub backend");
-        assert!(obs.labels.iter().any(|(n, _)| n == "brasil"), "label tipada");
+        assert!(
+            obs.labels.iter().any(|(n, _)| n == "brasil"),
+            "label tipada"
+        );
         assert!(obs.entities.iter().any(|e| e == "brasil"));
         assert!(obs.auth_cap <= 120, "auth≤120");
         // C3: assinatura RG 64→16→4

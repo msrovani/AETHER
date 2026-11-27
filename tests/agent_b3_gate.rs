@@ -15,13 +15,25 @@ fn b3_dual_bank_candidate_nunca_roteia_cutover_hitl_sem_mistura() {
 
     // propor candidate (era nova, ex. MiniLM 384) NÃO ativa; candidate nunca roteia
     let era_nova = EmbedEra::minilm_384();
-    let bank = f4.propose_candidate(era_nova.clone()).expect("candidate proposto");
+    let bank = f4
+        .propose_candidate(era_nova.clone())
+        .expect("candidate proposto");
     assert!(bank.candidate.is_some());
-    assert_eq!(bank.route_era().model_id, "BAAI/bge-m3", "candidate nunca roteia; roteia active");
-    assert_eq!(bank.route_era().dim, 1024, "0 mistura de eras no roteamento");
+    assert_eq!(
+        bank.route_era().model_id,
+        "BAAI/bge-m3",
+        "candidate nunca roteia; roteia active"
+    );
+    assert_eq!(
+        bank.route_era().dim,
+        1024,
+        "0 mistura de eras no roteamento"
+    );
 
     // propor candidate igual a active → reject
-    assert!(EmbedBank::frozen_f4().propose_candidate(EmbedEra::bge_m3_1024()).is_err());
+    assert!(EmbedBank::frozen_f4()
+        .propose_candidate(EmbedEra::bge_m3_1024())
+        .is_err());
 
     // cutover SEM token HITL → reject; nunca auto
     assert!(bank.clone().cutover("").is_err());
@@ -29,8 +41,16 @@ fn b3_dual_bank_candidate_nunca_roteia_cutover_hitl_sem_mistura() {
     // cutover sem candidate → reject
     assert!(EmbedBank::frozen_f4().cutover("token").is_err());
 
-    // cutover COM token HITL → active vira era nova; sem mistura (dim da nova)
-    let after = bank.cutover("hitl-token-255").expect("cutover HITL");
+    // cutover COM token HITL **e sanção `hitl_sanction_255`** → active vira era nova; sem mistura
+    // W2: sem `AETHER_HITL_SANCTION_255=1`, cutover rejeita (nunca auto)
+    assert!(
+        bank.clone().cutover("hitl-token-255").is_err(),
+        "cutover sem sanção hitl_sanction_255 → reject"
+    );
+    std::env::set_var("AETHER_HITL_SANCTION_255", "1");
+    let after = bank
+        .cutover("hitl-token-255")
+        .expect("cutover HITL + sanção");
     assert_eq!(after.route_era().model_id, era_nova.model_id);
     assert_eq!(after.route_era().dim, era_nova.dim);
     assert!(after.candidate.is_none());

@@ -83,7 +83,10 @@ pub struct EmbedBank {
 impl EmbedBank {
     /// F4 congelada hoje (`BAAI/bge-m3` 1024d); sem candidate.
     pub fn frozen_f4() -> Self {
-        Self { active: EmbedEra::bge_m3_1024(), candidate: None }
+        Self {
+            active: EmbedEra::bge_m3_1024(),
+            candidate: None,
+        }
     }
 
     /// Propor era nova como `candidate`; **não** ativa; rejeita igual a `active`.
@@ -99,6 +102,10 @@ impl EmbedBank {
     pub fn cutover(mut self, hitl_token: &str) -> Result<Self, String> {
         if hitl_token.trim().is_empty() {
             return Err("cutover B3 requer token HITL".into());
+        }
+        // W2: `hitl_sanction_255` humano (env + token; nunca auto). Não promove sem sanção.
+        if !super::a8_v1::hitl_sanction_255() {
+            return Err("cutover B3 requer sanção HITL (`AETHER_HITL_SANCTION_255=1` + fato nsgdb auth-255)".into());
         }
         match self.candidate.take() {
             Some(c) => {
