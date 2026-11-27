@@ -82,7 +82,40 @@ impl OcrPort {
         if !self.enabled {
             return Err("T-OCR off (feature ocr / AETHER_OCR)".into());
         }
-        Err("T-OCR enabled sem backend — use fixture id".into())
+        // C1 (TOMADAS_FUTURO): backend real via **sidecar externo**, sem
+        // dependência nova. `AETHER_OCR_CMD` (ex.: `tesseract <in> stdout` ou
+        // sidecar Python) recebe `doc.id` como argumento e imprime texto UTF-8.
+        // Sem `AETHER_OCR_CMD` → `Err` honesto; **nunca finge OCR**.
+        self.extract_sidecar(doc)
+    }
+
+    /// Backend externo (sidecar/Tesseract). `conf` não é medida pelo backend:
+    /// default `0.5` (limiar `to_goal`); override `AETHER_OCR_CONF`. **não inventa
+    /// confiança alta**; texto vazio ⇒ `conf=0.0`. PII só se re-detectado.
+    pub fn extract_sidecar(&self, doc: &DocRef) -> Result<OcrResult, String> {
+        let cmd_line = std::env::var("AETHER_OCR_CMD")
+            .map_err(|_| "T-OCR enabled sem backend (defina AETHER_OCR_CMD ou instale Tesseract; feature `ocr` off; sidecar Python/Tesseract)".to_string())?;
+        let mut parts = cmd_line.split_whitespace();
+        let prog = parts.next().ok_or_else(|| "AETHER_OCR_CMD vazio".to_string())?;
+        let mut args: Vec<String> = parts.map(|s| s.to_string()).collect();
+        args.push(doc.id.clone());
+        let output = std::process::Command::new(prog)
+            .args(&args)
+            .output()
+            .map_err(|e| format!("T-OCR sidecar spawn: {e}"))?;
+        if !output.status.success() {
+            return Err(format!("T-OCR sidecar status {}", output.status));
+        }
+        let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if text.is_empty() {
+            return Ok(OcrResult { text, conf: 0.0, spans: Vec::new(), pii: false });
+        }
+        let conf = std::env::var("AETHER_OCR_CONF")
+            .ok()
+            .and_then(|s| s.parse::<f32>().ok())
+            .map(|c| c.clamp(0.0, 1.0))
+            .unwrap_or(0.5);
+        Ok(OcrResult { text, conf, spans: Vec::new(), pii: false })
     }
 
     /// OCR → T-NL-IN. Conf &lt; 0.50 ou PII → não emite Goal.

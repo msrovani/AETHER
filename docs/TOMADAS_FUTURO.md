@@ -166,7 +166,7 @@ aprovada. C2–C4 só entram quando suas escadas (SPEECH/VISAO) abrirem.
 | **Contrato** | `DocRef` → texto UTF-8 + conf + spans |
 | **Fio** | **T-OCR** → T-NL-IN e/ou T-PACK (ETL) → core |
 | **Disjuntor** | conf baixa → ask; PII deny; feature `ocr` off |
-| **Estado hoje** | **vivo stub** — contrato `DocRef`→texto em `ocr.rs`; falta backend real atrás de `feature ocr` (off) |
+| **Estado hoje** | **vivo stub + adaptador C1** — contrato `DocRef`→texto; backend real via **sidecar externo** `AETHER_OCR_CMD` (ex. Tesseract/sidecar Python; sem dependência nova; `feature ocr` + `AETHER_OCR=1`); `AETHER_OCR_CONF` (default 0.5; **conf não medida pelo backend**; texto vazio→0.0); **`Err` honesto sem backend**; conf<0.50→ask; PII deny; `agent_c1_ocr_sidecar_gate`. **Tesseract não instalado neste host** |
 | **Deps** | sidecar Python/Tesseract **ou** ramo de T-VIS (V2+); A1 para tabelas; não duplicar pixels no core |
 | **Aceite** | mesmos gates de STT conf → não chutar Goal |
 
