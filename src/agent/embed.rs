@@ -66,6 +66,55 @@ impl EmbedVector {
     }
 }
 
+/// **B3-prep (F0 / TOMADAS_FUTURO §B3)** — dual-bank de embeddings (`T-EMB`
+/// era nova), reusa o padrão **dual-bank do T-DEC**.
+///
+/// * `active` = era vigente (F4 **congelada**: `BAAI/bge-m3` 1024d, off até sanção);
+/// * `candidate` = era nova proposta; **candidate nunca roteia**;
+/// * **cutover só HITL** (token); **0 mistura de eras** (`dim`/`model_id` checados).
+#[derive(Clone, Debug)]
+pub struct EmbedBank {
+    /// Era ativa no bus.
+    pub active: EmbedEra,
+    /// Era nova proposta (não roteia).
+    pub candidate: Option<EmbedEra>,
+}
+
+impl EmbedBank {
+    /// F4 congelada hoje (`BAAI/bge-m3` 1024d); sem candidate.
+    pub fn frozen_f4() -> Self {
+        Self { active: EmbedEra::bge_m3_1024(), candidate: None }
+    }
+
+    /// Propor era nova como `candidate`; **não** ativa; rejeita igual a `active`.
+    pub fn propose_candidate(mut self, era: EmbedEra) -> Result<Self, String> {
+        if era.model_id == self.active.model_id && era.dim == self.active.dim {
+            return Err("candidate igual a active".into());
+        }
+        self.candidate = Some(era);
+        Ok(self)
+    }
+
+    /// **Cutover só HITL** (token explícito); candidate→active; nunca auto; **nunca mistura**.
+    pub fn cutover(mut self, hitl_token: &str) -> Result<Self, String> {
+        if hitl_token.trim().is_empty() {
+            return Err("cutover B3 requer token HITL".into());
+        }
+        match self.candidate.take() {
+            Some(c) => {
+                self.active = c;
+                Ok(self)
+            }
+            None => Err("cutover sem candidate".into()),
+        }
+    }
+
+    /// Era que roteia no bus = **sempre `active`**; `candidate` nunca roteia.
+    pub fn route_era(&self) -> &EmbedEra {
+        &self.active
+    }
+}
+
 /// Porta host: default = off (lexical only).
 #[derive(Clone, Debug, Default)]
 pub struct EmbedPort {

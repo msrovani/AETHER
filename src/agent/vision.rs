@@ -76,7 +76,65 @@ impl VisionPort {
         if !self.enabled {
             return Err("T-VIS off".into());
         }
-        Err("T-VIS sem backend".into())
+        // C3 (TOMADAS_FUTURO): backend real via **sidecar externo**, sem dependência
+        // nova. `AETHER_VIS_CMD` recebe `image_ref` e imprime **labels tipadas**
+        // (`nome[ conf]`, uma por linha; nunca pixels no T0). Sem backend → `Err`
+        // honesto; **nunca finge visão**. V2–V3 + G-PERM.
+        self.observe_sidecar(image_ref, emb)
+    }
+
+    /// Backend externo (sidecar) → `VisionObs` tipada. `conf` default `0.5`
+    /// (limiar; não inventada alta); `AETHER_VIS_CONF` override. auth≤120.
+    pub fn observe_sidecar(&self, image_ref: &str, _emb: Option<&EmbedPort>) -> Result<VisionObs, String> {
+        let cmd_line = std::env::var("AETHER_VIS_CMD")
+            .map_err(|_| "T-VIS enabled sem backend (defina AETHER_VIS_CMD; sidecar; pixels fora do T0)".to_string())?;
+        let mut parts = cmd_line.split_whitespace();
+        let prog = parts.next().ok_or_else(|| "AETHER_VIS_CMD vazio".to_string())?;
+        let mut args: Vec<String> = parts.map(|s| s.to_string()).collect();
+        args.push(image_ref.to_string());
+        let output = std::process::Command::new(prog)
+            .args(&args)
+            .output()
+            .map_err(|e| format!("T-VIS sidecar spawn: {e}"))?;
+        if !output.status.success() {
+            return Err(format!("T-VIS sidecar status {}", output.status));
+        }
+        let raw = String::from_utf8_lossy(&output.stdout);
+        let default_conf = std::env::var("AETHER_VIS_CONF")
+            .ok()
+            .and_then(|s| s.parse::<f32>().ok())
+            .map(|c| c.clamp(0.0, 1.0))
+            .unwrap_or(0.5);
+        let mut labels: Vec<(String, f32)> = Vec::new();
+        let mut entities: Vec<String> = Vec::new();
+        for line in raw.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            let mut it = line.splitn(2, char::is_whitespace);
+            let name = it.next().unwrap_or("").trim().to_string();
+            if name.is_empty() {
+                continue;
+            }
+            let conf = it.next().and_then(|s| s.trim().parse::<f32>().ok()).map(|c| c.clamp(0.0, 1.0)).unwrap_or(default_conf);
+            entities.push(name.clone());
+            labels.push((name, conf));
+        }
+        // schema break: nenhuma label → conf 0.0 / vazio honesto (não inventa)
+        Ok(VisionObs { labels, entities, embed: None, auth_cap: VISION_AUTH_CAP })
+    }
+
+    /// **C3**: `VisionObs` → evento estruturado → assinatura RG 64→16→4 →
+    /// surpresa; reusa **A6 T-GRAPH** (`graph::GraphEvent`); claims auth≤120.
+    pub fn signature(&self, image_ref: &str, obs: &VisionObs, timestamp_ms: u64) -> [u16; 4] {
+        let features = obs.labels.iter().map(|(n, c)| (n.clone(), *c as f64)).collect();
+        let ev = super::graph::GraphEvent {
+            ids: vec![image_ref.to_string()],
+            timestamp_ms,
+            features,
+        };
+        ev.signature(0)
     }
 
     /// Labels → texto → T-NL-IN (nunca `act` direto).

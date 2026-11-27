@@ -63,7 +63,40 @@ impl SttPort {
         if !self.enabled {
             return Err("T-STT off".into());
         }
-        Err("T-STT sem backend".into())
+        // C2 (TOMADAS_FUTURO): backend real via **sidecar externo**, sem dependência
+        // nova. `AETHER_STT_CMD` (ex. STT/Tesseract speech/sidecar Python) recebe
+        // `audio_ref` (ref tipada; **PCM fora do T0**) e imprime texto UTF-8.
+        // Sem `AETHER_STT_CMD` → `Err` honesto; **nunca finge transcrição**.
+        self.transcribe_sidecar(audio_ref)
+    }
+
+    /// Backend externo (sidecar). `conf` não é medida pelo backend: default `0.5`
+    /// (limiar `to_goal`); override `AETHER_STT_CONF`; texto vazio ⇒ `conf=0.0`.
+    /// `to_goal` ainda aplica `conf<0.50→ask`.
+    pub fn transcribe_sidecar(&self, audio_ref: &str) -> Result<SttResult, String> {
+        let cmd_line = std::env::var("AETHER_STT_CMD")
+            .map_err(|_| "T-STT enabled sem backend (defina AETHER_STT_CMD; sidecar; PCM fora do T0)".to_string())?;
+        let mut parts = cmd_line.split_whitespace();
+        let prog = parts.next().ok_or_else(|| "AETHER_STT_CMD vazio".to_string())?;
+        let mut args: Vec<String> = parts.map(|s| s.to_string()).collect();
+        args.push(audio_ref.to_string());
+        let output = std::process::Command::new(prog)
+            .args(&args)
+            .output()
+            .map_err(|e| format!("T-STT sidecar spawn: {e}"))?;
+        if !output.status.success() {
+            return Err(format!("T-STT sidecar status {}", output.status));
+        }
+        let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if text.is_empty() {
+            return Ok(SttResult { text, conf: 0.0, lang: None });
+        }
+        let conf = std::env::var("AETHER_STT_CONF")
+            .ok()
+            .and_then(|s| s.parse::<f32>().ok())
+            .map(|c| c.clamp(0.0, 1.0))
+            .unwrap_or(0.5);
+        Ok(SttResult { text, conf, lang: None })
     }
 
     /// STT → T-NL-IN.
@@ -138,6 +171,31 @@ impl TtsPort {
             kind: "speak",
             spoken: utt.text.clone(),
         }
+    }
+
+    /// C4 (TOMADAS_FUTURO): backend real via **sidecar externo**, sem dependência
+    /// nova. **Só `CertifiedUtterance` fala**; `abstain`/sem fonte → `beep "não sei"`;
+    /// `AETHER_TTS_CMD` recebe texto certificado e fala; **nunca PCM no bus**; sem
+    /// backend → `Err` honesto. `feature speech` + `AETHER_TTS=1`.
+    pub fn speak_sidecar(&self, utt: &CertifiedUtterance) -> Result<TtsResult, String> {
+        // só fato certificado fala; abstain → beep "não sei"
+        if !utt.may_speak_fact() || matches!(utt.action, Action::Abstain) {
+            return Ok(TtsResult { kind: "beep", spoken: "não sei".into() });
+        }
+        let cmd_line = std::env::var("AETHER_TTS_CMD")
+            .map_err(|_| "T-TTS enabled sem backend (defina AETHER_TTS_CMD; sidecar; PCM não cruza o T0)".to_string())?;
+        let mut parts = cmd_line.split_whitespace();
+        let prog = parts.next().ok_or_else(|| "AETHER_TTS_CMD vazio".to_string())?;
+        let mut args: Vec<String> = parts.map(|s| s.to_string()).collect();
+        args.push(utt.text.clone());
+        let output = std::process::Command::new(prog)
+            .args(&args)
+            .output()
+            .map_err(|e| format!("T-TTS sidecar spawn: {e}"))?;
+        if !output.status.success() {
+            return Err(format!("T-TTS sidecar status {}", output.status));
+        }
+        Ok(TtsResult { kind: "speak", spoken: utt.text.clone() })
     }
 
     /// Status.

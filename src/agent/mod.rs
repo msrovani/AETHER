@@ -66,6 +66,10 @@ pub mod scorecard;
 pub mod self_model;
 pub mod semantic;
 pub mod speech;
+pub mod sensor;
+pub mod haptic;
+pub mod ar;
+pub mod robot;
 pub mod tab;
 pub mod telemetry;
 pub mod tnl_in;
@@ -98,7 +102,7 @@ pub use dec_upgrade::{
     mark_download_approved, revert_previous, CatalogReader, DecLamps, DecSlot, DecUpgradePhase,
     DecUpgradeState, LampColor, ACTIVE_LOCK, CATALOG_PATH, STATE_PATH as DEC_UPGRADE_STATE_PATH,
 };
-pub use embed::{EmbedEra, EmbedPort, EmbedVector};
+pub use embed::{EmbedBank, EmbedEra, EmbedPort, EmbedVector};
 pub use eval::{default_eval_path, EvalReport, EvalTier};
 pub use executor::ToolExecutor;
 pub use gemma_scribe::{
