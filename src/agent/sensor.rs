@@ -46,6 +46,17 @@ impl SensorReading {
     }
 }
 
+/// **SUGESTÃO/MÉDIO:** `Display`.
+impl std::fmt::Display for SensorReading {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}={}{} @{}",
+            self.sensor_id, self.value, self.unit, self.timestamp_ms
+        )
+    }
+}
+
 /// Backend do sensor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SensorBackend {

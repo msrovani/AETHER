@@ -120,9 +120,13 @@ impl SttPort {
     /// STT → T-NL-IN.
     pub fn to_goal(&self, audio_ref: &str, port: &mut ParserPort) -> Result<Goal, String> {
         let r = self.transcribe(audio_ref)?;
-        // W5/C2: NaN/inf→ask; `conf<=0.50` (não `<`) → não inventa Goal; PII básico STT
+        // W5/C2: NaN/inf→ask; `conf<=0.50` (não `<`) → não inventa Goal
         if !r.conf.is_finite() || r.conf <= 0.50 {
             return Err("T-STT conf baixa → ask".into());
+        }
+        // **MÉDIO C2:** PII no texto STT (mesmo `detect_pii` de C1; reusa infra) → deny
+        if crate::agent::ocr::detect_pii(&r.text) {
+            return Err("T-STT PII deny".into());
         }
         port.parse(&r.text, &GoalSchema::agent_default())
             .map_err(|e: LanguageError| format!("{e:?}"))

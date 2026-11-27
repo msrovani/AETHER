@@ -173,7 +173,7 @@ impl OcrPort {
 }
 
 /// **W5**: detector de PII conservador no texto extraído (evita `to_goal` com PII).
-fn detect_pii(text: &str) -> bool {
+pub(crate) fn detect_pii(text: &str) -> bool {
     let t = text.to_ascii_lowercase();
     if t.contains("cpf")
         || t.contains("cnpj")

@@ -31,6 +31,20 @@ pub struct VisionPort {
     pub enabled: bool,
 }
 
+/// **MÉDIO C3:** `VisionObs` schema break→reject; labels finitos; `auth_cap≤120`; no pixels no T0.
+impl VisionObs {
+    /// Validação.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.labels.iter().any(|(_, c)| !c.is_finite()) {
+            return Err("schema break: label conf não-finito".into());
+        }
+        if self.auth_cap > 120 {
+            return Err("auth_cap > 120".into());
+        }
+        Ok(())
+    }
+}
+
 impl VisionPort {
     /// Off.
     pub fn off() -> Self {
@@ -140,12 +154,14 @@ impl VisionPort {
             labels.push((name, conf));
         }
         // schema break: nenhuma label → conf 0.0 / vazio honesto (não inventa)
-        Ok(VisionObs {
+        let obs = VisionObs {
             labels,
             entities,
             embed: None,
             auth_cap: VISION_AUTH_CAP,
-        })
+        };
+        obs.validate()?; // MÉDIO C3
+        Ok(obs)
     }
 
     /// **C3**: `VisionObs` → evento estruturado → assinatura RG 64→16→4 →
