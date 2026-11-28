@@ -52,7 +52,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: toolchain (stable + rustfmt + clippy)
         uses: dtolnay/rust-toolchain@stable
@@ -84,7 +84,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: toolchain (stable + clippy)
         uses: dtolnay/rust-toolchain@stable
@@ -110,7 +110,7 @@ jobs:
       matrix:
         feature: [none, m1, m2, m3, m4, m5, m6, m7, m8]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
@@ -132,7 +132,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
@@ -152,7 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
       - name: cargo-audit
@@ -168,7 +168,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -185,7 +185,7 @@ jobs:
     runs-on: [self-hosted, gpu]
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
