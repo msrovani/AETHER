@@ -12,6 +12,10 @@ pub const ENV_SCRIBE: &str = "AETHER_SCRIBE";
 /// Env: tenta sidecar live (senão prosa ancorada só-claims).
 pub const ENV_SCRIBE_LIVE: &str = "AETHER_SCRIBE_LIVE";
 
+/// Timeout do sidecar live (R7): prosa de claims não vale hang — no estouro
+/// `run_backend` mata o filho e o bus cai no template.
+pub const SCRIBE_TIMEOUT_MS: u64 = 10_000;
+
 /// Política de runtime no host de produto.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScribeRuntime {
@@ -193,38 +197,34 @@ impl GemmaScribePort {
         Ok(lines.join(" "))
     }
 
-    /// Live: sidecar Python; falha → Empty (bus cai no template).
+    /// Live: sidecar Python via `run_backend` (R7). Antes: `Command::spawn` +
+    /// write de stdin **antes** de `wait_with_output` sem thread leitora —
+    /// payload grande (> pipe ~64 KB) podia bloquear para sempre (deadlock de
+    /// pipe: filho preso em stdout/stderr cheio, pai preso no write de stdin).
+    /// Agora: stdin por pipe, stdout cap, timeout + kill — e falha → Empty
+    /// (bus cai no template), igual antes.
     fn generate_live(&self, claims: &[Claim], style: Style) -> Result<String, LanguageError> {
         let payload = claims_to_jsonl(claims, style);
-        let out = std::process::Command::new("python")
-            .args([
-                "tools/gemma_scribe_generate.py",
-                "--artifact",
-                &self.artifact_path,
-                "--style",
-                match style {
-                    Style::Factual => "factual",
-                    Style::Compact => "compact",
-                },
-            ])
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn();
-        let Ok(mut child) = out else {
-            return Err(LanguageError::Empty);
+        let style_arg = match style {
+            Style::Factual => "factual",
+            Style::Compact => "compact",
         };
-        if let Some(mut stdin) = child.stdin.take() {
-            use std::io::Write;
-            let _ = stdin.write_all(payload.as_bytes());
-        }
-        let Ok(output) = child.wait_with_output() else {
-            return Err(LanguageError::Empty);
-        };
-        if !output.status.success() {
-            return Err(LanguageError::Empty);
-        }
-        let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let artifact = self.artifact_path.clone();
+        let out = crate::agent::backend::run_backend(
+            "python",
+            &[
+                "tools/gemma_scribe_generate.py".to_string(),
+                "--artifact".to_string(),
+                artifact,
+                "--style".to_string(),
+                style_arg.to_string(),
+            ],
+            Some(&payload),
+            SCRIBE_TIMEOUT_MS,
+            crate::agent::backend::BACKEND_MAX_STDOUT,
+        );
+        let stdout = out.map_err(|_| LanguageError::Empty)?;
+        let text = String::from_utf8_lossy(&stdout).trim().to_string();
         if text.is_empty() {
             return Err(LanguageError::Empty);
         }
