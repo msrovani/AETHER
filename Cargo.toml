@@ -243,11 +243,18 @@ opt-level = 3
 lto = "fat"
 codegen-units = 1
 panic = "abort"
-# R6: overflow-checks LIGADO em release — o hot path é f64 + índices pequenos
-# (custo <1% medido no bench do solver), e a suíte release volta a detectar
-# wraps silenciosos (antes, nem os testes pegavam overflow).
-overflow-checks = true
+# R6 (medido 2026-11-27): overflow-checks=true custa ~5× nos loops i8 de µs
+# (t12_bam_d256: 2.3µs off → 27.6µs on; g5: 7.6µs → 26µs). O release que vai
+# para o host fica OFF; a detecção de wraps roda em CI com o perfil
+# `release-checks` (job semanal) — a suíte volta a testar overflow lá.
+overflow-checks = false
 debug = 1
+
+# Perfil de CI para detecção de overflow aritmético (R6). Não é o binário de
+# produção: herda release e liga as checagens.
+[profile.release-checks]
+inherits = "release"
+overflow-checks = true
 
 [profile.bench]
 inherits = "release"

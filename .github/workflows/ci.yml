@@ -160,6 +160,23 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+  # R6 (auditoria 2026-11-27): detecção de overflow aritmético em release.
+  # O perfil de produção fica overflow-checks=false (medido: ~5× nos loops i8
+  # de µs); este job roda a suíte com o perfil `release-checks` (ligado).
+  overflow-checks:
+    name: overflow-checks (R6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-checks
+      - name: test (perfil release-checks)
+        run: cargo test --profile release-checks --no-fail-fast
+
   # Opt-in. O runner público não tem a RTX 3050. O job só dispara com
   # workflow_dispatch e input gpu=true, num runner com a label `gpu`.
   gate-gpu:
