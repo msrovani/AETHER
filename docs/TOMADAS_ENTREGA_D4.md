@@ -61,3 +61,10 @@ NÃ£o fingir backend; `Err` honesto; conf **nÃ£o inventada**; claims **authâ‰¤120
 - **W11:** D4 Stop isento de cert+isk (abortivo) mas **mantém HITL+kill+enabled+allowlist**; MAX_AUDIT. AETHER_ROBOT_RISK_CEILING is_finite.
 - **W12:** RobotError Display+Error; cargo fmt.
 
+
+## Media (W-médio + sugestoes pos-review)
+- **C2 no PII:** SttPort::to_goal aplica detect_pii.
+- **C3:** VisionObs::validate.
+- **Sugestao:** SensorReading Display.
+- **Honesto (não 100%):** hitl_sanction_255 env+token; não verifica criptograficamente origem/IdP; nsgdb-255 registrado separadamente, **não lido** no 8_v1. W10 parcial. Nota-6 pré-existente (gent_modalidades_gate testa off+stub?Goal/speak; não spawnam) **não quebrada**. AETHER_* config confiável. PII heurística. AETHER_CMD shell bloqueado.
+
