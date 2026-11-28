@@ -854,11 +854,12 @@ fn check_auth(state: &Mutex<ApiState>, req: &Request) -> Result<Option<u64>, Rep
 }
 
 fn token_eq(a: &str, b: &str) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff = 0u8;
-    for (x, y) in a.bytes().zip(b.bytes()) {
+    // T7: sem leak de comprimento — compara sobre `max(len)` com padding 0;
+    // o XOR de comprimentos entra no acumulador. Sem dep (`subtle`).
+    let mut diff = (a.len() ^ b.len()) as u8;
+    for i in 0..a.len().max(b.len()) {
+        let x = a.as_bytes().get(i).copied().unwrap_or(0);
+        let y = b.as_bytes().get(i).copied().unwrap_or(0);
         diff |= x ^ y;
     }
     diff == 0
