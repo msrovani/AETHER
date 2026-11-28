@@ -658,30 +658,33 @@ fn network_research_opt_in() -> bool {
 /// Classifica o pedido via `research_intent` (research|memory|deny).
 fn research_intent_action(text: &str) -> String {
     let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tools/research_intent.py");
-    let out = std::process::Command::new("python")
-        .arg(&script)
-        .arg(text)
-        .output();
-    match out {
-        Ok(done) if done.status.success() => {
-            let raw = String::from_utf8_lossy(&done.stdout);
-            // JSON com "action": "…"
-            if let Some(idx) = raw.find("\"action\"") {
-                let after = &raw[idx + "\"action\"".len()..];
-                if let Some(colon) = after.find(':') {
-                    let slice = &after[colon + 1..];
-                    if let Some(start_q) = slice.find('"') {
-                        let rest = &slice[start_q + 1..];
-                        if let Some(end_q) = rest.find('"') {
-                            return rest[..end_q].to_string();
-                        }
-                    }
+    // T4: spawn via `run_backend` (timeout+kill+cap) — script travado não
+    // trava a CLI; qualquer falha vira "deny" honesto.
+    let out = crate::agent::backend::run_backend(
+        "python",
+        &[script.display().to_string(), text.to_string()],
+        None,
+        30_000,
+        crate::agent::backend::BACKEND_MAX_STDOUT,
+    );
+    let Ok(raw_bytes) = out else {
+        return "deny".to_string();
+    };
+    let raw = String::from_utf8_lossy(&raw_bytes);
+    // JSON com "action": "…"
+    if let Some(idx) = raw.find("\"action\"") {
+        let after = &raw[idx + "\"action\"".len()..];
+        if let Some(colon) = after.find(':') {
+            let slice = &after[colon + 1..];
+            if let Some(start_q) = slice.find('"') {
+                let rest = &slice[start_q + 1..];
+                if let Some(end_q) = rest.find('"') {
+                    return rest[..end_q].to_string();
                 }
             }
-            "deny".to_string()
         }
-        _ => "deny".to_string(),
     }
+    "deny".to_string()
 }
 
 /// Chama o cabo F2 (offline ou vivo conforme `AETHER_RESEARCH_NETWORK`).
@@ -689,22 +692,29 @@ fn research_intent_action(text: &str) -> String {
 /// Sem fontes após cascata → linha `desconhecimento:` (nega; não limbo).
 fn f2_research_notice(text: &str) -> String {
     let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tools/f2_chat_hook.py");
-    let out = std::process::Command::new("python")
-        .arg(&script)
-        .arg("once")
-        .arg("--text")
-        .arg(text)
-        .arg("--reason")
-        .arg("unknown")
-        .output();
-    match out {
-        Ok(done) if done.status.success() => String::from_utf8_lossy(&done.stdout)
-            .lines()
-            .next()
-            .unwrap_or("desconhecimento: sem_saida_do_cabo")
-            .to_string(),
-        _ => "desconhecimento: cabo indisponivel — não afirmo".to_string(),
-    }
+    // T4: spawn via `run_backend` (timeout+kill+cap).
+    let out = crate::agent::backend::run_backend(
+        "python",
+        &[
+            script.display().to_string(),
+            "once".to_string(),
+            "--text".to_string(),
+            text.to_string(),
+            "--reason".to_string(),
+            "unknown".to_string(),
+        ],
+        None,
+        60_000,
+        crate::agent::backend::BACKEND_MAX_STDOUT,
+    );
+    let Ok(raw_bytes) = out else {
+        return "desconhecimento: cabo indisponivel — não afirmo".to_string();
+    };
+    String::from_utf8_lossy(&raw_bytes)
+        .lines()
+        .next()
+        .unwrap_or("desconhecimento: sem_saida_do_cabo")
+        .to_string()
 }
 
 /// Um turno de conversa. Devolve o código de saída do turno (abstenção NÃO é

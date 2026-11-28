@@ -4,7 +4,6 @@
 //! Autoridade da evidência **cap 120**. `research.expand` só via HITL.
 
 use std::path::PathBuf;
-use std::process::Command;
 
 use crate::agent::tool::{
     Cost, Goal, GoalKind, Risk, Tool, ToolContext, ToolError, ToolOutcome, ToolSchema, WorldState,
@@ -64,21 +63,23 @@ pub fn invoke_research_live(query: &str) -> Result<Json, ToolError> {
             script.display()
         )));
     }
-    let out = Command::new("python")
-        .arg(&script)
-        .arg(query)
-        .output()
-        .map_err(|e| ToolError::Failed(format!("spawn research_live: {e}")))?;
-    if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
-        return Err(ToolError::Failed(format!(
-            "research_live exit={:?}: {err}",
-            out.status.code()
-        )));
-    }
-    let raw = String::from_utf8_lossy(&out.stdout);
+    // T4: spawn via `run_backend` (timeout+kill+cap de stdout) — antes
+    // `cmd.output()` sem teto: script travado travava a tool para sempre.
+    let out = crate::agent::backend::run_backend(
+        "python",
+        &[script.display().to_string(), query.to_string()],
+        None,
+        RESEARCH_TIMEOUT_MS,
+        crate::agent::backend::BACKEND_MAX_STDOUT,
+    )
+    .map_err(|e| ToolError::Failed(format!("research_live: {e}")))?;
+    let raw = String::from_utf8_lossy(&out);
     Json::parse(raw.trim()).map_err(|e| ToolError::Failed(format!("json research: {e}")))
 }
+
+/// Timeout do sidecar de pesquisa (T4). Opt-in de rede separado
+/// (`AETHER_RESEARCH_NETWORK`); o teto só limita o processo, não o gate.
+pub const RESEARCH_TIMEOUT_MS: u64 = 60_000;
 
 fn authority_from_json(v: &Json) -> u8 {
     let raw = v
