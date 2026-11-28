@@ -310,6 +310,10 @@ impl LedgerStore {
 }
 
 /// Estado da borda: ledger, política de auth, store e contadores.
+///
+/// R9 (sharding): o cliente SGDB **não** mora mais aqui — vive em
+/// [`SgdbEdge`] sob o próprio `Mutex`, e o I/O de rede acontece **fora** do
+/// lock global (que cobre ledger/agent/contadores, todos compute-local).
 #[derive(Debug, Default)]
 pub struct ApiState {
     ledger: ScopeLedger,
@@ -317,8 +321,6 @@ pub struct ApiState {
     auth: Option<AuthPolicy>,
     /// Segredo servidor-side para escrever/purgar em autoridade `>= 200`.
     hitl: Option<String>,
-    sgdb: Option<SgdbClient<Box<dyn Transport>>>,
-    sgdb_error: Option<String>,
     agent: Option<AetherAgent>,
     requests: u64,
     bad_lines: usize,
@@ -354,25 +356,6 @@ impl ApiState {
             .hitl_token
             .clone()
             .filter(|token| !token.trim().is_empty());
-        if let Some(spec) = &cfg.sgdb {
-            let mut sgdb_cfg = SgdbConfig::from_env();
-            if let Some(path) = &cfg.sgdb_outbox {
-                sgdb_cfg.outbox = Some(path.clone());
-            }
-            if let Some(token) = &cfg.sgdb_token {
-                sgdb_cfg.token = Some(token.clone());
-            }
-            sgdb_cfg.recall_k = sgdb_cfg.recall_k.max(32);
-            match open(spec, sgdb_cfg) {
-                Ok(client) => state.sgdb = Some(client),
-                Err(e) => {
-                    eprintln!(
-                        "aviso: neural-sgdb não abriu ({e}) — a borda segue só com o ledger local"
-                    );
-                    state.sgdb_error = Some(e.to_string());
-                }
-            }
-        }
         // Agente: especialistas locais (transplante/SAT/QUBO) + especialista
         // de MEMÓRIA quando `--sgdb` está presente (JARBAS I3: a memória
         // durável alimenta o agente). O MemoryExpert abre o próprio cliente
@@ -384,17 +367,6 @@ impl ApiState {
         }
         state.agent = Some(AetherAgent::new(agent_cfg));
         Ok(state)
-    }
-
-    /// Estado do SGDB para `/health` (`off`/`on`/`error`).
-    pub fn sgdb_status(&self) -> &'static str {
-        if self.sgdb_error.is_some() {
-            return "error";
-        }
-        match &self.sgdb {
-            Some(_) => "on",
-            None => "off",
-        }
     }
 
     /// Registros no ledger (todos os escopos).
@@ -410,6 +382,61 @@ impl ApiState {
     /// Linhas inválidas encontradas ao carregar o arquivo.
     pub fn bad_lines(&self) -> usize {
         self.bad_lines
+    }
+}
+
+/// Shard do SGDB (R9): cliente + último erro, sob o **próprio** Mutex — o I/O
+/// de rede nunca é feito segurando o lock do [`ApiState`] (head-of-line
+/// blocking de 1500 ms congelava a borda inteira).
+///
+/// O **status** é lido sem lock (`AtomicBool`): `/health`/`/props` não podem
+/// esperar o mutex do edge, senão o I/O do SGDB volta a bloqueá-los.
+#[derive(Debug, Default)]
+pub struct SgdbEdge {
+    client: Option<SgdbClient<Box<dyn Transport>>>,
+    had_error: std::sync::atomic::AtomicBool,
+}
+
+impl SgdbEdge {
+    /// Abre o cliente a partir da config (best-effort; offline → erro honesto).
+    fn load(cfg: &ApiConfig) -> Self {
+        let Some(spec) = &cfg.sgdb else {
+            return Self::default();
+        };
+        let mut sgdb_cfg = SgdbConfig::from_env();
+        if let Some(path) = &cfg.sgdb_outbox {
+            sgdb_cfg.outbox = Some(path.clone());
+        }
+        if let Some(token) = &cfg.sgdb_token {
+            sgdb_cfg.token = Some(token.clone());
+        }
+        sgdb_cfg.recall_k = sgdb_cfg.recall_k.max(32);
+        match open(spec, sgdb_cfg) {
+            Ok(client) => Self {
+                client: Some(client),
+                had_error: std::sync::atomic::AtomicBool::new(false),
+            },
+            Err(e) => {
+                eprintln!(
+                    "aviso: neural-sgdb não abriu ({e}) — a borda segue só com o ledger local"
+                );
+                Self {
+                    client: None,
+                    had_error: std::sync::atomic::AtomicBool::new(true),
+                }
+            }
+        }
+    }
+
+    /// Status do SGDB (`off`/`on`/`error`) — **sem lock** (atomics).
+    pub fn status(&self) -> &'static str {
+        if self.had_error.load(std::sync::atomic::Ordering::Relaxed) {
+            return "error";
+        }
+        match &self.client {
+            Some(_) => "on",
+            None => "off",
+        }
     }
 }
 
@@ -455,6 +482,8 @@ fn drain_and_close(mut s: TcpStream) {
 /// Atende um `TcpListener` já ligado.
 pub fn serve_listener(listener: TcpListener, cfg: ApiConfig) -> std::io::Result<()> {
     let state = Arc::new(Mutex::new(ApiState::load(&cfg)?));
+    // R9 (sharding): o SGDB tem o próprio lock — rede nunca sob o lock global.
+    let sgdb = Arc::new(Mutex::new(SgdbEdge::load(&cfg)));
     let (tx, rx) = mpsc::sync_channel::<TcpStream>(cfg.queue_limit.max(1));
     let rx = Arc::new(Mutex::new(rx));
     let workers = cfg.threads.max(1);
@@ -467,6 +496,7 @@ pub fn serve_listener(listener: TcpListener, cfg: ApiConfig) -> std::io::Result<
     for _ in 0..workers {
         let rx = Arc::clone(&rx);
         let state = Arc::clone(&state);
+        let sgdb = Arc::clone(&sgdb);
         let conns = Arc::clone(&conns);
         handles.push(std::thread::spawn(move || loop {
             let next = {
@@ -492,12 +522,8 @@ pub fn serve_listener(listener: TcpListener, cfg: ApiConfig) -> std::io::Result<
                     // política de abort vale para os demais binários. Tests
                     // rodam com unwind (Cargo ignora `panic` em perfis de
                     // test), então este ramo é exercitado pela suíte.
-                    let mut st = match state.lock() {
-                        Ok(guard) => guard,
-                        Err(poison) => poison.into_inner(),
-                    };
                     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        handle(&mut st, &mut stream)
+                        handle(&state, &sgdb, &mut stream)
                     }));
                     if outcome.is_err() {
                         // Best-effort: se o cabeçalho da resposta ainda não
@@ -554,12 +580,24 @@ pub fn serve_listener(listener: TcpListener, cfg: ApiConfig) -> std::io::Result<
 }
 
 /// Atende **uma** conexão (útil em teste e em servidor embutido).
-pub fn handle(state: &mut ApiState, stream: &mut TcpStream) -> std::io::Result<()> {
+///
+/// R9: recebe os dois shards por `Mutex` — o lock global do estado é tomado
+/// **somente** nas seções que tocam ledger/agent/contadores; o I/O de rede do
+/// SGDB acontece fora dele (ver `remember`/`cue`/`evidence_for`).
+pub fn handle(
+    state: &Mutex<ApiState>,
+    sgdb: &Mutex<SgdbEdge>,
+    stream: &mut TcpStream,
+) -> std::io::Result<()> {
     let Some(req) = read_request(stream)? else {
         return Ok(());
     };
-    state.requests += 1;
-    let reply = route(state, &req);
+    // Contador de requests é atomicamente consistente com a fila de conexões.
+    {
+        let mut st = lock_state(state);
+        st.requests += 1;
+    }
+    let reply = route(state, sgdb, &req);
     write_reply(stream, reply)
 }
 
@@ -730,7 +768,23 @@ fn write_response(stream: &mut TcpStream, status: u16, body: &Json) -> std::io::
     stream.flush()
 }
 
-fn route(state: &mut ApiState, req: &Request) -> Reply {
+/// Lock com recuperação de poison (o guard nunca vira pânico no worker).
+fn lock_state(state: &Mutex<ApiState>) -> std::sync::MutexGuard<'_, ApiState> {
+    match state.lock() {
+        Ok(guard) => guard,
+        Err(poison) => poison.into_inner(),
+    }
+}
+
+/// Lock do shard SGDB com recuperação de poison.
+fn lock_edge(sgdb: &Mutex<SgdbEdge>) -> std::sync::MutexGuard<'_, SgdbEdge> {
+    match sgdb.lock() {
+        Ok(guard) => guard,
+        Err(poison) => poison.into_inner(),
+    }
+}
+
+fn route(state: &Mutex<ApiState>, sgdb: &Mutex<SgdbEdge>, req: &Request) -> Reply {
     if req.too_large {
         return Reply::Json(413, error_json("payload_too_large", "corpo acima de 1 MiB"));
     }
@@ -764,12 +818,12 @@ fn route(state: &mut ApiState, req: &Request) -> Reply {
     };
 
     match (req.method.as_str(), req.path.as_str()) {
-        ("GET", "/health") => Reply::Json(200, health(state)),
-        ("GET", "/props") => Reply::Json(200, props(state)),
+        ("GET", "/health") => Reply::Json(200, health(state, sgdb)),
+        ("GET", "/props") => Reply::Json(200, props(state, sgdb)),
         ("GET", "/v1/models") => Reply::Json(200, models()),
-        ("POST", "/v1/aether/remember") => remember(state, req, bound, false),
-        ("POST", "/v1/aether/memory/remember") => remember(state, req, bound, true),
-        ("POST", "/v1/aether/cue") => cue(state, &req.body, bound),
+        ("POST", "/v1/aether/remember") => remember(state, sgdb, req, bound, false),
+        ("POST", "/v1/aether/memory/remember") => remember(state, sgdb, req, bound, true),
+        ("POST", "/v1/aether/cue") => cue(state, sgdb, &req.body, bound),
         ("POST", "/v1/aether/solve") => solve(&req.body),
         ("POST", "/v1/aether/agent") => agent_route(state, &req.body, bound),
         ("POST", "/v1/aether/decision") => decision_route(&req.body),
@@ -785,8 +839,9 @@ fn route(state: &mut ApiState, req: &Request) -> Reply {
     }
 }
 
-fn check_auth(state: &ApiState, req: &Request) -> Result<Option<u64>, Reply> {
-    let Some(policy) = &state.auth else {
+fn check_auth(state: &Mutex<ApiState>, req: &Request) -> Result<Option<u64>, Reply> {
+    let st = lock_state(state);
+    let Some(policy) = &st.auth else {
         return Ok(None);
     };
     match &req.token {
@@ -842,7 +897,14 @@ fn scope_allowed(scope: ScopeId, bound: Option<u64>) -> bool {
     }
 }
 
-fn health(state: &ApiState) -> Json {
+fn health(state: &Mutex<ApiState>, sgdb: &Mutex<SgdbEdge>) -> Json {
+    let st = lock_state(state);
+    // R9: /health NÃO espera o mutex do edge (I/O do SGDB em curso) — try_lock:
+    // se ocupado, há cliente configurado e ativo → "on".
+    let sgdb_status = match sgdb.try_lock() {
+        Ok(edge) => edge.status(),
+        Err(_) => "on",
+    };
     Json::obj([
         ("status", Json::str("ok")),
         ("engine", Json::str("aether")),
@@ -855,25 +917,31 @@ fn health(state: &ApiState) -> Json {
                 ("t0_ledger_calls", Json::num(0.0)),
             ]),
         ),
-        ("requests", Json::num(state.requests as f64)),
-        ("ledger_entries", Json::num(state.ledger_len() as f64)),
-        ("persisted", Json::Bool(state.store.is_some())),
+        ("requests", Json::num(st.requests as f64)),
+        ("ledger_entries", Json::num(st.ledger_len() as f64)),
+        ("persisted", Json::Bool(st.store.is_some())),
         (
             "ledger_bytes",
-            Json::num(state.store.as_ref().map_or(0, LedgerStore::size) as f64),
+            Json::num(st.store.as_ref().map_or(0, LedgerStore::size) as f64),
         ),
         (
             "ledger_max_bytes",
-            Json::num(state.store.as_ref().map_or(0, LedgerStore::max_bytes) as f64),
+            Json::num(st.store.as_ref().map_or(0, LedgerStore::max_bytes) as f64),
         ),
-        ("auth", Json::Bool(state.auth.is_some())),
-        ("bad_lines", Json::num(state.bad_lines as f64)),
-        ("sgdb", Json::str(state.sgdb_status())),
-        ("agent", Json::Bool(state.agent.is_some())),
+        ("auth", Json::Bool(st.auth.is_some())),
+        ("bad_lines", Json::num(st.bad_lines as f64)),
+        ("sgdb", Json::str(sgdb_status)),
+        ("agent", Json::Bool(st.agent.is_some())),
     ])
 }
 
-fn props(state: &ApiState) -> Json {
+fn props(state: &Mutex<ApiState>, sgdb: &Mutex<SgdbEdge>) -> Json {
+    let st = lock_state(state);
+    // R9: idem /health — o edge nunca bloqueia os probes.
+    let sgdb_status = match sgdb.try_lock() {
+        Ok(edge) => edge.status(),
+        Err(_) => "on",
+    };
     Json::obj([
         ("model_path", Json::str(MODEL_ID)),
         ("n_ctx", Json::num(PHASE_DIMS as f64)),
@@ -883,9 +951,9 @@ fn props(state: &ApiState) -> Json {
             Json::obj([
                 ("version", Json::str(VERSION)),
                 ("phase_dims", Json::num(PHASE_DIMS as f64)),
-                ("ledger_entries", Json::num(state.ledger_len() as f64)),
-                ("persisted", Json::Bool(state.store.is_some())),
-                ("sgdb", Json::str(state.sgdb_status())),
+                ("ledger_entries", Json::num(st.ledger_len() as f64)),
+                ("persisted", Json::Bool(st.store.is_some())),
+                ("sgdb", Json::str(sgdb_status)),
                 ("edge", Json::str("text-phase-hash-lossy")),
                 // Freeze v0.1 — docs/V01_DELIVERY_PLAN.md
                 (
@@ -925,7 +993,13 @@ fn models() -> Json {
 ///   200/255 só com o segredo HITL do servidor no cabeçalho (promoção
 ///   server-side). A resposta informa `authority` efetiva e, quando o pedido
 ///   foi rebaixado, `authority_requested`.
-fn remember(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: bool) -> Reply {
+fn remember(
+    state: &Mutex<ApiState>,
+    sgdb: &Mutex<SgdbEdge>,
+    req: &Request,
+    bound: Option<u64>,
+    memory: bool,
+) -> Reply {
     let doc = match parse_json(&req.body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
@@ -949,14 +1023,6 @@ fn remember(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: boo
         .and_then(Json::as_u64)
         .unwrap_or(0)
         .min(255) as u8;
-    // Rota de memória: o cliente não promove. Rota de ledger: autoridade é do
-    // host local (ver doc acima) e é preservada como sempre foi.
-    let authority = if !memory || (requested >= AUTHORITY_HITL && hitl_authorized(state, req)) {
-        requested
-    } else {
-        AUTHORITY_QUARANTINE
-    };
-    let demoted = requested > authority;
     let layer = match doc.get("layer").and_then(Json::as_u64).unwrap_or(4) {
         2 => Layer::L2Episodic,
         6 => Layer::L6Graph,
@@ -968,66 +1034,98 @@ fn remember(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: boo
         .and_then(Json::as_u64)
         .unwrap_or_else(now_ms);
 
-    let record = DraftRecord {
-        key,
-        layer,
-        certificate,
-        authority,
-        scope,
-        tick,
-        wall_ms,
-        payload: phases_to_payload(&phases),
-    };
-    let scope_key = record.scope_key();
-    let mut persisted = false;
-    if let Some(store) = state.store.as_mut() {
-        match store.append(&record) {
-            Ok(()) => persisted = true,
-            Err(e) => {
-                return Reply::Json(
-                    500,
-                    error_json("ledger_io", &format!("falha ao gravar: {e}")),
-                )
-            }
-        }
-    }
-    let result = state.sgdb.as_mut().map(|client| {
-        // O contrato do SGDB é fase complexa (`re, im`); a borda HTTP fala
-        // fases puras. Converte na fronteira para um único formato durável.
-        let durable = DraftRecord {
-            payload: phases_to_complex(&record.payload),
-            ..record.clone()
-        };
-        client.remember_records(std::slice::from_ref(&durable))
-    });
-    let mut sgdb_state = "off";
-    match result {
-        Some(Ok(1)) => {
-            sgdb_state = "stored";
-            state.sgdb_error = None;
-        }
-        Some(Ok(_)) => {
-            sgdb_state = "empty";
-            state.sgdb_error = None;
-        }
-        Some(Err(e)) => {
-            sgdb_state = "offline";
-            state.sgdb_error = Some(e.to_string());
-        }
-        None => {}
-    }
-    state.ledger.append(record);
-
-    // Compactação: reescreve só os vivos quando o arquivo passa do teto.
+    // --- Fase A (lock curto do estado): HITL + append + compactação ---------
+    // R9: nada de rede aqui — a chamada SGDB de 1500 ms antes congelava a
+    // borda inteira (head-of-line blocking sob o lock global).
+    let authority;
+    let demoted;
+    let persisted;
     let mut compacted = false;
     let mut compact_error: Option<String> = None;
-    if state.store.as_ref().map(LedgerStore::should_compact) == Some(true) {
-        let all: Vec<DraftRecord> = state.ledger.records().cloned().collect();
-        if let Some(store) = state.store.as_mut() {
-            match store.compact(&all) {
-                Ok(()) => compacted = true,
-                Err(e) => compact_error = Some(e.to_string()),
+    let scope_key;
+    let total;
+    let record;
+    {
+        let mut st = lock_state(state);
+        // Rota de memória: o cliente não promove. Rota de ledger: autoridade é
+        // do host local (ver doc acima) e é preservada como sempre foi.
+        authority = if !memory || (requested >= AUTHORITY_HITL && hitl_authorized(&st, req)) {
+            requested
+        } else {
+            AUTHORITY_QUARANTINE
+        };
+        demoted = requested > authority;
+        record = DraftRecord {
+            key,
+            layer,
+            certificate,
+            authority,
+            scope,
+            tick,
+            wall_ms,
+            payload: phases_to_payload(&phases),
+        };
+        scope_key = record.scope_key();
+        let mut p = false;
+        if let Some(store) = st.store.as_mut() {
+            match store.append(&record) {
+                Ok(()) => p = true,
+                Err(e) => {
+                    return Reply::Json(
+                        500,
+                        error_json("ledger_io", &format!("falha ao gravar: {e}")),
+                    )
+                }
             }
+        }
+        persisted = p;
+        st.ledger.append(record.clone());
+
+        // Compactação: reescreve só os vivos quando o arquivo passa do teto.
+        if st.store.as_ref().map(LedgerStore::should_compact) == Some(true) {
+            let all: Vec<DraftRecord> = st.ledger.records().cloned().collect();
+            if let Some(store) = st.store.as_mut() {
+                match store.compact(&all) {
+                    Ok(()) => compacted = true,
+                    Err(e) => compact_error = Some(e.to_string()),
+                }
+            }
+        }
+        total = st.ledger.len();
+    }
+
+    // --- Fase B (SEM lock): rede SGDB ---------------------------------------
+    // O contrato do SGDB é fase complexa (`re, im`); a borda HTTP fala fases
+    // puras. Converte na fronteira para um único formato durável.
+    let durable = DraftRecord {
+        payload: phases_to_complex(&record.payload),
+        ..record.clone()
+    };
+    let sgdb_state;
+    {
+        let mut edge = lock_edge(sgdb);
+        let result = edge
+            .client
+            .as_mut()
+            .map(|client| client.remember_records(std::slice::from_ref(&durable)));
+        match result {
+            Some(Ok(1)) => {
+                sgdb_state = "stored";
+                edge.had_error
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+            }
+            Some(Ok(_)) => {
+                sgdb_state = "empty";
+                edge.had_error
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+            }
+            Some(Err(e)) => {
+                sgdb_state = "offline";
+                edge.had_error
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                let _ = e;
+            }
+            None => sgdb_state = "off",
         }
     }
 
@@ -1039,7 +1137,7 @@ fn remember(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: boo
         ("authority".into(), Json::num(f64::from(authority))),
         ("scope".into(), scope_json(scope)),
         ("scope_key".into(), Json::str(scope_key)),
-        ("total".into(), Json::num(state.ledger.len() as f64)),
+        ("total".into(), Json::num(total as f64)),
         ("sgdb".into(), Json::str(sgdb_state)),
     ];
     if demoted {
@@ -1072,7 +1170,7 @@ fn remember(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: boo
 /// Em ambas, o túmulo é gravado **antes** da remoção: se o disco falhar (ou não
 /// houver store), o fato continua citável e o cliente vê `500`, em vez de
 /// perder o registro sem rastro.
-fn forget(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: bool) -> Reply {
+fn forget(state: &Mutex<ApiState>, req: &Request, bound: Option<u64>, memory: bool) -> Reply {
     let doc = match parse_json(&req.body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
@@ -1102,7 +1200,7 @@ fn forget(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: bool)
     }
     // Só a rota de memória depende do segredo do servidor: na rota de ledger a
     // `authority` do host local é o mandato (mesma distinção de `remember`).
-    if memory && !hitl_authorized(state, req) {
+    if memory && !hitl_authorized(&lock_state(state), req) {
         return Reply::Json(
             403,
             error_json(
@@ -1113,13 +1211,15 @@ fn forget(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: bool)
     }
     let reason = doc.get("reason").and_then(Json::as_str).unwrap_or("manual");
 
+    // Tudo abaixo é compute-local (ledger/store): lock único do estado.
+    let mut st = lock_state(state);
     // Só grava túmulo de chave existente: um `forget` de chave ausente não pode
     // matar uma escrita futura com a mesma chave no próximo boot.
-    let exists = state.ledger.scoped(scope).any(|r| r.key == key);
+    let exists = st.ledger.scoped(scope).any(|r| r.key == key);
     // Túmulo ANTES da remoção (ADR-014: intenção antes do efeito).
     let mut tombstoned = false;
     if exists {
-        if let Some(store) = state.store.as_mut() {
+        if let Some(store) = st.store.as_mut() {
             if let Err(e) = store.tombstone(scope, key, reason, now_ms()) {
                 return Reply::Json(
                     500,
@@ -1141,14 +1241,14 @@ fn forget(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: bool)
     let removed = if hitl {
         false
     } else {
-        state.ledger.forget(scope, key)
+        st.ledger.forget(scope, key)
     };
     let mut fields: Vec<(String, Json)> = vec![
         ("forgot".into(), Json::Bool(removed)),
         ("tombstoned".into(), Json::Bool(tombstoned)),
         ("key".into(), Json::str(key.to_string())),
         ("scope".into(), scope_json(scope)),
-        ("remaining".into(), Json::num(state.ledger.len() as f64)),
+        ("remaining".into(), Json::num(st.ledger.len() as f64)),
     ];
     // Campo só no ramo novo: a resposta do purge 255 autorizado mantém o shape
     // antigo (`forgot`/`tombstoned`/`key`/`scope`/`remaining`).
@@ -1158,7 +1258,7 @@ fn forget(state: &mut ApiState, req: &Request, bound: Option<u64>, memory: bool)
     Reply::Json(200, Json::Obj(fields))
 }
 
-fn cue(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
+fn cue(state: &Mutex<ApiState>, sgdb: &Mutex<SgdbEdge>, body: &[u8], bound: Option<u64>) -> Reply {
     let doc = match parse_json(body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
@@ -1172,19 +1272,32 @@ fn cue(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
     let Some(query) = phases_from(doc.get("query"), PHASE_FLOATS) else {
         return bad("query ausente, ímpar ou com mais de 320 floats");
     };
+    // Fase A (lock curto): score local.
     let mut out = vec![0.0f32; query.len()];
-    let mut result = state.ledger.cue_scored(scope, &query, &mut out);
+    let mut result;
     let mut source = "local";
-    let needs_remote = !matches!(&result, Ok((_, score)) if *score >= MIN_SCORE);
-    if needs_remote {
-        // Sem hit local (ex.: processo reiniciou): reacende do SGDB e tenta
-        // de novo. O ledger textual não substitui a fase — ele a reacende.
-        let hydrated = hydrate_from_sgdb(state, scope);
-        if hydrated > 0 {
-            result = state.ledger.cue_scored(scope, &query, &mut out);
-            source = "sgdb";
+    {
+        let mut st = lock_state(state);
+        result = st.ledger.cue_scored(scope, &query, &mut out);
+        let needs_remote = !matches!(&result, Ok((_, score)) if *score >= MIN_SCORE);
+        if needs_remote {
+            // Fase B (sem lock do estado): rede SGDB. Sem hit local (ex.:
+            // processo reiniciou): reacende do SGDB e tenta de novo. O ledger
+            // textual não substitui a fase — ele a reacende.
+            let hydrated = hydrate_from_sgdb(state, sgdb, scope);
+            if hydrated > 0 {
+                result = st.ledger.cue_scored(scope, &query, &mut out);
+                source = "sgdb";
+            }
         }
     }
+    let cross = {
+        let st = lock_state(state);
+        (
+            st.ledger.cross_scope_hits(),
+            st.ledger.cross_scope_skipped(),
+        )
+    };
     match result {
         Ok((hit, score)) if score >= MIN_SCORE => Reply::Json(
             200,
@@ -1202,14 +1315,8 @@ fn cue(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
                 (
                     "isolation",
                     Json::obj([
-                        (
-                            "cross_scope_hits",
-                            Json::num(state.ledger.cross_scope_hits() as f64),
-                        ),
-                        (
-                            "cross_scope_skipped",
-                            Json::num(state.ledger.cross_scope_skipped() as f64),
-                        ),
+                        ("cross_scope_hits", Json::num(cross.0 as f64)),
+                        ("cross_scope_skipped", Json::num(cross.1 as f64)),
                     ]),
                 ),
             ]),
@@ -1223,37 +1330,46 @@ fn cue(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
 /// Reacende o cache local com os documentos de fase do escopo no SGDB.
 ///
 /// Devolve quantos registros entraram. Falha de rede não derruba o `cue`:
-/// apenas registra o erro no estado (`/health` mostra `sgdb: error`).
-fn hydrate_from_sgdb(state: &mut ApiState, scope: ScopeId) -> usize {
-    let Some(client) = state.sgdb.as_mut() else {
+/// apenas registra o erro no shard SGDB (`/health` mostra `sgdb: error`).
+/// R9: o I/O acontece fora do lock do estado; os hits são re-anexados sob
+/// lock curto no fim.
+fn hydrate_from_sgdb(state: &Mutex<ApiState>, sgdb: &Mutex<SgdbEdge>, scope: ScopeId) -> usize {
+    let recall = {
+        let mut edge = lock_edge(sgdb);
+        let Some(client) = edge.client.as_mut() else {
+            return 0;
+        };
+        match client.recall_scope(scope, 32) {
+            Ok(hits) => Some(hits),
+            Err(_) => {
+                edge.had_error
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                None
+            }
+        }
+    };
+    let Some(hits) = recall else {
         return 0;
     };
-    match client.recall_scope(scope, 32) {
-        Ok(hits) => {
-            let count = hits.len();
-            for hit in hits {
-                state.ledger.append(DraftRecord {
-                    key: hit.doc.key,
-                    layer: hit.doc.layer,
-                    certificate: hit.doc.certificate,
-                    authority: hit.authority,
-                    scope: hit.doc.scope,
-                    tick: hit.doc.tick,
-                    wall_ms: hit.doc.wall_ms,
-                    payload: complex_to_phases(&hit.doc.payload),
-                });
-            }
-            count
-        }
-        Err(e) => {
-            state.sgdb_error = Some(e.to_string());
-            0
-        }
+    let count = hits.len();
+    let mut st = lock_state(state);
+    for hit in hits {
+        st.ledger.append(DraftRecord {
+            key: hit.doc.key,
+            layer: hit.doc.layer,
+            certificate: hit.doc.certificate,
+            authority: hit.authority,
+            scope: hit.doc.scope,
+            tick: hit.doc.tick,
+            wall_ms: hit.doc.wall_ms,
+            payload: complex_to_phases(&hit.doc.payload),
+        });
     }
+    count
 }
 
 /// Rota do agente: fato, SAT, QUBO, memória **ou** pipeline `steps[]`.
-fn agent_route(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
+fn agent_route(state: &Mutex<ApiState>, body: &[u8], bound: Option<u64>) -> Reply {
     let doc = match parse_json(body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
@@ -1320,7 +1436,11 @@ fn agent_route(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
     } else {
         return bad("use {subject,relation}, {clauses,n}, {n,j,h}, {query} ou {steps|pipeline}");
     };
-    let Some(agent) = state.agent.as_mut() else {
+    // R9: o agente é compute-local (especialistas locais) — lock único do
+    // estado durante o solve; sem rede sob este lock (o MemoryExpert abre o
+    // próprio cliente em outra thread de vida própria).
+    let mut st = lock_state(state);
+    let Some(agent) = st.agent.as_mut() else {
         return Reply::Json(503, error_json("agent_off", "agente indisponível"));
     };
     let outcome = agent.run(&task);
@@ -1863,7 +1983,7 @@ fn solve(body: &[u8]) -> Reply {
     )
 }
 
-fn chat(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
+fn chat(state: &Mutex<ApiState>, body: &[u8], bound: Option<u64>) -> Reply {
     let doc = match parse_json(body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
@@ -1881,13 +2001,20 @@ fn chat(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
     if !scope_allowed(scope, bound) {
         return forbidden(scope, bound);
     }
+    // R9: o trio (T-NL-IN/T-HITL/T-NL-OUT) abre o próprio cliente SGDB a
+    // partir do env — o I/O dele NÃO pode acontecer sob o lock do estado.
+    let id = {
+        let mut st = lock_state(state);
+        let id = format!("chatcmpl-aether-{}", st.requests);
+        st.requests += 1;
+        id
+    };
     let evidence = evidence_for(state, scope, &text);
     let abstained = evidence
         .get("abstain")
         .and_then(Json::as_bool)
         .unwrap_or(false);
     let stream = doc.get("stream").and_then(Json::as_bool).unwrap_or(false);
-    let id = format!("chatcmpl-aether-{}", state.requests);
     let content = evidence_content(&evidence);
 
     if stream {
@@ -1960,7 +2087,7 @@ fn chat_chunks(id: &str, content: &str, abstained: bool) -> Vec<String> {
     ]
 }
 
-fn completion(state: &mut ApiState, body: &[u8], bound: Option<u64>) -> Reply {
+fn completion(state: &Mutex<ApiState>, body: &[u8], bound: Option<u64>) -> Reply {
     let doc = match parse_json(body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
@@ -2021,19 +2148,23 @@ fn normalize_sgdb_spec(spec: &str) -> String {
 ///
 /// Recicla `run_trio_turn` (parser + CertifiedUtterance + n-sgdb). O ledger de
 /// fase continua disponível em rotas `/v1/aether/*`; o chat usa o barramento.
-fn evidence_for(state: &mut ApiState, scope: ScopeId, text: &str) -> Json {
+fn evidence_for(state: &Mutex<ApiState>, scope: ScopeId, text: &str) -> Json {
     use crate::agent::{run_trio_turn, TrioOpts};
 
-    let raw = state
-        .sgdb
-        .as_ref()
-        .map(|_| {
+    // R9: o trio roda SEM o lock do estado (ele pode abrir transporte SGDB e
+    // falar rede). Só consultamos se há agente/SGDB configurado, sob lock curto.
+    let has_sgdb = lock_state(state).agent.is_some();
+    let raw = if has_sgdb {
+        Some(
             std::env::var("AETHER_SGDB_STDIO")
                 .or_else(|_| std::env::var("AETHER_SGDB_URL"))
-                .unwrap_or_else(|_| "mock".into())
-        })
-        .or_else(|| std::env::var("AETHER_SGDB_STDIO").ok())
-        .or_else(|| std::env::var("AETHER_SGDB_URL").ok());
+                .unwrap_or_else(|_| "mock".into()),
+        )
+    } else {
+        std::env::var("AETHER_SGDB_STDIO")
+            .ok()
+            .or_else(|| std::env::var("AETHER_SGDB_URL").ok())
+    };
     let sgdb = raw
         .filter(|s| !s.trim().is_empty())
         .map(|s| normalize_sgdb_spec(&s));
