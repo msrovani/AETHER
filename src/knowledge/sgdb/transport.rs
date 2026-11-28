@@ -777,6 +777,11 @@ impl HttpTransport {
                 Ok(0) => break,
                 Ok(_) => {
                     head.push_str(&line);
+                    // T3: headers HTTP com cap — servidor hostil pode emitir
+                    // linhas sem fim (sem `\r\n\r\n`) e crescer `head` à toa.
+                    if head.len() > MAX_RESPONSE / 16 {
+                        return Err(SgdbError::Protocol("headers HTTP acima do limite".into()));
+                    }
                     if line == "\r\n" || line == "\n" {
                         break;
                     }
@@ -811,6 +816,11 @@ impl HttpTransport {
                 let size = usize::from_str_radix(size_text, 16).unwrap_or(0);
                 if size == 0 {
                     break;
+                }
+                // T3: cap de chunk ANTES da alocação — `size` forjado (ex. 4 GiB)
+                // antes virava `vec![0u8; size]` → OOM antes do check.
+                if size > MAX_RESPONSE || bytes.len() + size > MAX_RESPONSE {
+                    return Err(SgdbError::Protocol("resposta acima de MAX_RESPONSE".into()));
                 }
                 let mut chunk = vec![0u8; size];
                 reader
@@ -977,12 +987,19 @@ impl Transport for StdioTransport {
         let mut buf = String::new();
         loop {
             buf.clear();
+            // T3: linha do child com cap (`take`) — stdout hostil/quebrado não
+            // cresce memória sem teto.
             let n = self
                 .stdout
+                .by_ref()
+                .take(MAX_RESPONSE as u64)
                 .read_line(&mut buf)
                 .map_err(|_| SgdbError::Timeout)?;
             if n == 0 {
                 return Err(SgdbError::Offline);
+            }
+            if n as usize == MAX_RESPONSE && !buf.ends_with('\n') {
+                return Err(SgdbError::Protocol("linha do child acima do limite".into()));
             }
             let trimmed = buf.trim();
             if trimmed.is_empty() || !trimmed.starts_with('{') {
