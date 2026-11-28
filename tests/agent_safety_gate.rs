@@ -326,3 +326,104 @@ fn injecao_em_memoria_nao_altera_escolha_de_tool() {
     let still = agent.plan(&dirty_state_goal);
     assert_eq!(still.first().map(|s| s.tool), Some("fact"));
 }
+
+// --- R3: shell.exec com spawn real reusa `run_backend_full` ------------------
+
+fn shell_ctx() -> ToolContext {
+    ToolContext::new(
+        ScopeId::new(1, 0, 0),
+        Budget {
+            max_steps: 8,
+            max_ms: 10_000,
+            max_tokens: 0,
+        },
+        71,
+    )
+}
+
+fn shell_goal(argv: &[&str]) -> Goal {
+    let json = format!(
+        r#"{{"argv":{argv},"hitl_token":"gate-r3"}}"#,
+        argv = format!(
+            "[{}]",
+            argv.iter()
+                .map(|a| format!("\"{a}\""))
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    );
+    let mut goal = Goal::fact("x", "shell.exec");
+    goal.kind = GoalKind::Act;
+    goal.relation = Some("shell.exec".into());
+    goal.risk_ceiling = Risk::Medium;
+    goal.query = Some(json);
+    goal
+}
+
+#[test]
+fn r3_shell_exec_spawn_real_ok_com_sandbox_cwd() {
+    std::env::set_var("AETHER_SHELL", "hitl");
+    std::env::set_var("AETHER_HITL_TOKEN", "gate-r3");
+    let policy = WorldPolicy {
+        sandbox_root: sandbox_dir(),
+        ..WorldPolicy::default()
+    };
+    let mut tool = ShellTool::new(&policy);
+    let mut ctx = shell_ctx();
+    // python rápido e determinístico; stderr vai a null (contrato run_backend).
+    let out = tool
+        .call(&shell_goal(&["python", "-c", "print('r3-ok')"]), &mut ctx)
+        .expect("spawn real ok");
+    assert!(out.detail.contains("shell.exec ok"), "{}", out.detail);
+    assert!(out.detail.contains("cwd="), "{}", out.detail);
+}
+
+#[test]
+fn r3_shell_exec_falha_honesta_sem_claim_fake() {
+    std::env::set_var("AETHER_SHELL", "hitl");
+    std::env::set_var("AETHER_HITL_TOKEN", "gate-r3");
+    let policy = WorldPolicy {
+        sandbox_root: sandbox_dir(),
+        ..WorldPolicy::default()
+    };
+    let mut tool = ShellTool::new(&policy);
+    let mut ctx = shell_ctx();
+    // exit != 0 → Err (antes: claim "fail" conf 0.2 fingindo sucesso estrutural).
+    // Sem `;` no script: metacharacters são banidos no argv (W1/K8).
+    let err = tool
+        .call(
+            &shell_goal(&["python", "-c", "raise SystemExit(3)"]),
+            &mut ctx,
+        )
+        .err()
+        .expect("exit != 0 é Err honesto");
+    assert!(err.to_string().contains("falhou"), "{err}");
+}
+
+#[test]
+fn r3_shell_exec_timeout_mata_o_filho() {
+    // Timeout curto por env não existe (const SHELL_TIMEOUT_MS) — aqui
+    // validamos que um filho travado não vira "ok": `python -c sleep` sob o
+    // mesmo budget da tool é abortado pelo run_backend (timeout 120 s é o
+    // teto da const; para o gate, usamos o kill de stdout overflow:
+    // um print infinito estoura o cap de 64 KiB e morre rápido).
+    std::env::set_var("AETHER_SHELL", "hitl");
+    std::env::set_var("AETHER_HITL_TOKEN", "gate-r3");
+    let policy = WorldPolicy {
+        sandbox_root: sandbox_dir(),
+        ..WorldPolicy::default()
+    };
+    let mut tool = ShellTool::new(&policy);
+    let mut ctx = shell_ctx();
+    let err = tool
+        .call(
+            &shell_goal(&["python", "-c", "while True: print('x'*64)"]),
+            &mut ctx,
+        )
+        .err()
+        .expect("stdout acima do cap → Err, não hang");
+    assert!(
+        err.to_string().contains("falhou"),
+        "estouro de stdout deve ser Err honesto: {err}"
+    );
+}

@@ -18,11 +18,14 @@ use crate::agent::{Claim, ExpertId, WorldPolicy};
 use crate::core::certificate::Provenance;
 use crate::json::Json;
 use std::path::PathBuf;
-use std::process::Command;
-use std::time::Duration;
 
 /// Cap de autoridade para claims de shell (quarentena; nunca 255 automático).
 pub const SHELL_AUTH_CAP: u8 = 120;
+
+/// Timeout do spawn real (R3): reusar `run_backend_full` (timeout+kill+cap de
+/// stdout). `cargo test` em primeiro build pode demorar — 120 s é o teto
+/// honesto; no estouro o filho é morto e a tool devolve `Err`, nunca hang.
+pub const SHELL_TIMEOUT_MS: u64 = 120_000;
 
 /// Modo do shell (K8).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -349,44 +352,43 @@ impl Tool for ShellTool {
             ));
         }
 
-        let mut cmd = Command::new(bin);
-        cmd.args(&argv[1..])
-            .current_dir(&self.root)
-            .env_clear()
-            .envs(std::env::vars().filter(|(k, _)| {
-                // PATH mínimo para cargo/python; sem herdar tokens.
-                k == "PATH"
-                    || k == "Path"
-                    || k == "SystemRoot"
-                    || k == "WINDIR"
-                    || k == "USERPROFILE"
-                    || k == "HOME"
-                    || k == "CARGO_HOME"
-                    || k == "RUSTUP_HOME"
-                    || k == "TMP"
-                    || k == "TEMP"
-                    || k == "TMPDIR"
-            }));
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            // niceness / process group — timeout via wait abaixo
-            let _ = cmd;
-        }
-
+        // R3: spawn real via `run_backend_full` — timeout + kill + cap de
+        // stdout, cwd = sandbox, env mínimo (PATH para cargo/python). Antes era
+        // `cmd.output()` (sem timeout, buffering ilimitado, no-op de elapsed).
+        let env_allow: [&str; 9] = [
+            "PATH",
+            "Path",
+            "SystemRoot",
+            "WINDIR",
+            "USERPROFILE",
+            "HOME",
+            "CARGO_HOME",
+            "RUSTUP_HOME",
+            "TMP",
+        ];
+        let spec = crate::agent::backend::BackendRun {
+            prog: bin,
+            args: &argv[1..],
+            stdin_data: None,
+            timeout_ms: SHELL_TIMEOUT_MS,
+            max_stdout: crate::agent::backend::BACKEND_MAX_STDOUT,
+            current_dir: Some(&self.root),
+            env_allow: Some(&env_allow),
+        };
         let started = std::time::Instant::now();
-        let output = cmd
-            .output()
-            .map_err(|e| ToolError::Failed(format!("shell spawn: {e}")))?;
+        let output = crate::agent::backend::run_backend_full(&spec);
         let elapsed = started.elapsed();
-        if elapsed > Duration::from_secs(120) {
-            // backstop informativo; Command::output já bloqueou.
-        }
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let code = output.status.code().unwrap_or(-1);
-        let ok = output.status.success();
+        let stdout_bytes = match output {
+            Ok(b) => b,
+            Err(e) => {
+                // Timeout/kill/exit != 0/saída estourada → Err honesto com
+                // contexto; nunca claim de "ok" nem hang.
+                return Err(ToolError::Failed(format!(
+                    "shell.exec {bin} falhou ({elapsed:?}): {e}"
+                )));
+            }
+        };
+        let stdout = String::from_utf8_lossy(&stdout_bytes);
         let preview = |s: &str| {
             let t = s.trim();
             if t.len() > 240 {
@@ -396,19 +398,13 @@ impl Tool for ShellTool {
             }
         };
         Ok(ToolOutcome {
-            claims: vec![claim(
-                "shell.exec",
-                if ok { "ok" } else { "fail" },
-                if ok { 1.0 } else { 0.2 },
-            )],
-            confidence: if ok { 1.0 } else { 0.1 },
+            claims: vec![claim("shell.exec", "ok", 1.0)],
+            confidence: 1.0,
             detail: format!(
-                "shell.exec {} exit={code} argv={:?} cwd={} out={} err={} scope={:?} trace={}",
-                if ok { "ok" } else { "fail" },
+                "shell.exec ok exit=0 argv={:?} cwd={} out={} dur={elapsed:?} scope={:?} trace={}",
                 argv,
                 self.root.display(),
                 preview(&stdout),
-                preview(&stderr),
                 ctx.scope,
                 ctx.trace_id
             ),

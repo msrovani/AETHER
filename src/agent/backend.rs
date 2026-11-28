@@ -101,6 +101,56 @@ pub fn run_backend(
         })
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
+    spawn_and_wait(cmd, stdin_data, timeout_ms, max_stdout)
+}
+
+/// Especificação completa para [`run_backend_full`] (cwd e env filtrado).
+pub struct BackendRun<'a> {
+    /// Programa concreto (sem shell).
+    pub prog: &'a str,
+    /// Argumentos estruturados (nunca linha de shell).
+    pub args: &'a [String],
+    /// Dado não confiável vai por stdin (nunca argv).
+    pub stdin_data: Option<&'a str>,
+    /// Timeout (ms) com `kill` no estouro.
+    pub timeout_ms: u64,
+    /// Cap de `stdout` (bytes).
+    pub max_stdout: usize,
+    /// Diretório de trabalho (sandbox).
+    pub current_dir: Option<&'a std::path::Path>,
+    /// Se `Some(nomes)`: `env_clear` + só esses envs herdam (ex.: PATH).
+    pub env_allow: Option<&'a [&'a str]>,
+}
+
+/// Variante com cwd/env — usada por `shell.exec` (R3): sandbox + env mínimo.
+pub fn run_backend_full(spec: &BackendRun<'_>) -> Result<Vec<u8>, String> {
+    let mut cmd = Command::new(spec.prog);
+    cmd.args(spec.args)
+        .stdin(if spec.stdin_data.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    if let Some(dir) = spec.current_dir {
+        cmd.current_dir(dir);
+    }
+    if let Some(allow) = spec.env_allow {
+        cmd.env_clear().envs(
+            std::env::vars().filter(|(k, _)| allow.iter().any(|a| a.eq_ignore_ascii_case(k))),
+        );
+    }
+    spawn_and_wait(cmd, spec.stdin_data, spec.timeout_ms, spec.max_stdout)
+}
+
+/// Núcleo único: spawn + stdin + leitora de stdout com cap + timeout + kill.
+fn spawn_and_wait(
+    mut cmd: Command,
+    stdin_data: Option<&str>,
+    timeout_ms: u64,
+    max_stdout: usize,
+) -> Result<Vec<u8>, String> {
     let child: Arc<Mutex<Child>> =
         Arc::new(Mutex::new(cmd.spawn().map_err(|e| format!("spawn: {e}"))?));
 
