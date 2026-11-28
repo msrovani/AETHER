@@ -154,7 +154,9 @@ impl std::fmt::Debug for ThermodynamicIsingSolver {
 }
 
 /// Fatias por-thread de um relaxamento (R11) — movidas para a thread.
+/// `b0` é o índice **global** do primeiro batch do chunk (j/h são globais).
 struct BatchChunks<'a> {
+    b0: usize,
     x: &'a mut [f64],
     y: &'a mut [f64],
     hx: &'a mut [f64],
@@ -424,6 +426,7 @@ impl ThermodynamicIsingSolver {
             let mut tri = trc_c.into_iter();
             let mut sti = stat_c.into_iter();
             let mut bei = be_c.into_iter();
+            let mut b0 = 0usize;
             loop {
                 match (
                     xi.next(),
@@ -452,20 +455,26 @@ impl ThermodynamicIsingSolver {
                         Some(trace),
                         Some(states),
                         Some(best_energy),
-                    ) => chunks.push(BatchChunks {
-                        x,
-                        y,
-                        hx,
-                        best,
-                        s_cur,
-                        s_try,
-                        g,
-                        g_try,
-                        init,
-                        trace,
-                        states,
-                        best_energy,
-                    }),
+                    ) => {
+                        let span = x.len() / n;
+                        let chunk = BatchChunks {
+                            b0,
+                            x,
+                            y,
+                            hx,
+                            best,
+                            s_cur,
+                            s_try,
+                            g,
+                            g_try,
+                            init,
+                            trace,
+                            states,
+                            best_energy,
+                        };
+                        b0 += span;
+                        chunks.push(chunk);
+                    }
                     _ => break,
                 }
             }
@@ -473,6 +482,7 @@ impl ThermodynamicIsingSolver {
         std::thread::scope(|s| {
             for ch in chunks {
                 let BatchChunks {
+                    b0,
                     x: xr,
                     y: yr,
                     hx: hxr,
@@ -491,8 +501,10 @@ impl ThermodynamicIsingSolver {
                 s.spawn(move || {
                     let b_span = xr.len() / n;
                     for b in 0..b_span {
-                        let j_off = b * n * n;
-                        let h_off = b * n;
+                        // j/h são GLOBAIS: o índice é `b0 + b` (os buffers por
+                        // chunk são locais — s_off é o `b` local mesmo).
+                        let j_off = (b0 + b) * n * n;
+                        let h_off = (b0 + b) * n;
                         let t_off = b * (steps + 1);
                         let s_off = b * n;
                         be[b] = Self::relax_one_batch(
