@@ -397,9 +397,11 @@ impl Tool for ShellTool {
                 t.to_string()
             }
         };
+        // T8: `exit=0` é Observed, mas o CONTEÚDO da saída não é evidência
+        // verificada — conf 0.0 (não inventar confiança).
         Ok(ToolOutcome {
-            claims: vec![claim("shell.exec", "ok", 1.0)],
-            confidence: 1.0,
+            claims: vec![claim("shell.exec", "ok", 0.0)],
+            confidence: 0.0,
             detail: format!(
                 "shell.exec ok exit=0 argv={:?} cwd={} out={} dur={elapsed:?} scope={:?} trace={}",
                 argv,

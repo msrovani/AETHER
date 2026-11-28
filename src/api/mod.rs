@@ -723,7 +723,7 @@ fn write_reply(stream: &mut TcpStream, reply: Reply) -> std::io::Result<()> {
                  content-type: text/event-stream; charset=utf-8\r\n\
                  cache-control: no-cache\r\n\
                  connection: close\r\n\
-                 access-control-allow-origin: *\r\n\
+                 
                  x-aether-version: {VERSION}\r\n\
                  x-aether-edge: text-phase-hash-lossy\r\n\
                  \r\n"
@@ -758,7 +758,7 @@ fn write_response(stream: &mut TcpStream, status: u16, body: &Json) -> std::io::
          content-type: application/json; charset=utf-8\r\n\
          content-length: {}\r\n\
          connection: close\r\n\
-         access-control-allow-origin: *\r\n\
+         
          x-aether-version: {VERSION}\r\n\
          x-aether-edge: text-phase-hash-lossy\r\n\
          \r\n",
