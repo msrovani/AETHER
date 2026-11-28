@@ -321,7 +321,6 @@ pub struct ApiState {
     auth: Option<AuthPolicy>,
     /// Segredo servidor-side para escrever/purgar em autoridade `>= 200`.
     hitl: Option<String>,
-    agent: Option<AetherAgent>,
     requests: u64,
     bad_lines: usize,
 }
@@ -356,16 +355,6 @@ impl ApiState {
             .hitl_token
             .clone()
             .filter(|token| !token.trim().is_empty());
-        // Agente: especialistas locais (transplante/SAT/QUBO) + especialista
-        // de MEMÓRIA quando `--sgdb` está presente (JARBAS I3: a memória
-        // durável alimenta o agente). O MemoryExpert abre o próprio cliente
-        // em modo leitura (recall_text); o transporte é o único escritor do
-        // arquivo (replica remember/cue), então não há corrida de escrita.
-        let mut agent_cfg = AgentConfig::default();
-        if let Some(spec) = &cfg.sgdb {
-            agent_cfg.sgdb = Some(spec.clone());
-        }
-        state.agent = Some(AetherAgent::new(agent_cfg));
         Ok(state)
     }
 
@@ -383,6 +372,18 @@ impl ApiState {
     pub fn bad_lines(&self) -> usize {
         self.bad_lines
     }
+}
+
+/// Constrói o agente da borda a partir da config (T5: shard próprio).
+fn agent_from_cfg(cfg: &ApiConfig) -> AetherAgent {
+    let mut agent_cfg = AgentConfig::default();
+    if let Some(spec) = &cfg.sgdb {
+        // Especialista de MEMÓRIA quando `--sgdb` está presente (JARBAS I3).
+        // O MemoryExpert abre o próprio cliente em modo leitura; o transporte
+        // é o único escritor do arquivo.
+        agent_cfg.sgdb = Some(spec.clone());
+    }
+    AetherAgent::new(agent_cfg)
 }
 
 /// Shard do SGDB (R9): cliente + último erro, sob o **próprio** Mutex — o I/O
@@ -484,6 +485,9 @@ pub fn serve_listener(listener: TcpListener, cfg: ApiConfig) -> std::io::Result<
     let state = Arc::new(Mutex::new(ApiState::load(&cfg)?));
     // R9 (sharding): o SGDB tem o próprio lock — rede nunca sob o lock global.
     let sgdb = Arc::new(Mutex::new(SgdbEdge::load(&cfg)));
+    // T5 (sharding): o agente tem o próprio lock — `agent.run` (que pode
+    // falar rede via MemoryExpert) nunca segura o lock do estado.
+    let agent: Arc<Mutex<Option<AetherAgent>>> = Arc::new(Mutex::new(Some(agent_from_cfg(&cfg))));
     let (tx, rx) = mpsc::sync_channel::<TcpStream>(cfg.queue_limit.max(1));
     let rx = Arc::new(Mutex::new(rx));
     let workers = cfg.threads.max(1);
@@ -497,6 +501,7 @@ pub fn serve_listener(listener: TcpListener, cfg: ApiConfig) -> std::io::Result<
         let rx = Arc::clone(&rx);
         let state = Arc::clone(&state);
         let sgdb = Arc::clone(&sgdb);
+        let agent = Arc::clone(&agent);
         let conns = Arc::clone(&conns);
         handles.push(std::thread::spawn(move || loop {
             let next = {
@@ -523,7 +528,7 @@ pub fn serve_listener(listener: TcpListener, cfg: ApiConfig) -> std::io::Result<
                     // rodam com unwind (Cargo ignora `panic` em perfis de
                     // test), então este ramo é exercitado pela suíte.
                     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        handle(&state, &sgdb, &mut stream)
+                        handle(&state, &sgdb, &agent, &mut stream)
                     }));
                     if outcome.is_err() {
                         // Best-effort: se o cabeçalho da resposta ainda não
@@ -587,6 +592,7 @@ pub fn serve_listener(listener: TcpListener, cfg: ApiConfig) -> std::io::Result<
 pub fn handle(
     state: &Mutex<ApiState>,
     sgdb: &Mutex<SgdbEdge>,
+    agent: &Mutex<Option<AetherAgent>>,
     stream: &mut TcpStream,
 ) -> std::io::Result<()> {
     let Some(req) = read_request(stream)? else {
@@ -597,7 +603,7 @@ pub fn handle(
         let mut st = lock_state(state);
         st.requests += 1;
     }
-    let reply = route(state, sgdb, &req);
+    let reply = route(state, sgdb, agent, &req);
     write_reply(stream, reply)
 }
 
@@ -774,6 +780,16 @@ fn lock_state(state: &Mutex<ApiState>) -> std::sync::MutexGuard<'_, ApiState> {
     }
 }
 
+/// Lock do shard do agente (T5) com recuperação de poison.
+fn lock_state_agent(
+    agent: &Mutex<Option<AetherAgent>>,
+) -> std::sync::MutexGuard<'_, Option<AetherAgent>> {
+    match agent.lock() {
+        Ok(guard) => guard,
+        Err(poison) => poison.into_inner(),
+    }
+}
+
 /// Lock do shard SGDB com recuperação de poison.
 fn lock_edge(sgdb: &Mutex<SgdbEdge>) -> std::sync::MutexGuard<'_, SgdbEdge> {
     match sgdb.lock() {
@@ -782,7 +798,12 @@ fn lock_edge(sgdb: &Mutex<SgdbEdge>) -> std::sync::MutexGuard<'_, SgdbEdge> {
     }
 }
 
-fn route(state: &Mutex<ApiState>, sgdb: &Mutex<SgdbEdge>, req: &Request) -> Reply {
+fn route(
+    state: &Mutex<ApiState>,
+    sgdb: &Mutex<SgdbEdge>,
+    agent: &Mutex<Option<AetherAgent>>,
+    req: &Request,
+) -> Reply {
     if req.too_large {
         return Reply::Json(413, error_json("payload_too_large", "corpo acima de 1 MiB"));
     }
@@ -816,19 +837,19 @@ fn route(state: &Mutex<ApiState>, sgdb: &Mutex<SgdbEdge>, req: &Request) -> Repl
     };
 
     match (req.method.as_str(), req.path.as_str()) {
-        ("GET", "/health") => Reply::Json(200, health(state, sgdb)),
-        ("GET", "/props") => Reply::Json(200, props(state, sgdb)),
+        ("GET", "/health") => Reply::Json(200, health(state, sgdb, agent)),
+        ("GET", "/props") => Reply::Json(200, props(state, sgdb, agent)),
         ("GET", "/v1/models") => Reply::Json(200, models()),
         ("POST", "/v1/aether/remember") => remember(state, sgdb, req, bound, false),
         ("POST", "/v1/aether/memory/remember") => remember(state, sgdb, req, bound, true),
         ("POST", "/v1/aether/cue") => cue(state, sgdb, &req.body, bound),
         ("POST", "/v1/aether/solve") => solve(&req.body),
-        ("POST", "/v1/aether/agent") => agent_route(state, &req.body, bound),
+        ("POST", "/v1/aether/agent") => agent_route(state, agent, &req.body, bound),
         ("POST", "/v1/aether/decision") => decision_route(&req.body),
         ("POST", "/v1/aether/forget") => forget(state, req, bound, false),
         ("POST", "/v1/aether/memory/forget") => forget(state, req, bound, true),
-        ("POST", "/v1/chat/completions") => chat(state, &req.body, bound),
-        ("POST", "/completion") => completion(state, &req.body, bound),
+        ("POST", "/v1/chat/completions") => chat(state, sgdb, &req.body, bound),
+        ("POST", "/completion") => completion(state, sgdb, &req.body, bound),
         ("OPTIONS", _) => Reply::Json(204, Json::Null),
         _ => Reply::Json(
             404,
@@ -896,13 +917,22 @@ fn scope_allowed(scope: ScopeId, bound: Option<u64>) -> bool {
     }
 }
 
-fn health(state: &Mutex<ApiState>, sgdb: &Mutex<SgdbEdge>) -> Json {
+fn health(
+    state: &Mutex<ApiState>,
+    sgdb: &Mutex<SgdbEdge>,
+    agent: &Mutex<Option<AetherAgent>>,
+) -> Json {
     let st = lock_state(state);
     // R9: /health NÃO espera o mutex do edge (I/O do SGDB em curso) — try_lock:
     // se ocupado, há cliente configurado e ativo → "on".
     let sgdb_status = match sgdb.try_lock() {
         Ok(edge) => edge.status(),
         Err(_) => "on",
+    };
+    // T5: idem para o agente — try_lock; ocupado = agente em solve → "on".
+    let agent_on = match agent.try_lock() {
+        Ok(a) => a.is_some(),
+        Err(_) => true,
     };
     Json::obj([
         ("status", Json::str("ok")),
@@ -930,11 +960,15 @@ fn health(state: &Mutex<ApiState>, sgdb: &Mutex<SgdbEdge>) -> Json {
         ("auth", Json::Bool(st.auth.is_some())),
         ("bad_lines", Json::num(st.bad_lines as f64)),
         ("sgdb", Json::str(sgdb_status)),
-        ("agent", Json::Bool(st.agent.is_some())),
+        ("agent", Json::Bool(agent_on)),
     ])
 }
 
-fn props(state: &Mutex<ApiState>, sgdb: &Mutex<SgdbEdge>) -> Json {
+fn props(
+    state: &Mutex<ApiState>,
+    sgdb: &Mutex<SgdbEdge>,
+    agent: &Mutex<Option<AetherAgent>>,
+) -> Json {
     let st = lock_state(state);
     // R9: idem /health — o edge nunca bloqueia os probes.
     let sgdb_status = match sgdb.try_lock() {
@@ -1368,7 +1402,12 @@ fn hydrate_from_sgdb(state: &Mutex<ApiState>, sgdb: &Mutex<SgdbEdge>, scope: Sco
 }
 
 /// Rota do agente: fato, SAT, QUBO, memória **ou** pipeline `steps[]`.
-fn agent_route(state: &Mutex<ApiState>, body: &[u8], bound: Option<u64>) -> Reply {
+fn agent_route(
+    state: &Mutex<ApiState>,
+    agent_mux: &Mutex<Option<AetherAgent>>,
+    body: &[u8],
+    bound: Option<u64>,
+) -> Reply {
     let doc = match parse_json(body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
@@ -1435,11 +1474,11 @@ fn agent_route(state: &Mutex<ApiState>, body: &[u8], bound: Option<u64>) -> Repl
     } else {
         return bad("use {subject,relation}, {clauses,n}, {n,j,h}, {query} ou {steps|pipeline}");
     };
-    // R9: o agente é compute-local (especialistas locais) — lock único do
-    // estado durante o solve; sem rede sob este lock (o MemoryExpert abre o
-    // próprio cliente em outra thread de vida própria).
-    let mut st = lock_state(state);
-    let Some(agent) = st.agent.as_mut() else {
+    // T5: o agente tem o PRÓPRIO lock — `agent.run` (que pode falar rede via
+    // MemoryExpert) nunca segura o lock do estado; solve do agente serializa
+    // apenas consigo mesmo.
+    let mut agent_shard = lock_state_agent(agent_mux);
+    let Some(agent) = agent_shard.as_mut() else {
         return Reply::Json(503, error_json("agent_off", "agente indisponível"));
     };
     let outcome = agent.run(&task);
@@ -1982,7 +2021,7 @@ fn solve(body: &[u8]) -> Reply {
     )
 }
 
-fn chat(state: &Mutex<ApiState>, body: &[u8], bound: Option<u64>) -> Reply {
+fn chat(state: &Mutex<ApiState>, sgdb: &Mutex<SgdbEdge>, body: &[u8], bound: Option<u64>) -> Reply {
     let doc = match parse_json(body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
@@ -2008,7 +2047,7 @@ fn chat(state: &Mutex<ApiState>, body: &[u8], bound: Option<u64>) -> Reply {
         st.requests += 1;
         id
     };
-    let mut evidence = evidence_for(state, scope, &text);
+    let mut evidence = evidence_for(state, sgdb, scope, &text);
     // T1: OOV do trio não pode esconder o ledger local — recall por fases do
     // texto: fases idênticas (texto exato) → cita; variação → abstém (a borda
     // é hash, não embedding). O corpo do cliente nunca promove autoridade.
@@ -2094,7 +2133,12 @@ fn chat_chunks(id: &str, content: &str, abstained: bool) -> Vec<String> {
     ]
 }
 
-fn completion(state: &Mutex<ApiState>, body: &[u8], bound: Option<u64>) -> Reply {
+fn completion(
+    state: &Mutex<ApiState>,
+    sgdb: &Mutex<SgdbEdge>,
+    body: &[u8],
+    bound: Option<u64>,
+) -> Reply {
     let doc = match parse_json(body) {
         Ok(v) => v,
         Err(e) => return Reply::Json(e.0, e.1),
@@ -2114,7 +2158,7 @@ fn completion(state: &Mutex<ApiState>, body: &[u8], bound: Option<u64>) -> Reply
     if !scope_allowed(scope, bound) {
         return forbidden(scope, bound);
     }
-    let mut evidence = evidence_for(state, scope, &text);
+    let mut evidence = evidence_for(state, sgdb, scope, &text);
     // T1: OOV do trio não pode esconder o ledger local — recall por fases do
     // texto: fases idênticas (texto exato) → cita; variação → abstém (a borda
     // é hash, não embedding). O corpo do cliente nunca promove autoridade.
@@ -2163,12 +2207,21 @@ fn normalize_sgdb_spec(spec: &str) -> String {
 ///
 /// Recicla `run_trio_turn` (parser + CertifiedUtterance + n-sgdb). O ledger de
 /// fase continua disponível em rotas `/v1/aether/*`; o chat usa o barramento.
-fn evidence_for(state: &Mutex<ApiState>, scope: ScopeId, text: &str) -> Json {
+fn evidence_for(
+    state: &Mutex<ApiState>,
+    sgdb: &Mutex<SgdbEdge>,
+    scope: ScopeId,
+    text: &str,
+) -> Json {
     use crate::agent::{run_trio_turn, TrioOpts};
 
-    // R9: o trio roda SEM o lock do estado (ele pode abrir transporte SGDB e
-    // falar rede). Só consultamos se há agente/SGDB configurado, sob lock curto.
-    let has_sgdb = lock_state(state).agent.is_some();
+    // R9/T5: o trio roda SEM o lock do estado (ele pode abrir transporte SGDB
+    // e falar rede). Só consultamos se há SGDB configurado, via try_lock do
+    // shard (ocupado = em uso = configurado).
+    let has_sgdb = sgdb
+        .try_lock()
+        .map(|edge| edge.status() != "off")
+        .unwrap_or(true);
     let raw = if has_sgdb {
         Some(
             std::env::var("AETHER_SGDB_STDIO")
