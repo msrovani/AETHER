@@ -291,7 +291,23 @@ protegido por `Mutex`: o **I/O** roda em paralelo; a consulta ao ledger é
 serializada. Para 60 Hz de telemetria isso sobra; para carga de LLM, suba o
 `--threads` e lembre que a serialização é do estado, não da rede.
 
-## 5.4 Resiliência a panic (perfil `release-unwind`)
+## 5.4 Backpressure e caps (R2/R9/T5)
+
+* **Fila limitada** (`queue_limit`, default 128) + **teto de conexões**
+  (`max_conns`, default 256): acima disso o accept responde **503**
+  `overload` e fecha (com drain — sem RST do Windows).
+* **Deadline total de request**: 30 s (todas as leituras); read/write timeout
+  de 10 s por segmento. Header: linha ≤ 8 KiB, ≤ 64 headers → conexão fechada.
+* Corpo ≤ 1 MiB (`413` acima, com drain de 4×).
+* **Shards**: estado (ledger/contadores), SGDB (`SgdbEdge`, rede **fora** do
+  lock do estado) e agente (solve serializa só consigo). `/health`/`/props`
+  usam `try_lock` — probes nunca esperam I/O.
+* **Chat/completion citam o ledger local** quando o trio abstém (T1): fases
+  idênticas ao texto lembrado → `verdict:"cite"` + `key`; variação → abstém.
+* **CORS**: sem wildcard (`*` removido) — same-origin por padrão.
+
+## 5.5 Resiliência a panic (perfil `release-unwind`)
+
 
 `catch_unwind` só captura panics que fazem *unwind*; com `panic = "abort"` o
 runtime mata o processo. Por isso a borda tem um perfil dedicado:
