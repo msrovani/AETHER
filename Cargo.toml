@@ -1,4 +1,4 @@
-﻿[workspace]
+[workspace]
 members = [".", "aether-decision"]
 resolver = "2"
 
@@ -148,7 +148,7 @@ egui = { version = "0.29", optional = true }
 serde = { version = "1", optional = true, features = ["derive"] }
 serde_json = { version = "1", optional = true }
 # GPU (opcional, fora do default). Versao fixada na cache local do registro.
-wgpu = { version = "22", optional = true }
+wgpu = { version = "30", optional = true }
 bytemuck = { version = "1", optional = true }
 
 [dev-dependencies]
