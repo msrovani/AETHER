@@ -80,7 +80,7 @@ impl HvBank {
             let hi = u64::from_le_bytes(rec[8..16].try_into().unwrap());
             keys.push((u128::from(hi) << 64) | u128::from(lo));
         }
-        let mut bank = Self {
+        let bank = Self {
             dim: dim_bits,
             words,
             dim_in,
