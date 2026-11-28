@@ -56,6 +56,10 @@ pub mod hitl;
 pub mod hitl_queue;
 pub mod language;
 pub mod learner;
+
+/// Infra compartilhada das portas de modalidade (T11).
+pub mod modality;
+
 pub mod linucb;
 pub mod nl_out;
 pub mod ocr;

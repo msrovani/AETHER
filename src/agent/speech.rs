@@ -36,11 +36,9 @@ impl SttPort {
 
     /// `AETHER_STT=1` + feature `speech`.
     pub fn from_env() -> Self {
-        let env_on = std::env::var("AETHER_STT")
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
         Self {
-            enabled: env_on && cfg!(feature = "speech"),
+            enabled: crate::agent::modality::ModalConfig::from_env("STT", cfg!(feature = "speech"))
+                .enabled,
         }
     }
 
@@ -81,17 +79,16 @@ impl SttPort {
         if !self.enabled {
             return Err("T-STT off (feature speech / AETHER_STT)".into()); // W3
         }
-        let cmd_line = std::env::var("AETHER_STT_CMD")
-            .map_err(|_| "T-STT enabled sem backend (defina AETHER_STT_CMD; binário concreto; PCM fora do T0)".to_string())?;
-        let timeout = std::env::var("AETHER_STT_TIMEOUT_MS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(super::backend::BACKEND_TIMEOUT_MS);
+        // T11: encanamento via ModalConfig.
+        let cfg = crate::agent::modality::ModalConfig::from_env("STT", cfg!(feature = "speech"));
+        let cmd_line = cfg.cmd.ok_or_else(|| {
+            "T-STT enabled sem backend (defina AETHER_STT_CMD; binário concreto; PCM fora do T0)".to_string()
+        })?;
         let out = super::backend::run_backend_cmd(
             &cmd_line,
             Some(audio_ref),
             None,
-            timeout,
+            cfg.timeout_ms,
             super::backend::BACKEND_MAX_STDOUT,
         )
         .map_err(|e| format!("T-STT sidecar: {e}"))?;
@@ -103,13 +100,7 @@ impl SttPort {
                 lang: None,
             });
         }
-        let conf = match std::env::var("AETHER_STT_CONF") {
-            Ok(s) => match s.parse::<f32>() {
-                Ok(c) if c.is_finite() => c.clamp(0.0, 1.0),
-                _ => 0.0,
-            },
-            Err(_) => 0.0,
-        };
+        let conf = cfg.conf.unwrap_or(0.0);
         Ok(SttResult {
             text,
             conf,
@@ -174,11 +165,9 @@ impl TtsPort {
 
     /// `AETHER_TTS=1` + feature `speech`.
     pub fn from_env() -> Self {
-        let env_on = std::env::var("AETHER_TTS")
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
         Self {
-            enabled: env_on && cfg!(feature = "speech"),
+            enabled: crate::agent::modality::ModalConfig::from_env("TTS", cfg!(feature = "speech"))
+                .enabled,
         }
     }
 
@@ -225,18 +214,17 @@ impl TtsPort {
                 spoken: "não sei".into(),
             }); // juíz insuficiente
         }
-        let cmd_line = std::env::var("AETHER_TTS_CMD")
-            .map_err(|_| "T-TTS enabled sem backend (defina AETHER_TTS_CMD; binário concreto; PCM não cruza o T0)".to_string())?;
-        let timeout = std::env::var("AETHER_TTS_TIMEOUT_MS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(super::backend::BACKEND_TIMEOUT_MS);
+        // T11: encanamento via ModalConfig.
+        let cfg = crate::agent::modality::ModalConfig::from_env("TTS", cfg!(feature = "speech"));
+        let cmd_line = cfg.cmd.ok_or_else(|| {
+            "T-TTS enabled sem backend (defina AETHER_TTS_CMD; binário concreto; PCM não cruza o T0)".to_string()
+        })?;
         // W1+W8: sem shell; **texto certificado por stdin**, não argv; timeout + limite
         super::backend::run_backend_cmd(
             &cmd_line,
             None,
             Some(&utt.text),
-            timeout,
+            cfg.timeout_ms,
             super::backend::BACKEND_MAX_STDOUT,
         )
         .map_err(|e| format!("T-TTS sidecar: {e}"))?;

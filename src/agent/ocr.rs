@@ -44,11 +44,9 @@ impl OcrPort {
 
     /// Liga se `AETHER_OCR=1` **e** feature `ocr` (sem feature = stub só em testes).
     pub fn from_env() -> Self {
-        let env_on = std::env::var("AETHER_OCR")
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
         Self {
-            enabled: env_on && cfg!(feature = "ocr"),
+            enabled: crate::agent::modality::ModalConfig::from_env("OCR", cfg!(feature = "ocr"))
+                .enabled,
         }
     }
 
@@ -102,17 +100,16 @@ impl OcrPort {
         if !self.enabled {
             return Err("T-OCR off (feature ocr / AETHER_OCR)".into());
         }
-        let cmd_line = std::env::var("AETHER_OCR_CMD")
-            .map_err(|_| "T-OCR enabled sem backend (defina AETHER_OCR_CMD; binário concreto; feature `ocr` off)".to_string())?;
-        let timeout = std::env::var("AETHER_OCR_TIMEOUT_MS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(super::backend::BACKEND_TIMEOUT_MS);
+        // T11: encanamento via ModalConfig (uma fonte de verdade).
+        let cfg = crate::agent::modality::ModalConfig::from_env("OCR", cfg!(feature = "ocr"));
+        let cmd_line = cfg.cmd.ok_or_else(|| {
+            "T-OCR enabled sem backend (defina AETHER_OCR_CMD; binário concreto; feature `ocr` off)".to_string()
+        })?;
         let out = super::backend::run_backend_cmd(
             &cmd_line,
             Some(&doc.id),
             None,
-            timeout,
+            cfg.timeout_ms,
             super::backend::BACKEND_MAX_STDOUT,
         )
         .map_err(|e| format!("T-OCR sidecar: {e}"))?;
@@ -127,14 +124,9 @@ impl OcrPort {
         }
         // W5: PII no texto extraído → deny (nunca emite Goal com PII)
         let pii = detect_pii(&text);
-        // W5: conf honesta — sem conf medida ⇒ 0.0; NaN/inf rejeitado; clamp
-        let conf = match std::env::var("AETHER_OCR_CONF") {
-            Ok(s) => match s.parse::<f32>() {
-                Ok(c) if c.is_finite() => c.clamp(0.0, 1.0),
-                _ => 0.0,
-            },
-            Err(_) => 0.0, // backend não reporta conf medida
-        };
+        // W5: conf honesta via ModalConfig — sem conf medida ⇒ 0.0; NaN/inf
+        // rejeitado pela ModalConfig (filter is_finite); clamp [0,1].
+        let conf = cfg.conf.unwrap_or(0.0);
         Ok(OcrResult {
             text,
             conf,
