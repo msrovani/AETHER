@@ -171,6 +171,7 @@ fn forget_body(key: u64, organism: u64, authority: u64) -> String {
 
 #[test]
 fn api_agent_responde_fato_e_abstem_no_desconhecido() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let addr = start();
     let (status, health) = request(addr, "GET", "/health", "");
     assert_eq!(status, 200);
@@ -199,6 +200,7 @@ fn api_agent_responde_fato_e_abstem_no_desconhecido() {
 
 #[test]
 fn api_agent_resolve_sat_e_qubo_com_certificado() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let addr = start();
     let (status, body) = request(
         addr,
@@ -224,6 +226,7 @@ fn api_agent_resolve_sat_e_qubo_com_certificado() {
 
 #[test]
 fn api_agent_aceita_pipeline_steps() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let addr = start();
     let body = r#"{
       "steps":[
@@ -243,6 +246,7 @@ fn api_agent_aceita_pipeline_steps() {
 
 #[test]
 fn api_agent_pipeline_rejeita_acima_do_cap() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let addr = start();
     let too_many = r#"{"steps":[
       {"kind":"fact","subject":"Brasil","relation":"capital"},
@@ -270,6 +274,7 @@ fn api_agent_pipeline_rejeita_acima_do_cap() {
 
 #[test]
 fn api_agent_pipeline_sucesso_em_json_no_topo() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let addr = start();
     let body = r#"{
       "pipeline":[
@@ -293,6 +298,7 @@ fn api_agent_pipeline_sucesso_em_json_no_topo() {
 
 #[test]
 fn api_agent_pipeline_abstem_sem_erro_http() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let addr = start();
     let (status, resp) = request(
         addr,
@@ -309,6 +315,7 @@ fn api_agent_pipeline_abstem_sem_erro_http() {
 
 #[test]
 fn api_agent_pipeline_recusa_payloads_malformados() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let addr = start();
     let cases: [(&str, &str); 5] = [
         (r#"{"steps":[]}"#, "pipeline sem steps"),
@@ -335,6 +342,7 @@ fn api_agent_pipeline_recusa_payloads_malformados() {
 
 #[test]
 fn api_agent_tarefa_unica_recusa_payload_invalido() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let addr = start();
     let cases: [(&str, &str); 5] = [
         // QUBO: sem teto, `flat_matrix` reservaria n² floats.
@@ -367,6 +375,7 @@ fn api_agent_tarefa_unica_recusa_payload_invalido() {
 
 #[test]
 fn api_agent_pipeline_nulo_nao_desvia_tarefa_unica() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let addr = start();
     let (status, resp) = request(
         addr,
@@ -383,6 +392,7 @@ fn api_agent_pipeline_nulo_nao_desvia_tarefa_unica() {
 
 #[test]
 fn api_agent_continua_vivo_depois_de_corpo_hostil() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let addr = start();
     // O corpo que antes panica dentro de `handle` (e envenenava o mutex).
     let (status, resp) = request(
@@ -411,6 +421,7 @@ fn api_agent_continua_vivo_depois_de_corpo_hostil() {
 /// rollback do workflow desfaz a escrita de verdade (journal real, não mock).
 #[test]
 fn api_agent_pipeline_desfaz_escrita_no_rollback() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let journal = temp_file("rollback");
     let _ = std::fs::remove_file(&journal);
     let _env = EnvGuard::set_journal(&journal);
@@ -457,6 +468,7 @@ const HITL_TOKEN: &str = "hitl-secret";
 /// não é purgado no mesmo passo.
 #[test]
 fn api_agent_forget_200_tombstone_sem_purge() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let file = temp_file("forget200");
     let _ = std::fs::remove_file(&file);
     let addr = start_cfg(ApiConfig {
@@ -521,6 +533,7 @@ fn api_agent_forget_200_tombstone_sem_purge() {
 /// (96); a rota de ledger confiável preserva a autoridade explícita do host.
 #[test]
 fn api_agent_remember_ignora_authority_do_cliente() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let addr = start_cfg(ApiConfig {
         hitl_token: None,
         threads: 1,
@@ -621,6 +634,7 @@ fn api_agent_remember_ignora_authority_do_cliente() {
 /// servidor: `authority`/`confirm` no corpo não concedem poder.
 #[test]
 fn api_agent_forget_255_exige_segredo_hitl() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let addr = start_cfg(ApiConfig {
         hitl_token: Some(HITL_TOKEN.to_string()),
         threads: 1,

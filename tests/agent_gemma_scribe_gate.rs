@@ -24,6 +24,7 @@ fn claim() -> Claim {
 
 #[test]
 fn catalog_sentinel_tem_role_scribe() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let cat = load_catalog().expect("catalog");
     let g = cat
         .iter()
@@ -38,6 +39,7 @@ fn catalog_sentinel_tem_role_scribe() {
 
 #[test]
 fn scribe_anchored_passa_p2() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     std::env::set_var("AETHER_SCRIBE", "gemma");
     let mut scribe = GemmaScribePort::from_env(Some(8192)).expect("scribe");
     let utt = certify_utterance(&mut scribe, &[claim()], Action::Cite, Style::Factual).unwrap();
@@ -48,6 +50,7 @@ fn scribe_anchored_passa_p2() {
 
 #[test]
 fn template_ainda_funciona() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let mut p = ParserPort::new();
     let utt = certify_utterance(&mut p, &[claim()], Action::Cite, Style::Factual).unwrap();
     assert!(utt.may_speak_fact());
@@ -55,6 +58,7 @@ fn template_ainda_funciona() {
 
 #[test]
 fn policy_user_final() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     assert_eq!(
         scribe_runtime_policy(Some(100), DEFAULT_AND_PEAK_MB, true),
         ScribeRuntime::TemplateOnly
@@ -67,6 +71,7 @@ fn policy_user_final() {
 
 #[test]
 fn lock_scribe_path_amarrado() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let _ = std::fs::create_dir_all(".vega/profiles/active");
     let lock = Json::obj([
         ("schema", Json::str("engine.lock/1")),
@@ -88,6 +93,7 @@ fn lock_scribe_path_amarrado() {
 
 #[test]
 fn artefato_gate() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let art = Json::obj([
         ("schema", Json::str("gemma_scribe_gate/1")),
         ("one_artifact_two_plugs", Json::Bool(true)),

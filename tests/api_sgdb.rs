@@ -91,6 +91,7 @@ fn cue_body() -> String {
 
 #[test]
 fn api_replica_remember_e_serve_cue_com_sgdb() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let addr = start(ApiConfig {
         threads: 1,
         sgdb: Some("mock".to_string()),
@@ -114,6 +115,7 @@ fn api_replica_remember_e_serve_cue_com_sgdb() {
 
 #[test]
 fn api_nao_derruba_escrita_quando_sgdb_esta_fora() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     // O ambiente é lido pelo SgdbConfig::from_env() no boot da borda.
     std::env::set_var("AETHER_SGDB_RETRIES", "0");
     std::env::set_var("AETHER_SGDB_TIMEOUT_MS", "100");

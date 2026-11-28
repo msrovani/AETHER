@@ -105,6 +105,7 @@ fn write_artifact(
 
 #[test]
 fn predict_mg_emite_yhat() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let series = mackey_glass(500, 17, 0.1);
     let mut agent = agent();
     let goal = Goal::predict_series(&series, 1).with_budget(
@@ -140,6 +141,7 @@ fn predict_mg_emite_yhat() {
 
 #[test]
 fn ood_serie_curta_nao_inventa() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let mut agent = agent();
     let goal = Goal::predict_series(&[1.0, 2.0, 3.0], 1).with_budget(
         Budget {
@@ -162,6 +164,7 @@ fn ood_serie_curta_nao_inventa() {
 
 #[test]
 fn metacog_surpresa() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     assert!(metacog_should_abstain(0.12));
     assert!(!metacog_should_abstain(0.001));
     let noise: Vec<f32> = (0..80).map(|i| ((i * 17) % 97) as f32 / 97.0).collect();
@@ -174,6 +177,7 @@ fn metacog_surpresa() {
 
 #[test]
 fn goal_propose_exige_hitl() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let _lock = A8_ENV.lock().unwrap_or_else(|e| e.into_inner());
     clear_a8_env();
     std::env::set_var("AETHER_HITL_TOKEN", "a8tok");
@@ -218,6 +222,7 @@ fn goal_propose_exige_hitl() {
 
 #[test]
 fn artefato_a8_gate() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let series = mackey_glass(400, 17, 0.1);
     let mg = forecast_series(&series, 1);
     let mg_nrmse = mg.nrmse;

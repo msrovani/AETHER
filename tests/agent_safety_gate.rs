@@ -29,6 +29,7 @@ fn agent_with_world(world: WorldPolicy) -> ToolAgent {
 
 #[test]
 fn fs_nega_traversal_fora_da_raiz() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let root = sandbox_dir();
     let err = resolve_sandbox_path(&root, "../secrets.txt").expect_err("traversal");
     assert!(matches!(err, ToolError::Precondition(_)));
@@ -38,6 +39,7 @@ fn fs_nega_traversal_fora_da_raiz() {
 
 #[test]
 fn fs_read_write_dentro_da_sandbox() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let root = sandbox_dir();
     let world = WorldPolicy {
         sandbox_root: root.clone(),
@@ -75,6 +77,7 @@ fn fs_read_write_dentro_da_sandbox() {
 
 #[test]
 fn http_get_nega_host_fora_allowlist() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let world = WorldPolicy {
         sandbox_root: sandbox_dir(),
         http_hosts: vec!["example.com".into()],
@@ -112,6 +115,7 @@ fn http_get_nega_host_fora_allowlist() {
 
 #[test]
 fn mcp_nega_nome_fora_allowlist() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let world = WorldPolicy {
         sandbox_root: sandbox_dir(),
         http_hosts: vec![],
@@ -147,6 +151,7 @@ fn mcp_nega_nome_fora_allowlist() {
 
 #[test]
 fn shell_sempre_nega_sem_hitl() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let mut agent = agent_with_world(WorldPolicy {
         sandbox_root: sandbox_dir(),
         ..WorldPolicy::default()
@@ -167,6 +172,7 @@ fn shell_sempre_nega_sem_hitl() {
 
 #[test]
 fn registry_rejeita_tool_fora_allowlist() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let mut registry = ToolRegistry::new(vec!["fact"]);
     struct Ghost;
     impl Tool for Ghost {
@@ -203,6 +209,7 @@ fn registry_rejeita_tool_fora_allowlist() {
 
 #[test]
 fn pipeline_fs_write_read_com_trace() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let root = sandbox_dir().join("pipe");
     let _ = std::fs::create_dir_all(&root);
     let world = WorldPolicy {
@@ -233,6 +240,7 @@ fn pipeline_fs_write_read_com_trace() {
 
 #[test]
 fn risco_acima_do_teto_nao_chama_http() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let world = WorldPolicy {
         sandbox_root: sandbox_dir(),
         http_hosts: vec!["example.com".into()],
@@ -255,6 +263,7 @@ fn risco_acima_do_teto_nao_chama_http() {
 
 #[test]
 fn injecao_em_memoria_nao_altera_escolha_de_tool() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     // Payload malicioso no blackboard não muda o ranking de um goal fact.
     let scope = ScopeId::new(1, 0, 1);
     let mut registry = ToolRegistry::new(vec!["fact", "shell.exec"]);
@@ -331,6 +340,7 @@ fn injecao_em_memoria_nao_altera_escolha_de_tool() {
 
 #[test]
 fn r4_http_get_rejeita_path_com_crlf_ou_espaco() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     use aether_engine::agent::tools::HttpGetTool;
     let world = WorldPolicy {
         sandbox_root: sandbox_dir(),
@@ -401,6 +411,7 @@ fn shell_goal(argv: &[&str]) -> Goal {
 
 #[test]
 fn r3_shell_exec_spawn_real_ok_com_sandbox_cwd() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     std::env::set_var("AETHER_SHELL", "hitl");
     std::env::set_var("AETHER_HITL_TOKEN", "gate-r3");
     let policy = WorldPolicy {
@@ -419,6 +430,7 @@ fn r3_shell_exec_spawn_real_ok_com_sandbox_cwd() {
 
 #[test]
 fn r3_shell_exec_falha_honesta_sem_claim_fake() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     std::env::set_var("AETHER_SHELL", "hitl");
     std::env::set_var("AETHER_HITL_TOKEN", "gate-r3");
     let policy = WorldPolicy {
@@ -441,6 +453,7 @@ fn r3_shell_exec_falha_honesta_sem_claim_fake() {
 
 #[test]
 fn r3_shell_exec_timeout_mata_o_filho() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     // Timeout curto por env não existe (const SHELL_TIMEOUT_MS) — aqui
     // validamos que um filho travado não vira "ok": `python -c sleep` sob o
     // mesmo budget da tool é abortado pelo run_backend (timeout 120 s é o

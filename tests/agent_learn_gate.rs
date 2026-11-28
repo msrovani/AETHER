@@ -79,6 +79,7 @@ fn exp3_update(w: &mut [f64; ARMS], arm: usize, reward: f64) {
 
 #[test]
 fn g_a5_linucb_mais_rapido_que_exp3() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let seeds = [1u64, 2, 3, 4, 5];
     let mut lin_steps = Vec::new();
     let mut exp_steps = Vec::new();
@@ -162,6 +163,7 @@ const SERVER: &str =
 
 #[test]
 fn replay_de_episodio_no_sgdb() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     if !Path::new(SERVER).exists() {
         eprintln!("replay: mcp_server ausente");
         return;

@@ -51,6 +51,7 @@ fn budget() -> (Budget, Risk) {
 
 #[test]
 fn coder_tools_na_allowlist_e_plano() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let agent = agent_with_sandbox(sandbox_dir());
     let names: Vec<_> = agent.tools().iter().map(|s| s.name).collect();
     for n in [
@@ -91,6 +92,7 @@ fn coder_tools_na_allowlist_e_plano() {
 
 #[test]
 fn code_check_ok_e_needle_fail() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let root = sandbox_dir();
     std::fs::write(root.join("sample.rs"), "fn main() { /* MARKER */ }\n").unwrap();
     let mut agent = agent_with_sandbox(root);
@@ -112,6 +114,7 @@ fn code_check_ok_e_needle_fail() {
 
 #[test]
 fn code_ast_grep_hits() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let root = sandbox_dir();
     std::fs::write(
         root.join("grep.rs"),
@@ -129,6 +132,7 @@ fn code_ast_grep_hits() {
 
 #[test]
 fn code_test_pass_e_fail() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let root = sandbox_dir();
     std::fs::write(root.join("ok.txt"), "# AETHER_TEST_OK\nbody\n").unwrap();
     std::fs::write(root.join("bad.txt"), "no marker\n").unwrap();
@@ -155,6 +159,7 @@ fn code_test_pass_e_fail() {
 
 #[test]
 fn patch_proposal_parse_e_apply_unit() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let prop = PatchProposal::from_json(
         r#"{"path":"f.txt","op":"replace","anchor":"OLD","content":"NEW"}"#,
     )
@@ -174,6 +179,7 @@ fn patch_proposal_parse_e_apply_unit() {
 
 #[test]
 fn code_patch_aplica_e_respeita_cap() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let root = sandbox_dir();
     std::fs::write(root.join("edit.txt"), "hello ANCHOR world\n").unwrap();
     let mut agent = agent_with_sandbox(root.clone());
@@ -191,6 +197,7 @@ fn code_patch_aplica_e_respeita_cap() {
 
 #[test]
 fn code_patch_aborta_anchor_ambigua() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let root = sandbox_dir();
     std::fs::write(root.join("dup.txt"), "AA AA\n").unwrap();
     let mut agent = agent_with_sandbox(root.clone());
@@ -204,6 +211,7 @@ fn code_patch_aborta_anchor_ambigua() {
 
 #[test]
 fn code_patch_rollback_via_rewind() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let root = sandbox_dir();
     let path = root.join("undo.txt");
     std::fs::write(&path, "BEFORE\n").unwrap();
@@ -228,6 +236,7 @@ fn code_patch_rollback_via_rewind() {
 
 #[test]
 fn code_check_nega_traversal() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let root = sandbox_dir();
     let mut agent = agent_with_sandbox(root);
     let (b, r) = budget();
@@ -237,6 +246,7 @@ fn code_check_nega_traversal() {
 
 #[test]
 fn code_generate_off_stub_e_cap() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let _lock = CODEGEN_ENV.lock().unwrap_or_else(|e| e.into_inner());
     let root = sandbox_dir();
     let path = root.join("gen.txt");
@@ -282,6 +292,7 @@ fn code_generate_off_stub_e_cap() {
 
 #[test]
 fn code_loop_keep_e_rollback() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let _lock = CODEGEN_ENV.lock().unwrap_or_else(|e| e.into_inner());
     let root = sandbox_dir();
     let keep = root.join("loop_keep.txt");
@@ -346,6 +357,7 @@ fn code_loop_keep_e_rollback() {
 
 #[test]
 fn code_apply_proposal_do_blackboard() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let _lock = CODEGEN_ENV.lock().unwrap_or_else(|e| e.into_inner());
     let root = sandbox_dir();
     let path = root.join("apply.txt");
@@ -373,6 +385,7 @@ fn code_apply_proposal_do_blackboard() {
 
 #[test]
 fn code_grammar_parse_rate_ge_95() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     // Corpus: 19 bons (fences/prosa/limpo) + 1 lixo → 95%.
     let good: Vec<String> = (0..19)
         .map(|i| {
@@ -389,6 +402,7 @@ fn code_grammar_parse_rate_ge_95() {
 
 #[test]
 fn code_grammar_tool_e_rasp() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let root = sandbox_dir();
     std::fs::write(root.join("rasp.txt"), "alpha\nUNIQUE_LINE_42\nbeta\n").unwrap();
     let mut agent = agent_with_sandbox(root.clone());
@@ -421,6 +435,7 @@ fn code_grammar_tool_e_rasp() {
 
 #[test]
 fn code_lm_offline_e_pass_at_k() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let caps = code_lm_caps();
     assert!(caps.offline);
     assert!(caps.max_ram_mb >= 64);
@@ -464,6 +479,7 @@ fn code_lm_offline_e_pass_at_k() {
 
 #[test]
 fn code_eval_t3_exige_generator_e_artefato() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let _lock = CODEGEN_ENV.lock().unwrap_or_else(|e| e.into_inner());
     std::env::remove_var("AETHER_CODE_GENERATE");
     std::env::remove_var("AETHER_CODE_T3_GENERATOR");
@@ -500,6 +516,7 @@ fn code_eval_t3_exige_generator_e_artefato() {
 
 #[test]
 fn shell_k8_default_deny_hitl_stub_e_kill() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let _lock = SHELL_ENV.lock().unwrap_or_else(|e| e.into_inner());
     // Limpa herança de ambiente.
     std::env::remove_var("AETHER_SHELL");

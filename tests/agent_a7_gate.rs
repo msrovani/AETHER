@@ -33,6 +33,7 @@ fn agent() -> ToolAgent {
 
 #[test]
 fn matriz_publicada_tem_3_classes() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     assert_eq!(RISK_MATRIX.len(), 3);
     assert_eq!(requirement_for(Risk::Low), HitlRequirement::Never);
     assert_eq!(requirement_for(Risk::Medium), HitlRequirement::Optional);
@@ -51,6 +52,7 @@ fn matriz_publicada_tem_3_classes() {
 
 #[test]
 fn kill_switch_bloqueia_toda_call() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let _lock = A7_ENV.lock().unwrap_or_else(|e| e.into_inner());
     clear_a7_env();
     std::env::set_var("AETHER_AGENT_KILL", "1");
@@ -77,6 +79,7 @@ fn kill_switch_bloqueia_toda_call() {
 
 #[test]
 fn high_sem_token_pede_hitl() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let _lock = A7_ENV.lock().unwrap_or_else(|e| e.into_inner());
     clear_a7_env();
     std::env::set_var("AETHER_HITL_TOKEN", "sekreto");
@@ -104,6 +107,7 @@ fn high_sem_token_pede_hitl() {
 
 #[test]
 fn medium_hitl_opcional_via_env() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let _lock = A7_ENV.lock().unwrap_or_else(|e| e.into_inner());
     clear_a7_env();
 
@@ -127,6 +131,7 @@ fn medium_hitl_opcional_via_env() {
 
 #[test]
 fn low_nunca_hitl_na_matriz() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let _lock = A7_ENV.lock().unwrap_or_else(|e| e.into_inner());
     clear_a7_env();
     let goal = Goal::fact("a", "b");
@@ -141,6 +146,7 @@ fn low_nunca_hitl_na_matriz() {
 
 #[test]
 fn agent_resolve_low_sem_kill() {
+    let _env_lock = aether_engine::test_env::env_test_lock();
     let _lock = A7_ENV.lock().unwrap_or_else(|e| e.into_inner());
     clear_a7_env();
     let mut agent = agent();

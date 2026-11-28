@@ -24,6 +24,10 @@ pub mod core;
 pub mod error;
 pub mod json;
 
+/// Trava de env para gates de teste (R14; infra, não contrato).
+#[doc(hidden)]
+pub mod test_env;
+
 /// Agente AETHER: inferência, MoE, coerência e autoaprendizado (`T2`).
 #[cfg(feature = "agent")]
 pub mod agent;
