@@ -2010,7 +2010,15 @@ fn chat(state: &Mutex<ApiState>, body: &[u8], bound: Option<u64>) -> Reply {
         st.requests += 1;
         id
     };
-    let evidence = evidence_for(state, scope, &text);
+    let mut evidence = evidence_for(state, scope, &text);
+    // T1: OOV do trio não pode esconder o ledger local — recall por fases do
+    // texto: fases idênticas (texto exato) → cita; variação → abstém (a borda
+    // é hash, não embedding). O corpo do cliente nunca promove autoridade.
+    if evidence.get("abstain").and_then(Json::as_bool) == Some(true) {
+        if let Some(cite) = ledger_cite(state, scope, &text) {
+            evidence = cite;
+        }
+    }
     let abstained = evidence
         .get("abstain")
         .and_then(Json::as_bool)
@@ -2108,7 +2116,15 @@ fn completion(state: &Mutex<ApiState>, body: &[u8], bound: Option<u64>) -> Reply
     if !scope_allowed(scope, bound) {
         return forbidden(scope, bound);
     }
-    let evidence = evidence_for(state, scope, &text);
+    let mut evidence = evidence_for(state, scope, &text);
+    // T1: OOV do trio não pode esconder o ledger local — recall por fases do
+    // texto: fases idênticas (texto exato) → cita; variação → abstém (a borda
+    // é hash, não embedding). O corpo do cliente nunca promove autoridade.
+    if evidence.get("abstain").and_then(Json::as_bool) == Some(true) {
+        if let Some(cite) = ledger_cite(state, scope, &text) {
+            evidence = cite;
+        }
+    }
     let abstained = evidence
         .get("abstain")
         .and_then(Json::as_bool)
@@ -2189,6 +2205,47 @@ fn evidence_for(state: &Mutex<ApiState>, scope: ScopeId, text: &str) -> Json {
         }
         other => other,
     }
+}
+
+/// Evidência do **ledger local** para OOV do trio (T1): converte o texto em
+/// fases e faz `cue_scored` no escopo. Fases idênticas ⇒ score alto ⇒ cita a
+/// `key`; variação de texto gera outras fases ⇒ abaixo de `MIN_SCORE` ⇒ `None`
+/// (o trio abstém como antes). Autoridade da citação caps em quarentena — o
+/// corpo do cliente nunca promove.
+fn ledger_cite(state: &Mutex<ApiState>, scope: ScopeId, text: &str) -> Option<Json> {
+    let query = text_to_phases(text);
+    let mut out = vec![0.0f32; query.len()];
+    let mut st = lock_state(state);
+    let (hit, score) = st.ledger.cue_scored(scope, &query, &mut out).ok()?;
+    if score < MIN_SCORE as f32 {
+        return None;
+    }
+    let auth = hit.authority.min(AUTHORITY_QUARANTINE);
+    Some(Json::obj([
+        ("abstain", Json::Bool(false)),
+        ("verdict", Json::str("cite")),
+        ("reason", Json::str("ledger_exact_phases")),
+        (
+            "memory_citations",
+            Json::Arr(vec![Json::obj([
+                ("key", Json::str(hit.key.to_string())),
+                ("score", Json::num(f64::from(score))),
+                ("authority", Json::num(f64::from(auth))),
+            ])]),
+        ),
+        ("certified", Json::Null),
+        ("parse_oov", Json::Bool(true)),
+        ("scope", scope_json(scope)),
+        (
+            "content",
+            Json::str(format!(
+                "citado do ledger local: key={} (score {:.2}, auth {auth})",
+                hit.key.to_string(),
+                score
+            )),
+        ),
+        ("edge", Json::str("ledger-cite")),
+    ]))
 }
 
 /// Conteúdo legível da evidência trio (prosa) — prefer `content` se presente.
