@@ -150,9 +150,8 @@ fn openai_chat_abstem_oov_e_nao_inventa_com_ledger_de_fase() {
     let (st, resp) = request(addr, "POST", "/v1/chat/completions", chat);
     assert_eq!(st, 200, "{resp}");
     assert!(resp.contains("chat.completion"), "{resp}");
+    // Sem nada lembrado ainda: OOV trio → abstém (content_filter).
     assert!(resp.contains("content_filter"), "{resp}");
-    // 0.5.4: o chat fala pelo barramento trio (edge=trio-bus), não pelo ledger
-    // de fase — `/v1/aether/cue` cobre a leitura do ledger.
     assert!(resp.contains("\"edge\":\"trio-bus\""), "{resp}");
     assert!(resp.contains("\"verdict\":\"abstain\""), "{resp}");
     assert!(resp.contains("\"parse_oov\":true"), "{resp}");
@@ -166,8 +165,11 @@ fn openai_chat_abstem_oov_e_nao_inventa_com_ledger_de_fase() {
         "messages":[{"role":"user","content":"ola"}]}"#;
     let (st, resp) = request(addr, "POST", "/v1/chat/completions", chat_scoped);
     assert_eq!(st, 200, "{resp}");
-    assert!(resp.contains("content_filter"), "{resp}");
-    assert!(resp.contains("\"verdict\":\"abstain\""), "{resp}");
+    // T1: texto exato lembrado → cita o ledger local (key=7), sem inventar.
+    assert!(resp.contains("\"finish_reason\":\"stop\""), "{resp}");
+    assert!(resp.contains("\"verdict\":\"cite\""), "{resp}");
+    assert!(resp.contains("\"key\":\"7\""), "{resp}");
+    assert!(resp.contains("ledger_exact_phases"), "{resp}");
     assert!(!resp.contains("\"verdict\":\"act\""), "{resp}");
 }
 
@@ -200,12 +202,9 @@ fn sse_entrega_chunks_e_done() {
     );
     assert!(resp.contains("\"role\":\"assistant\""), "{resp}");
     assert!(resp.contains("data: [DONE]"), "{resp}");
-    // 0.5.4: consulta OOV no barramento trio abstém (content_filter); o chunk SSE
-    // não carrega `x_aether` — o verdict fica no corpo JSON não-stream.
-    assert!(
-        resp.contains("\"finish_reason\":\"content_filter\""),
-        "{resp}"
-    );
+    // 0.5.4→T1: texto exato lembrado é CITADO pelo ledger (ledger_exact_phases);
+    // o chunk SSE não carrega `x_aether` — o verdict fica no corpo JSON não-stream.
+    assert!(resp.contains("\"finish_reason\":\"stop\""), "{resp}");
 }
 
 #[test]
