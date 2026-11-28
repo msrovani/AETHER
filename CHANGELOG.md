@@ -5,6 +5,44 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-11-27
+
+### Corrigido (auditoria full-codebase — ondas 1-2, R1-R14)
+
+- **R1 [CRÍTICO]**: perfil `release-unwind` para a borda (`aether-api`/`aether-daemon`) —
+  `catch_unwind` do `serve_listener` era dead-code com `panic = "abort"`; agora
+  o guard é real no binário empacotado (gate `api_panic_guard_gate`).
+- **R2**: backpressure na borda HTTP — fila `sync_channel` limitada + `503` com
+  drain (Windows RST), teto de conexões, deadline **total** por request, caps de
+  header (8 KB/64) (gate `api_backpressure_gate`).
+- **R3**: `shell.exec` reusa `run_backend_full` (timeout+kill+cap de stdout,
+  cwd sandbox, env mínimo) — antes `cmd.output()` sem timeout com claim fake
+  de falha.
+- **R4**: `http.get` sanitiza path (CR/LF/espaço → deny anti-smuggling) +
+  `connect_timeout` 5 s.
+- **R5**: `HvBank::load` com aritmética verificada + caps (header hostil/truncado
+  → `Err`, sem wrap silencioso nem OOM) (gate `hv_bank_parse_gate`).
+- **R6**: `overflow-checks` medido — fica OFF no release (custo ~5× nos loops
+  i8 de µs: t12 2,3→27,6 µs); detecção de wraps vira perfil `release-checks` +
+  job CI dedicado.
+- **R7**: `gemma_scribe` live via `run_backend` (elimina deadlock de pipe).
+- **R9**: sharding do `ApiState` — cliente SGDB em `SgdbEdge` com mutex próprio;
+  I/O de rede **nunca** sob o lock global (gate `api_shard_gate` prova
+  `/health` vivo com SGDB travado).
+- **R11**: solver `relax_into` paralelo por batch (threads scoped, chunks
+  disjuntos; zero-alloc preservado no caminho serial) + readout do organismo
+  com slices contíguos; determinismo bit-a-bit mantido.
+- **R13**: dependências mortas removidas (`rayon`, `mio`, feature `rayon` do
+  ndarray).
+- **R14**: trava global de env nos gates (`src/test_env.rs`) — causa raiz dos
+  flakes de `set_var` em paralelo; aplicada em 8 gates multi-teste.
+
+### Adicionado (Onda 1-2)
+
+- **R8**: job `audit` (rustsec/audit-check) no CI + Dependabot (cargo + actions).
+- Gates novos: `api_panic_guard_gate`, `api_backpressure_gate`,
+  `api_shard_gate`, `hv_bank_parse_gate` + checks R3/R4 em `agent_safety_gate`.
+
 ## [0.6.4] - 2026-11-26
 
 ### Added

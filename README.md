@@ -1,8 +1,8 @@
 # AETHER — motor cognitivo pós-token em Rust
 
-Versão crate: **`0.1.0`** (tag `v0.1.0` · MSG 0666 / `c8621d2` — freeze IA usável;
-plano e checklist: [`docs/V01_DELIVERY_PLAN.md`](docs/V01_DELIVERY_PLAN.md) ·
-[`docs/CYCLE_CLOSE_V01_FREEZE.md`](docs/CYCLE_CLOSE_V01_FREEZE.md)).
+Versão crate: ver `Cargo.toml` e `CHANGELOG.md` (freeze `v0.1.0` = tag
+`v0.1.0` · MSG 0666 / `c8621d2` — planos: `docs/V01_DELIVERY_PLAN.md` ·
+`docs/CYCLE_CLOSE_V01_FREEZE.md`).
 Suite cognitiva: `docs/COGNITIVE_AUDIT_RUN_2026-11-17.md` (ACQ 100 · 12/12).
 
 Protótipo experimental de computação baseada em física contínua: **zero tokens,
