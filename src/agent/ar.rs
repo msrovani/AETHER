@@ -59,11 +59,9 @@ impl ArPort {
 
     /// `AETHER_AR=1` + feature `ar`; deps C3 + T-COH devem estar prontas.
     pub fn from_env() -> Self {
-        let env_on = std::env::var("AETHER_AR")
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
         Self {
-            enabled: env_on && cfg!(feature = "ar"),
+            enabled: crate::agent::modality::ModalConfig::from_env("AR", cfg!(feature = "ar"))
+                .enabled,
             vis_ready: true,
             coh_ready: true,
         }
@@ -82,14 +80,16 @@ impl ArPort {
         if !self.coh_ready {
             return Err("T-AR precisa T-COH".into()); // dep dura
         }
-        match std::env::var("AETHER_AR_CMD") {
-            Ok(cmd_line) if !cmd_line.trim().is_empty() => {
+        // T11: encanamento via ModalConfig; backend ausente → no-op honesto.
+        let cfg = crate::agent::modality::ModalConfig::from_env("AR", cfg!(feature = "ar"));
+        match cfg.cmd {
+            Some(cmd_line) if !cmd_line.trim().is_empty() => {
                 // W1+W8: sem shell; `anchor.id` sanitizado; timeout+limite
                 super::backend::run_backend_cmd(
                     &cmd_line,
                     Some(&anchor.id),
                     None,
-                    super::backend::BACKEND_TIMEOUT_MS,
+                    cfg.timeout_ms,
                     super::backend::BACKEND_MAX_STDOUT,
                 )
                 .map_err(|e| format!("ar backend: {e}"))?;

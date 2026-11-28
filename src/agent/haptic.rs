@@ -63,11 +63,12 @@ impl HapticPort {
 
     /// `AETHER_HAPTIC=1` + feature `haptic`.
     pub fn from_env() -> Self {
-        let env_on = std::env::var("AETHER_HAPTIC")
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
         Self {
-            enabled: env_on && cfg!(feature = "haptic"),
+            enabled: crate::agent::modality::ModalConfig::from_env(
+                "HAPTIC",
+                cfg!(feature = "haptic"),
+            )
+            .enabled,
         }
     }
 
@@ -86,14 +87,16 @@ impl HapticPort {
             eprintln!("t-haptic off — no-op (feature `haptic` / AETHER_HAPTIC)");
             return Ok(()); // no-op honesto
         }
-        match std::env::var("AETHER_HAPTIC_CMD") {
-            Ok(cmd_line) if !cmd_line.trim().is_empty() => {
+        // T11: encanamento via ModalConfig; backend ausente → no-op honesto.
+        let cfg = crate::agent::modality::ModalConfig::from_env("HAPTIC", cfg!(feature = "haptic"));
+        match cfg.cmd {
+            Some(cmd_line) if !cmd_line.trim().is_empty() => {
                 // W1+W8: sem shell; pattern (estático); timeout+limite
                 super::backend::run_backend_cmd(
                     &cmd_line,
                     Some(&event.pattern),
                     None,
-                    super::backend::BACKEND_TIMEOUT_MS,
+                    cfg.timeout_ms,
                     super::backend::BACKEND_MAX_STDOUT,
                 )
                 .map_err(|e| format!("haptic backend: {e}"))?;

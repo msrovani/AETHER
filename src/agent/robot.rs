@@ -220,9 +220,9 @@ impl RobotPort {
     /// `AETHER_ROBOT=1` + feature `robot`; `AETHER_ROBOT_BACKEND=virtual|sidecar`;
     /// `AETHER_ROBOT_RISK_CEILING`.
     pub fn from_env() -> Self {
-        let env_on = std::env::var("AETHER_ROBOT")
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
+        // T11: gate via ModalConfig (env+feature, uma fonte de verdade).
+        let enabled =
+            crate::agent::modality::ModalConfig::from_env("ROBOT", cfg!(feature = "robot")).enabled;
         let backend = match std::env::var("AETHER_ROBOT_BACKEND").as_deref() {
             Ok("sidecar") => RobotBackend::Sidecar,
             Ok("off") => RobotBackend::Off,
@@ -233,7 +233,7 @@ impl RobotPort {
             .and_then(|s| s.parse().ok())
             .unwrap_or(0.5);
         Self {
-            enabled: env_on && cfg!(feature = "robot"),
+            enabled,
             backend,
             risk_ceiling,
             allowed: Self::default().allowed,
@@ -328,7 +328,10 @@ impl RobotPort {
         let (executed_real, verified, backend_name) = match self.backend {
             RobotBackend::Virtual => (false, true, "virtual"), // registra + verifica; NÃO atua
             RobotBackend::Sidecar => {
-                let cmd_line = std::env::var("AETHER_ROBOT_CMD").map_err(|_| {
+                // T11: encanamento via ModalConfig.
+                let cfg =
+                    crate::agent::modality::ModalConfig::from_env("ROBOT", cfg!(feature = "robot"));
+                let cmd_line = cfg.cmd.ok_or_else(|| {
                     RobotError::Backend("AETHER_ROBOT_CMD ausente (HW real)".into())
                 })?;
                 // W1+W8: sem shell; `cmd.action.code()` (estático); timeout+limite
@@ -336,7 +339,7 @@ impl RobotPort {
                     &cmd_line,
                     Some(cmd.action.code()),
                     None,
-                    super::backend::BACKEND_TIMEOUT_MS,
+                    cfg.timeout_ms,
                     super::backend::BACKEND_MAX_STDOUT,
                 )
                 .map_err(|e| RobotError::Backend(format!("robot backend: {e}")))?;

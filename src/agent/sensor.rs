@@ -97,16 +97,17 @@ impl SensorPort {
 
     /// `AETHER_SENSOR=1` + feature `sensor`; `AETHER_SENSOR_BACKEND=synthetic|sidecar`.
     pub fn from_env() -> Self {
-        let env_on = std::env::var("AETHER_SENSOR")
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
+        // T11: gate via ModalConfig (env+feature, uma fonte de verdade).
+        let enabled =
+            crate::agent::modality::ModalConfig::from_env("SENSOR", cfg!(feature = "sensor"))
+                .enabled;
         let backend = match std::env::var("AETHER_SENSOR_BACKEND").as_deref() {
             Ok("synthetic") => SensorBackend::Synthetic,
             Ok("sidecar") => SensorBackend::Sidecar,
             _ => SensorBackend::Synthetic, // classe D sem HW: virtual por default
         };
         Self {
-            enabled: env_on && cfg!(feature = "sensor"),
+            enabled,
             backend,
             seed: 0x0D10_0001,
         }
@@ -177,7 +178,9 @@ impl SensorPort {
     /// Sidecar `AETHER_SENSOR_CMD`, **seguro** (`backend::run_backend_cmd`): sem shell;
     /// `sensor_id` sanitizado; timeout+limite; `value` **`is_finite`** + `.validate()`. W1+W6+W8.
     fn sidecar(&self, sensor_id: &str, timestamp_ms: u64) -> Result<SensorReading, ToolError> {
-        let cmd = std::env::var("AETHER_SENSOR_CMD").map_err(|_| {
+        // T11: encanamento via ModalConfig (uma fonte de verdade).
+        let cfg = crate::agent::modality::ModalConfig::from_env("SENSOR", cfg!(feature = "sensor"));
+        let cmd = cfg.cmd.ok_or_else(|| {
             ToolError::Precondition(
                 "T-SENSOR enabled sem backend (AETHER_SENSOR_CMD; binário concreto)".into(),
             )
@@ -186,7 +189,7 @@ impl SensorPort {
             &cmd,
             Some(sensor_id),
             None,
-            super::backend::BACKEND_TIMEOUT_MS,
+            cfg.timeout_ms,
             super::backend::BACKEND_MAX_STDOUT,
         )
         .map_err(|e| ToolError::Failed(format!("sensor backend: {e}")))?;

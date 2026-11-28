@@ -53,11 +53,9 @@ impl VisionPort {
 
     /// `AETHER_VIS=1` + feature `vision`.
     pub fn from_env() -> Self {
-        let env_on = std::env::var("AETHER_VIS")
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
         Self {
-            enabled: env_on && cfg!(feature = "vision"),
+            enabled: crate::agent::modality::ModalConfig::from_env("VIS", cfg!(feature = "vision"))
+                .enabled,
         }
     }
 
@@ -110,29 +108,22 @@ impl VisionPort {
         if !self.enabled {
             return Err("T-VIS off (feature vision / AETHER_VIS)".into()); // W3
         }
-        let cmd_line = std::env::var("AETHER_VIS_CMD")
-            .map_err(|_| "T-VIS enabled sem backend (defina AETHER_VIS_CMD; binário concreto; pixels fora do T0)".to_string())?;
-        let timeout = std::env::var("AETHER_VIS_TIMEOUT_MS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(super::backend::BACKEND_TIMEOUT_MS);
+        // T11: encanamento via ModalConfig.
+        let cfg = crate::agent::modality::ModalConfig::from_env("VIS", cfg!(feature = "vision"));
+        let cmd_line = cfg.cmd.ok_or_else(|| {
+            "T-VIS enabled sem backend (defina AETHER_VIS_CMD; binário concreto; pixels fora do T0)".to_string()
+        })?;
         let out = super::backend::run_backend_cmd(
             &cmd_line,
             Some(image_ref),
             None,
-            timeout,
+            cfg.timeout_ms,
             super::backend::BACKEND_MAX_STDOUT,
         )
         .map_err(|e| format!("T-VIS sidecar: {e}"))?;
         let raw = String::from_utf8_lossy(&out);
-        // conf honesta (não inventada alta; NaN→0)
-        let default_conf = match std::env::var("AETHER_VIS_CONF") {
-            Ok(s) => match s.parse::<f32>() {
-                Ok(c) if c.is_finite() => c.clamp(0.0, 1.0),
-                _ => 0.0,
-            },
-            Err(_) => 0.0,
-        };
+        // conf honesta via ModalConfig (não inventada alta; NaN→0)
+        let default_conf = cfg.conf.unwrap_or(0.0);
         let mut labels: Vec<(String, f32)> = Vec::new();
         let mut entities: Vec<String> = Vec::new();
         for line in raw.lines() {
