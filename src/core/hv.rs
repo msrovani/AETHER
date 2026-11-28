@@ -48,8 +48,22 @@ impl HvBank {
         let dim_in = u32::from_le_bytes(raw[20..24].try_into().unwrap()) as usize;
         let count = u64::from_le_bytes(raw[28..36].try_into().unwrap()) as usize;
         let seed = u64::from_le_bytes(raw[36..44].try_into().unwrap());
+        // R5: aritmética verificada antes de qualquer alocação — header hostil
+        // (count/words gigantes de um bin truncado) antes wrapava em release
+        // (overflow-checks=false) e `with_capacity` ia a OOM/abort.
+        const MAX_COUNT: usize = 1 << 24;
+        const MAX_WORDS: usize = 1 << 20;
+        if count > MAX_COUNT || words == 0 || words > MAX_WORDS {
+            return Err(format!(
+                "bank header fora dos caps (count={count}, words={words})"
+            ));
+        }
+        let want_payload = (count * words)
+            .checked_mul(8)
+            .ok_or("bank header overflow")?;
+        let want_idx = count.checked_mul(24).ok_or("bank header overflow")?;
         let payload = &raw[HEADER_SIZE..];
-        if payload.len() != count * words * 8 {
+        if payload.len() != want_payload {
             return Err("payload size mismatch".into());
         }
         let mut bits = Vec::with_capacity(count * words);
@@ -57,7 +71,7 @@ impl HvBank {
             bits.push(u64::from_le_bytes(chunk.try_into().unwrap()));
         }
         let idx = fs::read(idx_path).map_err(|e| e.to_string())?;
-        if idx.len() != count * 24 {
+        if idx.len() != want_idx {
             return Err("idx size mismatch".into());
         }
         let mut keys = Vec::with_capacity(count);
