@@ -144,6 +144,22 @@ jobs:
       - name: definição de pronto (headless)
         run: bash scripts/check_organism.sh 10s
 
+  # R8 (auditoria 2026-11-27): segurança de dependências — RUSTSEC no lock.
+  # RustSec: crossbeam 0.5.17/rand 0.8.8/pyo3 0.30.1 já patched; o job fixa o
+  # contrato para o futuro (10+ crates maliciosos removidos em 2026).
+  audit:
+    name: audit (RUSTSEC)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: cargo-audit
+        uses: rustsec/audit-check@v2.0.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   # Opt-in. O runner público não tem a RTX 3050. O job só dispara com
   # workflow_dispatch e input gpu=true, num runner com a label `gpu`.
   gate-gpu:
