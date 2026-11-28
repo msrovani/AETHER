@@ -285,10 +285,7 @@ fn apply_local_sgdb_defaults() {
         return;
     };
     let cmd = if cfg!(windows) {
-        format!(
-            "powershell -NoProfile -ExecutionPolicy Bypass -File {}",
-            launcher.display()
-        )
+        format!("powershell -NoProfile -File {}", launcher.display())
     } else {
         format!("{}", launcher.display())
     };

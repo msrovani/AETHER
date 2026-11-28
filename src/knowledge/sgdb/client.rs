@@ -205,12 +205,45 @@ pub fn open_transport(spec: &str, cfg: &SgdbConfig) -> Result<Box<dyn Transport>
             .next()
             .ok_or_else(|| SgdbError::Config("stdio: exige um programa".into()))?;
         let args: Vec<String> = parts.map(str::to_string).collect();
+        guard_stdio_spawn(program, &args)?;
         let transport = StdioTransport::spawn(program, &args)?;
         return Ok(Box::new(transport));
     }
     Err(SgdbError::Config(format!(
         "especificação desconhecida: {spec} (use mock, http://…/mcp ou stdio:programa args)"
     )))
+}
+
+/// Guarda de spawn stdio (T2). O env é config confiável, mas a invariante
+/// "sem shell" (W1/W8) vale aqui também:
+/// * shells duros (`sh`/`bash`/`dash`/`zsh`/`ksh`/`pwsh`/`cmd`) **nunca**;
+/// * `powershell` **só** no shape do launcher documentado:
+///   `-NoProfile -File <caminho.ps1>` (sem `-Command`/`-EncodedCommand`/
+///   `-ExecutionPolicy` — nada de string de comando).
+fn guard_stdio_spawn(program: &str, args: &[String]) -> Result<(), SgdbError> {
+    let lower = program.to_ascii_lowercase();
+    let stem = lower.strip_suffix(".exe").unwrap_or(&lower);
+    if matches!(
+        stem,
+        "sh" | "bash" | "dash" | "zsh" | "ksh" | "pwsh" | "cmd"
+    ) {
+        return Err(SgdbError::Config(format!(
+            "stdio: shell não permitido: {program} (use binário concreto)"
+        )));
+    }
+    if stem == "powershell" {
+        let shape_ok = args.len() == 3
+            && args[0].eq_ignore_ascii_case("-noprofile")
+            && args[1].eq_ignore_ascii_case("-file")
+            && args[2].to_ascii_lowercase().ends_with(".ps1");
+        if !shape_ok {
+            return Err(SgdbError::Config(
+                "stdio: powershell só aceita `-NoProfile -File <caminho.ps1>` (sem -Command/-ExecutionPolicy)"
+                    .into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Abre um cliente a partir de uma especificação de transporte.
