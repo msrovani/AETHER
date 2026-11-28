@@ -327,6 +327,45 @@ fn injecao_em_memoria_nao_altera_escolha_de_tool() {
     assert_eq!(still.first().map(|s| s.tool), Some("fact"));
 }
 
+// --- R4: http.get com path sanitizado (anti request-smuggling) ---------------
+
+#[test]
+fn r4_http_get_rejeita_path_com_crlf_ou_espaco() {
+    use aether_engine::agent::tools::HttpGetTool;
+    let world = WorldPolicy {
+        sandbox_root: sandbox_dir(),
+        http_hosts: vec!["127.0.0.1".into()],
+        http_fetch: true,
+        mcp_allow: vec![],
+    };
+    let mut tool = HttpGetTool::new(&world);
+    let mut ctx = shell_ctx();
+    for bad_url in [
+        "http://127.0.0.1/x HTTP/1.1\r\nX-Inj: y",
+        "http://127.0.0.1/pa th",
+        "http://127.0.0.1/a\nb",
+    ] {
+        let goal = Goal::http_get(bad_url);
+        let err = tool
+            .call(&goal, &mut ctx)
+            .err()
+            .expect("path hostil deve ser Err antes de abrir socket");
+        assert!(
+            err.to_string().contains("anti-smuggling"),
+            "{bad_url}: {err}"
+        );
+    }
+    // path normal (mesmo host, sem rede real neste gate — connect falha
+    // rápido com timeout de 5 s, mas oErro é de rede, NÃO de path).
+    let goal = Goal::http_get("http://127.0.0.1:1/sanitario");
+    if let Err(e) = tool.call(&goal, &mut ctx) {
+        assert!(
+            !e.to_string().contains("anti-smuggling"),
+            "path limpo não deve ser rejeitado por sanitize: {e}"
+        );
+    }
+}
+
 // --- R3: shell.exec com spawn real reusa `run_backend_full` ------------------
 
 fn shell_ctx() -> ToolContext {

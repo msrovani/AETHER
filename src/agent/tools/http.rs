@@ -5,7 +5,7 @@
 //! `std::net::TcpStream`.
 
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use crate::agent::tool::{
@@ -172,19 +172,31 @@ impl Tool for HttpGetTool {
 }
 
 fn http_get_plain(url: &str, host: &str) -> Result<String, ToolError> {
-    let path = url
+    // R4: path derivado só de índices ASCII (`find` devolve fronteira de char)
+    // e validado antes de virar request line. Antes: CR/LF/espaço passavam
+    // direto → request-smuggling contra o host allowlisted.
+    let after_scheme = url
         .strip_prefix("http://")
-        .unwrap_or(url)
+        .or_else(|| url.strip_prefix("https://"))
+        .unwrap_or(url);
+    let raw_path = after_scheme
         .find('/')
-        .map(|_| {
-            let rest = &url[url.find("://").map(|j| j + 3).unwrap_or(0)..];
-            &rest[rest.find('/').unwrap_or(rest.len())..]
-        })
-        .filter(|p| !p.is_empty())
+        .map(|i| &after_scheme[i..])
         .unwrap_or("/");
-    let path = if path.is_empty() { "/" } else { path };
-    let addr = format!("{host}:80");
-    let mut stream = TcpStream::connect(addr.as_str())
+    let path = if raw_path.is_empty() { "/" } else { raw_path };
+    if path.bytes().any(|b| b <= 0x20 || b == 0x7f) {
+        return Err(ToolError::InvalidArgs(
+            "http.get: path com CR/LF/espaço/controle (anti-smuggling)".into(),
+        ));
+    }
+    // R4: connect_timeout — antes `TcpStream::connect` sem teto (SYN retries
+    // no Windows podem bloquear 20 s+), anulando o read_timeout de 5 s.
+    let addr = (host, 80u16)
+        .to_socket_addrs()
+        .map_err(|e| ToolError::Failed(format!("resolve: {e}")))?
+        .next()
+        .ok_or_else(|| ToolError::Failed("host sem endereço".into()))?;
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(5))
         .map_err(|e| ToolError::Failed(format!("connect: {e}")))?;
     stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
     stream.set_write_timeout(Some(Duration::from_secs(5))).ok();
