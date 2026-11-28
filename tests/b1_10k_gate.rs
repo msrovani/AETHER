@@ -14,9 +14,11 @@ fn b1_recall_p99_rss() {
         eprintln!("B1: bank de 10k ausente, sem número sintético");
         return;
     }
-    let bank = HvBank::load(Path::new(BANK), Path::new(IDX)).expect("bank");
+    let mut bank = HvBank::load(Path::new(BANK), Path::new(IDX)).expect("bank");
     assert!(bank.count() >= 10_000, "count {}", bank.count());
     // MSG 0440 ACHADO_1: em n≥10k o caminho tem de ser LSH, não varredura exata.
+    // T16: LSH lazy — o build acontece na primeira query (`ensure_lsh`).
+    bank.ensure_lsh();
     assert!(
         !bank.lsh_tables.is_empty(),
         "B1 n={} sem LSH — limiar deve ser ≥10k",

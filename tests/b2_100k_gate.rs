@@ -66,7 +66,7 @@ fn find_capacity_shard(cands: &[&str], min_n: usize) -> Option<(PathBuf, PathBuf
         if !idx.exists() {
             continue;
         }
-        let bank = match HvBank::load(bin, &idx) {
+        let mut bank = match HvBank::load(bin, &idx) {
             Ok(b) => b,
             Err(_) => continue,
         };
@@ -77,7 +77,7 @@ fn find_capacity_shard(cands: &[&str], min_n: usize) -> Option<(PathBuf, PathBuf
     None
 }
 
-fn measure_recall_p99(bank: &HvBank, sample: usize) -> (f64, u128, usize) {
+fn measure_recall_p99(bank: &mut HvBank, sample: usize) -> (f64, u128, usize) {
     let n = bank.count();
     let sample = sample.min(n);
     let mut hits = 0usize;
@@ -110,7 +110,7 @@ fn b2_e1b_shard_plan_100k() {
 #[test]
 fn b2_lsh_recall_p99_rss() {
     if let Some((bank_p, idx_p)) = find_existing(FULL_CANDIDATES) {
-        let bank = HvBank::load(&bank_p, &idx_p).expect("bank");
+        let mut bank = HvBank::load(&bank_p, &idx_p).expect("bank");
         assert!(
             bank.count() >= 100_000,
             "B2 exige n≥100k, got {}",
@@ -127,7 +127,7 @@ fn b2_lsh_recall_p99_rss() {
             "B2 exige multi-probe (lsh_probes>0), got {}",
             bank.lsh_probes
         );
-        let (recall, p99, sample) = measure_recall_p99(&bank, 200);
+        let (recall, p99, sample) = measure_recall_p99(&mut bank, 200);
         let rss = working_set();
         eprintln!(
             "B2 FULL n={} cap={} over={} probes={} sample={sample} recall@10={recall:.3} p99_us={p99} rss={rss}",
@@ -150,9 +150,10 @@ fn b2_lsh_recall_p99_rss() {
     }
 
     // Aceite intermediário: shard ≤ capacidade E1B com recall≥0,90.
-    if let Some((bank_p, _idx_p, bank)) = find_capacity_shard(CAPACITY_SHARD_CANDIDATES, 1_000) {
+    if let Some((bank_p, _idx_p, mut bank)) = find_capacity_shard(CAPACITY_SHARD_CANDIDATES, 1_000)
+    {
         let cap = bank.e1b_capacity();
-        let (recall, p99, sample) = measure_recall_p99(&bank, 200);
+        let (recall, p99, sample) = measure_recall_p99(&mut bank, 200);
         eprintln!(
             "B2 CAP-SHARD {} n={} cap={} probes={} sample={sample} recall@10={recall:.3} p99_us={p99}",
             bank_p.display(),
@@ -174,7 +175,7 @@ fn b2_lsh_recall_p99_rss() {
         if bank.count() >= 10_000 && bank.lsh_tables.is_empty() {
             bank.build_lsh(4, 16);
         }
-        let (recall, p99, sample) = measure_recall_p99(&bank, 200);
+        let (recall, p99, sample) = measure_recall_p99(&mut bank, 200);
         eprintln!(
             "B2 OVER-CAP {} n={} cap={} over={} probes={} sample={sample} recall@10={recall:.3} p99_us={p99} (sem piso 0,90)",
             bank_p.display(),

@@ -90,13 +90,23 @@ impl HvBank {
             lsh_tables: Vec::new(),
             lsh_probes: 0,
         };
-        // LSH auto: ≥ capacidade E1B (4096 @ 10240). B1/10k e shards 4k
-        // exercitam multi-probe; abaixo disso varredura cabe no teto 5 ms (release).
-        let lsh_floor = e1b_atom_capacity(bank.dim).max(1);
-        if bank.count() >= lsh_floor {
-            bank.build_lsh(4, 16);
-        }
+        // T16: LSH **lazy** — o build no load() era trabalho desperdiçado: o
+        // único consumidor em produção (`hier_moe`) faz varredura linear e
+        // nunca usa as tabelas. O build acontece na primeira query
+        // (`ensure_lsh`) ou quando o host pede (`build_lsh` público).
         Ok(bank)
+    }
+
+    /// Constrói o LSH **se** o banco atingir o piso E1B e as tabelas estiverem
+    /// vazias (T16 — chamado no caminho de query; idempotente).
+    pub fn ensure_lsh(&mut self) {
+        if !self.lsh_tables.is_empty() {
+            return;
+        }
+        let lsh_floor = e1b_atom_capacity(self.dim).max(1);
+        if self.count() >= lsh_floor {
+            self.build_lsh(4, 16);
+        }
     }
 
     pub fn count(&self) -> usize {
@@ -126,7 +136,9 @@ impl HvBank {
     }
 
     /// Top-k por menor Hamming; `out` pré-alocado `(dist, key)`.
-    pub fn top_k_into(&self, q: &[u64], k: usize, out: &mut [(u32, u128)]) -> usize {
+    /// T16: constrói o LSH sob demanda (`ensure_lsh`) antes do caminho rápido.
+    pub fn top_k_into(&mut self, q: &[u64], k: usize, out: &mut [(u32, u128)]) -> usize {
+        self.ensure_lsh();
         let k = k.min(out.len()).min(self.count());
         if k == 0 {
             return 0;
