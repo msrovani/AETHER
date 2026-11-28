@@ -22,6 +22,10 @@
 
 pub mod core;
 pub mod error;
+
+/// Log JSON-lines mínimo (T14 mitigado; `AETHER_LOG=1` liga).
+pub mod log;
+
 pub mod json;
 
 /// Trava de env para gates de teste (R14; infra, não contrato).

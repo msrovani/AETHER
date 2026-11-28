@@ -598,12 +598,18 @@ pub fn handle(
     let Some(req) = read_request(stream)? else {
         return Ok(());
     };
+    let started = std::time::Instant::now();
     // Contador de requests é atomicamente consistente com a fila de conexões.
     {
         let mut st = lock_state(state);
         st.requests += 1;
     }
     let reply = route(state, sgdb, agent, &req);
+    // T14 (mitigado): telemetria por request — off por default (AETHER_LOG).
+    crate::log::event(
+        "api",
+        &format!("{} {} {:?}", req.method, req.path, started.elapsed()),
+    );
     write_reply(stream, reply)
 }
 

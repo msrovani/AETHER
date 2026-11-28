@@ -426,6 +426,8 @@ fn r3_shell_exec_spawn_real_ok_com_sandbox_cwd() {
         .expect("spawn real ok");
     assert!(out.detail.contains("shell.exec ok"), "{}", out.detail);
     assert!(out.detail.contains("cwd="), "{}", out.detail);
+    // T8/T23: conf honesta — saída do shell não é evidência verificada.
+    assert_eq!(out.confidence, 0.0, "conf inventada: {}", out.confidence);
 }
 
 #[test]

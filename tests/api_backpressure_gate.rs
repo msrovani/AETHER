@@ -68,6 +68,23 @@ fn header_gigante_e_muitos_headers_nao_matam_o_servidor() {
 }
 
 #[test]
+fn t6_respostas_sem_cors_wildcard() {
+    let addr = start_cfg(ApiConfig::default());
+    let mut s = TcpStream::connect(addr).expect("connect");
+    s.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    s.write_all(b"GET /health HTTP/1.1\r\nhost: x\r\nconnection: close\r\n\r\n")
+        .expect("write");
+    let mut resp = String::new();
+    s.read_to_string(&mut resp).expect("read");
+    assert!(
+        !resp
+            .to_ascii_lowercase()
+            .contains("access-control-allow-origin: *"),
+        "wildcard CORS voltou: {resp}"
+    );
+}
+
+#[test]
 fn overload_responde_503_e_o_servidor_fica_vivo() {
     // threads:1 + max_conns:2 — A segura o worker; B ocupa a fila; qualquer
     // conexão nova acima do teto recebe 503 (branch de `max_conns`, que é
