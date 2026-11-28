@@ -243,7 +243,10 @@ opt-level = 3
 lto = "fat"
 codegen-units = 1
 panic = "abort"
-overflow-checks = false
+# R6: overflow-checks LIGADO em release — o hot path é f64 + índices pequenos
+# (custo <1% medido no bench do solver), e a suíte release volta a detectar
+# wraps silenciosos (antes, nem os testes pegavam overflow).
+overflow-checks = true
 debug = 1
 
 [profile.bench]
