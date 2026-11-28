@@ -250,6 +250,15 @@ debug = 1
 inherits = "release"
 debug = 1
 
+# Perfil dedicado à BORDA (aether-api / aether-daemon empacotados): pânico com
+# unwind, para que o `catch_unwind` de `serve_listener` seja REAL em produção —
+# um panic num request não derruba o servidor (500 + conexão fechada).
+# Os demais binários continuam com `panic = "abort"` ([profile.release]).
+# Build da borda: cargo build --profile release-unwind --features api --bin aether-api
+[profile.release-unwind]
+inherits = "release"
+panic = "unwind"
+
 [[bench]]
 name = "hardware_extremus"
 harness = false

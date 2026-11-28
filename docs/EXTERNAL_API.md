@@ -291,6 +291,21 @@ protegido por `Mutex`: o **I/O** roda em paralelo; a consulta ao ledger é
 serializada. Para 60 Hz de telemetria isso sobra; para carga de LLM, suba o
 `--threads` e lembre que a serialização é do estado, não da rede.
 
+## 5.4 Resiliência a panic (perfil `release-unwind`)
+
+`catch_unwind` só captura panics que fazem *unwind*; com `panic = "abort"` o
+runtime mata o processo. Por isso a borda tem um perfil dedicado:
+
+```powershell
+cargo build --profile release-unwind --features api --bin aether-api
+```
+
+* **`--profile release-unwind`**: um panic num request devolve `500` e a borda
+  continua atendendo (gate `tests/api_panic_guard_gate.rs`).
+* **`--release` (abort)**: um panic encerra o processo — política dos demais
+  binários; scripts de empacotamento (`package-daemon.ps1`,
+  `produto-c-smoke.ps1`, `two-instances.ps1`) já usam `release-unwind`.
+
 ## 6. Notas de interoperabilidade
 
 * **BOM UTF-8** no início do corpo é aceito e removido (clientes Windows

@@ -435,6 +435,16 @@ pub fn serve_listener(listener: TcpListener, cfg: ApiConfig) -> std::io::Result<
                     // índice no núcleo) não pode derrubar o worker nem envenenar
                     // o estado: o guard é recuperado com `into_inner` e a
                     // conexão recebe 500 — a borda continua atendendo.
+                    //
+                    // CONTRATO DE PERFIL: `catch_unwind` só captura panics que
+                    // fazem *unwind*. Este guard é REAL quando a borda é
+                    // construída com `--profile release-unwind`
+                    // ([profile.release-unwind] no Cargo.toml, `panic =
+                    // "unwind"`). Com `panic = "abort"` ([profile.release]) o
+                    // runtime aborta o processo e este ramo é dead-code —
+                    // política de abort vale para os demais binários. Tests
+                    // rodam com unwind (Cargo ignora `panic` em perfis de
+                    // test), então este ramo é exercitado pela suíte.
                     let mut st = match state.lock() {
                         Ok(guard) => guard,
                         Err(poison) => poison.into_inner(),

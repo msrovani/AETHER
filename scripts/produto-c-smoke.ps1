@@ -17,9 +17,9 @@ function Step([string]$Name, [bool]$Ok, [string]$Detail) {
 }
 
 Write-Host "=== build aether-daemon ==="
-& "$PSScriptRoot\cargo.ps1" build --release --bin aether-daemon
+& "$PSScriptRoot\cargo.ps1" build --profile release-unwind --bin aether-daemon
 if ($LASTEXITCODE -ne 0) { throw "build daemon falhou" }
-$exe = Join-Path $Root "target\release\aether-daemon.exe"
+$exe = Join-Path $Root "target\release-unwind\aether-daemon.exe"
 
 $help = & $exe --help 2>&1 | Out-String
 Step "help" ($LASTEXITCODE -eq 0 -and $help -match "human") "exit=$LASTEXITCODE"
