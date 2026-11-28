@@ -36,7 +36,7 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use aether_decision::{
     Answer, DecisionError, DecisionMeta, DecisionPort, DecisionRequest, DecisionResponse, StubPort,
@@ -66,8 +66,18 @@ pub const PHASE_DIMS: usize = 160;
 /// (1280 bytes, exatamente `MAX_PHASE_BYTES` do F1).
 pub const PHASE_FLOATS: usize = 2 * PHASE_DIMS;
 
-/// Corpo máximo aceito (1 MiB) — acima disso a conexão é fechada com 413.
+/// Corpo máximo aceito (1 MiB) - acima disso a conexão é fechada com 413.
 pub const MAX_BODY: usize = 1 << 20;
+
+/// Deadline **total** de um request (todas as leituras do cabeçalho + corpo).
+/// Acima disso a conexão é fechada sem resposta (R2 — anti slow-loris).
+pub const REQUEST_DEADLINE: Duration = Duration::from_secs(30);
+
+/// Tamanho máximo de uma única linha de cabeçalho (R2).
+pub const MAX_HEADER_LINE: usize = 8 * 1024;
+
+/// Número máximo de cabeçalhos por request (R2).
+pub const MAX_HEADERS: usize = 64;
 
 /// Score mínimo de correlação para responder em vez de abster.
 ///
@@ -123,6 +133,13 @@ pub struct ApiConfig {
     /// (`/v1/aether/remember`, `/v1/aether/forget`) a `authority` do host é o
     /// mandato e este segredo não é exigido.
     pub hitl_token: Option<String>,
+    /// Tamanho da fila de conexões entre o accept-loop e os workers.
+    ///
+    /// Fila cheia → o accept responde `503` e fecha (backpressure real; antes
+    /// era `mpsc::channel` ilimitado — memória crescia sem teto).
+    pub queue_limit: usize,
+    /// Teto de conexões simultâneas aceitas (defesa de exaustão de fds).
+    pub max_conns: usize,
 }
 
 impl Default for ApiConfig {
@@ -140,6 +157,8 @@ impl Default for ApiConfig {
             hitl_token: std::env::var("AETHER_HITL_TOKEN")
                 .ok()
                 .filter(|token| !token.trim().is_empty()),
+            queue_limit: 128,
+            max_conns: 256,
         }
     }
 }
@@ -410,17 +429,45 @@ pub fn serve_config(cfg: ApiConfig) -> std::io::Result<()> {
     serve_listener(listener, cfg)
 }
 
+/// Drena o que o cliente enviou e fecha (usado nas respostas de overload).
+///
+/// No Windows, fechar um socket com dados recebidos não lidos envia RST e o
+/// cliente perde a resposta escrita (10054). Drenar antes do drop garante que
+/// o `503` chegue. Cap de `4 * MAX_BODY` para não virar um amplificador.
+fn drain_and_close(mut s: TcpStream) {
+    let _ = s.set_read_timeout(Some(Duration::from_millis(200)));
+    let mut scratch = [0u8; 8192];
+    let mut total = 0usize;
+    loop {
+        match s.read(&mut scratch) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => {
+                total += n;
+                if total > 4 * MAX_BODY {
+                    break;
+                }
+            }
+        }
+    }
+    drop(s);
+}
+
 /// Atende um `TcpListener` já ligado.
 pub fn serve_listener(listener: TcpListener, cfg: ApiConfig) -> std::io::Result<()> {
     let state = Arc::new(Mutex::new(ApiState::load(&cfg)?));
-    let (tx, rx) = mpsc::channel::<TcpStream>();
+    let (tx, rx) = mpsc::sync_channel::<TcpStream>(cfg.queue_limit.max(1));
     let rx = Arc::new(Mutex::new(rx));
     let workers = cfg.threads.max(1);
+    // Backpressure (R2): contador de conexões vivas; acima de `max_conns` o
+    // accept responde 503 e fecha, em vez de acumular streams na fila.
+    let conns = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let max_conns = cfg.max_conns.max(workers);
 
     let mut handles = Vec::with_capacity(workers);
     for _ in 0..workers {
         let rx = Arc::clone(&rx);
         let state = Arc::clone(&state);
+        let conns = Arc::clone(&conns);
         handles.push(std::thread::spawn(move || loop {
             let next = {
                 let guard = match rx.lock() {
@@ -461,6 +508,9 @@ pub fn serve_listener(listener: TcpListener, cfg: ApiConfig) -> std::io::Result<
                             &error_json("internal", "panic ao atender a requisição"),
                         );
                     }
+                    drop(stream);
+                    // A conexão deixou de estar "em serviço": libera o teto.
+                    conns.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
                 }
                 Err(_) => break,
             }
@@ -469,9 +519,28 @@ pub fn serve_listener(listener: TcpListener, cfg: ApiConfig) -> std::io::Result<
 
     for stream in listener.incoming() {
         match stream {
-            Ok(s) => {
-                if tx.send(s).is_err() {
-                    break;
+            Ok(mut s) => {
+                let cur = conns.load(std::sync::atomic::Ordering::Relaxed);
+                if cur >= max_conns {
+                    // Sobrecarga explícita: 503 e fecha (o cliente pode tentar
+                    // de novo) em vez de crescer a fila sem teto.
+                    let _ = write_response(&mut s, 503, &error_json("overload", "fila cheia"));
+                    drain_and_close(s);
+                    continue;
+                }
+                conns.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                match tx.try_send(s) {
+                    Ok(()) => {}
+                    Err(std::sync::mpsc::TrySendError::Full(mut s)) => {
+                        conns.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+                        let _ = write_response(&mut s, 503, &error_json("overload", "fila cheia"));
+                        drain_and_close(s);
+                    }
+                    Err(std::sync::mpsc::TrySendError::Disconnected(s)) => {
+                        conns.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+                        drop(s);
+                        break;
+                    }
                 }
             }
             Err(_) => continue,
@@ -511,6 +580,11 @@ enum Reply {
 
 fn read_request(stream: &mut TcpStream) -> std::io::Result<Option<Request>> {
     stream.set_read_timeout(Some(Duration::from_secs(10)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(10)))?;
+    // Deadline **total** do request (R2): o read-timeout de 10 s é por leitura;
+    // um cliente lento que goteja 1 byte a cada 9 s antes segurava um worker
+    // indefinidamente. Agora o request inteiro tem `REQUEST_DEADLINE`.
+    let deadline = Instant::now() + REQUEST_DEADLINE;
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut line = String::new();
     if reader.read_line(&mut line)? == 0 {
@@ -524,13 +598,35 @@ fn read_request(stream: &mut TcpStream) -> std::io::Result<Option<Request>> {
     let mut content_length = 0usize;
     let mut token: Option<String> = None;
     let mut hitl: Option<String> = None;
+    let mut header_count = 0usize;
     loop {
         line.clear();
+        if Instant::now() > deadline {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "deadline do request estourado",
+            ));
+        }
         if reader.read_line(&mut line)? == 0 {
             break;
         }
+        // Caps de header (R2): linha de 8 KB e 64 headers — um cliente hostil
+        // antes podia crescer a `line` sem teto (memória) e empilhar headers.
+        if line.len() > MAX_HEADER_LINE {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "linha de header acima do limite",
+            ));
+        }
         if line == "\r\n" || line == "\n" {
             break;
+        }
+        header_count += 1;
+        if header_count > MAX_HEADERS {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "número de headers acima do limite",
+            ));
         }
         if let Some((k, v)) = line.split_once(':') {
             let v = v.trim();
