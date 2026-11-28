@@ -123,15 +123,15 @@ arboard = { version = "3.7", optional = true, default-features = false }
 # F1: unica face do vega no Rust. Sem a feature pyo3 o port default e StubPort
 # (degradacao honesta, nenhuma chamada externa - Eixo C do plano).
 aether_decision = { path = "aether-decision" }
-ndarray = { version = "0.16", features = ["rayon"] }
-rayon = "1.10"
+# R13: `rayon` removido (zero uso em src — determinismo bit-a-bit sem pool) e
+# `mio` removido (nunca foi usado). ndarray sem a feature `rayon` (também sem uso).
+ndarray = "0.16"
 rustfft = "6.2"
 realfft = "3.3"
 num-complex = "0.4"
 rand = "0.8"
 rand_chacha = "0.3"
 socket2 = "0.5"
-mio = { version = "1", features = ["net", "os-poll"] }
 crossbeam-channel = "0.5"
 thiserror = "2"
 ratatui = { version = "0.29", optional = true }
