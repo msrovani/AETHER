@@ -5,6 +5,35 @@ Versionamento: semântico; ciclo automático ainda gera patches `0.1.x` quando a
 
 ## [Unreleased]
 
+## [0.6.6] - 2026-11-28 (triade — T1-T13, T19)
+
+### Corrigido (auditoria triade — Onda 1)
+
+- **T1**: `chat`/`completion` citam o **ledger local** quando o trio abstém
+  (`ledger_cite`: fases idênticas ao texto lembrado → `verdict:"cite"`+`key`
+  com auth caps em quarentena; variação → abstém). `api_eval` verde (regressão
+  pré-existente). Headers HTTP reparados (edit T6 tinha quebrado a string
+  multi-linha) — `T1b`.
+- **T2**: guarda de spawn stdio do SGDB — shells duros bloqueados;
+  `powershell` só `-NoProfile -File *.ps1`; `-ExecutionPolicy Bypass`
+  removido (`cli.rs` + `.env.example`). Gate `sgdb_transport_guard_gate`.
+- **T3**: caps de leitura no transporte SGDB (head HTTP, chunk-size **antes**
+  da alocação, `read_line` do child com `take`).
+- **T4**: `research_live`/`research_intent`/`f2_chat_hook` via `run_backend`
+  (timeout+kill+cap). Residual: `dashboard/jobs.rs`.
+- **T5**: agente em shard próprio — `agent.run` nunca segura o lock do estado.
+- **T6**: CORS wildcard `*` removido (same-origin). **T7**: `token_eq` sem
+  leak de comprimento. **T8**: `shell.exec` conf honesta `0.0`.
+- **T10/T13**: docs `EXTERNAL_API` (backpressure/caps/shards/ledger-cite).
+
+### Adicionado (Onda 2)
+
+- **T11**: `agent/modality.rs` — `ModalConfig::from_env` (env+feature+CMD+
+  TIMEOUT+CONF com uma fonte de verdade) + `ModalError` tipado; **7/7 portas**
+  (ocr/stt/tts/vision/sensor/haptic/ar/robot) migradas; zero `env::var`
+  duplicado.
+- **T19**: CI agendado semanalmente (audit/overflow/Miri).
+
 ## [0.6.5] - 2026-11-27
 
 ### Corrigido (auditoria full-codebase — ondas 1-2, R1-R14)
