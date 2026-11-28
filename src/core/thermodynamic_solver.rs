@@ -129,14 +129,14 @@ pub struct ThermodynamicIsingSolver {
     hx: Array2<f64>,
     /// `[B, N]` elite discreta da trajetória.
     best_states: Array2<i8>,
-    /// Scratch do estado discreto corrente (`N`).
-    s_cur: Vec<i8>,
-    /// Scratch do estado discreto de fuga (`N`).
-    s_try: Vec<i8>,
-    /// Scratch do gradiente discreto `J s` (`N`).
-    g: Vec<f64>,
-    /// Scratch do gradiente discreto de fuga (`N`).
-    g_try: Vec<f64>,
+    /// `[B, N]` scratch do estado discreto corrente (por batch — R11).
+    s_cur: Array2<i8>,
+    /// `[B, N]` scratch do estado discreto de fuga (por batch — R11).
+    s_try: Array2<i8>,
+    /// `[B, N]` scratch do gradiente discreto `J s` (por batch — R11).
+    g: Array2<f64>,
+    /// `[B, N]` scratch do gradiente discreto de fuga (por batch — R11).
+    g_try: Array2<f64>,
     /// RNG determinístico semeado por `reset`.
     rng: ChaCha8Rng,
 }
@@ -151,6 +151,44 @@ impl std::fmt::Debug for ThermodynamicIsingSolver {
             .field("a0", &self.a0)
             .finish_non_exhaustive()
     }
+}
+
+/// Fatias por-thread de um relaxamento (R11) — movidas para a thread.
+struct BatchChunks<'a> {
+    x: &'a mut [f64],
+    y: &'a mut [f64],
+    hx: &'a mut [f64],
+    best: &'a mut [i8],
+    s_cur: &'a mut [i8],
+    s_try: &'a mut [i8],
+    g: &'a mut [f64],
+    g_try: &'a mut [f64],
+    init: &'a mut [i8],
+    trace: &'a mut [f64],
+    states: &'a mut [i8],
+    best_energy: &'a mut [f64],
+}
+
+/// Divide `all` (flat `[B, per]`) em `chunks` fatias disjuntas e contíguas —
+/// uma por thread (R11). `threads <= B` garante chunk não-vazio.
+fn split_chunks<'a, T>(
+    all: &'a mut [T],
+    threads: usize,
+    batch: usize,
+    per: usize,
+) -> Vec<&'a mut [T]> {
+    let mut out = Vec::with_capacity(threads);
+    let mut rest: &'a mut [T] = all;
+    let mut done = 0usize;
+    for t in 0..threads {
+        let upto = (batch * (t + 1) / threads) * per;
+        debug_assert!(upto > done, "thread sem batch (threads > batch?)");
+        let (head, tail) = rest.split_at_mut(upto - done);
+        out.push(head);
+        rest = tail;
+        done = upto;
+    }
+    out
 }
 
 impl ThermodynamicIsingSolver {
@@ -171,10 +209,10 @@ impl ThermodynamicIsingSolver {
             y: Array2::<f64>::zeros((batch, n)),
             hx: Array2::<f64>::zeros((batch, n)),
             best_states: Array2::<i8>::zeros((batch, n)),
-            s_cur: vec![1i8; n],
-            s_try: vec![1i8; n],
-            g: vec![0.0; n],
-            g_try: vec![0.0; n],
+            s_cur: Array2::<i8>::from_elem((batch, n), 1),
+            s_try: Array2::<i8>::from_elem((batch, n), 1),
+            g: Array2::<f64>::zeros((batch, n)),
+            g_try: Array2::<f64>::zeros((batch, n)),
             rng: ChaCha8Rng::seed_from_u64(DEFAULT_SEED),
         };
         solver.reset(DEFAULT_SEED);
@@ -247,21 +285,239 @@ impl ThermodynamicIsingSolver {
             .as_slice_mut()
             .ok_or_else(|| AetherError::Config("out.states deve ser C-contíguo".into()))?;
 
-        for b in 0..batch {
-            let j_off = b * n * n;
-            let h_off = b * n;
-            let t_off = b * (steps + 1);
-            let s_off = b * n;
-            let best = self.relax_one(
-                b,
-                &j[j_off..j_off + n * n],
-                &h[h_off..h_off + n],
-                &mut init_all[s_off..s_off + n],
-                &mut trace_all[t_off..t_off + steps + 1],
-                &mut state_all[s_off..s_off + n],
-            );
-            out.best_energy[b] = best;
+        // --- R11: paralelismo por batch -----------------------------------
+        // Batches são independentes (resultado de b só depende dos buffers de
+        // b) → threads scoped com `available_parallelism`; determinismo
+        // bit-a-bit preservado (tie-break por índice, ordem fixa por batch).
+        let dt = self.dt;
+        let a0 = self.a0;
+        let x_all = self
+            .x
+            .as_slice_mut()
+            .expect("x é C-contíguo por construção");
+        let y_all = self
+            .y
+            .as_slice_mut()
+            .expect("y é C-contíguo por construção");
+        let hx_all = self
+            .hx
+            .as_slice_mut()
+            .expect("hx é C-contíguo por construção");
+        let bs_all = self
+            .best_states
+            .as_slice_mut()
+            .expect("best_states é C-contíguo por construção");
+        let sc_all = self
+            .s_cur
+            .as_slice_mut()
+            .expect("s_cur é C-contíguo por construção");
+        let st_all = self
+            .s_try
+            .as_slice_mut()
+            .expect("s_try é C-contíguo por construção");
+        let g_all = self
+            .g
+            .as_slice_mut()
+            .expect("g é C-contíguo por construção");
+        let gt_all = self
+            .g_try
+            .as_slice_mut()
+            .expect("g_try é C-contíguo por construção");
+        let be_all = out
+            .best_energy
+            .as_slice_mut()
+            .expect("best_energy é C-contíguo por construção");
+
+        let threads = std::thread::available_parallelism()
+            .map_or(1, |p| p.get())
+            .min(batch);
+        // R11: caminho serial (batch == 1 ou 1 núcleo visível) — zero alocação,
+        // mesmo contrato do `alloc_invariants` (contagem de allocs == 0).
+        if threads == 1 {
+            let x_all = self
+                .x
+                .as_slice_mut()
+                .expect("x é C-contíguo por construção");
+            let y_all = self
+                .y
+                .as_slice_mut()
+                .expect("y é C-contíguo por construção");
+            let hx_all = self
+                .hx
+                .as_slice_mut()
+                .expect("hx é C-contíguo por construção");
+            let bs_all = self
+                .best_states
+                .as_slice_mut()
+                .expect("best_states é C-contíguo por construção");
+            let sc_all = self
+                .s_cur
+                .as_slice_mut()
+                .expect("s_cur é C-contíguo por construção");
+            let st_all = self
+                .s_try
+                .as_slice_mut()
+                .expect("s_try é C-contíguo por construção");
+            let g_all = self
+                .g
+                .as_slice_mut()
+                .expect("g é C-contíguo por construção");
+            let gt_all = self
+                .g_try
+                .as_slice_mut()
+                .expect("g_try é C-contíguo por construção");
+            for b in 0..batch {
+                let j_off = b * n * n;
+                let h_off = b * n;
+                let t_off = b * (steps + 1);
+                let s_off = b * n;
+                let best = Self::relax_one_batch(
+                    n,
+                    steps,
+                    dt,
+                    a0,
+                    &j[j_off..j_off + n * n],
+                    &h[h_off..h_off + n],
+                    &mut x_all[s_off..s_off + n],
+                    &mut y_all[s_off..s_off + n],
+                    &mut hx_all[s_off..s_off + n],
+                    &mut bs_all[s_off..s_off + n],
+                    &mut sc_all[s_off..s_off + n],
+                    &mut st_all[s_off..s_off + n],
+                    &mut g_all[s_off..s_off + n],
+                    &mut gt_all[s_off..s_off + n],
+                    &mut init_all[s_off..s_off + n],
+                    &mut trace_all[t_off..t_off + steps + 1],
+                    &mut state_all[s_off..s_off + n],
+                );
+                out.best_energy[b] = best;
+            }
+            return Ok(());
         }
+        // Fatias pré-computadas, disjuntas por construção (o borrow checker
+        // não vê a disjunção de indexações repetidas dentro do loop).
+        let x_c = split_chunks(x_all, threads, batch, n);
+        let y_c = split_chunks(y_all, threads, batch, n);
+        let hx_c = split_chunks(hx_all, threads, batch, n);
+        let bs_c = split_chunks(bs_all, threads, batch, n);
+        let sc_c = split_chunks(sc_all, threads, batch, n);
+        let st_c = split_chunks(st_all, threads, batch, n);
+        let g_c = split_chunks(g_all, threads, batch, n);
+        let gt_c = split_chunks(gt_all, threads, batch, n);
+        let init_c = split_chunks(init_all, threads, batch, n);
+        let trc_c = split_chunks(trace_all, threads, batch, steps + 1);
+        let stat_c = split_chunks(state_all, threads, batch, n);
+        let be_c = split_chunks(be_all, threads, batch, 1);
+        // Consome os Vecs em trava, montando um `BatchChunks` por thread —
+        // movidos para a thread (sem `unsafe`, sem aliasing por construção).
+        let mut chunks: Vec<BatchChunks<'_>> = Vec::with_capacity(threads);
+        {
+            let mut xi = x_c.into_iter();
+            let mut yi = y_c.into_iter();
+            let mut hi = hx_c.into_iter();
+            let mut bi = bs_c.into_iter();
+            let mut si = sc_c.into_iter();
+            let mut ti = st_c.into_iter();
+            let mut gi = g_c.into_iter();
+            let mut gti = gt_c.into_iter();
+            let mut ini = init_c.into_iter();
+            let mut tri = trc_c.into_iter();
+            let mut sti = stat_c.into_iter();
+            let mut bei = be_c.into_iter();
+            loop {
+                match (
+                    xi.next(),
+                    yi.next(),
+                    hi.next(),
+                    bi.next(),
+                    si.next(),
+                    ti.next(),
+                    gi.next(),
+                    gti.next(),
+                    ini.next(),
+                    tri.next(),
+                    sti.next(),
+                    bei.next(),
+                ) {
+                    (
+                        Some(x),
+                        Some(y),
+                        Some(hx),
+                        Some(best),
+                        Some(s_cur),
+                        Some(s_try),
+                        Some(g),
+                        Some(g_try),
+                        Some(init),
+                        Some(trace),
+                        Some(states),
+                        Some(best_energy),
+                    ) => chunks.push(BatchChunks {
+                        x,
+                        y,
+                        hx,
+                        best,
+                        s_cur,
+                        s_try,
+                        g,
+                        g_try,
+                        init,
+                        trace,
+                        states,
+                        best_energy,
+                    }),
+                    _ => break,
+                }
+            }
+        }
+        std::thread::scope(|s| {
+            for ch in chunks {
+                let BatchChunks {
+                    x: xr,
+                    y: yr,
+                    hx: hxr,
+                    best: br,
+                    s_cur: sc,
+                    s_try: stx,
+                    g: gr,
+                    g_try: gtr,
+                    init,
+                    trace: trc,
+                    states: stat,
+                    best_energy: be,
+                } = ch;
+                let j_ref: &[f64] = j;
+                let h_ref: &[f64] = h;
+                s.spawn(move || {
+                    let b_span = xr.len() / n;
+                    for b in 0..b_span {
+                        let j_off = b * n * n;
+                        let h_off = b * n;
+                        let t_off = b * (steps + 1);
+                        let s_off = b * n;
+                        be[b] = Self::relax_one_batch(
+                            n,
+                            steps,
+                            dt,
+                            a0,
+                            &j_ref[j_off..j_off + n * n],
+                            &h_ref[h_off..h_off + n],
+                            &mut xr[s_off..s_off + n],
+                            &mut yr[s_off..s_off + n],
+                            &mut hxr[s_off..s_off + n],
+                            &mut br[s_off..s_off + n],
+                            &mut sc[s_off..s_off + n],
+                            &mut stx[s_off..s_off + n],
+                            &mut gr[s_off..s_off + n],
+                            &mut gtr[s_off..s_off + n],
+                            &mut init[s_off..s_off + n],
+                            &mut trc[t_off..t_off + steps + 1],
+                            &mut stat[s_off..s_off + n],
+                        );
+                    }
+                });
+            }
+        });
         Ok(())
     }
 
@@ -284,28 +540,34 @@ impl ThermodynamicIsingSolver {
         row_energy(jb, n, hb, s)
     }
 
-    /// Relaxa uma instância do lote. Retorna `H(states)` do estado emergente.
+    /// Relaxa uma instância do lote — função associada **sem `self`** (R11).
     ///
+    /// O paralelismo por batch exige buffers por-thread: nunca `&mut self`.
     /// `init_row` recebe `sign(x_0)`, `trace_row` recebe `steps + 1` energias e
     /// `state_row` recebe o argmin polido.
-    fn relax_one(
-        &mut self,
-        b: usize,
+    fn relax_one_batch(
+        n: usize,
+        steps: usize,
+        dt: f64,
+        a0: f64,
         jb: &[f64],
         hb: &[f64],
+        xr: &mut [f64],
+        yr: &mut [f64],
+        hxr: &mut [f64],
+        best_row: &mut [i8],
+        s_cur: &mut [i8],
+        s_try: &mut [i8],
+        g: &mut [f64],
+        g_try: &mut [f64],
         init_row: &mut [i8],
         trace_row: &mut [f64],
         state_row: &mut [i8],
     ) -> f64 {
-        let n = self.n;
-        let steps = self.steps;
-        let dt = self.dt;
-        let a0 = self.a0;
-
         // --- estado inicial efetivamente usado: sign(x_0) ---
         for i in 0..n {
-            init_row[i] = sign(self.x[[b, i]]);
-            self.best_states[[b, i]] = init_row[i];
+            init_row[i] = sign(xr[i]);
+            best_row[i] = init_row[i];
         }
         let e0 = row_energy(jb, n, hb, init_row);
         trace_row[0] = e0;
@@ -330,21 +592,7 @@ impl ThermodynamicIsingSolver {
         };
 
         // --- integração simplética do lote b ---
-        let x_all = self
-            .x
-            .as_slice_mut()
-            .expect("x é C-contíguo por construção");
-        let y_all = self
-            .y
-            .as_slice_mut()
-            .expect("y é C-contíguo por construção");
-        let hx_all = self
-            .hx
-            .as_slice_mut()
-            .expect("hx é C-contíguo por construção");
-        let xr = &mut x_all[b * n..(b + 1) * n];
-        let yr = &mut y_all[b * n..(b + 1) * n];
-        let hxr = &mut hx_all[b * n..(b + 1) * n];
+        // xr/yr/hxr chegam por parâmetro (buffer por batch — R11).
 
         for k in 0..steps {
             // a(t) = a0 * t / Tmax, com t = (k + 1) dt e Tmax = steps * dt.
@@ -374,13 +622,13 @@ impl ThermodynamicIsingSolver {
 
             // energia do estado discreto corrente + elitismo
             for i in 0..n {
-                self.s_cur[i] = sign(xr[i]);
+                s_cur[i] = sign(xr[i]);
             }
             // `s` convertido uma vez (O(n)); a energia vira um dot f64 puro.
             {
-                let sf = &mut self.g[..n];
+                let sf = &mut g[..n];
                 for i in 0..n {
-                    sf[i] = f64::from(self.s_cur[i]);
+                    sf[i] = f64::from(s_cur[i]);
                 }
                 let mut e = 0.0;
                 for i in 0..n {
@@ -394,7 +642,7 @@ impl ThermodynamicIsingSolver {
                 if e < e_best {
                     e_best = e;
                     for i in 0..n {
-                        self.best_states[[b, i]] = self.s_cur[i];
+                        best_row[i] = s_cur[i];
                     }
                 }
             }
@@ -402,33 +650,25 @@ impl ThermodynamicIsingSolver {
 
         // --- polimento guloso determinístico do melhor estado ---
         for i in 0..n {
-            self.s_cur[i] = self.best_states[[b, i]];
+            s_cur[i] = best_row[i];
         }
         // F1 (Sprint C): `e` vai ao final do estado devolvido; sem recálculo
         // extra de O(N²) em `relax_one` (escavação redundantes em L436).
-        let mut e = descend(n, jb, hb, self.s_cur.as_mut_slice(), self.g.as_mut_slice());
+        let mut e = descend(n, jb, hb, s_cur, g);
 
         // --- fuga determinística (só se o polimento não bateu H(s_0)) ---
         if e >= e0 {
             for i in 0..n {
-                self.best_states[[b, i]] = self.s_cur[i];
+                best_row[i] = s_cur[i];
             }
             let mut best_e = e;
             for i in 0..n {
-                let elite = self.best_states.row(b);
-                let base = elite.as_slice().expect("linha do elite é C-contígua");
-                self.s_try.copy_from_slice(base);
-                self.s_try[i] = -self.s_try[i];
-                let e_try = descend(
-                    n,
-                    jb,
-                    hb,
-                    self.s_try.as_mut_slice(),
-                    self.g_try.as_mut_slice(),
-                );
+                s_try.copy_from_slice(best_row);
+                s_try[i] = -s_try[i];
+                let e_try = descend(n, jb, hb, s_try, g_try);
                 if e_try < best_e {
                     best_e = e_try;
-                    self.s_cur.copy_from_slice(&self.s_try);
+                    s_cur.copy_from_slice(s_try);
                 }
             }
             // F1 (Sprint C): a energia do estado final devolvido reusamos
@@ -436,7 +676,7 @@ impl ThermodynamicIsingSolver {
             e = best_e;
         }
 
-        state_row.copy_from_slice(&self.s_cur);
+        state_row.copy_from_slice(s_cur);
         // F1 (Sprint C): é `e` = `descend`/`best_e` acima — poupamos um
         // recálculo O(N²) de `row_energy(jb, n, hb, state_row)`.
         e

@@ -479,12 +479,24 @@ impl ClosedLoopOrganism {
             let spec = self.wave.wave_spectrum();
             let keep = self.wave.modes().min(spec.ncols());
             let c_out = spec.nrows();
+            // R11: slices contíguos (spec e readout em flat) — a indexação
+            // tripla `[[i,o,k]]` derrotava a auto-vetorização e o prefetch.
+            let spec_flat = spec
+                .as_slice()
+                .ok_or_else(|| AetherError::Config("spec deve ser C-contíguo".into()))?;
+            let ro_flat = self
+                .readout
+                .as_slice()
+                .ok_or_else(|| AetherError::Config("readout deve ser C-contíguo".into()))?;
             for i in 0..n {
                 let mut acc = 0.0f64;
+                let ro_base = i * c_out * keep;
                 for o in 0..c_out {
+                    let ro_off = ro_base + o * keep;
+                    let sp_off = o * spec.ncols();
                     for k in 0..keep {
-                        let w = self.readout[[i, o, k]];
-                        let y = spec[[o, k]];
+                        let w = ro_flat[ro_off + k];
+                        let y = spec_flat[sp_off + k];
                         // Re(W * Y)
                         acc += (w.re * y.re - w.im * y.im) as f64;
                     }
@@ -507,8 +519,16 @@ impl ClosedLoopOrganism {
         lap!(stage::READOUT);
 
         // --- colapso termodinâmico ---
-        let h2 = self.h.view().into_shape_with_order((1, n)).unwrap();
-        let j3 = self.j.view().into_shape_with_order((1, n, n)).unwrap();
+        let h2 = self
+            .h
+            .view()
+            .into_shape_with_order((1, n))
+            .map_err(|e| AetherError::Config(format!("reshape h (1,n): {e}")))?;
+        let j3 = self
+            .j
+            .view()
+            .into_shape_with_order((1, n, n))
+            .map_err(|e| AetherError::Config(format!("reshape j (1,n,n): {e}")))?;
         self.solver
             .relax_into(IsingLandscape::new(j3, h2), &mut self.out)?;
         lap!(stage::SOLVER);
